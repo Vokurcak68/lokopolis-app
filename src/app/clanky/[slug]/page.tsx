@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/components/Auth/AuthProvider";
@@ -14,6 +14,7 @@ export default function ArticleDetailPage() {
   const params = useParams();
   const slug = params.slug as string;
   const { user } = useAuth();
+  const router = useRouter();
 
   const [article, setArticle] = useState<ArticleWithRelations | null>(null);
   const [comments, setComments] = useState<CommentWithAuthor[]>([]);
@@ -21,6 +22,9 @@ export default function ArticleDetailPage() {
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const isAuthor = user && article && user.id === article.author_id;
 
   useEffect(() => {
     async function fetchArticle() {
@@ -188,6 +192,38 @@ export default function ArticleDetailPage() {
         <span>·</span>
         <span>{formatDate(article.published_at)}</span>
       </div>
+
+      {/* Author actions */}
+      {isAuthor && (
+        <div className="flex items-center justify-center gap-3 mb-8">
+          <Link
+            href={`/clanky/${slug}/upravit`}
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-bg-card border border-border-subtle text-text-nav hover:border-primary hover:text-primary transition-colors"
+          >
+            ✏️ Upravit článek
+          </Link>
+          <button
+            onClick={async () => {
+              if (!confirm("Opravdu chcete smazat tento článek? Tuto akci nelze vrátit zpět.")) return;
+              setDeleting(true);
+              const { error } = await supabase
+                .from("articles")
+                .delete()
+                .eq("id", article.id);
+              if (error) {
+                alert("Chyba při mazání: " + error.message);
+                setDeleting(false);
+              } else {
+                router.push("/clanky");
+              }
+            }}
+            disabled={deleting}
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-bg-card border border-border-subtle text-red-400 hover:border-red-400 hover:bg-red-400/10 transition-colors disabled:opacity-50"
+          >
+            {deleting ? "Mazání…" : "🗑️ Smazat"}
+          </button>
+        </div>
+      )}
 
       {/* Cover image */}
       {article.cover_image_url && (
