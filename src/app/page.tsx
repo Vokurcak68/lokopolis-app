@@ -99,7 +99,7 @@ const events = [
   { month: "Dub", day: "5", name: "TT sraz Olomouc", location: "Klub přátel kolejí" },
 ];
 
-const activeAuthors = [
+const defaultAuthors = [
   { name: "Petr Havlík", count: 42 },
   { name: "Milan Kratochvíl", count: 38 },
   { name: "Jan Novotný", count: 29 },
@@ -135,16 +135,18 @@ export default function Home() {
   );
 
   const [latestArticles, setLatestArticles] = useState<LatestArticle[]>([]);
+  const [activeAuthors, setActiveAuthors] = useState(defaultAuthors);
 
   useEffect(() => {
     async function fetchAll() {
       try {
         // All 4 queries in parallel
-        const [statsRes, membersRes, latestRes, catCountsRes] = await Promise.all([
+        const [statsRes, membersRes, latestRes, catCountsRes, authorsRes] = await Promise.all([
           supabase.from("articles").select("*", { count: "exact", head: true }).eq("status", "published").eq("verified", true),
           supabase.from("profiles").select("*", { count: "exact", head: true }),
           supabase.from("articles").select("id, slug, title, excerpt, cover_image_url, published_at, author:profiles(display_name, username, avatar_url), category:categories(name, icon)").eq("status", "published").eq("verified", true).order("published_at", { ascending: false }).limit(3),
           supabase.from("articles").select("category:categories(slug)").eq("status", "published").eq("verified", true),
+          supabase.from("articles").select("author:profiles(display_name, username)").eq("status", "published").eq("verified", true),
         ]);
 
         // Stats
@@ -177,6 +179,23 @@ export default function Home() {
               count: counts[c.slug] !== undefined ? counts[c.slug] : c.defaultCount,
             }))
           );
+        }
+
+        // Active authors
+        if (authorsRes.data && authorsRes.data.length > 0) {
+          const authorCounts: Record<string, number> = {};
+          for (const a of authorsRes.data) {
+            const author = a.author as unknown as { display_name: string | null; username: string | null } | null;
+            const name = author?.display_name || author?.username || "Anonym";
+            authorCounts[name] = (authorCounts[name] || 0) + 1;
+          }
+          const sorted = Object.entries(authorCounts)
+            .map(([name, count]) => ({ name, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 5);
+          if (sorted.length > 0) {
+            setActiveAuthors(sorted);
+          }
         }
       } catch {
         // fallback — keep defaults
@@ -463,7 +482,7 @@ export default function Home() {
               {activeAuthors.map((a) => (
                 <li key={a.name}>
                   <a href="#">{a.name}</a>
-                  <span>{a.count} článků</span>
+                  <span>{a.count} {a.count === 1 ? "článek" : a.count < 5 ? "články" : "článků"}</span>
                 </li>
               ))}
             </ul>
