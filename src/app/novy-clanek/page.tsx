@@ -51,11 +51,22 @@ export default function NewArticlePage() {
       .slice(0, 80);
   }
 
+  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+  const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+
   const handleImageUpload = useCallback(
     async (file: File): Promise<string> => {
+      if (!ALLOWED_TYPES.includes(file.type)) {
+        throw new Error("Povolené formáty: JPEG, PNG, GIF, WebP");
+      }
+      if (file.size > MAX_FILE_SIZE) {
+        throw new Error(`Maximální velikost obrázku je ${MAX_FILE_SIZE / 1024 / 1024} MB`);
+      }
+      if (!user) throw new Error("Nejste přihlášen");
+
       const ext = file.name.split(".").pop() || "jpg";
       const name = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-      const path = `articles/${name}`;
+      const path = `${user.id}/${name}`;
 
       const { error: uploadError } = await supabase.storage
         .from("images")
@@ -66,7 +77,7 @@ export default function NewArticlePage() {
       const { data } = supabase.storage.from("images").getPublicUrl(path);
       return data.publicUrl;
     },
-    []
+    [user]
   );
 
   const handleCoverUpload = useCallback(
@@ -79,8 +90,8 @@ export default function NewArticlePage() {
         const url = await handleImageUpload(file);
         setCoverUrl(url);
         setCoverPreview(URL.createObjectURL(file));
-      } catch {
-        setError("Nahrání úvodního obrázku se nezdařilo");
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Nahrání úvodního obrázku se nezdařilo");
       }
       setCoverUploading(false);
       e.target.value = "";

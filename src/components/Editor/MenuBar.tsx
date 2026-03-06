@@ -80,8 +80,8 @@ export default function MenuBar({ editor, onImageUpload }: MenuBarProps) {
       try {
         const url = await onImageUpload(file);
         editor.chain().focus().setImage({ src: url }).run();
-      } catch {
-        alert("Nahrávání obrázku se nezdařilo");
+      } catch (err) {
+        alert(err instanceof Error ? err.message : "Nahrávání obrázku se nezdařilo");
       }
       e.target.value = "";
     },
