@@ -9,19 +9,19 @@ import { supabase } from "@/lib/supabase";
    DATA
    ============================================================ */
 
-const categories = [
-  { title: "Stavba kolejiště", icon: "🏗️", count: 214, href: "/kategorie/stavba-kolejiste" },
-  { title: "Recenze modelů", icon: "🔍", count: 186, href: "/kategorie/recenze" },
-  { title: "Návody & tipy", icon: "🔧", count: 153, href: "/kategorie/navody-a-tipy" },
-  { title: "Krajina & scenérie", icon: "🎨", count: 128, href: "/kategorie/krajina-a-zelen" },
-  { title: "Digitalizace", icon: "⚡", count: 97, href: "/kategorie/digitalni-rizeni" },
-  { title: "Přestavby", icon: "🚃", count: 142, href: "/kategorie/prestavby" },
-  { title: "Kolejové plány", icon: "📐", count: 85, href: "/kategorie/kolejove-plany" },
-  { title: "Modelové domy", icon: "🏠", count: 74, href: "/kategorie/modelove-domy" },
-  { title: "Nátěry & patina", icon: "🖌️", count: 63, href: "/kategorie/natery-a-patina" },
-  { title: "Osvětlení", icon: "💡", count: 52, href: "/kategorie/osvetleni" },
-  { title: "3D tisk", icon: "🖨️", count: 41, href: "/kategorie/3d-tisk" },
-  { title: "Ze světa", icon: "🌍", count: 38, href: "/kategorie/ze-sveta" },
+const defaultCategories = [
+  { title: "Stavba kolejiště", icon: "🏗️", defaultCount: 214, href: "/kategorie/stavba-kolejiste", slug: "stavba-kolejiste" },
+  { title: "Recenze modelů", icon: "🔍", defaultCount: 186, href: "/kategorie/recenze", slug: "recenze" },
+  { title: "Návody & tipy", icon: "🔧", defaultCount: 153, href: "/kategorie/navody-a-tipy", slug: "navody-a-tipy" },
+  { title: "Krajina & scenérie", icon: "🎨", defaultCount: 128, href: "/kategorie/krajina-a-zelen", slug: "krajina-a-zelen" },
+  { title: "Digitalizace", icon: "⚡", defaultCount: 97, href: "/kategorie/digitalni-rizeni", slug: "digitalni-rizeni" },
+  { title: "Přestavby", icon: "🚃", defaultCount: 142, href: "/kategorie/prestavby", slug: "prestavby" },
+  { title: "Kolejové plány", icon: "📐", defaultCount: 85, href: "/kategorie/kolejove-plany", slug: "kolejove-plany" },
+  { title: "Modelové domy", icon: "🏠", defaultCount: 74, href: "/kategorie/modelove-domy", slug: "modelove-domy" },
+  { title: "Nátěry & patina", icon: "🖌️", defaultCount: 63, href: "/kategorie/natery-a-patina", slug: "natery-a-patina" },
+  { title: "Osvětlení", icon: "💡", defaultCount: 52, href: "/kategorie/osvetleni", slug: "osvetleni" },
+  { title: "3D tisk", icon: "🖨️", defaultCount: 41, href: "/kategorie/3d-tisk", slug: "3d-tisk" },
+  { title: "Ze světa", icon: "🌍", defaultCount: 38, href: "/kategorie/ze-sveta", slug: "ze-sveta" },
 ];
 
 const demoArticles = [
@@ -151,6 +151,10 @@ export default function Home() {
     photos: "4 820",
   });
 
+  const [categories, setCategories] = useState(
+    defaultCategories.map(c => ({ ...c, count: c.defaultCount }))
+  );
+
   useEffect(() => {
     async function fetchStats() {
       try {
@@ -176,6 +180,41 @@ export default function Home() {
       }
     }
     fetchStats();
+  }, []);
+
+  useEffect(() => {
+    async function fetchCategoryCounts() {
+      try {
+        // Fetch all published+verified articles with their category
+        const { data: articles } = await supabase
+          .from("articles")
+          .select("category:categories(slug)")
+          .eq("status", "published")
+          .eq("verified", true);
+
+        if (!articles || articles.length === 0) return;
+
+        // Count articles per category slug
+        const counts: Record<string, number> = {};
+        for (const a of articles) {
+          const slug = (a.category as unknown as { slug: string })?.slug;
+          if (slug) {
+            counts[slug] = (counts[slug] || 0) + 1;
+          }
+        }
+
+        // Update categories — real count if >0, else keep default
+        setCategories(prev =>
+          prev.map(c => ({
+            ...c,
+            count: counts[c.slug] !== undefined ? counts[c.slug] : c.defaultCount,
+          }))
+        );
+      } catch {
+        // fallback — keep defaults
+      }
+    }
+    fetchCategoryCounts();
   }, []);
 
   return (
