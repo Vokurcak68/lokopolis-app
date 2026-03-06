@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import BadgeLogo from "@/components/BadgeLogo";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
@@ -113,6 +114,15 @@ const tags = ["Tillig", "DCC", "epocha IV", "3D tisk", "ČSD", "krajina", "patin
    ============================================================ */
 
 export default function Home() {
+  const router = useRouter();
+  const [searchQuery, setSearchQuery] = useState("");
+
+  function handleSearch(e: React.FormEvent) {
+    e.preventDefault();
+    const q = searchQuery.trim();
+    if (q) router.push(`/hledat?q=${encodeURIComponent(q)}`);
+  }
+
   const [stats, setStats] = useState({
     articles: "1 247",
     members: "385",
@@ -218,7 +228,8 @@ export default function Home() {
           <p style={{ fontSize: "20px", color: "#8a8ea0", maxWidth: "560px", margin: "16px auto 32px" }}>
             Návody, recenze, kolejové plány a komunita modelářů
           </p>
-          <div
+          <form
+            onSubmit={handleSearch}
             style={{
               display: "flex",
               maxWidth: "480px",
@@ -231,6 +242,8 @@ export default function Home() {
           >
             <input
               type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Hledej články, modely, kolejové plány..."
               style={{
                 flex: 1,
@@ -243,6 +256,7 @@ export default function Home() {
               }}
             />
             <button
+              type="submit"
               style={{
                 padding: "14px 24px",
                 background: "#f0a030",
@@ -255,7 +269,7 @@ export default function Home() {
             >
               Hledat
             </button>
-          </div>
+          </form>
         </div>
       </section>
 
