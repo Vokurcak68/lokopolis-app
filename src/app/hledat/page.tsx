@@ -58,17 +58,22 @@ function SearchContent() {
     setSearched(false);
 
     try {
-      // Search in title, excerpt, and content using ilike
-      const searchTerm = `%${q.trim()}%`;
+      const term = q.trim();
+      const pattern = `%${term}%`;
 
-      const { data } = await supabase
+      // Fetch with three separate ilike conditions via or()
+      const { data, error: searchError } = await supabase
         .from("articles")
         .select("id, slug, title, excerpt, content, cover_image_url, published_at, author:profiles(display_name, username), category:categories(name, icon, slug)")
         .eq("status", "published")
         .eq("verified", true)
-        .or(`title.ilike.${searchTerm},excerpt.ilike.${searchTerm},content.ilike.${searchTerm}`)
+        .or(`title.ilike.${pattern},excerpt.ilike.${pattern},content.ilike.${pattern}`)
         .order("published_at", { ascending: false })
         .limit(20);
+
+      if (searchError) {
+        console.error("Search error:", searchError);
+      }
 
       setResults((data as unknown as SearchResult[]) || []);
     } catch {

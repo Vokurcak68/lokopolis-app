@@ -142,7 +142,8 @@ export default function Home() {
         const { count: artCount } = await supabase
           .from("articles")
           .select("*", { count: "exact", head: true })
-          .eq("status", "published");
+          .eq("status", "published")
+          .eq("verified", true);
 
         const { count: memberCount } = await supabase
           .from("profiles")
