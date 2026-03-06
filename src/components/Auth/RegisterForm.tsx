@@ -11,6 +11,7 @@ export default function RegisterForm({
 }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
   const [username, setUsername] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -20,6 +21,13 @@ export default function RegisterForm({
     e.preventDefault();
     setError(null);
     setLoading(true);
+
+    // Validace shody hesel
+    if (password !== passwordConfirm) {
+      setError("Hesla se neshodují");
+      setLoading(false);
+      return;
+    }
 
     // Validace username
     if (!/^[a-zA-Z0-9_-]{3,30}$/.test(username)) {
@@ -133,6 +141,22 @@ export default function RegisterForm({
           minLength={6}
           className="px-4 py-2.5 rounded-lg bg-bg-card border border-border-subtle focus:border-primary focus:outline-none text-white placeholder:text-text-muted/50"
           placeholder="Minimálně 6 znaků"
+        />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label htmlFor="reg-password-confirm" className="text-sm text-text-muted">
+          Heslo znovu
+        </label>
+        <input
+          id="reg-password-confirm"
+          type="password"
+          value={passwordConfirm}
+          onChange={(e) => setPasswordConfirm(e.target.value)}
+          required
+          minLength={6}
+          className="px-4 py-2.5 rounded-lg bg-bg-card border border-border-subtle focus:border-primary focus:outline-none text-white placeholder:text-text-muted/50"
+          placeholder="Zopakujte heslo"
         />
       </div>
 
