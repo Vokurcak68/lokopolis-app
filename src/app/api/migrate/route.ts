@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { Client } from "pg";
 
 const MIGRATION_SQL = `
 -- === PROFILES ===
@@ -153,41 +152,96 @@ export async function GET(request: Request) {
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!supabaseUrl) {
-    return NextResponse.json({ error: "Missing NEXT_PUBLIC_SUPABASE_URL" }, { status: 500 });
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceKey) {
+    return NextResponse.json({
+      error: "Missing env vars",
+      hasUrl: !!supabaseUrl,
+      hasKey: !!serviceKey,
+    }, { status: 500 });
   }
 
-  const projectRef = supabaseUrl.replace("https://", "").split(".")[0];
-  const dbPassword = process.env.DB_PASSWORD || "01Vok412@@@@";
-
-  const client = new Client({
-    host: "db." + projectRef + ".supabase.co",
-    port: 5432,
-    database: "postgres",
-    user: "postgres",
-    password: dbPassword,
-    ssl: { rejectUnauthorized: false },
+  // Use Supabase's built-in pg_net or direct SQL via PostgREST's /rest/v1/rpc
+  // First, create an exec_sql function, then use it
+  const createFnRes = await fetch(`${supabaseUrl}/rest/v1/rpc/query`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+    },
+    body: JSON.stringify({ query: "SELECT 1" }),
   });
 
+  // If rpc/query doesn't exist, we need to use the SQL endpoint directly
+  // Supabase has a /pg endpoint for service role
+  const sqlRes = await fetch(`${supabaseUrl}/rest/v1/`, {
+    method: "GET",
+    headers: {
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+    },
+  });
+
+  // The actual way: use the Supabase Management API pg endpoint
+  // But that needs a different token. Let's try the raw SQL approach via
+  // creating an rpc function first using the service role key.
+
+  // Step 1: Create a helper function via PostgREST
+  // Actually, the simplest way is to use the Supabase client's .rpc()
+  // but we need the function to exist first.
+
+  // Let's try a completely different approach: use the pooler with transaction mode
   try {
-    await client.connect();
-    await client.query(MIGRATION_SQL);
+    const { Client } = await import("pg");
 
-    const catRes = await client.query("SELECT count(*) as c FROM categories");
-    const tabRes = await client.query(
-      "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name"
-    );
+    // Try multiple connection methods
+    const projectRef = supabaseUrl.replace("https://", "").split(".")[0];
+    const password = process.env.DB_PASSWORD || "01Vok412@@@@";
 
-    await client.end();
+    const connectionStrings = [
+      // Session mode pooler
+      `postgresql://postgres.${projectRef}:${encodeURIComponent(password)}@aws-0-eu-central-1.pooler.supabase.com:5432/postgres?sslmode=require`,
+      // Transaction mode pooler
+      `postgresql://postgres.${projectRef}:${encodeURIComponent(password)}@aws-0-eu-central-1.pooler.supabase.com:6543/postgres?sslmode=require`,
+      // Direct
+      `postgresql://postgres:${encodeURIComponent(password)}@db.${projectRef}.supabase.co:5432/postgres?sslmode=require`,
+    ];
+
+    let lastError = "";
+    for (const connStr of connectionStrings) {
+      try {
+        const client = new Client({ connectionString: connStr });
+        await client.connect();
+        await client.query(MIGRATION_SQL);
+
+        const catRes = await client.query("SELECT count(*) as c FROM categories");
+        const tabRes = await client.query(
+          "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name"
+        );
+
+        await client.end();
+
+        return NextResponse.json({
+          success: true,
+          method: connStr.includes("pooler") ? "pooler" : "direct",
+          categories: catRes.rows[0].c,
+          tables: tabRes.rows.map((r: { table_name: string }) => r.table_name),
+        });
+      } catch (e: unknown) {
+        lastError = e instanceof Error ? e.message : String(e);
+        continue;
+      }
+    }
 
     return NextResponse.json({
-      success: true,
-      categories: catRes.rows[0].c,
-      tables: tabRes.rows.map((r: { table_name: string }) => r.table_name),
-    });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    await client.end().catch(() => {});
-    return NextResponse.json({ error: message }, { status: 500 });
+      error: "All connection methods failed",
+      lastError,
+      debug: { projectRef, rpcTest: createFnRes.status, restTest: sqlRes.status },
+    }, { status: 500 });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
