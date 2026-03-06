@@ -9,7 +9,7 @@ import "@/components/Editor/editor.css";
 
 export default function NewArticlePage() {
   const router = useRouter();
-  const [user, setUser] = useState<{ id: string } | null>(null);
+  const [user, setUser] = useState<{ id: string; role: string } | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [title, setTitle] = useState("");
   const [excerpt, setExcerpt] = useState("");
@@ -20,13 +20,20 @@ export default function NewArticlePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [coverUploading, setCoverUploading] = useState(false);
+  const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) {
         router.push("/prihlaseni");
       } else {
-        setUser({ id: data.user.id });
+        // Fetch user role from profiles
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", data.user.id)
+          .single();
+        setUser({ id: data.user.id, role: profile?.role || "user" });
       }
     });
   }, [router]);
@@ -118,6 +125,7 @@ export default function NewArticlePage() {
     setError(null);
 
     const slug = slugify(title);
+    const isAdmin = user.role === "admin";
     const articleData = {
       title: title.trim(),
       slug,
@@ -128,6 +136,7 @@ export default function NewArticlePage() {
       cover_image_url: coverUrl || null,
       status: asDraft ? "draft" : "published",
       published_at: asDraft ? null : new Date().toISOString(),
+      verified: isAdmin ? true : false,
     };
 
     const { error: insertError } = await supabase
@@ -140,13 +149,54 @@ export default function NewArticlePage() {
       return;
     }
 
-    router.push(asDraft ? "/clanky" : `/clanky/${slug}`);
+    if (asDraft) {
+      router.push("/clanky");
+    } else if (user.role === "admin") {
+      router.push(`/clanky/${slug}`);
+    } else {
+      // Non-admin: article awaits verification
+      setSuccess(true);
+    }
   }
 
   if (!user) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="animate-pulse text-text-muted">Načítání…</div>
+      </div>
+    );
+  }
+
+  if (success) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
+        <div className="text-5xl mb-4">✅</div>
+        <h2 className="text-2xl font-bold text-white mb-2">Článek odeslán!</h2>
+        <p className="text-gray-400 mb-6 max-w-md">
+          Váš článek čeká na schválení administrátorem. Jakmile bude ověřen, zobrazí se na webu.
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={() => {
+              setTitle("");
+              setExcerpt("");
+              setContent("");
+              setCategoryId("");
+              setCoverUrl("");
+              setCoverPreview("");
+              setSuccess(false);
+            }}
+            className="px-5 py-2.5 rounded-lg border border-white/10 text-gray-400 hover:text-white transition-all text-sm"
+          >
+            Napsat další
+          </button>
+          <button
+            onClick={() => router.push("/")}
+            className="px-5 py-2.5 rounded-lg bg-primary text-[#0f1117] font-semibold text-sm"
+          >
+            Na hlavní stránku
+          </button>
+        </div>
       </div>
     );
   }

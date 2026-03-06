@@ -33,6 +33,7 @@ export interface Article {
   category_id: string | null;
   author_id: string | null;
   status: ArticleStatus;
+  verified: boolean;
   published_at: string | null;
   created_at: string;
   updated_at: string;
