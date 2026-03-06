@@ -30,10 +30,10 @@ export default function NewArticlePage() {
         // Fetch user role from profiles
         const { data: profile } = await supabase
           .from("profiles")
-          .select("role")
+          .select("role, display_name, username")
           .eq("id", data.user.id)
           .single();
-        setUser({ id: data.user.id, role: profile?.role || "user" });
+        setUser({ id: data.user.id, role: profile?.role || "user", displayName: profile?.display_name || "", username: profile?.username || "" });
       }
     });
   }, [router]);
@@ -149,9 +149,22 @@ export default function NewArticlePage() {
       return;
     }
 
+    // Notify admins if non-admin published
+    if (!asDraft && !isAdmin) {
+      fetch("/api/notify-admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          articleTitle: title.trim(),
+          articleSlug: slug,
+          authorName: user.displayName || user.username || "Neznámý",
+        }),
+      }).catch(() => {}); // fire & forget
+    }
+
     if (asDraft) {
       router.push("/clanky");
-    } else if (user.role === "admin") {
+    } else if (isAdmin) {
       router.push(`/clanky/${slug}`);
     } else {
       // Non-admin: article awaits verification

@@ -194,6 +194,19 @@ export default function EditArticlePage() {
       return;
     }
 
+    // Notify admins if non-admin edited
+    if (!asDraft && !isAdmin) {
+      fetch("/api/notify-admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          articleTitle: title.trim(),
+          articleSlug: newSlug,
+          authorName: "Autor",
+        }),
+      }).catch(() => {});
+    }
+
     if (asDraft) {
       router.push("/clanky");
     } else if (isAdmin) {
