@@ -64,7 +64,26 @@ export default function Header() {
             🔍
           </span>
           {user ? (
-            <UserMenu />
+            <>
+              <Link
+                href="/novy-clanek"
+                style={{
+                  padding: "8px 16px",
+                  border: "none",
+                  borderRadius: "8px",
+                  background: "#f0a030",
+                  color: "#0f1117",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "background 0.2s",
+                  textDecoration: "none",
+                }}
+              >
+                ✏️ Napsat článek
+              </Link>
+              <UserMenu />
+            </>
           ) : (
             <>
               <Link
@@ -143,7 +162,16 @@ export default function Header() {
             ))}
             <div style={{ paddingTop: "12px", borderTop: "1px solid #252838", marginTop: "8px" }}>
               {user ? (
-                <UserMenu />
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <Link
+                    href="/novy-clanek"
+                    style={{ color: "#f0a030", fontSize: "14px", fontWeight: 600, textDecoration: "none" }}
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    ✏️ Napsat článek
+                  </Link>
+                  <UserMenu />
+                </div>
               ) : (
                 <div style={{ display: "flex", gap: "8px" }}>
                   <Link href="/prihlaseni" style={{ color: "#a0a4b8", fontSize: "13px", textDecoration: "none" }}>
