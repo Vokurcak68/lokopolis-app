@@ -24,47 +24,16 @@ const defaultCategories = [
   { title: "Ze světa", icon: "🌍", defaultCount: 38, href: "/kategorie/ze-sveta", slug: "ze-sveta" },
 ];
 
-const demoArticles = [
-  {
-    id: 1,
-    emoji: "🏔️",
-    badge: "Stavba",
-    authorInitials: "PH",
-    author: "Petr Havlík",
-    date: "4. března 2026",
-    title: "Stavba nádraží Měchenice — od plánu po první vlak",
-    excerpt: "Jak jsem navrhl a postavil repliku nádraží z epochy IV. Kompletní postup včetně materiálů a technik.",
-    views: 342,
-    comments: 28,
-    likes: 47,
-  },
-  {
-    id: 2,
-    emoji: "🚂",
-    badge: "Recenze",
-    authorInitials: "MK",
-    author: "Milan Kratochvíl",
-    date: "2. března 2026",
-    title: "Tillig BR 01 — stojí nový model za tu cenu?",
-    excerpt: "Podrobná recenze nové Tillig parní lokomotivy. Srovnání s předchozí verzí, detaily, jízdní vlastnosti.",
-    views: 521,
-    comments: 43,
-    likes: 62,
-  },
-  {
-    id: 3,
-    emoji: "⚡",
-    badge: "Návod",
-    authorInitials: "JN",
-    author: "Jan Novotný",
-    date: "28. února 2026",
-    title: "DCC dekodér do V180 — kompletní návod krok za krokem",
-    excerpt: "Instalace dekodéru Lenz Silver+ do lokomotivy V180 od Tillingu. Včetně nastavení CV hodnot.",
-    views: 289,
-    comments: 15,
-    likes: 31,
-  },
-];
+interface LatestArticle {
+  id: string;
+  slug: string;
+  title: string;
+  excerpt: string | null;
+  cover_image_url: string | null;
+  published_at: string | null;
+  author: { display_name: string | null; username: string | null; avatar_url: string | null } | null;
+  category: { name: string; icon: string } | null;
+}
 
 const demoDownloads = [
   {
@@ -155,6 +124,8 @@ export default function Home() {
     defaultCategories.map(c => ({ ...c, count: c.defaultCount }))
   );
 
+  const [latestArticles, setLatestArticles] = useState<LatestArticle[]>([]);
+
   useEffect(() => {
     async function fetchStats() {
       try {
@@ -180,6 +151,27 @@ export default function Home() {
       }
     }
     fetchStats();
+  }, []);
+
+  useEffect(() => {
+    async function fetchLatestArticles() {
+      try {
+        const { data } = await supabase
+          .from("articles")
+          .select("id, slug, title, excerpt, cover_image_url, published_at, author:profiles(display_name, username, avatar_url), category:categories(name, icon)")
+          .eq("status", "published")
+          .eq("verified", true)
+          .order("published_at", { ascending: false })
+          .limit(3);
+
+        if (data && data.length > 0) {
+          setLatestArticles(data as unknown as LatestArticle[]);
+        }
+      } catch {
+        // fallback — no articles shown
+      }
+    }
+    fetchLatestArticles();
   }, []);
 
   useEffect(() => {
@@ -331,58 +323,58 @@ export default function Home() {
             gap: "20px",
           }}
         >
-          {demoArticles.map((a) => (
-            <div key={a.id} className="article-card">
-              <div className="article-img">
-                <div className="placeholder">{a.emoji}</div>
-                <span className="article-badge">{a.badge}</span>
-              </div>
-              <div style={{ padding: "16px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
-                  <div
-                    style={{
-                      width: "24px",
-                      height: "24px",
-                      borderRadius: "50%",
-                      background: "#353a50",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: "11px",
-                      color: "#a0a4b8",
-                    }}
-                  >
-                    {a.authorInitials}
+          {latestArticles.map((a) => {
+            const authorName = a.author?.display_name || a.author?.username || "Anonym";
+            const initials = authorName.charAt(0).toUpperCase();
+            const date = a.published_at
+              ? new Date(a.published_at).toLocaleDateString("cs-CZ", { day: "numeric", month: "long", year: "numeric" })
+              : "";
+            return (
+              <Link key={a.id} href={`/clanky/${a.slug}`} style={{ textDecoration: "none" }}>
+                <div className="article-card">
+                  <div className="article-img">
+                    {a.cover_image_url ? (
+                      <img src={a.cover_image_url} alt={a.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    ) : (
+                      <div className="placeholder">{a.category?.icon || "📄"}</div>
+                    )}
+                    {a.category && <span className="article-badge">{a.category.icon} {a.category.name}</span>}
                   </div>
-                  <span style={{ fontSize: "12px", color: "#6a6e80" }}>{a.author}</span>
-                  <span style={{ fontSize: "12px", color: "#555a70" }}>· {a.date}</span>
+                  <div style={{ padding: "16px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                      {a.author?.avatar_url ? (
+                        <img src={a.author.avatar_url} alt="" style={{ width: 24, height: 24, borderRadius: "50%", objectFit: "cover" }} />
+                      ) : (
+                        <div
+                          style={{
+                            width: "24px",
+                            height: "24px",
+                            borderRadius: "50%",
+                            background: "#353a50",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: "11px",
+                            color: "#a0a4b8",
+                          }}
+                        >
+                          {initials}
+                        </div>
+                      )}
+                      <span style={{ fontSize: "12px", color: "#6a6e80" }}>{authorName}</span>
+                      <span style={{ fontSize: "12px", color: "#555a70" }}>· {date}</span>
+                    </div>
+                    <h3 style={{ fontSize: "16px", fontWeight: 600, color: "#fff", marginBottom: "8px", lineHeight: 1.4 }}>
+                      {a.title}
+                    </h3>
+                    <p style={{ fontSize: "13px", color: "#8a8ea0", lineHeight: 1.5 }}>
+                      {a.excerpt || ""}
+                    </p>
+                  </div>
                 </div>
-                <h3 style={{ fontSize: "16px", fontWeight: 600, color: "#fff", marginBottom: "8px", lineHeight: 1.4 }}>
-                  {a.title}
-                </h3>
-                <p style={{ fontSize: "13px", color: "#8a8ea0", lineHeight: 1.5 }}>{a.excerpt}</p>
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "16px",
-                    marginTop: "12px",
-                    paddingTop: "12px",
-                    borderTop: "1px solid #252838",
-                  }}
-                >
-                  <span style={{ fontSize: "12px", color: "#6a6e80", display: "flex", alignItems: "center", gap: "4px" }}>
-                    👁️ {a.views}
-                  </span>
-                  <span style={{ fontSize: "12px", color: "#6a6e80", display: "flex", alignItems: "center", gap: "4px" }}>
-                    💬 {a.comments}
-                  </span>
-                  <span style={{ fontSize: "12px", color: "#6a6e80", display: "flex", alignItems: "center", gap: "4px" }}>
-                    ❤️ {a.likes}
-                  </span>
-                </div>
-              </div>
-            </div>
-          ))}
+              </Link>
+            );
+          })}
         </div>
       </section>
 
