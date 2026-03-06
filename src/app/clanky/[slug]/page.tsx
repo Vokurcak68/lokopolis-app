@@ -140,7 +140,7 @@ export default function ArticleDetailPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-16">
+    <div style={{ maxWidth: '896px', margin: '0 auto', padding: '64px 24px' }}>
       {/* Breadcrumb */}
       <nav className="flex items-center gap-2 text-sm text-text-muted mb-8">
         <Link href="/" className="hover:text-primary transition-colors">
