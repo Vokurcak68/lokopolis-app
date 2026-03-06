@@ -74,14 +74,14 @@ a:hover {
   background: linear-gradient(135deg, #1a1e2e 0%, #0f1117 50%, #1a1520 100%);
 }
 
-.hero-section::before {
+.hero-section::after {
   content: '';
   position: absolute;
-  top: 0;
+  bottom: 0;
   left: 0;
   right: 0;
-  bottom: 0;
-  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 100" preserveAspectRatio="none"><defs><linearGradient id="g1" x1="0%25" y1="100%25" x2="100%25" y2="0%25"><stop offset="0%25" stop-color="%23f0a030" stop-opacity="0.05"/><stop offset="100%25" stop-color="%23f0a030" stop-opacity="0"/></linearGradient></defs><rect fill="url(%23g1)" width="1200" height="100"/><line x1="0" y1="88" x2="1200" y2="88" stroke="%23f0a030" stroke-opacity="0.15" stroke-width="2"/><line x1="0" y1="90" x2="1200" y2="90" stroke="%23f0a030" stroke-opacity="0.08" stroke-width="1"/><circle cx="200" cy="88" r="3" fill="%23f0a030" fill-opacity="0.3"/><circle cx="500" cy="88" r="3" fill="%23f0a030" fill-opacity="0.3"/><circle cx="800" cy="88" r="3" fill="%23f0a030" fill-opacity="0.3"/><circle cx="1050" cy="88" r="3" fill="%23f0a030" fill-opacity="0.3"/></svg>') center bottom/100% auto no-repeat;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, rgba(240,160,48,0.3) 20%, rgba(240,160,48,0.15) 50%, rgba(240,160,48,0.3) 80%, transparent 100%);
 }
 
 @media (max-width: 768px) {
@@ -89,10 +89,6 @@ a:hover {
     height: auto;
     min-height: 280px;
     padding: 32px 0 24px;
-    border-bottom: 2px solid rgba(240, 160, 48, 0.15);
-  }
-  .hero-section::before {
-    display: none;
   }
   .stats-bar-inner {
     gap: 20px !important;
