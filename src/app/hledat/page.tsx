@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { Suspense, useEffect, useState, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
@@ -19,7 +19,6 @@ interface SearchResult {
 
 function highlightMatch(text: string, query: string, maxLen = 200): string {
   if (!text) return "";
-  // Strip HTML tags for content search
   const plain = text.replace(/<[^>]*>/g, "");
   const lower = plain.toLowerCase();
   const idx = lower.indexOf(query.toLowerCase());
@@ -30,11 +29,19 @@ function highlightMatch(text: string, query: string, maxLen = 200): string {
 
   const start = Math.max(0, idx - 60);
   const end = Math.min(plain.length, idx + query.length + 140);
-  let snippet = (start > 0 ? "…" : "") + plain.slice(start, end) + (end < plain.length ? "…" : "");
+  const snippet = (start > 0 ? "…" : "") + plain.slice(start, end) + (end < plain.length ? "…" : "");
   return snippet;
 }
 
 export default function SearchPage() {
+  return (
+    <Suspense fallback={<div style={{ textAlign: "center", padding: "64px 0", color: "#6a6e80" }}>Načítání…</div>}>
+      <SearchContent />
+    </Suspense>
+  );
+}
+
+function SearchContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const query = searchParams.get("q") || "";
