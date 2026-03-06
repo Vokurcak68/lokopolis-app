@@ -229,7 +229,7 @@ export default function Home() {
       </section>
 
       {/* ===================== STATS BAR ===================== */}
-      <div style={{ background: "#161822", borderBottom: "1px solid #252838", padding: "16px 0" }}>
+      <div style={{ background: "#161822", borderTop: "1px solid #252838", padding: "12px 0" }}>
         <div
           className="flex flex-wrap justify-center"
           style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 20px", gap: "48px" }}
