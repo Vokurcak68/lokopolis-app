@@ -140,7 +140,7 @@ export default function ArticleDetailPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-16">
+    <div className="mx-auto max-w-4xl px-6 py-16">
       {/* Breadcrumb */}
       <nav className="flex items-center gap-2 text-sm text-text-muted mb-8">
         <Link href="/" className="hover:text-primary transition-colors">
@@ -191,7 +191,7 @@ export default function ArticleDetailPage() {
 
       {/* Cover image */}
       {article.cover_image_url && (
-        <div className="rounded-xl overflow-hidden mb-10">
+        <div className="rounded-xl overflow-hidden mb-12">
           <img
             src={article.cover_image_url}
             alt={article.title}
