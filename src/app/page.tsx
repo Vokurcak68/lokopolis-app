@@ -229,10 +229,10 @@ export default function Home() {
       </section>
 
       {/* ===================== STATS BAR ===================== */}
-      <div style={{ background: "#161822", padding: "14px 0" }}>
+      <div className="stats-bar" style={{ background: "#161822", padding: "14px 0" }}>
         <div
-          className="flex flex-wrap justify-center"
-          style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 20px", gap: "48px" }}
+          className="stats-bar-inner"
+          style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 20px", display: "flex", justifyContent: "center", gap: "48px" }}
         >
           {[
             { num: stats.articles, label: "Článků" },
@@ -241,8 +241,8 @@ export default function Home() {
             { num: stats.photos, label: "Fotografií" },
           ].map((s) => (
             <div key={s.label} style={{ textAlign: "center" }}>
-              <div style={{ fontSize: "24px", fontWeight: 700, color: "#f0a030" }}>{s.num}</div>
-              <div style={{ fontSize: "12px", color: "#6a6e80", textTransform: "uppercase", letterSpacing: "1px", marginTop: "2px" }}>
+              <div className="stats-num" style={{ fontSize: "24px", fontWeight: 700, color: "#f0a030" }}>{s.num}</div>
+              <div className="stats-label" style={{ fontSize: "12px", color: "#6a6e80", textTransform: "uppercase", letterSpacing: "1px", marginTop: "2px" }}>
                 {s.label}
               </div>
             </div>

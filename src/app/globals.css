@@ -94,6 +94,16 @@ a:hover {
   .hero-section::before {
     display: none;
   }
+  .stats-bar-inner {
+    gap: 20px !important;
+  }
+  .stats-num {
+    font-size: 18px !important;
+  }
+  .stats-label {
+    font-size: 10px !important;
+    letter-spacing: 0.5px !important;
+  }
 }
 
 /* === NAV LINKS === */
