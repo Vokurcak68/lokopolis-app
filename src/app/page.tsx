@@ -1,5 +1,9 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import BadgeLogo from "@/components/BadgeLogo";
 import Link from "next/link";
+import { supabase } from "@/lib/supabase";
 
 const categories = [
   {
@@ -76,13 +80,40 @@ const categories = [
   },
 ];
 
-const stats = [
-  { label: "Kategorií", value: "12" },
-  { label: "Článků", value: "0" },
-  { label: "Členů", value: "0" },
-];
-
 export default function Home() {
+  const [stats, setStats] = useState([
+    { label: "Kategorií", value: "12" },
+    { label: "Článků", value: "—" },
+    { label: "Členů", value: "—" },
+  ]);
+
+  useEffect(() => {
+    async function fetchStats() {
+      // Počet kategorií
+      const { count: catCount } = await supabase
+        .from("categories")
+        .select("*", { count: "exact", head: true });
+
+      // Počet publikovaných článků
+      const { count: artCount } = await supabase
+        .from("articles")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "published");
+
+      // Počet členů (profilů)
+      const { count: memberCount } = await supabase
+        .from("profiles")
+        .select("*", { count: "exact", head: true });
+
+      setStats([
+        { label: "Kategorií", value: String(catCount ?? 12) },
+        { label: "Článků", value: String(artCount ?? 0) },
+        { label: "Členů", value: String(memberCount ?? 0) },
+      ]);
+    }
+    fetchStats();
+  }, []);
+
   return (
     <div className="flex flex-col">
       {/* Hero Section */}

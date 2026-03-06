@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import BadgeLogo from "./BadgeLogo";
+import UserMenu from "./Auth/UserMenu";
 
 const navItems = [
   { label: "Články", href: "/clanky" },
@@ -36,6 +37,11 @@ export default function Header() {
             ))}
           </nav>
 
+          {/* Desktop user menu */}
+          <div className="hidden md:block">
+            <UserMenu />
+          </div>
+
           {/* Mobile hamburger */}
           <button
             className="md:hidden text-text-muted hover:text-primary transition-colors"
@@ -66,6 +72,9 @@ export default function Header() {
                   {item.label}
                 </Link>
               ))}
+              <div className="px-2 pt-3 border-t border-border-subtle">
+                <UserMenu />
+              </div>
             </div>
           </nav>
         )}
