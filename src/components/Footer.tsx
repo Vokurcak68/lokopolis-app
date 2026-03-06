@@ -1,42 +1,127 @@
 import Link from "next/link";
 import BadgeLogo from "./BadgeLogo";
 
-const footerLinks = [
-  { label: "Články", href: "/clanky" },
-  { label: "Galerie", href: "/galerie" },
-  { label: "Ke stažení", href: "/ke-stazeni" },
-  { label: "Komunita", href: "/komunita" },
-];
-
 export default function Footer() {
-  const currentYear = new Date().getFullYear();
-
   return (
-    <footer className="border-t border-border-subtle bg-bg-dark">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12">
-        <div className="flex flex-col items-center gap-8">
-          {/* Logo */}
-          <Link href="/" className="hover:opacity-90 transition-opacity">
-            <BadgeLogo size="sm" />
-          </Link>
-
-          {/* Links */}
-          <nav className="flex flex-wrap justify-center gap-6">
-            {footerLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="text-text-muted hover:text-primary transition-colors text-sm tracking-wide uppercase"
-              >
-                {link.label}
+    <footer style={{ marginTop: "64px", background: "#161822", borderTop: "1px solid #252838", padding: "48px 0 24px" }}>
+      <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 20px" }}>
+        {/* Footer grid */}
+        <div
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
+          style={{ gap: "32px", marginBottom: "32px" }}
+        >
+          {/* Brand */}
+          <div className="sm:col-span-2 lg:col-span-1">
+            <div style={{ marginBottom: "12px" }}>
+              <Link href="/" style={{ textDecoration: "none" }}>
+                <BadgeLogo size="sm" />
               </Link>
-            ))}
-          </nav>
+            </div>
+            <p style={{ fontSize: "13px", color: "#6a6e80", maxWidth: "280px" }}>
+              Česká komunita modelové železnice. Články, návody, recenze, galerie a vše pro vaše kolejiště.
+            </p>
+          </div>
 
-          {/* Copyright */}
-          <p className="text-text-muted text-sm text-center">
-            © {currentYear} Lokopolis. Všechna práva vyhrazena.
-          </p>
+          {/* Obsah */}
+          <div>
+            <h4
+              style={{
+                fontSize: "13px",
+                fontWeight: 600,
+                color: "#fff",
+                textTransform: "uppercase",
+                letterSpacing: "1px",
+                marginBottom: "16px",
+              }}
+            >
+              Obsah
+            </h4>
+            <Link href="/clanky" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
+              Články
+            </Link>
+            <Link href="/galerie" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
+              Galerie
+            </Link>
+            <Link href="/ke-stazeni" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
+              Ke stažení
+            </Link>
+            <Link href="#" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
+              Akce
+            </Link>
+          </div>
+
+          {/* Komunita */}
+          <div>
+            <h4
+              style={{
+                fontSize: "13px",
+                fontWeight: 600,
+                color: "#fff",
+                textTransform: "uppercase",
+                letterSpacing: "1px",
+                marginBottom: "16px",
+              }}
+            >
+              Komunita
+            </h4>
+            <Link href="#" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
+              Fórum
+            </Link>
+            <Link href="/komunita" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
+              Členové
+            </Link>
+            <Link href="#" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
+              Pravidla
+            </Link>
+            <Link href="#" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
+              Nový příspěvek
+            </Link>
+          </div>
+
+          {/* Info */}
+          <div>
+            <h4
+              style={{
+                fontSize: "13px",
+                fontWeight: 600,
+                color: "#fff",
+                textTransform: "uppercase",
+                letterSpacing: "1px",
+                marginBottom: "16px",
+              }}
+            >
+              Info
+            </h4>
+            <Link href="#" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
+              O projektu
+            </Link>
+            <Link href="#" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
+              Kontakt
+            </Link>
+            <Link href="#" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
+              RSS
+            </Link>
+            <Link href="#" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
+              Podpořte nás
+            </Link>
+          </div>
+        </div>
+
+        {/* Copyright */}
+        <div
+          style={{
+            borderTop: "1px solid #252838",
+            paddingTop: "24px",
+            display: "flex",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "8px",
+            fontSize: "12px",
+            color: "#555a70",
+          }}
+        >
+          <span>© 2026 Lokopolis.cz — Svět modelové železnice</span>
+          <span>Vytvořeno s ❤️ pro modeláře</span>
         </div>
       </div>
     </footer>

@@ -4,81 +4,160 @@ import Link from "next/link";
 import { useState } from "react";
 import BadgeLogo from "./BadgeLogo";
 import UserMenu from "./Auth/UserMenu";
+import { useAuth } from "./Auth/AuthProvider";
 
 const navItems = [
+  { label: "Domů", href: "/", active: true },
   { label: "Články", href: "/clanky" },
   { label: "Galerie", href: "/galerie" },
   { label: "Ke stažení", href: "/ke-stazeni" },
-  { label: "Komunita", href: "/komunita" },
+  { label: "Akce", href: "#" },
+  { label: "Fórum", href: "#" },
 ];
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { user } = useAuth();
 
   return (
-    <header className="sticky top-0 z-50 border-b border-border-subtle bg-bg-dark/95 backdrop-blur-sm">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex h-16 items-center justify-between">
-          {/* Logo */}
-          <Link href="/" className="shrink-0 hover:opacity-90 transition-opacity">
-            <BadgeLogo size="sm" />
-          </Link>
+    <header
+      style={{
+        background: "#161822",
+        borderBottom: "1px solid #252838",
+        position: "sticky",
+        top: 0,
+        zIndex: 100,
+      }}
+    >
+      <div
+        style={{
+          maxWidth: "1200px",
+          margin: "0 auto",
+          padding: "0 20px",
+          display: "flex",
+          alignItems: "center",
+          height: "64px",
+          justifyContent: "space-between",
+        }}
+      >
+        {/* Logo */}
+        <Link href="/" style={{ textDecoration: "none" }}>
+          <BadgeLogo size="sm" />
+        </Link>
 
-          {/* Desktop nav */}
-          <nav className="hidden md:flex items-center gap-8">
+        {/* Desktop nav */}
+        <nav className="hidden md:flex" style={{ gap: 0 }}>
+          {navItems.map((item) => (
+            <Link
+              key={item.href + item.label}
+              href={item.href}
+              className={`nav-link${item.active ? " active" : ""}`}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+
+        {/* Desktop actions */}
+        <div className="hidden md:flex" style={{ alignItems: "center", gap: "12px" }}>
+          <span style={{ color: "#a0a4b8", cursor: "pointer", fontSize: "18px", padding: "8px" }}>
+            🔍
+          </span>
+          {user ? (
+            <UserMenu />
+          ) : (
+            <>
+              <Link
+                href="/prihlaseni"
+                style={{
+                  padding: "8px 16px",
+                  border: "1px solid #3a3f55",
+                  borderRadius: "8px",
+                  color: "#a0a4b8",
+                  fontSize: "13px",
+                  background: "transparent",
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                  textDecoration: "none",
+                }}
+              >
+                Přihlásit
+              </Link>
+              <Link
+                href="/registrace"
+                style={{
+                  padding: "8px 16px",
+                  border: "none",
+                  borderRadius: "8px",
+                  background: "#f0a030",
+                  color: "#0f1117",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "background 0.2s",
+                  textDecoration: "none",
+                }}
+              >
+                Registrace
+              </Link>
+            </>
+          )}
+        </div>
+
+        {/* Mobile hamburger */}
+        <button
+          className="md:hidden"
+          style={{ color: "#a0a4b8", background: "none", border: "none", cursor: "pointer" }}
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          aria-label="Menu"
+        >
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            {mobileMenuOpen ? (
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            ) : (
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+            )}
+          </svg>
+        </button>
+      </div>
+
+      {/* Mobile menu */}
+      {mobileMenuOpen && (
+        <nav className="md:hidden" style={{ padding: "0 20px 16px", borderTop: "1px solid #252838" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px", paddingTop: "12px" }}>
             {navItems.map((item) => (
               <Link
-                key={item.href}
+                key={item.href + item.label}
                 href={item.href}
-                className="text-text-muted hover:text-primary transition-colors text-sm font-medium tracking-wide uppercase"
+                style={{
+                  color: "#a0a4b8",
+                  fontSize: "14px",
+                  fontWeight: 500,
+                  padding: "8px 0",
+                  textDecoration: "none",
+                }}
+                onClick={() => setMobileMenuOpen(false)}
               >
                 {item.label}
               </Link>
             ))}
-          </nav>
-
-          {/* Desktop user menu */}
-          <div className="hidden md:block">
-            <UserMenu />
-          </div>
-
-          {/* Mobile hamburger */}
-          <button
-            className="md:hidden text-text-muted hover:text-primary transition-colors"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            aria-label="Menu"
-          >
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              {mobileMenuOpen ? (
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              ) : (
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-              )}
-            </svg>
-          </button>
-        </div>
-
-        {/* Mobile menu */}
-        {mobileMenuOpen && (
-          <nav className="md:hidden pb-4 border-t border-border-subtle pt-4">
-            <div className="flex flex-col gap-3">
-              {navItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className="text-text-muted hover:text-primary transition-colors text-sm font-medium tracking-wide uppercase px-2 py-1"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  {item.label}
-                </Link>
-              ))}
-              <div className="px-2 pt-3 border-t border-border-subtle">
+            <div style={{ paddingTop: "12px", borderTop: "1px solid #252838", marginTop: "8px" }}>
+              {user ? (
                 <UserMenu />
-              </div>
+              ) : (
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <Link href="/prihlaseni" style={{ color: "#a0a4b8", fontSize: "13px", textDecoration: "none" }}>
+                    Přihlásit
+                  </Link>
+                  <Link href="/registrace" style={{ color: "#f0a030", fontSize: "13px", fontWeight: 600, textDecoration: "none" }}>
+                    Registrace
+                  </Link>
+                </div>
+              )}
             </div>
-          </nav>
-        )}
-      </div>
+          </div>
+        </nav>
+      )}
     </header>
   );
 }
