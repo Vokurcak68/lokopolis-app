@@ -161,11 +161,11 @@ export default function ArticleDetailPage() {
       </nav>
 
       {/* Article header */}
-      <h1 className="text-3xl md:text-4xl font-bold text-white mb-4">
+      <h1 className="text-2xl md:text-3xl font-bold text-white mb-4 text-center">
         {article.title}
       </h1>
 
-      <div className="flex items-center gap-4 text-sm text-text-muted mb-8">
+      <div className="flex items-center justify-center gap-4 text-sm text-text-muted mb-8">
         {/* Autor */}
         <div className="flex items-center gap-2">
           {article.author?.avatar_url ? (
@@ -201,9 +201,10 @@ export default function ArticleDetailPage() {
       )}
 
       {/* Obsah */}
-      <article className="prose prose-invert prose-orange max-w-none mb-16 text-text-main leading-relaxed whitespace-pre-wrap">
-        {article.content || "Tento článek zatím nemá obsah."}
-      </article>
+      <article
+        className="article-content mb-16"
+        dangerouslySetInnerHTML={{ __html: article.content || "<p>Tento článek zatím nemá obsah.</p>" }}
+      />
 
       {/* Komentáře */}
       <section className="border-t border-border-subtle pt-10">
