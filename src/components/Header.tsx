@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import BadgeLogo from "./BadgeLogo";
 import UserMenu from "./Auth/UserMenu";
 import { useAuth } from "./Auth/AuthProvider";
+import { supabase } from "@/lib/supabase";
 
 const navItems = [
   { label: "Domů", href: "/", active: true },
@@ -17,7 +18,22 @@ const navItems = [
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const [pendingCount, setPendingCount] = useState(0);
+  const isAdmin = profile?.role === "admin";
+
+  // Fetch pending articles count for admin
+  useEffect(() => {
+    if (!isAdmin) return;
+    supabase
+      .from("articles")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "published")
+      .eq("verified", false)
+      .then(({ count }) => {
+        if (count !== null) setPendingCount(count);
+      });
+  }, [isAdmin]);
 
   return (
     <header
@@ -65,6 +81,42 @@ export default function Header() {
           </span>
           {user ? (
             <>
+              {isAdmin && pendingCount > 0 && (
+                <Link
+                  href="/admin/clanky"
+                  style={{
+                    position: "relative",
+                    padding: "8px 12px",
+                    border: "1px solid #3a3f55",
+                    borderRadius: "8px",
+                    color: "#f0a030",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    textDecoration: "none",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  🔔
+                  <span
+                    style={{
+                      background: "#ef4444",
+                      color: "#fff",
+                      fontSize: "11px",
+                      fontWeight: 700,
+                      borderRadius: "50%",
+                      width: "18px",
+                      height: "18px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {pendingCount}
+                  </span>
+                </Link>
+              )}
               <Link
                 href="/novy-clanek"
                 style={{

@@ -149,19 +149,6 @@ export default function NewArticlePage() {
       return;
     }
 
-    // Notify admins if non-admin published
-    if (!asDraft && !isAdmin) {
-      fetch("/api/notify-admin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          articleTitle: title.trim(),
-          articleSlug: slug,
-          authorName: user.displayName || user.username || "Neznámý",
-        }),
-      }).catch(() => {}); // fire & forget
-    }
-
     if (asDraft) {
       router.push("/clanky");
     } else if (isAdmin) {
