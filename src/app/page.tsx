@@ -137,18 +137,19 @@ export default function Home() {
   const [latestArticles, setLatestArticles] = useState<LatestArticle[]>([]);
 
   useEffect(() => {
-    async function fetchStats() {
+    async function fetchAll() {
       try {
-        const { count: artCount } = await supabase
-          .from("articles")
-          .select("*", { count: "exact", head: true })
-          .eq("status", "published")
-          .eq("verified", true);
+        // All 4 queries in parallel
+        const [statsRes, membersRes, latestRes, catCountsRes] = await Promise.all([
+          supabase.from("articles").select("*", { count: "exact", head: true }).eq("status", "published").eq("verified", true),
+          supabase.from("profiles").select("*", { count: "exact", head: true }),
+          supabase.from("articles").select("id, slug, title, excerpt, cover_image_url, published_at, author:profiles(display_name, username, avatar_url), category:categories(name, icon)").eq("status", "published").eq("verified", true).order("published_at", { ascending: false }).limit(3),
+          supabase.from("articles").select("category:categories(slug)").eq("status", "published").eq("verified", true),
+        ]);
 
-        const { count: memberCount } = await supabase
-          .from("profiles")
-          .select("*", { count: "exact", head: true });
-
+        // Stats
+        const artCount = statsRes.count;
+        const memberCount = membersRes.count;
         if (artCount !== null || memberCount !== null) {
           setStats({
             articles: artCount !== null ? artCount.toLocaleString("cs-CZ") : "1 247",
@@ -157,67 +158,31 @@ export default function Home() {
             photos: "4 820",
           });
         }
-      } catch {
-        // fallback — keep defaults
-      }
-    }
-    fetchStats();
-  }, []);
 
-  useEffect(() => {
-    async function fetchLatestArticles() {
-      try {
-        const { data } = await supabase
-          .from("articles")
-          .select("id, slug, title, excerpt, cover_image_url, published_at, author:profiles(display_name, username, avatar_url), category:categories(name, icon)")
-          .eq("status", "published")
-          .eq("verified", true)
-          .order("published_at", { ascending: false })
-          .limit(3);
-
-        if (data && data.length > 0) {
-          setLatestArticles(data as unknown as LatestArticle[]);
+        // Latest articles
+        if (latestRes.data && latestRes.data.length > 0) {
+          setLatestArticles(latestRes.data as unknown as LatestArticle[]);
         }
-      } catch {
-        // fallback — no articles shown
-      }
-    }
-    fetchLatestArticles();
-  }, []);
 
-  useEffect(() => {
-    async function fetchCategoryCounts() {
-      try {
-        // Fetch all published+verified articles with their category
-        const { data: articles } = await supabase
-          .from("articles")
-          .select("category:categories(slug)")
-          .eq("status", "published")
-          .eq("verified", true);
-
-        if (!articles || articles.length === 0) return;
-
-        // Count articles per category slug
-        const counts: Record<string, number> = {};
-        for (const a of articles) {
-          const slug = (a.category as unknown as { slug: string })?.slug;
-          if (slug) {
-            counts[slug] = (counts[slug] || 0) + 1;
+        // Category counts
+        if (catCountsRes.data && catCountsRes.data.length > 0) {
+          const counts: Record<string, number> = {};
+          for (const a of catCountsRes.data) {
+            const slug = (a.category as unknown as { slug: string })?.slug;
+            if (slug) counts[slug] = (counts[slug] || 0) + 1;
           }
+          setCategories(prev =>
+            prev.map(c => ({
+              ...c,
+              count: counts[c.slug] !== undefined ? counts[c.slug] : c.defaultCount,
+            }))
+          );
         }
-
-        // Update categories — real count if >0, else keep default
-        setCategories(prev =>
-          prev.map(c => ({
-            ...c,
-            count: counts[c.slug] !== undefined ? counts[c.slug] : c.defaultCount,
-          }))
-        );
       } catch {
         // fallback — keep defaults
       }
     }
-    fetchCategoryCounts();
+    fetchAll();
   }, []);
 
   return (

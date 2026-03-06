@@ -11,17 +11,16 @@ export default function ArticlesPage() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Load categories once on mount
   useEffect(() => {
-    async function fetchCategories() {
-      const { data } = await supabase
-        .from("categories")
-        .select("*")
-        .order("sort_order");
-      if (data) setCategories(data);
-    }
-    fetchCategories();
+    supabase
+      .from("categories")
+      .select("*")
+      .order("sort_order")
+      .then(({ data }) => { if (data) setCategories(data); });
   }, []);
 
+  // Load articles when category filter changes
   useEffect(() => {
     async function fetchArticles() {
       setLoading(true);
@@ -29,6 +28,7 @@ export default function ArticlesPage() {
         .from("articles")
         .select("*, author:profiles(*), category:categories(*)")
         .eq("status", "published")
+        .eq("verified", true)
         .order("published_at", { ascending: false });
 
       if (selectedCategory) {
