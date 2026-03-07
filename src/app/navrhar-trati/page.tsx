@@ -27,32 +27,82 @@ interface TrackPiece {
   type: "straight" | "curve" | "turnout-left" | "turnout-right" | "crossing";
 }
 
-interface PlacedPiece {
-  piece: TrackPiece;
-  x: number;
-  y: number;
-  rotation: number;
-}
-
-interface LayoutResult {
-  pieces: PlacedPiece[];
-  bom: { piece: TrackPiece; count: number }[];
-  description: string;
-  warnings: string[];
-  dimensions: { width: number; height: number };
-}
-
 interface FormData {
   boardShape: BoardShape;
-  width: number;       // cm — main width
-  height: number;      // cm — main depth
-  width2: number;      // cm — L-shape side arm width
-  height2: number;     // cm — L-shape side arm depth
-  lCorner: LCorner;    // L-shape corner position
-  uArmDepth: number;   // cm — U-shape arm depth (both sides)
+  width: number;
+  height: number;
+  width2: number;
+  height2: number;
+  lCorner: LCorner;
+  uArmDepth: number;
   scale: Scale;
   trackSystem: TrackSystem;
   character: LayoutCharacter;
+}
+
+/* ===========================
+   AI TRACK TYPES
+   =========================== */
+interface TrackStraight {
+  type: "straight";
+  x1: number; y1: number; x2: number; y2: number;
+  label?: string;
+  secondary?: boolean;
+}
+interface TrackCurve {
+  type: "curve";
+  cx: number; cy: number; r: number;
+  startAngle: number; endAngle: number;
+  label?: string;
+  secondary?: boolean;
+}
+interface TrackTurnout {
+  type: "turnout";
+  x: number; y: number;
+  angle: number;
+  direction: "left" | "right";
+  label?: string;
+}
+interface TrackStation {
+  type: "station";
+  x: number; y: number;
+  width: number;
+  tracks: number;
+  label?: string;
+}
+interface TrackBuffer {
+  type: "buffer";
+  x: number; y: number;
+  angle: number;
+}
+interface TrackTunnel {
+  type: "tunnel";
+  x1: number; y1: number; x2: number; y2: number;
+  label?: string;
+  secondary?: boolean;
+}
+interface TrackBridge {
+  type: "bridge";
+  x1: number; y1: number; x2: number; y2: number;
+  label?: string;
+  secondary?: boolean;
+}
+
+type TrackSegment = TrackStraight | TrackCurve | TrackTurnout | TrackStation | TrackBuffer | TrackTunnel | TrackBridge;
+
+interface TrackLabel {
+  x: number; y: number;
+  text: string;
+  fontSize?: number;
+}
+
+interface AIResult {
+  description: string;
+  bom: { name: string; nameCz: string; type: string; count: number }[];
+  warnings: string[];
+  tracks: TrackSegment[];
+  labels?: TrackLabel[];
+  board: { width: number; height: number };
 }
 
 /* ===========================
@@ -137,664 +187,20 @@ const CHARACTER_OPTIONS: { value: LayoutCharacter; label: string; icon: string; 
 ];
 
 /* ===========================
-   LAYOUT GENERATOR
+   AI TRACK PLAN SVG RENDERER
    =========================== */
-function generateLayout(form: FormData): LayoutResult {
-  const catalog = TRACK_CATALOGS[form.trackSystem];
-  const pieces: PlacedPiece[] = [];
-  const bomMap = new Map<string, { piece: TrackPiece; count: number }>();
-  const warnings: string[] = [];
-
-  // Board dimensions in mm
-  const boardW = form.width * 10;
-  const boardH = form.height * 10;
-
-  // Area factor — scale piece counts to board area relative to a 200×100cm reference
-  const refArea = 2000 * 1000; // 200cm × 100cm in mm²
-  let effectiveArea: number;
-  if (form.boardShape === "l-shape") {
-    const mainArea = boardW * boardH;
-    const sideArea = form.width2 * 10 * form.height2 * 10;
-    effectiveArea = mainArea + sideArea;
-  } else if (form.boardShape === "u-shape") {
-    const mainArea = boardW * boardH;
-    const armsArea = 2 * form.uArmDepth * 10 * boardH;
-    effectiveArea = mainArea + armsArea;
-  } else {
-    effectiveArea = boardW * boardH;
-  }
-  const areaFactor = Math.max(0.5, Math.min(3, effectiveArea / refArea));
-
-  // Find track pieces by type
-  const straights = catalog.pieces.filter((p) => p.type === "straight");
-  const curves = catalog.pieces.filter((p) => p.type === "curve");
-  const turnoutL = catalog.pieces.find((p) => p.type === "turnout-left");
-  const turnoutR = catalog.pieces.find((p) => p.type === "turnout-right");
-
-  const mainStraight = straights[0];
-  const shortStraight = straights.length > 1 ? straights[1] : straights[0];
-  const tightCurve = curves[0]; // smallest radius
-  const wideCurve = curves.length > 1 ? curves[curves.length - 1] : curves[0]; // widest radius
-  const mediumCurve = curves.length > 2 ? curves[1] : curves[0];
-
-  if (!mainStraight || !tightCurve) {
-    return {
-      pieces,
-      bom: [],
-      description: "Nelze vygenerovat — chybí díly v katalogu.",
-      warnings: ["Katalog nemá potřebné díly."],
-      dimensions: { width: 0, height: 0 },
-    };
-  }
-
-  const addToBom = (piece: TrackPiece, count: number = 1) => {
-    const c = Math.max(1, Math.round(count));
-    const existing = bomMap.get(piece.id);
-    if (existing) existing.count += c;
-    else bomMap.set(piece.id, { piece, count: c });
-  };
-
-  const scaledCount = (base: number) => Math.max(1, Math.round(base * areaFactor));
-
-  let description = "";
-  const scaleInfo = `Měřítko ${form.scale} (1:${SCALE_FACTOR[form.scale]}), systém ${catalog.name}.`;
-
-  switch (form.character) {
-    case "horska-trat": {
-      // Mountain line: single-track, tight curves, tunnels, passing loops
-      const curvesFor180 = Math.ceil(180 / (tightCurve.angle ?? 30));
-      addToBom(mainStraight, scaledCount(6));
-      if (shortStraight.id !== mainStraight.id) addToBom(shortStraight, scaledCount(4));
-      addToBom(tightCurve, scaledCount(curvesFor180 * 2 + 4));
-      if (turnoutL) addToBom(turnoutL, Math.max(1, Math.round(areaFactor)));
-      if (turnoutR) addToBom(turnoutR, Math.max(1, Math.round(areaFactor)));
-
-      description = `${scaleInfo} Horská jednokolejná trať s těsnými oblouky (R=${tightCurve.radius}mm), výhybnou pro míjení a tunely. Trať stoupá a klesá — výškové rozdíly je třeba řešit ručně podložkami (doporučeno 3–4 % stoupání).`;
-      warnings.push("Výškové rozdíly (stoupání/klesání) je nutné vyřešit ručně pomocí podložek nebo stoupacích modulů.");
-      if (boardW < 1200 || boardH < 600) {
-        warnings.push("Pro horskou trať doporučujeme alespoň 120 × 60 cm.");
-      }
-      break;
-    }
-
-    case "hlavni-koridor": {
-      // Main corridor: double track, wide curves, long straights, station
-      const curvesFor180 = Math.ceil(180 / (wideCurve.angle ?? 30));
-      // Double track = 2× everything for main line
-      addToBom(mainStraight, scaledCount(12)); // double the straights
-      addToBom(wideCurve, scaledCount(curvesFor180 * 2 * 2)); // double curves for both loops
-      if (mediumCurve.id !== wideCurve.id) addToBom(mediumCurve, scaledCount(curvesFor180 * 2)); // parallel inner track
-      // Station with through tracks
-      if (turnoutL) addToBom(turnoutL, Math.max(2, scaledCount(2)));
-      if (turnoutR) addToBom(turnoutR, Math.max(2, scaledCount(2)));
-      addToBom(mainStraight, scaledCount(6)); // station straights
-
-      description = `${scaleInfo} Dvoukolejný hlavní koridor s plynulými oblouky (R=${wideCurve.radius}mm), dlouhými rovnými úseky a průjezdnou stanicí. Vhodné pro rychlíky a IC vlaky.`;
-      if (boardW < 1800) {
-        warnings.push("Dvoukolejná trať s velkými poloměry vyžaduje ideálně alespoň 180 cm šířky.");
-      }
-      break;
-    }
-
-    case "stanice-vlecky": {
-      // Station + sidings: many turnouts, complex track
-      addToBom(mainStraight, scaledCount(10));
-      if (shortStraight.id !== mainStraight.id) addToBom(shortStraight, scaledCount(8));
-      const curvesFor90 = Math.ceil(90 / (mediumCurve.angle ?? 30));
-      addToBom(mediumCurve, scaledCount(curvesFor90 * 4));
-      // Lots of turnouts for station and sidings
-      const turnoutCount = Math.max(3, scaledCount(4));
-      if (turnoutL) addToBom(turnoutL, turnoutCount);
-      if (turnoutR) addToBom(turnoutR, turnoutCount);
-
-      description = `${scaleInfo} Centrální stanice s ${turnoutCount * 2}× výhybkami, průjezdními kolejemi, vlečkami k průmyslovým objektům a odstavnou skupinou. Ideální pro posunovací operace.`;
-      if (boardW < 1500) {
-        warnings.push("Složitá stanice s vlečkami vyžaduje ideálně alespoň 150 cm šířky pro pohodlné uspořádání.");
-      }
-      break;
-    }
-
-    case "mala-diorama": {
-      // Small diorama: minimal, compact, simple oval or point-to-point
-      const curvesFor180 = Math.ceil(180 / (tightCurve.angle ?? 30));
-      addToBom(mainStraight, scaledCount(4));
-      addToBom(tightCurve, scaledCount(curvesFor180 * 2));
-      if (areaFactor > 0.8 && turnoutL) {
-        addToBom(turnoutL, 1);
-        if (turnoutR) addToBom(turnoutR, 1);
-        addToBom(mainStraight, 2);
-        description = `${scaleInfo} Kompaktní dioráma — jednoduchý ovál s jednou zastávkou a krátkou odstavnou kolejí. Optimalizováno pro malý prostor.`;
-      } else {
-        description = `${scaleInfo} Minimalistická dioráma — jednoduchý ovál bez výhybek. Ideální pro začátečníky nebo výstavní účely.`;
-      }
-      break;
-    }
-
-    case "prujezdna-stanice": {
-      // Oval with passing station: 2+ station tracks + through track
-      const curvesFor180 = Math.ceil(180 / (mediumCurve.angle ?? 30));
-      addToBom(mainStraight, scaledCount(8));
-      addToBom(mediumCurve, scaledCount(curvesFor180 * 2));
-      // Station throat: 2 turnouts each side = 4 total
-      if (turnoutL) addToBom(turnoutL, 2);
-      if (turnoutR) addToBom(turnoutR, 2);
-      // Station track straights
-      addToBom(mainStraight, scaledCount(4));
-      if (shortStraight.id !== mainStraight.id) addToBom(shortStraight, scaledCount(2));
-
-      description = `${scaleInfo} Ovál s průjezdnou stanicí — hlavní trať (průjezdní kolej) + 2 staniční koleje s výhybkami v obou zhlavích. Umožňuje míjení a předjíždění vlaků.`;
-      break;
-    }
-
-    case "prumyslova-vlecka": {
-      // Industrial spur: point-to-point, many turnouts for spurs
-      addToBom(mainStraight, scaledCount(8));
-      if (shortStraight.id !== mainStraight.id) addToBom(shortStraight, scaledCount(6));
-      const curvesFor90 = Math.ceil(90 / (mediumCurve.angle ?? 30));
-      addToBom(mediumCurve, scaledCount(curvesFor90 * 2));
-      // Industrial turnouts
-      const turnoutCount = Math.max(2, scaledCount(3));
-      if (turnoutL) addToBom(turnoutL, turnoutCount);
-      if (turnoutR) addToBom(turnoutR, turnoutCount);
-
-      description = `${scaleInfo} Průmyslová vlečka — bod-bod trať s ${turnoutCount * 2}× výhybkami, nakládacími rampami, skladovými kolejemi. Zaměřeno na posunovací operace s motorovými lokomotivami.`;
-      break;
-    }
-  }
-
-  // Board shape notes
-  if (form.boardShape === "l-shape") {
-    description += ` Deska tvaru L (${form.width}×${form.height} cm + rameno ${form.width2}×${form.height2} cm).`;
-  } else if (form.boardShape === "u-shape") {
-    description += ` Deska tvaru U (${form.width}×${form.height} cm + 2× ramena hloubky ${form.uArmDepth} cm).`;
-  }
-
-  return {
-    pieces,
-    bom: Array.from(bomMap.values()).sort((a, b) => {
-      const order: Record<string, number> = { straight: 0, curve: 1, "turnout-left": 2, "turnout-right": 3, crossing: 4 };
-      return (order[a.piece.type] ?? 5) - (order[b.piece.type] ?? 5);
-    }),
-    description,
-    warnings,
-    dimensions: { width: boardW, height: boardH },
-  };
-}
-
-/* ===========================
-   SVG RENDERER
-   =========================== */
-function LayoutSVG({ result, form }: { result: LayoutResult; form: FormData }) {
-  const boardW = form.width * 10;
-  const boardH = form.height * 10;
+function AITrackPlanSVG({ tracks, labels, board, form }: {
+  tracks: TrackSegment[];
+  labels?: TrackLabel[];
+  board: { width: number; height: number };
+  form: FormData;
+}) {
+  const boardW = board.width;
+  const boardH = board.height;
   const padding = 60;
   const svgW = 800;
 
   // Compute total SVG area based on board shape
-  let totalW = boardW;
-  let totalH = boardH;
-  if (form.boardShape === "l-shape") {
-    totalW = Math.max(boardW, form.width2 * 10);
-    totalH = boardH + form.height2 * 10;
-  } else if (form.boardShape === "u-shape") {
-    totalW = boardW + 2 * form.uArmDepth * 10;
-    totalH = boardH;
-  }
-
-  const svgH = (totalH / totalW) * (svgW - padding * 2) + padding * 2;
-  const scale = (svgW - padding * 2) / totalW;
-
-  // Offsets for centering within the SVG
-  const offX = padding;
-  const offY = padding / 2;
-
-  // Board polygon path
-  let boardPath = "";
-  if (form.boardShape === "rectangle") {
-    boardPath = `M ${offX} ${offY} h ${boardW * scale} v ${boardH * scale} h ${-boardW * scale} Z`;
-  } else if (form.boardShape === "l-shape") {
-    const w1 = boardW * scale;
-    const h1 = boardH * scale;
-    const w2 = form.width2 * 10 * scale;
-    const h2 = form.height2 * 10 * scale;
-    // L-shape depends on corner
-    if (form.lCorner === "top-right") {
-      boardPath = `M ${offX} ${offY} h ${w1} v ${h1} h ${-(w1 - w2)} v ${h2} h ${-w2} Z`;
-    } else if (form.lCorner === "top-left") {
-      boardPath = `M ${offX + w2} ${offY} h ${w1 - w2} v ${h1 + h2} h ${-w1} v ${-h1} h ${w2 - 0} Z`;
-      // Simpler: draw from top-left
-      boardPath = `M ${offX} ${offY} h ${w1} v ${h1 + h2} h ${-w2} v ${-h2} h ${-(w1 - w2)} Z`;
-    } else if (form.lCorner === "bottom-right") {
-      boardPath = `M ${offX} ${offY} h ${w1} v ${h1 + h2} h ${-w2} v ${-h2} h ${-(w1 - w2)} Z`;
-    } else {
-      // bottom-left
-      boardPath = `M ${offX} ${offY} h ${w1} v ${h1} h ${-(w1 - w2)} v ${h2} h ${-w2} Z`;
-    }
-  } else if (form.boardShape === "u-shape") {
-    const armW = form.uArmDepth * 10 * scale;
-    const w = boardW * scale;
-    const h = boardH * scale;
-    // U opens upward: main bar at bottom, two arms going up
-    boardPath = `M ${offX} ${offY} h ${armW} v ${h * 0.4} h ${w - 0} v ${-h * 0.4} h ${armW} v ${h} h ${-(w + 2 * armW)} Z`;
-  }
-
-  // Grid generation based on board area
-  const gridLinesV = Math.floor(totalW / 100) + 1;
-  const gridLinesH = Math.floor(totalH / 100) + 1;
-
-  // Track schematic rendering helper
-  const renderTrackSchematic = () => {
-    const cx = offX + (boardW / 2) * scale;
-    const cy = offY + (boardH / 2) * scale;
-    const bw = boardW * scale;
-    const bh = boardH * scale;
-
-    // For non-rectangle shapes, adjust cx/cy to account for the full board
-    const fullCx = form.boardShape === "u-shape" ? offX + (totalW / 2) * scale : cx;
-
-    switch (form.character) {
-      case "mala-diorama": {
-        // Simple oval
-        const rx = Math.min(bw * 0.35, bh * 0.8);
-        const ry = Math.min(bh * 0.3, bw * 0.3);
-        return (
-          <g>
-            <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="none" stroke="var(--accent)" strokeWidth="3.5" />
-            {/* Small halt */}
-            <rect
-              x={cx - rx * 0.4} y={cy - ry - 12} width={rx * 0.8} height={10}
-              fill="var(--accent)" opacity="0.15" stroke="var(--accent)" strokeWidth="0.5" rx="2"
-            />
-            <text x={cx} y={cy - ry - 16} fill="var(--accent)" fontSize="9" textAnchor="middle" fontWeight="600">
-              Zastávka
-            </text>
-            {/* Direction arrow */}
-            <polygon
-              points={`${cx + rx * 0.5 - 5},${cy - ry - 1} ${cx + rx * 0.5 + 5},${cy - ry - 1} ${cx + rx * 0.5},${cy - ry - 8}`}
-              fill="var(--accent)"
-            />
-          </g>
-        );
-      }
-
-      case "horska-trat": {
-        // Single-track mainline with tight curves, tunnel, passing loop
-        const rx = Math.min(bw * 0.38, bh * 0.9);
-        const ry = Math.min(bh * 0.32, bw * 0.35);
-        return (
-          <g>
-            {/* Main oval track */}
-            <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="none" stroke="var(--accent)" strokeWidth="3" />
-            {/* Tunnel section (dashed) on top left */}
-            <path
-              d={`M ${cx - rx * 0.7} ${cy - ry * 0.7} A ${rx} ${ry} 0 0 1 ${cx - rx * 0.2} ${cy - ry}`}
-              fill="none" stroke="var(--accent)" strokeWidth="4" strokeDasharray="8,6" opacity="0.7"
-            />
-            {/* Tunnel portal markers */}
-            <rect x={cx - rx * 0.72 - 4} y={cy - ry * 0.72 - 4} width="8" height="8" rx="2" fill="var(--text-dim)" opacity="0.6" />
-            <text x={cx - rx * 0.72} y={cy - ry * 0.72 - 8} fill="var(--text-dim)" fontSize="8" textAnchor="middle">🚇</text>
-            {/* Passing loop */}
-            <path
-              d={`M ${cx + rx * 0.1} ${cy + ry} Q ${cx + rx * 0.3} ${cy + ry + 18} ${cx + rx * 0.6} ${cy + ry}`}
-              fill="none" stroke="var(--accent)" strokeWidth="2" opacity="0.6"
-            />
-            <text x={cx + rx * 0.35} y={cy + ry + 28} fill="var(--text-dim)" fontSize="8" textAnchor="middle">
-              Výhybna
-            </text>
-            {/* Elevation indicator */}
-            <text x={cx + rx + 8} y={cy - ry * 0.3} fill="var(--text-dim)" fontSize="9" textAnchor="start" opacity="0.7">
-              ↗ 3%
-            </text>
-            <text x={cx - rx - 8} y={cy + ry * 0.3} fill="var(--text-dim)" fontSize="9" textAnchor="end" opacity="0.7">
-              ↘ 3%
-            </text>
-          </g>
-        );
-      }
-
-      case "hlavni-koridor": {
-        // Double-track mainline with station
-        const rx = Math.min(bw * 0.38, bh * 0.9);
-        const ry = Math.min(bh * 0.28, bw * 0.3);
-        const trackGap = 8;
-        return (
-          <g>
-            {/* Outer track */}
-            <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="none" stroke="var(--accent)" strokeWidth="3" />
-            {/* Inner track (parallel) */}
-            <ellipse cx={cx} cy={cy} rx={rx - trackGap} ry={ry - trackGap} fill="none" stroke="var(--accent)" strokeWidth="2.5" opacity="0.6" />
-            {/* Station area */}
-            <rect
-              x={cx - rx * 0.45} y={cy - ry - 28} width={rx * 0.9} height={24}
-              fill="var(--accent)" opacity="0.08" stroke="var(--accent)" strokeWidth="0.5" rx="3"
-              strokeDasharray="4,2"
-            />
-            {/* Station tracks (extra parallel lines in station area) */}
-            <line
-              x1={cx - rx * 0.35} y1={cy - ry - 10} x2={cx + rx * 0.35} y2={cy - ry - 10}
-              stroke="var(--accent)" strokeWidth="2" opacity="0.4"
-            />
-            <line
-              x1={cx - rx * 0.3} y1={cy - ry - 18} x2={cx + rx * 0.3} y2={cy - ry - 18}
-              stroke="var(--accent)" strokeWidth="1.5" opacity="0.3"
-            />
-            <text x={cx} y={cy - ry - 32} fill="var(--accent)" fontSize="10" textAnchor="middle" fontWeight="600">
-              🏛️ Stanice
-            </text>
-            {/* Direction arrows on both tracks */}
-            <polygon
-              points={`${cx + rx * 0.4 - 4},${cy - ry} ${cx + rx * 0.4 + 4},${cy - ry} ${cx + rx * 0.4},${cy - ry - 7}`}
-              fill="var(--accent)"
-            />
-            <polygon
-              points={`${cx - rx * 0.4 - 4},${cy + ry} ${cx - rx * 0.4 + 4},${cy + ry} ${cx - rx * 0.4},${cy + ry + 7}`}
-              fill="var(--accent)" opacity="0.6"
-            />
-          </g>
-        );
-      }
-
-      case "stanice-vlecky": {
-        // Complex station with sidings and freight yard
-        const trackY = cy;
-        const leftX = offX + bw * 0.08;
-        const rightX = offX + bw * 0.92;
-        const stationLeft = offX + bw * 0.25;
-        const stationRight = offX + bw * 0.75;
-        return (
-          <g>
-            {/* Main through line */}
-            <line x1={leftX} y1={trackY} x2={rightX} y2={trackY} stroke="var(--accent)" strokeWidth="3.5" />
-            {/* Station area background */}
-            <rect
-              x={stationLeft} y={trackY - 45} width={stationRight - stationLeft} height={90}
-              fill="var(--accent)" opacity="0.06" stroke="var(--accent)" strokeWidth="0.5" rx="4"
-              strokeDasharray="4,2"
-            />
-            {/* Station tracks (parallel) */}
-            <line x1={stationLeft + 15} y1={trackY - 14} x2={stationRight - 15} y2={trackY - 14}
-              stroke="var(--accent)" strokeWidth="2" opacity="0.5" />
-            <line x1={stationLeft + 25} y1={trackY - 28} x2={stationRight - 25} y2={trackY - 28}
-              stroke="var(--accent)" strokeWidth="1.5" opacity="0.35" />
-            {/* Turnout lines (throat) */}
-            <line x1={stationLeft} y1={trackY} x2={stationLeft + 15} y2={trackY - 14}
-              stroke="var(--accent)" strokeWidth="2" opacity="0.5" />
-            <line x1={stationRight} y1={trackY} x2={stationRight - 15} y2={trackY - 14}
-              stroke="var(--accent)" strokeWidth="2" opacity="0.5" />
-            <line x1={stationLeft + 10} y1={trackY - 14} x2={stationLeft + 25} y2={trackY - 28}
-              stroke="var(--accent)" strokeWidth="1.5" opacity="0.35" />
-            <line x1={stationRight - 10} y1={trackY - 14} x2={stationRight - 25} y2={trackY - 28}
-              stroke="var(--accent)" strokeWidth="1.5" opacity="0.35" />
-            {/* Industrial sidings (below main line) */}
-            <line x1={stationRight - 30} y1={trackY} x2={rightX - 10} y2={trackY + 20}
-              stroke="var(--accent)" strokeWidth="2" opacity="0.4" />
-            <line x1={rightX - 10} y1={trackY + 20} x2={rightX - 5} y2={trackY + 20}
-              stroke="var(--accent)" strokeWidth="2" opacity="0.4" />
-            <line x1={rightX - 30} y1={trackY + 20} x2={rightX - 10} y2={trackY + 35}
-              stroke="var(--accent)" strokeWidth="1.5" opacity="0.3" />
-            <line x1={rightX - 10} y1={trackY + 35} x2={rightX - 5} y2={trackY + 35}
-              stroke="var(--accent)" strokeWidth="1.5" opacity="0.3" />
-            {/* Labels */}
-            <text x={(stationLeft + stationRight) / 2} y={trackY - 50} fill="var(--accent)" fontSize="10" textAnchor="middle" fontWeight="600">
-              🏛️ Stanice
-            </text>
-            <text x={rightX - 15} y={trackY + 50} fill="var(--text-dim)" fontSize="8" textAnchor="middle">
-              🏭 Vlečky
-            </text>
-            {/* Freight yard */}
-            <line x1={stationLeft - 10} y1={trackY} x2={leftX + 15} y2={trackY + 22}
-              stroke="var(--accent)" strokeWidth="2" opacity="0.4" />
-            <line x1={leftX + 15} y1={trackY + 22} x2={leftX + 60} y2={trackY + 22}
-              stroke="var(--accent)" strokeWidth="2" opacity="0.4" />
-            <line x1={leftX + 25} y1={trackY + 22} x2={leftX + 15} y2={trackY + 36}
-              stroke="var(--accent)" strokeWidth="1.5" opacity="0.3" />
-            <line x1={leftX + 15} y1={trackY + 36} x2={leftX + 55} y2={trackY + 36}
-              stroke="var(--accent)" strokeWidth="1.5" opacity="0.3" />
-            <text x={leftX + 35} y={trackY + 50} fill="var(--text-dim)" fontSize="8" textAnchor="middle">
-              Nákladní dvůr
-            </text>
-          </g>
-        );
-      }
-
-      case "prujezdna-stanice": {
-        // Oval with proper passing station
-        const rx = Math.min(bw * 0.38, bh * 0.9);
-        const ry = Math.min(bh * 0.3, bw * 0.3);
-        return (
-          <g>
-            {/* Main oval */}
-            <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="none" stroke="var(--accent)" strokeWidth="3.5" />
-            {/* Station area */}
-            <rect
-              x={cx - rx * 0.5} y={cy - ry - 35} width={rx * 1.0} height={32}
-              fill="var(--accent)" opacity="0.08" stroke="var(--accent)" strokeWidth="0.5" rx="3"
-              strokeDasharray="4,2"
-            />
-            {/* Through track (part of oval top) is already there */}
-            {/* Station track 1 */}
-            <line
-              x1={cx - rx * 0.4} y1={cy - ry - 10} x2={cx + rx * 0.4} y2={cy - ry - 10}
-              stroke="var(--accent)" strokeWidth="2.5" opacity="0.5"
-            />
-            {/* Station track 2 */}
-            <line
-              x1={cx - rx * 0.35} y1={cy - ry - 22} x2={cx + rx * 0.35} y2={cy - ry - 22}
-              stroke="var(--accent)" strokeWidth="2" opacity="0.35"
-            />
-            {/* Throat turnouts (left) */}
-            <line x1={cx - rx * 0.45} y1={cy - ry} x2={cx - rx * 0.4} y2={cy - ry - 10}
-              stroke="var(--accent)" strokeWidth="2" opacity="0.5" />
-            <line x1={cx - rx * 0.42} y1={cy - ry - 6} x2={cx - rx * 0.35} y2={cy - ry - 22}
-              stroke="var(--accent)" strokeWidth="1.5" opacity="0.35" />
-            {/* Throat turnouts (right) */}
-            <line x1={cx + rx * 0.45} y1={cy - ry} x2={cx + rx * 0.4} y2={cy - ry - 10}
-              stroke="var(--accent)" strokeWidth="2" opacity="0.5" />
-            <line x1={cx + rx * 0.42} y1={cy - ry - 6} x2={cx + rx * 0.35} y2={cy - ry - 22}
-              stroke="var(--accent)" strokeWidth="1.5" opacity="0.35" />
-            {/* Labels */}
-            <text x={cx} y={cy - ry - 40} fill="var(--accent)" fontSize="10" textAnchor="middle" fontWeight="600">
-              🔄 Průjezdná stanice
-            </text>
-            {/* Direction arrow */}
-            <polygon
-              points={`${cx + rx * 0.5 - 5},${cy - ry - 1} ${cx + rx * 0.5 + 5},${cy - ry - 1} ${cx + rx * 0.5},${cy - ry - 8}`}
-              fill="var(--accent)"
-            />
-          </g>
-        );
-      }
-
-      case "prumyslova-vlecka": {
-        // Point-to-point with industrial spurs
-        const leftX = offX + bw * 0.06;
-        const rightX = offX + bw * 0.94;
-        const trackY = cy - 10;
-        return (
-          <g>
-            {/* Main line */}
-            <line x1={leftX} y1={trackY} x2={rightX} y2={trackY} stroke="var(--accent)" strokeWidth="3.5" />
-            {/* Terminal buffer left */}
-            <line x1={leftX - 3} y1={trackY - 6} x2={leftX - 3} y2={trackY + 6} stroke="var(--accent)" strokeWidth="3" />
-            {/* Terminal buffer right */}
-            <line x1={rightX + 3} y1={trackY - 6} x2={rightX + 3} y2={trackY + 6} stroke="var(--accent)" strokeWidth="3" />
-            {/* Industrial spur 1 — loading ramp */}
-            <line x1={leftX + bw * 0.25} y1={trackY} x2={leftX + bw * 0.35} y2={trackY + 30}
-              stroke="var(--accent)" strokeWidth="2" opacity="0.5" />
-            <line x1={leftX + bw * 0.35} y1={trackY + 30} x2={leftX + bw * 0.5} y2={trackY + 30}
-              stroke="var(--accent)" strokeWidth="2" opacity="0.5" />
-            <rect x={leftX + bw * 0.38} y={trackY + 24} width={bw * 0.1} height={12}
-              fill="var(--accent)" opacity="0.1" stroke="var(--accent)" strokeWidth="0.5" rx="2" />
-            <text x={leftX + bw * 0.43} y={trackY + 55} fill="var(--text-dim)" fontSize="8" textAnchor="middle">
-              Nakládací rampa
-            </text>
-            {/* Industrial spur 2 — warehouse */}
-            <line x1={leftX + bw * 0.55} y1={trackY} x2={leftX + bw * 0.65} y2={trackY + 25}
-              stroke="var(--accent)" strokeWidth="2" opacity="0.5" />
-            <line x1={leftX + bw * 0.65} y1={trackY + 25} x2={leftX + bw * 0.8} y2={trackY + 25}
-              stroke="var(--accent)" strokeWidth="2" opacity="0.5" />
-            {/* Second spur track */}
-            <line x1={leftX + bw * 0.7} y1={trackY + 25} x2={leftX + bw * 0.75} y2={trackY + 40}
-              stroke="var(--accent)" strokeWidth="1.5" opacity="0.35" />
-            <line x1={leftX + bw * 0.75} y1={trackY + 40} x2={leftX + bw * 0.88} y2={trackY + 40}
-              stroke="var(--accent)" strokeWidth="1.5" opacity="0.35" />
-            <rect x={leftX + bw * 0.66} y={trackY + 19} width={bw * 0.12} height={12}
-              fill="var(--accent)" opacity="0.1" stroke="var(--accent)" strokeWidth="0.5" rx="2" />
-            <text x={leftX + bw * 0.72} y={trackY + 55} fill="var(--text-dim)" fontSize="8" textAnchor="middle">
-              🏭 Sklad
-            </text>
-            {/* Run-around track (for shunting) */}
-            <path
-              d={`M ${leftX + bw * 0.12} ${trackY} Q ${leftX + bw * 0.15} ${trackY - 25} ${leftX + bw * 0.22} ${trackY - 25} L ${leftX + bw * 0.42} ${trackY - 25} Q ${leftX + bw * 0.48} ${trackY - 25} ${leftX + bw * 0.5} ${trackY}`}
-              fill="none" stroke="var(--accent)" strokeWidth="2" opacity="0.45"
-            />
-            <text x={leftX + bw * 0.3} y={trackY - 30} fill="var(--text-dim)" fontSize="8" textAnchor="middle">
-              Objízdná kolej
-            </text>
-            {/* Labels */}
-            <text x={leftX} y={trackY - 14} fill="var(--text-dim)" fontSize="9" textAnchor="start">Výchozí bod</text>
-            <text x={rightX} y={trackY - 14} fill="var(--text-dim)" fontSize="9" textAnchor="end">Koncový bod</text>
-          </g>
-        );
-      }
-
-      default:
-        return null;
-    }
-  };
-
-  // For non-rect shapes, draw track adapted to shape
-  const renderShapeAdaptedTrack = () => {
-    if (form.boardShape === "rectangle") return null;
-
-    // For L and U shapes, render additional guiding track in the arms
-    if (form.boardShape === "l-shape") {
-      const w1 = boardW * scale;
-      const h1 = boardH * scale;
-      const w2 = form.width2 * 10 * scale;
-      const h2 = form.height2 * 10 * scale;
-      // Draw a continuation track into the L arm
-      const armTrackY = offY + h1 + h2 * 0.5;
-      let armTrackX1: number, armTrackX2: number;
-      if (form.lCorner === "bottom-left" || form.lCorner === "top-left") {
-        armTrackX1 = offX;
-        armTrackX2 = offX + w2;
-      } else {
-        armTrackX1 = offX + w1 - w2;
-        armTrackX2 = offX + w1;
-      }
-      return (
-        <g>
-          <line x1={armTrackX1 + 10} y1={armTrackY} x2={armTrackX2 - 10} y2={armTrackY}
-            stroke="var(--accent)" strokeWidth="2.5" opacity="0.4" strokeDasharray="6,4" />
-          <text x={(armTrackX1 + armTrackX2) / 2} y={armTrackY - 8} fill="var(--text-dim)" fontSize="8" textAnchor="middle">
-            Prodloužení tratě
-          </text>
-        </g>
-      );
-    }
-
-    if (form.boardShape === "u-shape") {
-      const armW = form.uArmDepth * 10 * scale;
-      const h = boardH * scale;
-      // Left arm track
-      // Right arm track
-      return (
-        <g>
-          {/* Left arm */}
-          <line x1={offX + armW * 0.5} y1={offY + 15} x2={offX + armW * 0.5} y2={offY + h * 0.4 - 5}
-            stroke="var(--accent)" strokeWidth="2.5" opacity="0.4" strokeDasharray="6,4" />
-          <text x={offX + armW * 0.5} y={offY + 10} fill="var(--text-dim)" fontSize="8" textAnchor="middle">
-            Rameno L
-          </text>
-          {/* Right arm */}
-          <line x1={offX + (boardW * scale) + armW + armW * 0.5} y1={offY + 15}
-            x2={offX + (boardW * scale) + armW + armW * 0.5} y2={offY + h * 0.4 - 5}
-            stroke="var(--accent)" strokeWidth="2.5" opacity="0.4" strokeDasharray="6,4" />
-          <text x={offX + (boardW * scale) + armW + armW * 0.5} y={offY + 10}
-            fill="var(--text-dim)" fontSize="8" textAnchor="middle">
-            Rameno R
-          </text>
-        </g>
-      );
-    }
-
-    return null;
-  };
-
-  return (
-    <svg
-      viewBox={`0 0 ${svgW} ${svgH + 10}`}
-      style={{ width: "100%", maxWidth: "800px", background: "var(--bg-card)", borderRadius: "12px", border: "1px solid var(--border)" }}
-    >
-      {/* Board shape */}
-      <path
-        d={boardPath}
-        fill="var(--bg-input)"
-        stroke="var(--border-hover)"
-        strokeWidth="2"
-      />
-
-      {/* Grid lines */}
-      {Array.from({ length: gridLinesV }, (_, i) => (
-        <line
-          key={`gv${i}`}
-          x1={offX + i * 100 * scale}
-          y1={offY}
-          x2={offX + i * 100 * scale}
-          y2={offY + totalH * scale}
-          stroke="var(--border)"
-          strokeWidth="0.5"
-          strokeDasharray="4,4"
-          opacity="0.5"
-        />
-      ))}
-      {Array.from({ length: gridLinesH }, (_, i) => (
-        <line
-          key={`gh${i}`}
-          x1={offX}
-          y1={offY + i * 100 * scale}
-          x2={offX + totalW * scale}
-          y2={offY + i * 100 * scale}
-          stroke="var(--border)"
-          strokeWidth="0.5"
-          strokeDasharray="4,4"
-          opacity="0.5"
-        />
-      ))}
-
-      {/* Dimension labels */}
-      <text x={offX + boardW * scale / 2} y={offY - 10} fill="var(--text-dim)" fontSize="12" textAnchor="middle">
-        {form.width} cm
-      </text>
-      <text x={offX - 10} y={offY + boardH * scale / 2} fill="var(--text-dim)" fontSize="12" textAnchor="middle"
-        transform={`rotate(-90, ${offX - 10}, ${offY + boardH * scale / 2})`}>
-        {form.height} cm
-      </text>
-
-      {/* Track schematic */}
-      {renderTrackSchematic()}
-
-      {/* Shape-adapted track extensions */}
-      {renderShapeAdaptedTrack()}
-
-      {/* Scale indicator */}
-      <text x={offX + totalW * scale - 5} y={svgH - 5} fill="var(--text-faint)" fontSize="10" textAnchor="end">
-        {form.scale} 1:{SCALE_FACTOR[form.scale]} · {TRACK_CATALOGS[form.trackSystem].name}
-      </text>
-    </svg>
-  );
-}
-
-/* ===========================
-   AI SVG RENDERER
-   =========================== */
-function AILayoutSVG({ aiResult, form }: { aiResult: { trackPlan?: { segments: { type: string; description: string; position?: string }[] }; features?: string[] }; form: FormData }) {
-  const boardW = form.width * 10;
-  const boardH = form.height * 10;
-  const padding = 60;
-  const svgW = 800;
-
   let totalW = boardW;
   let totalH = boardH;
   if (form.boardShape === "l-shape") {
@@ -809,7 +215,11 @@ function AILayoutSVG({ aiResult, form }: { aiResult: { trackPlan?: { segments: {
   const offX = padding;
   const offY = padding / 2;
 
-  // Board polygon
+  // Transform mm coordinates to SVG coordinates
+  const tx = (x: number) => offX + x * sc;
+  const ty = (y: number) => offY + y * sc;
+
+  // Board polygon path
   let boardPath = "";
   if (form.boardShape === "rectangle") {
     boardPath = `M ${offX} ${offY} h ${boardW * sc} v ${boardH * sc} h ${-boardW * sc} Z`;
@@ -827,177 +237,356 @@ function AILayoutSVG({ aiResult, form }: { aiResult: { trackPlan?: { segments: {
     boardPath = `M ${offX} ${offY} h ${armW} v ${h * 0.4} h ${w} v ${-h * 0.4} h ${armW} v ${h} h ${-(w + 2 * armW)} Z`;
   }
 
-  const segments = aiResult.trackPlan?.segments ?? [];
+  // Grid lines
+  const gridLinesV = Math.floor(totalW / 100) + 1;
+  const gridLinesH = Math.floor(totalH / 100) + 1;
 
-  // Position mapping to coordinates
-  const posToCoord = (pos: string | undefined): { x: number; y: number } => {
-    const cx = offX + (boardW / 2) * sc;
-    const cy = offY + (boardH / 2) * sc;
-    const bw = boardW * sc;
-    const bh = boardH * sc;
-    switch (pos) {
-      case "top": return { x: cx, y: offY + bh * 0.12 };
-      case "top-center": return { x: cx, y: offY + bh * 0.12 };
-      case "top-left": return { x: offX + bw * 0.2, y: offY + bh * 0.15 };
-      case "top-right": return { x: offX + bw * 0.8, y: offY + bh * 0.15 };
-      case "bottom": return { x: cx, y: offY + bh * 0.88 };
-      case "bottom-center": return { x: cx, y: offY + bh * 0.88 };
-      case "bottom-left": return { x: offX + bw * 0.2, y: offY + bh * 0.85 };
-      case "bottom-right": return { x: offX + bw * 0.8, y: offY + bh * 0.85 };
-      case "left": return { x: offX + bw * 0.1, y: cy };
-      case "right": return { x: offX + bw * 0.9, y: cy };
-      case "center": return { x: cx, y: cy };
-      default: return { x: cx, y: cy };
-    }
+  // Helper: SVG arc path for a curve segment
+  const curveArcPath = (seg: TrackCurve): string => {
+    const r = seg.r * sc;
+    const cxs = tx(seg.cx);
+    const cys = ty(seg.cy);
+    // Convert angles to radians (0° = right/east, clockwise)
+    const startRad = (seg.startAngle * Math.PI) / 180;
+    const endRad = (seg.endAngle * Math.PI) / 180;
+    const sx = cxs + r * Math.cos(startRad);
+    const sy = cys + r * Math.sin(startRad);
+    const ex = cxs + r * Math.cos(endRad);
+    const ey = cys + r * Math.sin(endRad);
+
+    // Determine sweep
+    let angleDiff = seg.endAngle - seg.startAngle;
+    if (angleDiff < 0) angleDiff += 360;
+    const largeArc = angleDiff > 180 ? 1 : 0;
+    const sweepFlag = 1; // clockwise
+
+    return `M ${sx} ${sy} A ${r} ${r} 0 ${largeArc} ${sweepFlag} ${ex} ${ey}`;
   };
 
-  // Draw mainline as oval
-  const cx = offX + (boardW / 2) * sc;
-  const cy = offY + (boardH / 2) * sc;
-  const rx = boardW * sc * 0.42;
-  const ry = boardH * sc * 0.35;
+  // Render individual track segments
+  const renderSegment = (seg: TrackSegment, i: number) => {
+    const isSecondary = "secondary" in seg && seg.secondary;
 
-  const segIcons: Record<string, string> = {
-    mainline: "🛤️", station: "🏛️", siding: "🔀", tunnel: "🚇",
-    bridge: "🌉", depot: "🏗️", "freight-yard": "📦",
-    "passing-loop": "🔄", "industrial-spur": "🏭", turntable: "🔁",
+    switch (seg.type) {
+      case "straight": {
+        return (
+          <g key={`t${i}`}>
+            <line
+              x1={tx(seg.x1)} y1={ty(seg.y1)}
+              x2={tx(seg.x2)} y2={ty(seg.y2)}
+              stroke="var(--accent)"
+              strokeWidth={isSecondary ? 2 : 3.5}
+              strokeLinecap="round"
+              opacity={isSecondary ? 0.5 : 1}
+            />
+            {seg.label && (
+              <text
+                x={(tx(seg.x1) + tx(seg.x2)) / 2}
+                y={(ty(seg.y1) + ty(seg.y2)) / 2 - 8}
+                fill="var(--text-dim)" fontSize="9" textAnchor="middle"
+              >
+                {seg.label}
+              </text>
+            )}
+          </g>
+        );
+      }
+
+      case "curve": {
+        const pathD = curveArcPath(seg);
+        return (
+          <g key={`t${i}`}>
+            <path
+              d={pathD}
+              fill="none"
+              stroke="var(--accent)"
+              strokeWidth={isSecondary ? 2 : 3.5}
+              strokeLinecap="round"
+              opacity={isSecondary ? 0.5 : 1}
+            />
+            {seg.label && (() => {
+              const midAngle = ((seg.startAngle + seg.endAngle) / 2 * Math.PI) / 180;
+              const lx = tx(seg.cx) + seg.r * sc * Math.cos(midAngle);
+              const ly = ty(seg.cy) + seg.r * sc * Math.sin(midAngle);
+              return (
+                <text x={lx} y={ly - 8} fill="var(--text-dim)" fontSize="9" textAnchor="middle">
+                  {seg.label}
+                </text>
+              );
+            })()}
+          </g>
+        );
+      }
+
+      case "turnout": {
+        // Draw turnout: main straight + diverging branch
+        const len = 30 * sc;
+        const angleRad = (seg.angle * Math.PI) / 180;
+        // Assume the turnout is oriented horizontally (0° = east) for now
+        // We draw a short straight and a diverging line
+        const sx = tx(seg.x);
+        const sy = ty(seg.y);
+        const dirMul = seg.direction === "left" ? -1 : 1;
+
+        return (
+          <g key={`t${i}`}>
+            {/* Main straight path through turnout */}
+            <line
+              x1={sx - len / 2} y1={sy}
+              x2={sx + len / 2} y2={sy}
+              stroke="var(--accent)" strokeWidth="3.5" strokeLinecap="round"
+            />
+            {/* Diverging path */}
+            <line
+              x1={sx} y1={sy}
+              x2={sx + len / 2} y2={sy + dirMul * len * Math.tan(angleRad)}
+              stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" opacity="0.6"
+            />
+            {/* Turnout marker dot */}
+            <circle cx={sx} cy={sy} r={3} fill="var(--accent)" opacity="0.8" />
+            {seg.label && (
+              <text x={sx} y={sy - 10} fill="var(--text-dim)" fontSize="8" textAnchor="middle">
+                {seg.label}
+              </text>
+            )}
+          </g>
+        );
+      }
+
+      case "station": {
+        const sx = tx(seg.x);
+        const sy = ty(seg.y);
+        const sw = seg.width * sc;
+        const trackSpacing = 12;
+        const stationH = (seg.tracks + 1) * trackSpacing;
+
+        return (
+          <g key={`t${i}`}>
+            {/* Station platform background */}
+            <rect
+              x={sx} y={sy}
+              width={sw} height={stationH}
+              fill="var(--accent)" opacity="0.08"
+              stroke="var(--accent)" strokeWidth="0.8"
+              rx="4" strokeDasharray="4,2"
+            />
+            {/* Station tracks */}
+            {Array.from({ length: seg.tracks }, (_, ti) => (
+              <line
+                key={`st${i}-${ti}`}
+                x1={sx + 8} y1={sy + (ti + 1) * trackSpacing}
+                x2={sx + sw - 8} y2={sy + (ti + 1) * trackSpacing}
+                stroke="var(--accent)"
+                strokeWidth={ti === 0 ? 3 : 2}
+                strokeLinecap="round"
+                opacity={ti === 0 ? 1 : 0.4 + 0.1 * ti}
+              />
+            ))}
+            {/* Platform rectangle between tracks */}
+            {seg.tracks >= 2 && (
+              <rect
+                x={sx + sw * 0.15} y={sy + trackSpacing + 3}
+                width={sw * 0.7} height={trackSpacing - 6}
+                fill="var(--accent)" opacity="0.12" rx="2"
+              />
+            )}
+            {/* Station label */}
+            {seg.label && (
+              <text
+                x={sx + sw / 2} y={sy - 6}
+                fill="var(--accent)" fontSize="11" textAnchor="middle" fontWeight="600"
+              >
+                🏛️ {seg.label}
+              </text>
+            )}
+          </g>
+        );
+      }
+
+      case "buffer": {
+        const bx = tx(seg.x);
+        const by = ty(seg.y);
+        const angleRad = (seg.angle * Math.PI) / 180;
+        // Perpendicular line
+        const perpLen = 8;
+        const px = Math.cos(angleRad + Math.PI / 2) * perpLen;
+        const py = Math.sin(angleRad + Math.PI / 2) * perpLen;
+
+        return (
+          <g key={`t${i}`}>
+            <line
+              x1={bx - px} y1={by - py}
+              x2={bx + px} y2={by + py}
+              stroke="var(--accent)" strokeWidth="3" strokeLinecap="round"
+            />
+            <circle cx={bx} cy={by} r={2.5} fill="var(--accent)" />
+          </g>
+        );
+      }
+
+      case "tunnel": {
+        return (
+          <g key={`t${i}`}>
+            <line
+              x1={tx(seg.x1)} y1={ty(seg.y1)}
+              x2={tx(seg.x2)} y2={ty(seg.y2)}
+              stroke="var(--accent)"
+              strokeWidth={isSecondary ? 2 : 3.5}
+              strokeLinecap="round"
+              strokeDasharray="8,4"
+              opacity={isSecondary ? 0.4 : 0.7}
+            />
+            {/* Tunnel portal markers */}
+            <rect
+              x={tx(seg.x1) - 4} y={ty(seg.y1) - 4}
+              width="8" height="8" rx="2"
+              fill="var(--text-dim)" opacity="0.4"
+            />
+            <rect
+              x={tx(seg.x2) - 4} y={ty(seg.y2) - 4}
+              width="8" height="8" rx="2"
+              fill="var(--text-dim)" opacity="0.4"
+            />
+            {seg.label && (
+              <text
+                x={(tx(seg.x1) + tx(seg.x2)) / 2}
+                y={(ty(seg.y1) + ty(seg.y2)) / 2 - 10}
+                fill="var(--text-dim)" fontSize="9" textAnchor="middle"
+              >
+                🚇 {seg.label}
+              </text>
+            )}
+          </g>
+        );
+      }
+
+      case "bridge": {
+        const bx1 = tx(seg.x1), by1 = ty(seg.y1);
+        const bx2 = tx(seg.x2), by2 = ty(seg.y2);
+        const dx = bx2 - bx1;
+        const dy = by2 - by1;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        const pierCount = Math.max(2, Math.round(len / 30));
+        // Perpendicular direction for piers
+        const nx = -dy / len;
+        const ny = dx / len;
+        const pierH = 10;
+
+        return (
+          <g key={`t${i}`}>
+            {/* Track line */}
+            <line
+              x1={bx1} y1={by1} x2={bx2} y2={by2}
+              stroke="var(--accent)"
+              strokeWidth={isSecondary ? 2 : 3.5}
+              strokeLinecap="round"
+              opacity={isSecondary ? 0.5 : 1}
+            />
+            {/* Pier supports */}
+            {Array.from({ length: pierCount }, (_, pi) => {
+              const t = (pi + 0.5) / pierCount;
+              const px = bx1 + dx * t;
+              const py = by1 + dy * t;
+              return (
+                <line
+                  key={`pier${i}-${pi}`}
+                  x1={px} y1={py}
+                  x2={px + nx * pierH} y2={py + ny * pierH}
+                  stroke="var(--accent)" strokeWidth="1.5" opacity="0.4"
+                />
+              );
+            })}
+            {/* Base line connecting pier bottoms */}
+            <line
+              x1={bx1 + nx * pierH} y1={by1 + ny * pierH}
+              x2={bx2 + nx * pierH} y2={by2 + ny * pierH}
+              stroke="var(--accent)" strokeWidth="1" opacity="0.25"
+            />
+            {seg.label && (
+              <text
+                x={(bx1 + bx2) / 2} y={(by1 + by2) / 2 - 10}
+                fill="var(--text-dim)" fontSize="9" textAnchor="middle"
+              >
+                🌉 {seg.label}
+              </text>
+            )}
+          </g>
+        );
+      }
+
+      default:
+        return null;
+    }
   };
 
   return (
     <svg
-      viewBox={`0 0 ${svgW} ${svgH + 10}`}
-      style={{ width: "100%", maxWidth: "800px", background: "var(--bg-card)", borderRadius: "12px", border: "1px solid var(--border)" }}
+      viewBox={`0 0 ${svgW} ${Math.max(svgH + 10, 200)}`}
+      style={{
+        width: "100%",
+        maxWidth: "800px",
+        background: "var(--bg-card)",
+        borderRadius: "12px",
+        border: "1px solid var(--border)",
+      }}
     >
-      {/* Board shape */}
-      <path d={boardPath} fill="var(--bg-input)" stroke="var(--border-hover)" strokeWidth="2" />
+      {/* Board shape background */}
+      <path
+        d={boardPath}
+        fill="var(--bg-input)"
+        stroke="var(--border-hover)"
+        strokeWidth="2"
+      />
 
-      {/* Grid */}
-      {Array.from({ length: Math.floor(totalW / 100) + 1 }, (_, i) => (
-        <line key={`gv${i}`} x1={offX + i * 100 * sc} y1={offY} x2={offX + i * 100 * sc} y2={offY + totalH * sc}
-          stroke="var(--border)" strokeWidth="0.5" strokeDasharray="4,4" opacity="0.5" />
+      {/* Grid lines every 100mm */}
+      {Array.from({ length: gridLinesV }, (_, i) => (
+        <line
+          key={`gv${i}`}
+          x1={offX + i * 100 * sc} y1={offY}
+          x2={offX + i * 100 * sc} y2={offY + totalH * sc}
+          stroke="var(--border)" strokeWidth="0.5" strokeDasharray="4,4" opacity="0.4"
+        />
       ))}
-      {Array.from({ length: Math.floor(totalH / 100) + 1 }, (_, i) => (
-        <line key={`gh${i}`} x1={offX} y1={offY + i * 100 * sc} x2={offX + totalW * sc} y2={offY + i * 100 * sc}
-          stroke="var(--border)" strokeWidth="0.5" strokeDasharray="4,4" opacity="0.5" />
+      {Array.from({ length: gridLinesH }, (_, i) => (
+        <line
+          key={`gh${i}`}
+          x1={offX} y1={offY + i * 100 * sc}
+          x2={offX + totalW * sc} y2={offY + i * 100 * sc}
+          stroke="var(--border)" strokeWidth="0.5" strokeDasharray="4,4" opacity="0.4"
+        />
       ))}
 
-      {/* Dimension labels */}
-      <text x={offX + boardW * sc / 2} y={offY - 10} fill="var(--text-dim)" fontSize="12" textAnchor="middle">{form.width} cm</text>
-      <text x={offX - 10} y={offY + boardH * sc / 2} fill="var(--text-dim)" fontSize="12" textAnchor="middle"
-        transform={`rotate(-90, ${offX - 10}, ${offY + boardH * sc / 2})`}>{form.height} cm</text>
+      {/* Dimension labels on edges */}
+      <text x={offX + boardW * sc / 2} y={offY - 10} fill="var(--text-dim)" fontSize="12" textAnchor="middle">
+        {form.width} cm ({boardW} mm)
+      </text>
+      <text
+        x={offX - 10} y={offY + boardH * sc / 2}
+        fill="var(--text-dim)" fontSize="12" textAnchor="middle"
+        transform={`rotate(-90, ${offX - 10}, ${offY + boardH * sc / 2})`}
+      >
+        {form.height} cm ({boardH} mm)
+      </text>
 
-      {/* Main track oval */}
-      <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="none" stroke="var(--accent)" strokeWidth="3.5" />
+      {/* Track segments */}
+      {tracks.map((seg, i) => renderSegment(seg, i))}
 
-      {/* Segments from AI */}
-      {segments.map((seg, i) => {
-        if (seg.type === "mainline") return null; // already drawn as oval
-        const pos = posToCoord(seg.position);
-
-        if (seg.type === "tunnel") {
-          // Dashed arc section
-          const angle = seg.position?.includes("left") ? Math.PI : seg.position?.includes("right") ? 0 : seg.position?.includes("top") ? -Math.PI / 2 : Math.PI / 2;
-          const tx = cx + Math.cos(angle) * rx * 0.9;
-          const ty = cy + Math.sin(angle) * ry * 0.9;
-          return (
-            <g key={i}>
-              <rect x={tx - 25} y={ty - 8} width={50} height={16} rx="8" fill="var(--bg-page)" stroke="var(--accent)" strokeWidth="2" strokeDasharray="4,3" opacity="0.7" />
-              <text x={tx} y={ty + 4} fill="var(--text-dim)" fontSize="9" textAnchor="middle">🚇</text>
-            </g>
-          );
-        }
-
-        if (seg.type === "station" || seg.type === "passing-loop") {
-          // Station rectangle with multiple tracks
-          const sw = Math.min(rx * 0.8, 120);
-          return (
-            <g key={i}>
-              <rect x={pos.x - sw / 2} y={pos.y - 18} width={sw} height={28} rx="4"
-                fill="var(--accent)" opacity="0.1" stroke="var(--accent)" strokeWidth="1" />
-              {/* Station tracks */}
-              <line x1={pos.x - sw / 2 + 8} y1={pos.y - 5} x2={pos.x + sw / 2 - 8} y2={pos.y - 5}
-                stroke="var(--accent)" strokeWidth="2" opacity="0.6" />
-              <line x1={pos.x - sw / 2 + 15} y1={pos.y + 5} x2={pos.x + sw / 2 - 15} y2={pos.y + 5}
-                stroke="var(--accent)" strokeWidth="1.5" opacity="0.4" />
-              <text x={pos.x} y={pos.y + 25} fill="var(--accent)" fontSize="10" textAnchor="middle" fontWeight="600">
-                {segIcons[seg.type] || "📍"} {seg.type === "station" ? "Stanice" : "Výhybna"}
-              </text>
-            </g>
-          );
-        }
-
-        if (seg.type === "siding" || seg.type === "industrial-spur") {
-          // Spur track branching off
-          const dir = (seg.position?.includes("right")) ? 1 : -1;
-          const sy = (seg.position?.includes("top")) ? -1 : 1;
-          return (
-            <g key={i}>
-              <line x1={pos.x} y1={pos.y} x2={pos.x + dir * 40} y2={pos.y + sy * 25}
-                stroke="var(--accent)" strokeWidth="2" opacity="0.5" />
-              <line x1={pos.x + dir * 40} y1={pos.y + sy * 25} x2={pos.x + dir * 80} y2={pos.y + sy * 25}
-                stroke="var(--accent)" strokeWidth="2" opacity="0.5" />
-              <line x1={pos.x + dir * 80 + dir * 3} y1={pos.y + sy * 25 - 5} x2={pos.x + dir * 80 + dir * 3} y2={pos.y + sy * 25 + 5}
-                stroke="var(--accent)" strokeWidth="2.5" />
-              <text x={pos.x + dir * 50} y={pos.y + sy * 42} fill="var(--text-dim)" fontSize="9" textAnchor="middle">
-                {segIcons[seg.type] || "📍"} {seg.type === "siding" ? "Odstavná" : "Vlečka"}
-              </text>
-            </g>
-          );
-        }
-
-        if (seg.type === "bridge") {
-          return (
-            <g key={i}>
-              <rect x={pos.x - 20} y={pos.y - 6} width={40} height={12} rx="2"
-                fill="none" stroke="var(--accent)" strokeWidth="1.5" strokeDasharray="3,2" />
-              <line x1={pos.x - 20} y1={pos.y + 6} x2={pos.x - 15} y2={pos.y + 14} stroke="var(--accent)" strokeWidth="1" opacity="0.5" />
-              <line x1={pos.x + 20} y1={pos.y + 6} x2={pos.x + 15} y2={pos.y + 14} stroke="var(--accent)" strokeWidth="1" opacity="0.5" />
-              <text x={pos.x} y={pos.y + 24} fill="var(--text-dim)" fontSize="9" textAnchor="middle">🌉 Most</text>
-            </g>
-          );
-        }
-
-        if (seg.type === "depot" || seg.type === "freight-yard") {
-          const dw = 60;
-          return (
-            <g key={i}>
-              <rect x={pos.x - dw / 2} y={pos.y - 12} width={dw} height={24} rx="3"
-                fill="var(--accent)" opacity="0.08" stroke="var(--accent)" strokeWidth="0.8" />
-              <line x1={pos.x - dw / 2 + 5} y1={pos.y - 3} x2={pos.x + dw / 2 - 5} y2={pos.y - 3}
-                stroke="var(--accent)" strokeWidth="1.5" opacity="0.5" />
-              <line x1={pos.x - dw / 2 + 10} y1={pos.y + 5} x2={pos.x + dw / 2 - 10} y2={pos.y + 5}
-                stroke="var(--accent)" strokeWidth="1" opacity="0.35" />
-              <text x={pos.x} y={pos.y + 24} fill="var(--text-dim)" fontSize="9" textAnchor="middle">
-                {segIcons[seg.type]} {seg.type === "depot" ? "Depo" : "Nákladiště"}
-              </text>
-            </g>
-          );
-        }
-
-        if (seg.type === "turntable") {
-          return (
-            <g key={i}>
-              <circle cx={pos.x} cy={pos.y} r={15} fill="none" stroke="var(--accent)" strokeWidth="1.5" opacity="0.6" />
-              <line x1={pos.x - 12} y1={pos.y} x2={pos.x + 12} y2={pos.y} stroke="var(--accent)" strokeWidth="2" opacity="0.7" />
-              <text x={pos.x} y={pos.y + 25} fill="var(--text-dim)" fontSize="9" textAnchor="middle">🔁 Točna</text>
-            </g>
-          );
-        }
-
-        // Generic fallback
-        return (
-          <g key={i}>
-            <circle cx={pos.x} cy={pos.y} r={4} fill="var(--accent)" opacity="0.6" />
-            <text x={pos.x} y={pos.y + 16} fill="var(--text-dim)" fontSize="8" textAnchor="middle">
-              {segIcons[seg.type] || "📍"}
-            </text>
-          </g>
-        );
-      })}
+      {/* Labels from AI */}
+      {labels?.map((lbl, i) => (
+        <text
+          key={`lbl${i}`}
+          x={tx(lbl.x)} y={ty(lbl.y)}
+          fill="var(--text-dim)"
+          fontSize={lbl.fontSize ? lbl.fontSize * sc * 1.5 : 10}
+          textAnchor="middle"
+        >
+          {lbl.text}
+        </text>
+      ))}
 
       {/* Scale indicator */}
-      <text x={offX + totalW * sc - 5} y={svgH - 5} fill="var(--text-faint)" fontSize="10" textAnchor="end">
-        {form.scale} 1:{form.scale === "H0" ? 87 : form.scale === "TT" ? 120 : 160} · AI návrh
+      <text x={offX + totalW * sc - 5} y={Math.max(svgH, 190) - 5} fill="var(--text-faint)" fontSize="10" textAnchor="end">
+        {form.scale} 1:{SCALE_FACTOR[form.scale]} · {TRACK_CATALOGS[form.trackSystem].name} · AI návrh
       </text>
     </svg>
   );
@@ -1022,14 +611,6 @@ const L_CORNERS: { value: LCorner; label: string }[] = [
 /* ===========================
    MAIN PAGE
    =========================== */
-interface AIResult {
-  description: string;
-  bom: { name: string; nameCz: string; type: string; count: number }[];
-  features: string[];
-  warnings: string[];
-  trackPlan?: { segments: { type: string; description: string; position?: string }[] };
-}
-
 export default function TrackDesignerPage() {
   const [form, setForm] = useState<FormData>({
     boardShape: "rectangle",
@@ -1044,31 +625,13 @@ export default function TrackDesignerPage() {
     character: "prujezdna-stanice",
   });
   const [prompt, setPrompt] = useState("");
-  const [result, setResult] = useState<LayoutResult | null>(null);
   const [aiResult, setAiResult] = useState<AIResult | null>(null);
-  const [generating, setGenerating] = useState(false);
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
-  const [mode, setMode] = useState<"local" | "ai">("local");
   const resultRef = useRef<HTMLDivElement>(null);
 
-  const handleGenerateLocal = useCallback(() => {
-    setGenerating(true);
-    setMode("local");
-    setAiResult(null);
-    setAiError(null);
-    setTimeout(() => {
-      const layout = generateLayout(form);
-      setResult(layout);
-      setGenerating(false);
-      setTimeout(() => resultRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
-    }, 600);
-  }, [form]);
-
-  const handleGenerateAI = useCallback(async () => {
+  const handleGenerate = useCallback(async () => {
     setAiGenerating(true);
-    setMode("ai");
-    setResult(null);
     setAiError(null);
     setAiResult(null);
 
@@ -1163,7 +726,7 @@ export default function TrackDesignerPage() {
           Návrhář tratí
         </h1>
         <p style={{ fontSize: "15px", color: "var(--text-dim)", maxWidth: "500px", margin: "0 auto" }}>
-          Zadejte rozměry a charakter — vygenerujeme kolejový plán i seznam dílů
+          Zadejte rozměry a charakter — AI navrhne kolejový plán i seznam dílů
         </p>
       </div>
 
@@ -1201,7 +764,7 @@ export default function TrackDesignerPage() {
             </div>
           </div>
 
-          {/* Dimensions — changes based on board shape */}
+          {/* Dimensions */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px", marginBottom: "20px" }}>
             <div>
               <label style={labelStyle}>
@@ -1224,7 +787,6 @@ export default function TrackDesignerPage() {
               />
             </div>
 
-            {/* L-shape extra fields */}
             {form.boardShape === "l-shape" && (
               <>
                 <div>
@@ -1258,7 +820,6 @@ export default function TrackDesignerPage() {
               </>
             )}
 
-            {/* U-shape extra fields */}
             {form.boardShape === "u-shape" && (
               <div>
                 <label style={labelStyle}>Hloubka ramen U (cm)</label>
@@ -1325,7 +886,7 @@ export default function TrackDesignerPage() {
           {/* AI Prompt */}
           <div style={{ marginBottom: "20px" }}>
             <label style={labelStyle}>
-              ✨ Popište svou představu (volitelné — pro AI návrh)
+              ✨ Popište svou představu (volitelné)
             </label>
             <textarea
               value={prompt}
@@ -1342,319 +903,158 @@ export default function TrackDesignerPage() {
             />
           </div>
 
-          {/* Generate buttons */}
-          <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-            <button
-              onClick={handleGenerateAI}
-              disabled={aiGenerating || generating}
-              style={{
-                flex: "1 1 200px",
-                padding: "14px",
-                borderRadius: "10px",
-                border: "none",
-                background: aiGenerating ? "var(--border-hover)" : "linear-gradient(135deg, #667eea, #764ba2)",
-                color: aiGenerating ? "var(--text-dim)" : "#fff",
-                fontSize: "16px",
-                fontWeight: 700,
-                cursor: aiGenerating ? "not-allowed" : "pointer",
-                transition: "all 0.2s",
-              }}
-            >
-              {aiGenerating ? "🤖 AI přemýšlí..." : "🤖 AI návrh"}
-            </button>
-            <button
-              onClick={handleGenerateLocal}
-              disabled={generating || aiGenerating}
-              style={{
-                flex: "1 1 200px",
-                padding: "14px",
-                borderRadius: "10px",
-                border: "none",
-                background: generating ? "var(--border-hover)" : "var(--accent)",
-                color: generating ? "var(--text-dim)" : "var(--accent-text-on)",
-                fontSize: "16px",
-                fontWeight: 700,
-                cursor: generating ? "not-allowed" : "pointer",
-                transition: "all 0.2s",
-              }}
-            >
-              {generating ? "⏳ Generuji..." : "⚡ Rychlý návrh"}
-            </button>
-          </div>
-          <p style={{ fontSize: "12px", color: "var(--text-faint)", marginTop: "8px", textAlign: "center" }}>
-            🤖 AI návrh — umělá inteligence navrhne plán podle vašeho popisu &nbsp;|&nbsp; ⚡ Rychlý návrh — okamžitý algoritmus
-          </p>
+          {/* Single generate button */}
+          <button
+            onClick={handleGenerate}
+            disabled={aiGenerating}
+            style={{
+              width: "100%",
+              padding: "16px",
+              borderRadius: "10px",
+              border: "none",
+              background: aiGenerating ? "var(--border-hover)" : "linear-gradient(135deg, #667eea, #764ba2)",
+              color: aiGenerating ? "var(--text-dim)" : "#fff",
+              fontSize: "17px",
+              fontWeight: 700,
+              cursor: aiGenerating ? "not-allowed" : "pointer",
+              transition: "all 0.2s",
+              letterSpacing: "0.3px",
+            }}
+          >
+            {aiGenerating ? "🤖 AI navrhuje kolejiště..." : "🤖 Navrhnout kolejiště"}
+          </button>
         </div>
 
-        {/* AI Result */}
-        {mode === "ai" && (aiResult || aiError || aiGenerating) && (
-          <div ref={resultRef} style={{ marginTop: "32px" }}>
-            {aiGenerating && (
-              <div style={{ ...cardStyle, textAlign: "center", padding: "48px 24px" }}>
-                <div style={{ fontSize: "48px", marginBottom: "16px", animation: "pulse 1.5s ease-in-out infinite" }}>🤖</div>
-                <p style={{ fontSize: "16px", color: "var(--text-muted)" }}>AI navrhuje kolejiště...</p>
-                <p style={{ fontSize: "13px", color: "var(--text-faint)", marginTop: "8px" }}>Obvykle to trvá 5-15 sekund</p>
-                <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
+        {/* Results area */}
+        <div ref={resultRef} style={{ marginTop: "32px" }}>
+          {/* Loading state */}
+          {aiGenerating && (
+            <div style={{ ...cardStyle, textAlign: "center", padding: "48px 24px" }}>
+              <div style={{ position: "relative", width: "80px", height: "80px", margin: "0 auto 20px" }}>
+                {/* Animated train track circle */}
+                <svg width="80" height="80" viewBox="0 0 80 80" style={{ animation: "spin 3s linear infinite" }}>
+                  <circle cx="40" cy="40" r="30" fill="none" stroke="var(--border)" strokeWidth="3" strokeDasharray="6,4" />
+                  <circle cx="40" cy="10" r="5" fill="var(--accent)">
+                    <animate attributeName="opacity" values="1;0.3;1" dur="1.5s" repeatCount="indefinite" />
+                  </circle>
+                </svg>
+                <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", fontSize: "28px" }}>
+                  🚂
+                </div>
               </div>
-            )}
-
-            {aiError && (
-              <div style={{ ...cardStyle, borderColor: "var(--danger)" }}>
-                <h2 style={{ fontSize: "18px", fontWeight: 700, color: "var(--danger)", marginBottom: "12px" }}>
-                  ❌ Chyba
-                </h2>
-                <p style={{ fontSize: "15px", color: "var(--text-secondary)" }}>{aiError}</p>
-                <p style={{ fontSize: "13px", color: "var(--text-faint)", marginTop: "8px" }}>
-                  Zkuste to znovu, nebo použijte ⚡ Rychlý návrh
-                </p>
-              </div>
-            )}
-
-            {aiResult && (
-              <>
-                {/* AI SVG Plan */}
-                <div style={{ ...cardStyle, marginBottom: "20px", textAlign: "center" }}>
-                  <h2 style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px", textAlign: "left" }}>
-                    📐 Kolejový plán
-                  </h2>
-                  <AILayoutSVG aiResult={aiResult} form={form} />
-                </div>
-
-                {/* AI Description */}
-                <div style={{ ...cardStyle, marginBottom: "20px" }}>
-                  <h2 style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
-                    🤖 AI návrh kolejiště
-                  </h2>
-                  <p style={{ fontSize: "15px", color: "var(--text-secondary)", lineHeight: 1.7 }}>
-                    {aiResult.description}
-                  </p>
-
-                  {/* Features */}
-                  {aiResult.features && aiResult.features.length > 0 && (
-                    <div style={{ marginTop: "16px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                      {aiResult.features.map((f, i) => (
-                        <span key={i} style={{
-                          padding: "4px 12px",
-                          borderRadius: "20px",
-                          background: "var(--accent-bg)",
-                          border: "1px solid var(--accent-border)",
-                          color: "var(--accent)",
-                          fontSize: "12px",
-                          fontWeight: 600,
-                        }}>
-                          {f}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Track plan description */}
-                  {aiResult.trackPlan?.segments && aiResult.trackPlan.segments.length > 0 && (
-                    <div style={{ marginTop: "20px" }}>
-                      <h3 style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-muted)", marginBottom: "10px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                        Rozložení tratě
-                      </h3>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                        {aiResult.trackPlan.segments.map((seg, i) => {
-                          const segIcons: Record<string, string> = {
-                            mainline: "🛤️", station: "🏛️", siding: "🔀", tunnel: "🚇",
-                            bridge: "🌉", depot: "🏗️", "freight-yard": "📦",
-                            "passing-loop": "🔄", "industrial-spur": "🏭", turntable: "🔁",
-                          };
-                          return (
-                            <div key={i} style={{
-                              padding: "10px 14px",
-                              background: "var(--bg-input)",
-                              borderRadius: "8px",
-                              border: "1px solid var(--border-light)",
-                              display: "flex",
-                              gap: "10px",
-                              alignItems: "flex-start",
-                            }}>
-                              <span style={{ fontSize: "18px", flexShrink: 0 }}>{segIcons[seg.type] || "📍"}</span>
-                              <div>
-                                <span style={{ fontSize: "13px", color: "var(--text-body)" }}>{seg.description}</span>
-                                {seg.position && (
-                                  <span style={{ fontSize: "11px", color: "var(--text-faint)", marginLeft: "8px" }}>
-                                    ({seg.position})
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* AI Warnings */}
-                  {aiResult.warnings && aiResult.warnings.length > 0 && (
-                    <div style={{ marginTop: "16px", padding: "12px 16px", background: "rgba(255, 193, 7, 0.1)", border: "1px solid rgba(255, 193, 7, 0.3)", borderRadius: "8px" }}>
-                      {aiResult.warnings.map((w, i) => (
-                        <p key={i} style={{ fontSize: "13px", color: "#ffc107", margin: i > 0 ? "6px 0 0" : "0" }}>
-                          ⚠️ {w}
-                        </p>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* AI BOM */}
-                <div style={cardStyle}>
-                  <h2 style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px" }}>
-                    🛒 Seznam dílů (AI)
-                  </h2>
-                  <div style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                      <thead>
-                        <tr>
-                          <th style={{ textAlign: "left", padding: "10px 12px", borderBottom: "2px solid var(--border)", color: "var(--accent)", fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                            Typ
-                          </th>
-                          <th style={{ textAlign: "left", padding: "10px 12px", borderBottom: "2px solid var(--border)", color: "var(--accent)", fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                            Díl
-                          </th>
-                          <th style={{ textAlign: "left", padding: "10px 12px", borderBottom: "2px solid var(--border)", color: "var(--accent)", fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                            Označení
-                          </th>
-                          <th style={{ textAlign: "center", padding: "10px 12px", borderBottom: "2px solid var(--border)", color: "var(--accent)", fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                            Počet
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {aiResult.bom.map((item, i) => {
-                          const typeIcons: Record<string, string> = {
-                            straight: "➖", curve: "↪️", "turnout-left": "↙️", "turnout-right": "↗️", crossing: "✖️",
-                          };
-                          return (
-                            <tr key={i} style={{ borderBottom: "1px solid var(--border-light)" }}>
-                              <td style={{ padding: "10px 12px", fontSize: "14px" }}>
-                                {typeIcons[item.type] || "🔧"}
-                              </td>
-                              <td style={{ padding: "10px 12px", fontSize: "14px", color: "var(--text-body)" }}>
-                                {item.nameCz}
-                              </td>
-                              <td style={{ padding: "10px 12px", fontSize: "13px", color: "var(--text-dim)" }}>
-                                {item.name}
-                              </td>
-                              <td style={{ padding: "10px 12px", fontSize: "16px", fontWeight: 700, color: "var(--accent)", textAlign: "center" }}>
-                                {item.count}×
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div style={{ marginTop: "16px", paddingTop: "12px", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: "14px", color: "var(--text-dim)" }}>Celkem dílů</span>
-                    <span style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-primary)" }}>
-                      {aiResult.bom.reduce((sum, item) => sum + item.count, 0)}×
-                    </span>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* Local Result */}
-        {mode === "local" && result && (
-          <div ref={resultRef} style={{ marginTop: "32px" }}>
-            {/* SVG */}
-            <div style={{ ...cardStyle, marginBottom: "20px", textAlign: "center" }}>
-              <h2 style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px", textAlign: "left" }}>
-                📐 Kolejový plán
-              </h2>
-              <LayoutSVG result={result} form={form} />
+              <p style={{ fontSize: "16px", color: "var(--text-muted)", fontWeight: 600 }}>AI navrhuje kolejiště...</p>
+              <p style={{ fontSize: "13px", color: "var(--text-faint)", marginTop: "8px" }}>Generování geometrie tratě, obvykle 10-20 sekund</p>
+              <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
             </div>
+          )}
 
-            {/* Description */}
-            <div style={{ ...cardStyle, marginBottom: "20px" }}>
-              <h2 style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "12px" }}>
-                📝 Popis
+          {/* Error state */}
+          {aiError && (
+            <div style={{ ...cardStyle, borderColor: "var(--danger)" }}>
+              <h2 style={{ fontSize: "18px", fontWeight: 700, color: "var(--danger)", marginBottom: "12px" }}>
+                ❌ Chyba
               </h2>
-              <p style={{ fontSize: "15px", color: "var(--text-secondary)", lineHeight: 1.7 }}>
-                {result.description}
+              <p style={{ fontSize: "15px", color: "var(--text-secondary)" }}>{aiError}</p>
+              <p style={{ fontSize: "13px", color: "var(--text-faint)", marginTop: "8px" }}>
+                Zkuste to znovu — AI občas neodpoví napoprvé.
               </p>
+            </div>
+          )}
 
-              {result.warnings.length > 0 && (
-                <div style={{ marginTop: "16px", padding: "12px 16px", background: "rgba(255, 193, 7, 0.1)", border: "1px solid rgba(255, 193, 7, 0.3)", borderRadius: "8px" }}>
-                  {result.warnings.map((w, i) => (
-                    <p key={i} style={{ fontSize: "13px", color: "#ffc107", margin: i > 0 ? "6px 0 0" : "0" }}>
-                      ⚠️ {w}
+          {/* Results */}
+          {aiResult && (
+            <>
+              {/* 1. SVG Track Plan */}
+              <div style={{ ...cardStyle, marginBottom: "20px", textAlign: "center" }}>
+                <h2 style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px", textAlign: "left" }}>
+                  📐 Kolejový plán
+                </h2>
+                <AITrackPlanSVG
+                  tracks={aiResult.tracks ?? []}
+                  labels={aiResult.labels}
+                  board={aiResult.board ?? { width: form.width * 10, height: form.height * 10 }}
+                  form={form}
+                />
+              </div>
+
+              {/* 2. Warnings */}
+              {aiResult.warnings && aiResult.warnings.length > 0 && (
+                <div style={{ ...cardStyle, marginBottom: "20px", borderColor: "rgba(255, 193, 7, 0.4)" }}>
+                  <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#ffc107", marginBottom: "12px" }}>
+                    ⚠️ Upozornění
+                  </h2>
+                  {aiResult.warnings.map((w, i) => (
+                    <p key={i} style={{ fontSize: "14px", color: "var(--text-secondary)", margin: i > 0 ? "8px 0 0" : "0", lineHeight: 1.6 }}>
+                      • {w}
                     </p>
                   ))}
                 </div>
               )}
-            </div>
 
-            {/* BOM */}
-            <div style={cardStyle}>
-              <h2 style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px" }}>
-                🛒 Seznam dílů
-              </h2>
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead>
-                    <tr>
-                      <th style={{ textAlign: "left", padding: "10px 12px", borderBottom: "2px solid var(--border)", color: "var(--accent)", fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                        Typ
-                      </th>
-                      <th style={{ textAlign: "left", padding: "10px 12px", borderBottom: "2px solid var(--border)", color: "var(--accent)", fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                        Díl
-                      </th>
-                      <th style={{ textAlign: "left", padding: "10px 12px", borderBottom: "2px solid var(--border)", color: "var(--accent)", fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                        Označení
-                      </th>
-                      <th style={{ textAlign: "center", padding: "10px 12px", borderBottom: "2px solid var(--border)", color: "var(--accent)", fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                        Počet
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {result.bom.map((item, i) => {
-                      const typeIcons: Record<string, string> = {
-                        straight: "➖",
-                        curve: "↪️",
-                        "turnout-left": "↙️",
-                        "turnout-right": "↗️",
-                        crossing: "✖️",
-                      };
-                      return (
-                        <tr key={i} style={{ borderBottom: "1px solid var(--border-light)" }}>
-                          <td style={{ padding: "10px 12px", fontSize: "14px" }}>
-                            {typeIcons[item.piece.type] || "🔧"}
-                          </td>
-                          <td style={{ padding: "10px 12px", fontSize: "14px", color: "var(--text-body)" }}>
-                            {item.piece.nameCz}
-                          </td>
-                          <td style={{ padding: "10px 12px", fontSize: "13px", color: "var(--text-dim)" }}>
-                            {item.piece.name}
-                          </td>
-                          <td style={{ padding: "10px 12px", fontSize: "16px", fontWeight: 700, color: "var(--accent)", textAlign: "center" }}>
-                            {item.count}×
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+              {/* 3. BOM Table */}
+              <div style={cardStyle}>
+                <h2 style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px" }}>
+                  🛒 Seznam dílů
+                </h2>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr>
+                        {["Typ", "Díl", "Označení", "Počet"].map((header, hi) => (
+                          <th key={hi} style={{
+                            textAlign: hi === 3 ? "center" : "left",
+                            padding: "10px 12px",
+                            borderBottom: "2px solid var(--border)",
+                            color: "var(--accent)",
+                            fontSize: "12px",
+                            fontWeight: 700,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.5px",
+                          }}>
+                            {header}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {aiResult.bom.map((item, i) => {
+                        const typeIcons: Record<string, string> = {
+                          straight: "➖", curve: "↪️", "turnout-left": "↙️", "turnout-right": "↗️", crossing: "✖️",
+                        };
+                        return (
+                          <tr key={i} style={{ borderBottom: "1px solid var(--border-light)" }}>
+                            <td style={{ padding: "10px 12px", fontSize: "14px" }}>
+                              {typeIcons[item.type] || "🔧"}
+                            </td>
+                            <td style={{ padding: "10px 12px", fontSize: "14px", color: "var(--text-body)" }}>
+                              {item.nameCz}
+                            </td>
+                            <td style={{ padding: "10px 12px", fontSize: "13px", color: "var(--text-dim)" }}>
+                              {item.name}
+                            </td>
+                            <td style={{ padding: "10px 12px", fontSize: "16px", fontWeight: 700, color: "var(--accent)", textAlign: "center" }}>
+                              {item.count}×
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div style={{
+                  marginTop: "16px", paddingTop: "12px",
+                  borderTop: "1px solid var(--border)",
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                }}>
+                  <span style={{ fontSize: "14px", color: "var(--text-dim)" }}>Celkem dílů</span>
+                  <span style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-primary)" }}>
+                    {aiResult.bom.reduce((sum, item) => sum + item.count, 0)}×
+                  </span>
+                </div>
               </div>
-
-              {/* Total */}
-              <div style={{ marginTop: "16px", paddingTop: "12px", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: "14px", color: "var(--text-dim)" }}>
-                  Celkem dílů
-                </span>
-                <span style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-primary)" }}>
-                  {result.bom.reduce((sum, item) => sum + item.count, 0)}×
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
