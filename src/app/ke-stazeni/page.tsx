@@ -438,8 +438,22 @@ export default function DownloadsPage() {
       // don't block download if counter fails
     }
 
-    // Open file
-    window.open(dl.file_url, "_blank");
+    // Force download — fetch as blob to bypass browser preview
+    try {
+      const res = await fetch(dl.file_url);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = dl.file_name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      // Fallback — otevřít v novém tabu
+      window.open(dl.file_url, "_blank");
+    }
 
     // Refresh to show updated count
     setTimeout(() => fetchDownloads(), 500);
