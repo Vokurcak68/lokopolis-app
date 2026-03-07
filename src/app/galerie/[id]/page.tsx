@@ -832,8 +832,6 @@ function GalleryCard({
         transition: "all 0.2s",
         borderBottom: "3px solid var(--accent)",
         position: "relative",
-        breakInside: "avoid",
-        marginBottom: "16px",
       }}
       onClick={() => {
         if (!needsAuth) onOpen();
@@ -857,7 +855,7 @@ function GalleryCard({
       <div
         style={{
           width: "100%",
-          aspectRatio: item.type === "youtube" ? "16/9" : "4/3",
+          height: "200px",
           background: "var(--bg-page)",
           position: "relative",
           overflow: "hidden",
@@ -1354,29 +1352,25 @@ export default function AlbumDetailPage() {
           </p>
         </div>
       ) : (
-        <div
-          style={{
-            columnCount: 1,
-            columnGap: "16px",
-          }}
-        >
+        <div>
           <style
             dangerouslySetInnerHTML={{
               __html: `
                 @media (min-width: 640px) {
-                  .gallery-masonry { column-count: 2 !important; }
+                  .gallery-grid { grid-template-columns: repeat(2, 1fr) !important; }
                 }
                 @media (min-width: 1024px) {
-                  .gallery-masonry { column-count: 3 !important; }
+                  .gallery-grid { grid-template-columns: repeat(3, 1fr) !important; }
                 }
               `,
             }}
           />
           <div
-            className="gallery-masonry"
+            className="gallery-grid"
             style={{
-              columnCount: 1,
-              columnGap: "16px",
+              display: "grid",
+              gridTemplateColumns: "1fr",
+              gap: "16px",
             }}
           >
             {items.map((item) => (
