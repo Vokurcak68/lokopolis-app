@@ -103,6 +103,19 @@ export interface Event {
   updated_at: string;
 }
 
+// Tag types
+export interface Tag {
+  id: string;
+  name: string;
+  slug: string;
+  created_at: string;
+}
+
+export interface ArticleTag {
+  article_id: string;
+  tag_id: string;
+}
+
 // Rozšířené typy s relacemi
 export interface ArticleWithRelations extends Article {
   author: Profile | null;

@@ -8,6 +8,7 @@ import { useAuth } from "@/components/Auth/AuthProvider";
 import type {
   ArticleWithRelations,
   CommentWithAuthor,
+  Tag,
 } from "@/types/database";
 
 export default function ArticleDetailPage() {
@@ -23,6 +24,7 @@ export default function ArticleDetailPage() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [articleTags, setArticleTags] = useState<Tag[]>([]);
 
   const isAuthor = user && article && user.id === article.author_id;
 
@@ -48,6 +50,26 @@ export default function ArticleDetailPage() {
       // Increment view count (fire & forget)
       void (async () => {
         try { await supabase.rpc("increment_article_view", { target_article_id: data.id }); } catch {}
+      })();
+
+      // Load tags
+      void (async () => {
+        try {
+          const { data: tagLinks } = await supabase
+            .from("article_tags")
+            .select("tag_id, tags(*)")
+            .eq("article_id", data.id);
+          if (tagLinks) {
+            const loadedTags = tagLinks
+              .map((link: { tag_id: string; tags: Tag | Tag[] | null }) => {
+                const t = link.tags;
+                if (Array.isArray(t)) return t[0] || null;
+                return t;
+              })
+              .filter(Boolean) as Tag[];
+            setArticleTags(loadedTags);
+          }
+        } catch {}
       })();
     }
     fetchArticle();
@@ -246,6 +268,34 @@ export default function ArticleDetailPage() {
         className="article-content mb-16"
         dangerouslySetInnerHTML={{ __html: article.content || "<p>Tento článek zatím nemá obsah.</p>" }}
       />
+
+      {/* Tags */}
+      {articleTags.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "48px", paddingTop: "16px", borderTop: "1px solid #252838" }}>
+          <span style={{ fontSize: "13px", color: "#6a6e80", marginRight: "4px", lineHeight: "28px" }}>🏷️</span>
+          {articleTags.map((tag) => (
+            <Link
+              key={tag.id}
+              href={`/hledat?tag=${tag.slug}`}
+              style={{
+                display: "inline-block",
+                background: "rgba(240,160,48,0.1)",
+                border: "1px solid rgba(240,160,48,0.3)",
+                borderRadius: "20px",
+                padding: "4px 12px",
+                color: "#f0a030",
+                fontSize: "12px",
+                textDecoration: "none",
+                transition: "background 0.2s",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(240,160,48,0.2)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(240,160,48,0.1)")}
+            >
+              {tag.name}
+            </Link>
+          ))}
+        </div>
+      )}
 
       {/* Komentáře */}
       <section className="border-t border-border-subtle pt-10">

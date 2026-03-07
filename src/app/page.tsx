@@ -89,7 +89,14 @@ const defaultAuthors = [
   { name: "Radek Dvořák", count: 21 },
 ];
 
-const tags = ["Tillig", "DCC", "epocha IV", "3D tisk", "ČSD", "krajina", "patina", "ROCO", "výhybky", "LED osvětlení"];
+interface PopularTag {
+  id: string;
+  name: string;
+  slug: string;
+  article_count: number;
+}
+
+const defaultTags = ["Tillig", "DCC", "epocha IV", "3D tisk", "ČSD", "krajina", "patina", "ROCO", "výhybky", "LED osvětlení"];
 
 /* ============================================================
    COMPONENT
@@ -122,6 +129,7 @@ export default function Home() {
   const [upcomingEvents, setUpcomingEvents] = useState<EventItem[]>([]);
   const [memberCount, setMemberCount] = useState<number | null>(null);
   const [popularArticles, setPopularArticles] = useState<PopularArticle[]>([]);
+  const [popularTags, setPopularTags] = useState<PopularTag[]>([]);
 
   useEffect(() => {
     async function fetchAll() {
@@ -162,6 +170,16 @@ export default function Home() {
         // Events
         if (eventsRes.data && eventsRes.data.length > 0) {
           setUpcomingEvents(eventsRes.data as EventItem[]);
+        }
+
+        // Popular tags
+        try {
+          const { data: tagsData } = await supabase.rpc("get_popular_tags", { max_results: 15 });
+          if (tagsData && tagsData.length > 0) {
+            setPopularTags(tagsData as PopularTag[]);
+          }
+        } catch {
+          // keep empty
         }
 
         // Popular articles (by views this month)
@@ -571,11 +589,40 @@ export default function Home() {
           <div className="widget">
             <h3>🏷️ Štítky</h3>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-              {tags.map((t) => (
-                <span key={t} className="tag">
-                  {t}
-                </span>
-              ))}
+              {popularTags.length > 0
+                ? popularTags.map((t) => (
+                    <Link
+                      key={t.id}
+                      href={`/hledat?tag=${t.slug}`}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "4px",
+                        background: "rgba(240,160,48,0.1)",
+                        border: "1px solid rgba(240,160,48,0.3)",
+                        borderRadius: "20px",
+                        padding: "4px 12px",
+                        color: "#f0a030",
+                        fontSize: "12px",
+                        cursor: "pointer",
+                        textDecoration: "none",
+                        transition: "background 0.2s",
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(240,160,48,0.2)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(240,160,48,0.1)")}
+                    >
+                      {t.name}
+                      <span style={{ fontSize: "10px", color: "rgba(240,160,48,0.6)", marginLeft: "2px" }}>
+                        {t.article_count}
+                      </span>
+                    </Link>
+                  ))
+                : defaultTags.map((t) => (
+                    <span key={t} className="tag">
+                      {t}
+                    </span>
+                  ))
+              }
             </div>
           </div>
         </aside>

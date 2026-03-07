@@ -45,11 +45,13 @@ function SearchContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const query = searchParams.get("q") || "";
+  const tagSlug = searchParams.get("tag") || "";
 
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [inputValue, setInputValue] = useState(query);
+  const [activeTagName, setActiveTagName] = useState<string | null>(null);
 
   const doSearch = useCallback(async (q: string) => {
     if (!q.trim()) return;
@@ -61,7 +63,6 @@ function SearchContent() {
       const term = q.trim();
       const pattern = `%${term}%`;
 
-      // Fetch with three separate ilike conditions via or()
       const { data, error: searchError } = await supabase
         .from("articles")
         .select("id, slug, title, excerpt, content, cover_image_url, published_at, author:profiles(display_name, username), category:categories(name, icon, slug)")
@@ -84,10 +85,72 @@ function SearchContent() {
     setSearched(true);
   }, []);
 
+  const doTagSearch = useCallback(async (slug: string) => {
+    if (!slug.trim()) return;
+
+    setLoading(true);
+    setSearched(false);
+
+    try {
+      // Get tag info
+      const { data: tagData } = await supabase
+        .from("tags")
+        .select("id, name")
+        .eq("slug", slug)
+        .single();
+
+      if (!tagData) {
+        setActiveTagName(slug);
+        setResults([]);
+        setLoading(false);
+        setSearched(true);
+        return;
+      }
+
+      setActiveTagName(tagData.name);
+
+      // Get article IDs for this tag
+      const { data: tagLinks } = await supabase
+        .from("article_tags")
+        .select("article_id")
+        .eq("tag_id", tagData.id);
+
+      if (!tagLinks || tagLinks.length === 0) {
+        setResults([]);
+        setLoading(false);
+        setSearched(true);
+        return;
+      }
+
+      const articleIds = tagLinks.map((l: { article_id: string }) => l.article_id);
+
+      const { data } = await supabase
+        .from("articles")
+        .select("id, slug, title, excerpt, content, cover_image_url, published_at, author:profiles(display_name, username), category:categories(name, icon, slug)")
+        .eq("status", "published")
+        .eq("verified", true)
+        .in("id", articleIds)
+        .order("published_at", { ascending: false })
+        .limit(20);
+
+      setResults((data as unknown as SearchResult[]) || []);
+    } catch {
+      setResults([]);
+    }
+
+    setLoading(false);
+    setSearched(true);
+  }, []);
+
   useEffect(() => {
     setInputValue(query);
-    if (query) doSearch(query);
-  }, [query, doSearch]);
+    if (tagSlug) {
+      doTagSearch(tagSlug);
+    } else if (query) {
+      setActiveTagName(null);
+      doSearch(query);
+    }
+  }, [query, tagSlug, doSearch, doTagSearch]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -143,6 +206,47 @@ function SearchContent() {
         </button>
       </form>
 
+      {/* Tag filter banner */}
+      {tagSlug && activeTagName && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+            marginBottom: "24px",
+            padding: "12px 16px",
+            background: "rgba(240,160,48,0.08)",
+            border: "1px solid rgba(240,160,48,0.2)",
+            borderRadius: "10px",
+          }}
+        >
+          <span style={{ fontSize: "14px", color: "#e0e0e0" }}>
+            Články se štítkem: <strong style={{ color: "#f0a030" }}>{activeTagName}</strong>
+          </span>
+          <button
+            onClick={() => router.push("/hledat")}
+            style={{
+              background: "rgba(240,160,48,0.15)",
+              border: "1px solid rgba(240,160,48,0.3)",
+              borderRadius: "50%",
+              width: "22px",
+              height: "22px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#f0a030",
+              fontSize: "13px",
+              cursor: "pointer",
+              lineHeight: 1,
+              padding: 0,
+            }}
+            title="Zrušit filtr"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {/* Results header */}
       {searched && (
         <div style={{ marginBottom: "24px" }}>
@@ -152,12 +256,19 @@ function SearchContent() {
               : "Nic nenalezeno"
             }
           </h1>
-          <p style={{ fontSize: "14px", color: "#6a6e80" }}>
-            {results.length > 0
-              ? `Výsledky pro „${query}"`
-              : `Pro „${query}" jsme nenašli žádné články. Zkuste jiný výraz.`
-            }
-          </p>
+          {!tagSlug && (
+            <p style={{ fontSize: "14px", color: "#6a6e80" }}>
+              {results.length > 0
+                ? `Výsledky pro „${query}"`
+                : `Pro „${query}" jsme nenašli žádné články. Zkuste jiný výraz.`
+              }
+            </p>
+          )}
+          {tagSlug && results.length === 0 && (
+            <p style={{ fontSize: "14px", color: "#6a6e80" }}>
+              Pro tento štítek jsme nenašli žádné články.
+            </p>
+          )}
         </div>
       )}
 

@@ -1,12 +1,21 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { ArticleEditor } from "@/components/Editor";
-import type { Category } from "@/types/database";
+import type { Category, Tag } from "@/types/database";
 import "@/components/Editor/editor.css";
+
+function generateTagSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
 
 export default function EditArticlePage() {
   const params = useParams();
@@ -27,6 +36,111 @@ export default function EditArticlePage() {
   const [coverUploading, setCoverUploading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+
+  // Tags state
+  const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
+  const [tagInput, setTagInput] = useState("");
+  const [tagSuggestions, setTagSuggestions] = useState<Tag[]>([]);
+  const [showTagSuggestions, setShowTagSuggestions] = useState(false);
+  const tagInputRef = useRef<HTMLInputElement>(null);
+  const tagDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close tag dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (
+        tagDropdownRef.current &&
+        !tagDropdownRef.current.contains(e.target as Node) &&
+        tagInputRef.current &&
+        !tagInputRef.current.contains(e.target as Node)
+      ) {
+        setShowTagSuggestions(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Fetch tag suggestions
+  useEffect(() => {
+    if (!tagInput.trim()) {
+      setTagSuggestions([]);
+      return;
+    }
+    const timeout = setTimeout(async () => {
+      const { data } = await supabase
+        .from("tags")
+        .select("*")
+        .ilike("name", `%${tagInput.trim()}%`)
+        .limit(10);
+      if (data) {
+        const filtered = data.filter(
+          (t: Tag) => !selectedTags.some((s) => s.id === t.id)
+        );
+        setTagSuggestions(filtered);
+        setShowTagSuggestions(true);
+      }
+    }, 200);
+    return () => clearTimeout(timeout);
+  }, [tagInput, selectedTags]);
+
+  function addExistingTag(tag: Tag) {
+    if (selectedTags.length >= 10) return;
+    if (selectedTags.some((t) => t.id === tag.id)) return;
+    setSelectedTags((prev) => [...prev, tag]);
+    setTagInput("");
+    setShowTagSuggestions(false);
+    tagInputRef.current?.focus();
+  }
+
+  async function addNewTag(name: string) {
+    if (selectedTags.length >= 10) return;
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    if (selectedTags.some((t) => t.name.toLowerCase() === trimmed.toLowerCase())) {
+      setTagInput("");
+      return;
+    }
+    const { data: existing } = await supabase
+      .from("tags")
+      .select("*")
+      .ilike("name", trimmed)
+      .limit(1);
+    if (existing && existing.length > 0) {
+      addExistingTag(existing[0]);
+      return;
+    }
+    const tagSlug = generateTagSlug(trimmed);
+    const { data: newTag, error: tagError } = await supabase
+      .from("tags")
+      .insert({ name: trimmed, slug: tagSlug })
+      .select()
+      .single();
+    if (!tagError && newTag) {
+      setSelectedTags((prev) => [...prev, newTag as Tag]);
+    }
+    setTagInput("");
+    setShowTagSuggestions(false);
+    tagInputRef.current?.focus();
+  }
+
+  function removeTag(tagId: string) {
+    setSelectedTags((prev) => prev.filter((t) => t.id !== tagId));
+  }
+
+  function handleTagKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (tagSuggestions.length > 0) {
+        addExistingTag(tagSuggestions[0]);
+      } else if (tagInput.trim()) {
+        addNewTag(tagInput);
+      }
+    }
+    if (e.key === "Backspace" && !tagInput && selectedTags.length > 0) {
+      removeTag(selectedTags[selectedTags.length - 1].id);
+    }
+  }
 
   // Load user
   useEffect(() => {
@@ -86,6 +200,23 @@ export default function EditArticlePage() {
       setCategoryId(data.category_id || "");
       setCoverUrl(data.cover_image_url || "");
       setCoverPreview(data.cover_image_url || "");
+
+      // Load existing tags
+      const { data: tagLinks } = await supabase
+        .from("article_tags")
+        .select("tag_id, tags(*)")
+        .eq("article_id", data.id);
+      if (tagLinks) {
+        const loadedTags = tagLinks
+          .map((link: { tag_id: string; tags: Tag | Tag[] | null }) => {
+            const t = link.tags;
+            if (Array.isArray(t)) return t[0] || null;
+            return t;
+          })
+          .filter(Boolean) as Tag[];
+        setSelectedTags(loadedTags);
+      }
+
       setLoading(false);
     }
 
@@ -192,6 +323,16 @@ export default function EditArticlePage() {
       setError(updateError.message);
       setSaving(false);
       return;
+    }
+
+    // Sync tags: delete old, insert new
+    await supabase.from("article_tags").delete().eq("article_id", articleId);
+    if (selectedTags.length > 0) {
+      const tagLinks = selectedTags.map((t) => ({
+        article_id: articleId,
+        tag_id: t.id,
+      }));
+      await supabase.from("article_tags").insert(tagLinks);
     }
 
     if (asDraft) {
@@ -331,6 +472,164 @@ export default function EditArticlePage() {
               <input type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" />
             </label>
           </div>
+        </div>
+      </div>
+
+      {/* Tags */}
+      <div style={{ marginBottom: "24px" }}>
+        <label style={{ display: "block", fontSize: "11px", color: "#6b7280", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          Štítky {selectedTags.length > 0 && <span style={{ color: "#555a70" }}>({selectedTags.length}/10)</span>}
+        </label>
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "6px",
+            padding: "8px 12px",
+            background: "#12141f",
+            border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: "8px",
+            alignItems: "center",
+            minHeight: "42px",
+            position: "relative",
+          }}
+        >
+          {selectedTags.map((tag) => (
+            <span
+              key={tag.id}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+                background: "rgba(240,160,48,0.1)",
+                border: "1px solid rgba(240,160,48,0.3)",
+                borderRadius: "20px",
+                padding: "4px 12px",
+                color: "#f0a030",
+                fontSize: "12px",
+              }}
+            >
+              {tag.name}
+              <button
+                type="button"
+                onClick={() => removeTag(tag.id)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#f0a030",
+                  cursor: "pointer",
+                  padding: "0 0 0 2px",
+                  fontSize: "14px",
+                  lineHeight: 1,
+                  opacity: 0.7,
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+                onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.7")}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          {selectedTags.length < 10 && (
+            <input
+              ref={tagInputRef}
+              type="text"
+              value={tagInput}
+              onChange={(e) => setTagInput(e.target.value)}
+              onKeyDown={handleTagKeyDown}
+              onFocus={() => tagInput.trim() && setShowTagSuggestions(true)}
+              placeholder={selectedTags.length === 0 ? "Přidat štítek…" : ""}
+              style={{
+                flex: 1,
+                minWidth: "100px",
+                background: "transparent",
+                border: "none",
+                outline: "none",
+                color: "#fff",
+                fontSize: "13px",
+                padding: "2px 0",
+              }}
+            />
+          )}
+          {showTagSuggestions && tagSuggestions.length > 0 && (
+            <div
+              ref={tagDropdownRef}
+              style={{
+                position: "absolute",
+                top: "100%",
+                left: 0,
+                right: 0,
+                marginTop: "4px",
+                background: "#1a1e2e",
+                border: "1px solid #252838",
+                borderRadius: "8px",
+                zIndex: 50,
+                maxHeight: "200px",
+                overflowY: "auto",
+                boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+              }}
+            >
+              {tagSuggestions.map((tag) => (
+                <button
+                  key={tag.id}
+                  type="button"
+                  onClick={() => addExistingTag(tag)}
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    textAlign: "left",
+                    padding: "8px 14px",
+                    background: "transparent",
+                    border: "none",
+                    color: "#e0e0e0",
+                    fontSize: "13px",
+                    cursor: "pointer",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(240,160,48,0.1)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                >
+                  {tag.name}
+                </button>
+              ))}
+            </div>
+          )}
+          {showTagSuggestions && tagInput.trim() && tagSuggestions.length === 0 && (
+            <div
+              ref={tagDropdownRef}
+              style={{
+                position: "absolute",
+                top: "100%",
+                left: 0,
+                right: 0,
+                marginTop: "4px",
+                background: "#1a1e2e",
+                border: "1px solid #252838",
+                borderRadius: "8px",
+                zIndex: 50,
+                boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => addNewTag(tagInput)}
+                style={{
+                  display: "block",
+                  width: "100%",
+                  textAlign: "left",
+                  padding: "8px 14px",
+                  background: "transparent",
+                  border: "none",
+                  color: "#f0a030",
+                  fontSize: "13px",
+                  cursor: "pointer",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(240,160,48,0.1)")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              >
+                + Vytvořit štítek &quot;{tagInput.trim()}&quot;
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
