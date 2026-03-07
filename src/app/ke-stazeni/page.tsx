@@ -406,6 +406,9 @@ export default function DownloadsPage() {
   const fetchDownloads = useCallback(async () => {
     setLoading(true);
     try {
+      // Ensure we have fresh auth session before querying
+      await supabase.auth.getSession();
+
       let query = supabase
         .from("downloads")
         .select("*")
@@ -427,8 +430,11 @@ export default function DownloadsPage() {
   }, [activeCategory]);
 
   useEffect(() => {
-    fetchDownloads();
-  }, [fetchDownloads]);
+    // Wait until auth state is resolved before fetching
+    if (!authLoading) {
+      fetchDownloads();
+    }
+  }, [fetchDownloads, authLoading]);
 
   async function handleDownload(dl: Download) {
     // Increment counter
@@ -455,8 +461,8 @@ export default function DownloadsPage() {
       window.open(dl.file_url, "_blank");
     }
 
-    // Refresh to show updated count
-    setTimeout(() => fetchDownloads(), 500);
+    // Refresh to show updated count (longer delay to avoid race with auth)
+    setTimeout(() => fetchDownloads(), 1500);
   }
 
   return (
