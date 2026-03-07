@@ -67,6 +67,23 @@ export interface Download {
   updated_at: string;
 }
 
+// Gallery types
+export type GalleryItemType = "image" | "video" | "youtube";
+export type GalleryAccess = "public" | "authenticated";
+
+export interface GalleryItem {
+  id: string;
+  title: string;
+  description: string | null;
+  type: GalleryItemType;
+  media_url: string;
+  thumbnail_url: string | null;
+  access: GalleryAccess;
+  uploaded_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // Rozšířené typy s relacemi
 export interface ArticleWithRelations extends Article {
   author: Profile | null;
