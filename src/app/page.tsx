@@ -145,7 +145,7 @@ export default function Home() {
           supabase.from("articles").select("id, slug, title, excerpt, cover_image_url, published_at, author:profiles(display_name, username, avatar_url), category:categories(name, icon)").eq("status", "published").eq("verified", true).order("published_at", { ascending: false }).limit(3),
           supabase.from("articles").select("category:categories(slug)").eq("status", "published").eq("verified", true),
           supabase.from("articles").select("author:profiles(display_name, username)").eq("status", "published").eq("verified", true),
-          supabase.from("downloads").select("id, title, description, file_name, file_size, download_count").eq("access", "public").order("created_at", { ascending: false }).limit(3),
+          supabase.from("downloads").select("id, title, description, file_name, file_size, download_count").order("created_at", { ascending: false }).limit(3),
           supabase.from("events").select("id, title, event_date, location").gte("event_date", today).order("event_date", { ascending: true }).limit(3),
           supabase.from("downloads").select("*", { count: "exact", head: true }),
           supabase.from("gallery_items").select("*", { count: "exact", head: true }),
