@@ -97,9 +97,6 @@ export default function Header() {
         </nav>
 
         <div className="desktop-actions" style={{ alignItems: "center", gap: "12px" }}>
-          <span style={{ color: "var(--text-muted)", cursor: "pointer", fontSize: "18px", padding: "8px" }}>
-            🔍
-          </span>
           <ThemeToggle />
           {user ? (
             <>
