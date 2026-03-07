@@ -114,8 +114,8 @@ export default function SectionPage() {
     return (
       <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "64px 20px", textAlign: "center" }}>
         <div style={{ fontSize: "48px", marginBottom: "16px" }}>😕</div>
-        <h1 style={{ fontSize: "24px", color: "#fff", marginBottom: "8px" }}>Sekce nenalezena</h1>
-        <Link href="/forum" style={{ color: "#f0a030", textDecoration: "none" }}>← Zpět na fórum</Link>
+        <h1 style={{ fontSize: "24px", color: "var(--text-primary)", marginBottom: "8px" }}>Sekce nenalezena</h1>
+        <Link href="/forum" style={{ color: "var(--accent)", textDecoration: "none" }}>← Zpět na fórum</Link>
       </div>
     );
   }
@@ -123,20 +123,20 @@ export default function SectionPage() {
   return (
     <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "48px 20px" }}>
       {/* Breadcrumb */}
-      <div style={{ marginBottom: "24px", fontSize: "13px", color: "#6a6e80" }}>
-        <Link href="/forum" style={{ color: "#f0a030", textDecoration: "none" }}>Fórum</Link>
+      <div style={{ marginBottom: "24px", fontSize: "13px", color: "var(--text-dimmer)" }}>
+        <Link href="/forum" style={{ color: "var(--accent)", textDecoration: "none" }}>Fórum</Link>
         <span style={{ margin: "0 8px" }}>›</span>
-        <span style={{ color: "#a0a4b8" }}>{section?.name || "..."}</span>
+        <span style={{ color: "var(--text-muted)" }}>{section?.name || "..."}</span>
       </div>
 
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px", flexWrap: "wrap", gap: "16px" }}>
         <div>
-          <h1 style={{ fontSize: "28px", fontWeight: 700, color: "#fff", marginBottom: "8px" }}>
+          <h1 style={{ fontSize: "28px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "8px" }}>
             {section?.icon} {section?.name}
           </h1>
           {section?.description && (
-            <p style={{ fontSize: "15px", color: "#8a8ea0" }}>{section.description}</p>
+            <p style={{ fontSize: "15px", color: "var(--text-dim)" }}>{section.description}</p>
           )}
         </div>
         {user && !isBanned && (
@@ -144,8 +144,8 @@ export default function SectionPage() {
             href={`/forum/nove-vlakno?section=${slug}`}
             style={{
               padding: "10px 20px",
-              background: "#f0a030",
-              color: "#0f1117",
+              background: "var(--accent)",
+              color: "var(--bg-page)",
               border: "none",
               borderRadius: "10px",
               fontSize: "14px",
@@ -162,14 +162,14 @@ export default function SectionPage() {
       {loading ? (
         <div style={{ textAlign: "center", padding: "64px 0" }}>
           <div style={{ fontSize: "32px", marginBottom: "12px" }}>⏳</div>
-          <p style={{ color: "#6a6e80", fontSize: "14px" }}>Načítám vlákna...</p>
+          <p style={{ color: "var(--text-dimmer)", fontSize: "14px" }}>Načítám vlákna...</p>
         </div>
       ) : threads.length === 0 ? (
         <div style={{ textAlign: "center", padding: "64px 0" }}>
           <div style={{ fontSize: "48px", marginBottom: "16px" }}>📭</div>
-          <p style={{ color: "#8a8ea0", fontSize: "16px" }}>Zatím zde nejsou žádná vlákna</p>
+          <p style={{ color: "var(--text-dim)", fontSize: "16px" }}>Zatím zde nejsou žádná vlákna</p>
           {user && !isBanned && (
-            <Link href={`/forum/nove-vlakno?section=${slug}`} style={{ color: "#f0a030", textDecoration: "none", fontSize: "14px" }}>
+            <Link href={`/forum/nove-vlakno?section=${slug}`} style={{ color: "var(--accent)", textDecoration: "none", fontSize: "14px" }}>
               Buďte první a založte nové vlákno →
             </Link>
           )}
@@ -186,8 +186,8 @@ export default function SectionPage() {
                 <div
                   key={t.id}
                   style={{
-                    background: "#1a1e2e",
-                    border: "1px solid #252838",
+                    background: "var(--bg-card)",
+                    border: "1px solid var(--border)",
                     borderRadius: "10px",
                     padding: "16px 20px",
                     display: "flex",
@@ -195,8 +195,8 @@ export default function SectionPage() {
                     gap: "14px",
                     transition: "border-color 0.2s",
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#353a50"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#252838"; }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--border-hover)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
                 >
                   {/* Avatar */}
                   <div style={{ flexShrink: 0 }}>
@@ -204,9 +204,9 @@ export default function SectionPage() {
                       <img src={t.author.avatar_url} alt="" style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }} />
                     ) : (
                       <div style={{
-                        width: 40, height: 40, borderRadius: "50%", background: "#353a50",
+                        width: 40, height: 40, borderRadius: "50%", background: "var(--border-hover)",
                         display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: "16px", color: "#a0a4b8", fontWeight: 600,
+                        fontSize: "16px", color: "var(--text-muted)", fontWeight: 600,
                       }}>
                         {initials}
                       </div>
@@ -219,13 +219,13 @@ export default function SectionPage() {
                       href={`/forum/${slug}/${t.id}`}
                       style={{ textDecoration: "none" }}
                     >
-                      <h3 style={{ fontSize: "15px", fontWeight: 600, color: "#e0e0e0", marginBottom: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <h3 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-body)", marginBottom: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
                         {t.is_pinned && <span title="Připnuto">📌</span>}
                         {t.is_locked && <span title="Zamčeno">🔒</span>}
                         {t.title}
                       </h3>
                     </Link>
-                    <div style={{ fontSize: "12px", color: "#6a6e80" }}>
+                    <div style={{ fontSize: "12px", color: "var(--text-dimmer)" }}>
                       {authorName} · {timeAgo(t.created_at)}
                     </div>
                   </div>
@@ -233,16 +233,16 @@ export default function SectionPage() {
                   {/* Stats */}
                   <div className="hidden md:flex" style={{ alignItems: "center", gap: "20px", flexShrink: 0 }}>
                     <div style={{ textAlign: "center" }}>
-                      <div style={{ fontSize: "16px", fontWeight: 700, color: "#a0a4b8" }}>{t.post_count}</div>
-                      <div style={{ fontSize: "10px", color: "#555a70" }}>odpovědí</div>
+                      <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-muted)" }}>{t.post_count}</div>
+                      <div style={{ fontSize: "10px", color: "var(--text-faint)" }}>odpovědí</div>
                     </div>
                     <div style={{ maxWidth: "150px" }}>
                       {lastPosterName && (
-                        <div style={{ fontSize: "12px", color: "#8a8ea0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        <div style={{ fontSize: "12px", color: "var(--text-dim)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                           {lastPosterName}
                         </div>
                       )}
-                      <div style={{ fontSize: "11px", color: "#555a70" }}>{timeAgo(t.last_post_at)}</div>
+                      <div style={{ fontSize: "11px", color: "var(--text-faint)" }}>{timeAgo(t.last_post_at)}</div>
                     </div>
                   </div>
 
@@ -286,9 +286,9 @@ export default function SectionPage() {
                   onClick={() => setPage(p)}
                   style={{
                     padding: "8px 14px",
-                    background: p === page ? "#f0a030" : "#1a1e2e",
-                    color: p === page ? "#0f1117" : "#a0a4b8",
-                    border: `1px solid ${p === page ? "#f0a030" : "#252838"}`,
+                    background: p === page ? "var(--accent)" : "var(--bg-card)",
+                    color: p === page ? "var(--bg-page)" : "var(--text-muted)",
+                    border: `1px solid ${p === page ? "var(--accent)" : "var(--border)"}`,
                     borderRadius: "8px",
                     fontSize: "13px",
                     fontWeight: p === page ? 700 : 400,
@@ -313,5 +313,5 @@ const adminBtnStyle: React.CSSProperties = {
   borderRadius: "6px",
   fontSize: "14px",
   cursor: "pointer",
-  color: "#a0a4b8",
+  color: "var(--text-muted)",
 };

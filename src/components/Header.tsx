@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import BadgeLogo from "./BadgeLogo";
 import UserMenu from "./Auth/UserMenu";
 import { useAuth } from "./Auth/AuthProvider";
+import { useTheme } from "./ThemeProvider";
 import { supabase } from "@/lib/supabase";
 
 const navItems = [
@@ -16,13 +17,35 @@ const navItems = [
   { label: "Fórum", href: "/forum" },
 ];
 
+function ThemeToggle() {
+  const { theme, toggleTheme } = useTheme();
+  return (
+    <button
+      onClick={toggleTheme}
+      title={theme === "dark" ? "Přepnout na světlý režim" : "Přepnout na tmavý režim"}
+      style={{
+        background: "none",
+        border: "1px solid var(--border-nav)",
+        borderRadius: "8px",
+        padding: "6px 10px",
+        cursor: "pointer",
+        fontSize: "16px",
+        lineHeight: 1,
+        color: "var(--text-muted)",
+        transition: "border-color 0.2s",
+      }}
+    >
+      {theme === "dark" ? "☀️" : "🌙"}
+    </button>
+  );
+}
+
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { user, profile } = useAuth();
   const [pendingCount, setPendingCount] = useState(0);
   const isAdmin = profile?.role === "admin";
 
-  // Fetch pending articles count for admin
   useEffect(() => {
     if (!isAdmin) return;
     supabase
@@ -38,8 +61,8 @@ export default function Header() {
   return (
     <header
       style={{
-        background: "#161822",
-        borderBottom: "1px solid #252838",
+        background: "var(--bg-header)",
+        borderBottom: "1px solid var(--border)",
         position: "sticky",
         top: 0,
         zIndex: 100,
@@ -56,12 +79,10 @@ export default function Header() {
           justifyContent: "space-between",
         }}
       >
-        {/* Logo */}
         <Link href="/" style={{ textDecoration: "none" }}>
           <BadgeLogo size="sm" />
         </Link>
 
-        {/* Desktop nav */}
         <nav className="hidden md:flex" style={{ gap: 0 }}>
           {navItems.map((item) => (
             <Link
@@ -74,11 +95,11 @@ export default function Header() {
           ))}
         </nav>
 
-        {/* Desktop actions */}
         <div className="hidden md:flex" style={{ alignItems: "center", gap: "12px" }}>
-          <span style={{ color: "#a0a4b8", cursor: "pointer", fontSize: "18px", padding: "8px" }}>
+          <span style={{ color: "var(--text-muted)", cursor: "pointer", fontSize: "18px", padding: "8px" }}>
             🔍
           </span>
+          <ThemeToggle />
           {user ? (
             <>
               {isAdmin && pendingCount > 0 && (
@@ -87,9 +108,9 @@ export default function Header() {
                   style={{
                     position: "relative",
                     padding: "8px 12px",
-                    border: "1px solid #3a3f55",
+                    border: "1px solid var(--border-nav)",
                     borderRadius: "8px",
-                    color: "#f0a030",
+                    color: "var(--accent)",
                     fontSize: "13px",
                     fontWeight: 600,
                     textDecoration: "none",
@@ -123,12 +144,11 @@ export default function Header() {
                   padding: "8px 16px",
                   border: "none",
                   borderRadius: "8px",
-                  background: "#f0a030",
-                  color: "#0f1117",
+                  background: "var(--accent)",
+                  color: "var(--accent-text-on)",
                   fontSize: "13px",
                   fontWeight: 600,
                   cursor: "pointer",
-                  transition: "background 0.2s",
                   textDecoration: "none",
                 }}
               >
@@ -142,13 +162,12 @@ export default function Header() {
                 href="/prihlaseni"
                 style={{
                   padding: "8px 16px",
-                  border: "1px solid #3a3f55",
+                  border: "1px solid var(--border-nav)",
                   borderRadius: "8px",
-                  color: "#a0a4b8",
+                  color: "var(--text-muted)",
                   fontSize: "13px",
                   background: "transparent",
                   cursor: "pointer",
-                  transition: "all 0.2s",
                   textDecoration: "none",
                 }}
               >
@@ -160,12 +179,11 @@ export default function Header() {
                   padding: "8px 16px",
                   border: "none",
                   borderRadius: "8px",
-                  background: "#f0a030",
-                  color: "#0f1117",
+                  background: "var(--accent)",
+                  color: "var(--accent-text-on)",
                   fontSize: "13px",
                   fontWeight: 600,
                   cursor: "pointer",
-                  transition: "background 0.2s",
                   textDecoration: "none",
                 }}
               >
@@ -175,33 +193,33 @@ export default function Header() {
           )}
         </div>
 
-        {/* Mobile hamburger */}
-        <button
-          className="md:hidden"
-          style={{ color: "#a0a4b8", background: "none", border: "none", cursor: "pointer" }}
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          aria-label="Menu"
-        >
-          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            {mobileMenuOpen ? (
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            ) : (
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-            )}
-          </svg>
-        </button>
+        <div className="md:hidden" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <ThemeToggle />
+          <button
+            style={{ color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer" }}
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label="Menu"
+          >
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              {mobileMenuOpen ? (
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              )}
+            </svg>
+          </button>
+        </div>
       </div>
 
-      {/* Mobile menu */}
       {mobileMenuOpen && (
-        <nav className="md:hidden" style={{ padding: "0 20px 16px", borderTop: "1px solid #252838" }}>
+        <nav className="md:hidden" style={{ padding: "0 20px 16px", borderTop: "1px solid var(--border)" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: "4px", paddingTop: "12px" }}>
             {navItems.map((item) => (
               <Link
                 key={item.href + item.label}
                 href={item.href}
                 style={{
-                  color: "#a0a4b8",
+                  color: "var(--text-muted)",
                   fontSize: "14px",
                   fontWeight: 500,
                   padding: "8px 0",
@@ -212,14 +230,14 @@ export default function Header() {
                 {item.label}
               </Link>
             ))}
-            <div style={{ paddingTop: "12px", borderTop: "1px solid #252838", marginTop: "8px" }}>
+            <div style={{ paddingTop: "12px", borderTop: "1px solid var(--border)", marginTop: "8px" }}>
               {user ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                   {isAdmin && pendingCount > 0 && (
                     <Link
                       href="/admin/clanky"
                       style={{
-                        color: "#f0a030",
+                        color: "var(--accent)",
                         fontSize: "14px",
                         fontWeight: 600,
                         textDecoration: "none",
@@ -250,7 +268,7 @@ export default function Header() {
                   )}
                   <Link
                     href="/novy-clanek"
-                    style={{ color: "#f0a030", fontSize: "14px", fontWeight: 600, textDecoration: "none" }}
+                    style={{ color: "var(--accent)", fontSize: "14px", fontWeight: 600, textDecoration: "none" }}
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     ✏️ Napsat článek
@@ -259,10 +277,10 @@ export default function Header() {
                 </div>
               ) : (
                 <div style={{ display: "flex", gap: "8px" }}>
-                  <Link href="/prihlaseni" style={{ color: "#a0a4b8", fontSize: "13px", textDecoration: "none" }}>
+                  <Link href="/prihlaseni" style={{ color: "var(--text-muted)", fontSize: "13px", textDecoration: "none" }}>
                     Přihlásit
                   </Link>
-                  <Link href="/registrace" style={{ color: "#f0a030", fontSize: "13px", fontWeight: 600, textDecoration: "none" }}>
+                  <Link href="/registrace" style={{ color: "var(--accent)", fontSize: "13px", fontWeight: 600, textDecoration: "none" }}>
                     Registrace
                   </Link>
                 </div>

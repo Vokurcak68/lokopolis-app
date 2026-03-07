@@ -35,7 +35,7 @@ function highlightMatch(text: string, query: string, maxLen = 200): string {
 
 export default function SearchPage() {
   return (
-    <Suspense fallback={<div style={{ textAlign: "center", padding: "64px 0", color: "#6a6e80" }}>Načítání…</div>}>
+    <Suspense fallback={<div style={{ textAlign: "center", padding: "64px 0", color: "var(--text-dimmer)" }}>Načítání…</div>}>
       <SearchContent />
     </Suspense>
   );
@@ -167,8 +167,8 @@ function SearchContent() {
         onSubmit={handleSubmit}
         style={{
           display: "flex",
-          background: "#1e2233",
-          border: "1px solid #2a2f45",
+          background: "var(--bg-input)",
+          border: "1px solid var(--border-input)",
           borderRadius: "12px",
           overflow: "hidden",
           marginBottom: "32px",
@@ -185,7 +185,7 @@ function SearchContent() {
             padding: "14px 20px",
             background: "transparent",
             border: "none",
-            color: "#fff",
+            color: "var(--text-primary)",
             fontSize: "16px",
             outline: "none",
           }}
@@ -194,9 +194,9 @@ function SearchContent() {
           type="submit"
           style={{
             padding: "14px 28px",
-            background: "#f0a030",
+            background: "var(--accent)",
             border: "none",
-            color: "#0f1117",
+            color: "var(--accent-text-on)",
             fontWeight: 600,
             fontSize: "14px",
             cursor: "pointer",
@@ -215,26 +215,26 @@ function SearchContent() {
             gap: "12px",
             marginBottom: "24px",
             padding: "12px 16px",
-            background: "rgba(240,160,48,0.08)",
-            border: "1px solid rgba(240,160,48,0.2)",
+            background: "var(--accent-bg)",
+            border: "1px solid var(--accent-border)",
             borderRadius: "10px",
           }}
         >
-          <span style={{ fontSize: "14px", color: "#e0e0e0" }}>
-            Články se štítkem: <strong style={{ color: "#f0a030" }}>{activeTagName}</strong>
+          <span style={{ fontSize: "14px", color: "var(--text-body)" }}>
+            Články se štítkem: <strong style={{ color: "var(--accent)" }}>{activeTagName}</strong>
           </span>
           <button
             onClick={() => router.push("/hledat")}
             style={{
-              background: "rgba(240,160,48,0.15)",
-              border: "1px solid rgba(240,160,48,0.3)",
+              background: "var(--accent-bg)",
+              border: "1px solid var(--accent-border-strong)",
               borderRadius: "50%",
               width: "22px",
               height: "22px",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: "#f0a030",
+              color: "var(--accent)",
               fontSize: "13px",
               cursor: "pointer",
               lineHeight: 1,
@@ -250,14 +250,14 @@ function SearchContent() {
       {/* Results header */}
       {searched && (
         <div style={{ marginBottom: "24px" }}>
-          <h1 style={{ fontSize: "22px", fontWeight: 700, color: "#fff", marginBottom: "4px" }}>
+          <h1 style={{ fontSize: "22px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "4px" }}>
             {results.length > 0
               ? `Nalezeno ${results.length} ${results.length === 1 ? "výsledek" : results.length < 5 ? "výsledky" : "výsledků"}`
               : "Nic nenalezeno"
             }
           </h1>
           {!tagSlug && (
-            <p style={{ fontSize: "14px", color: "#6a6e80" }}>
+            <p style={{ fontSize: "14px", color: "var(--text-dimmer)" }}>
               {results.length > 0
                 ? `Výsledky pro „${query}"`
                 : `Pro „${query}" jsme nenašli žádné články. Zkuste jiný výraz.`
@@ -265,7 +265,7 @@ function SearchContent() {
             </p>
           )}
           {tagSlug && results.length === 0 && (
-            <p style={{ fontSize: "14px", color: "#6a6e80" }}>
+            <p style={{ fontSize: "14px", color: "var(--text-dimmer)" }}>
               Pro tento štítek jsme nenašli žádné články.
             </p>
           )}
@@ -275,7 +275,7 @@ function SearchContent() {
       {/* Loading */}
       {loading && (
         <div style={{ textAlign: "center", padding: "48px 0" }}>
-          <div className="animate-pulse" style={{ color: "#6a6e80", fontSize: "15px" }}>Hledám…</div>
+          <div className="animate-pulse" style={{ color: "var(--text-dimmer)", fontSize: "15px" }}>Hledám…</div>
         </div>
       )}
 
@@ -296,13 +296,13 @@ function SearchContent() {
                     display: "flex",
                     gap: "16px",
                     padding: "16px",
-                    background: "#161822",
-                    border: "1px solid #1e2233",
+                    background: "var(--bg-header)",
+                    border: "1px solid var(--bg-input)",
                     borderRadius: "12px",
                     transition: "border-color 0.2s",
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#f0a030")}
-                  onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#1e2233")}
+                  onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--accent)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--bg-input)")}
                 >
                   {/* Cover thumbnail */}
                   {r.cover_image_url && (
@@ -329,8 +329,8 @@ function SearchContent() {
                           display: "inline-block",
                           fontSize: "11px",
                           fontWeight: 600,
-                          color: "#f0a030",
-                          background: "rgba(240,160,48,0.1)",
+                          color: "var(--accent)",
+                          background: "var(--accent-bg)",
                           padding: "2px 8px",
                           borderRadius: "4px",
                           marginBottom: "6px",
@@ -340,15 +340,15 @@ function SearchContent() {
                       </span>
                     )}
 
-                    <h3 style={{ fontSize: "16px", fontWeight: 600, color: "#fff", marginBottom: "6px", lineHeight: 1.4 }}>
+                    <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "6px", lineHeight: 1.4 }}>
                       {r.title}
                     </h3>
 
-                    <p style={{ fontSize: "13px", color: "#8a8ea0", lineHeight: 1.5, marginBottom: "8px" }}>
+                    <p style={{ fontSize: "13px", color: "var(--text-dim)", lineHeight: 1.5, marginBottom: "8px" }}>
                       {snippet}
                     </p>
 
-                    <div style={{ display: "flex", gap: "8px", alignItems: "center", fontSize: "12px", color: "#555a70" }}>
+                    <div style={{ display: "flex", gap: "8px", alignItems: "center", fontSize: "12px", color: "var(--text-faint)" }}>
                       <span>{authorName}</span>
                       {date && <span>· {date}</span>}
                     </div>
@@ -364,7 +364,7 @@ function SearchContent() {
       {!searched && !loading && (
         <div style={{ textAlign: "center", padding: "64px 0" }}>
           <div style={{ fontSize: "48px", marginBottom: "16px" }}>🔍</div>
-          <p style={{ fontSize: "16px", color: "#6a6e80" }}>Zadejte hledaný výraz</p>
+          <p style={{ fontSize: "16px", color: "var(--text-dimmer)" }}>Zadejte hledaný výraz</p>
         </div>
       )}
     </div>

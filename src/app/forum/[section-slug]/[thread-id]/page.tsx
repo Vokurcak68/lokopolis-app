@@ -335,7 +335,7 @@ export default function ThreadPage() {
     return (
       <div style={{ maxWidth: "900px", margin: "0 auto", padding: "64px 20px", textAlign: "center" }}>
         <div style={{ fontSize: "32px", marginBottom: "12px" }}>⏳</div>
-        <p style={{ color: "#6a6e80", fontSize: "14px" }}>Načítám vlákno...</p>
+        <p style={{ color: "var(--text-dimmer)", fontSize: "14px" }}>Načítám vlákno...</p>
       </div>
     );
   }
@@ -344,8 +344,8 @@ export default function ThreadPage() {
     return (
       <div style={{ maxWidth: "900px", margin: "0 auto", padding: "64px 20px", textAlign: "center" }}>
         <div style={{ fontSize: "48px", marginBottom: "16px" }}>😕</div>
-        <h1 style={{ fontSize: "24px", color: "#fff", marginBottom: "8px" }}>Vlákno nenalezeno</h1>
-        <Link href="/forum" style={{ color: "#f0a030", textDecoration: "none" }}>← Zpět na fórum</Link>
+        <h1 style={{ fontSize: "24px", color: "var(--text-primary)", marginBottom: "8px" }}>Vlákno nenalezeno</h1>
+        <Link href="/forum" style={{ color: "var(--accent)", textDecoration: "none" }}>← Zpět na fórum</Link>
       </div>
     );
   }
@@ -355,17 +355,17 @@ export default function ThreadPage() {
   return (
     <div style={{ maxWidth: "900px", margin: "0 auto", padding: "48px 20px" }}>
       {/* Breadcrumb */}
-      <div style={{ marginBottom: "24px", fontSize: "13px", color: "#6a6e80" }}>
-        <Link href="/forum" style={{ color: "#f0a030", textDecoration: "none" }}>Fórum</Link>
+      <div style={{ marginBottom: "24px", fontSize: "13px", color: "var(--text-dimmer)" }}>
+        <Link href="/forum" style={{ color: "var(--accent)", textDecoration: "none" }}>Fórum</Link>
         <span style={{ margin: "0 8px" }}>›</span>
-        <Link href={`/forum/${sectionSlug}`} style={{ color: "#f0a030", textDecoration: "none" }}>{section?.name || sectionSlug}</Link>
+        <Link href={`/forum/${sectionSlug}`} style={{ color: "var(--accent)", textDecoration: "none" }}>{section?.name || sectionSlug}</Link>
         <span style={{ margin: "0 8px" }}>›</span>
-        <span style={{ color: "#a0a4b8" }}>{thread.title}</span>
+        <span style={{ color: "var(--text-muted)" }}>{thread.title}</span>
       </div>
 
       {/* Thread title & admin actions */}
       <div style={{ marginBottom: "24px" }}>
-        <h1 style={{ fontSize: "24px", fontWeight: 700, color: "#fff", marginBottom: "8px", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+        <h1 style={{ fontSize: "24px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "8px", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
           {thread.is_pinned && <span>📌</span>}
           {thread.is_locked && <span>🔒</span>}
           {thread.title}
@@ -458,9 +458,9 @@ export default function ThreadPage() {
               onClick={() => setPage(p)}
               style={{
                 padding: "8px 14px",
-                background: p === page ? "#f0a030" : "#1a1e2e",
-                color: p === page ? "#0f1117" : "#a0a4b8",
-                border: `1px solid ${p === page ? "#f0a030" : "#252838"}`,
+                background: p === page ? "var(--accent)" : "var(--bg-card)",
+                color: p === page ? "var(--bg-page)" : "var(--text-muted)",
+                border: `1px solid ${p === page ? "var(--accent)" : "var(--border)"}`,
                 borderRadius: "8px",
                 fontSize: "13px",
                 fontWeight: p === page ? 700 : 400,
@@ -476,14 +476,14 @@ export default function ThreadPage() {
       {/* Reply editor */}
       {thread.is_locked ? (
         <div style={{
-          background: "#1a1e2e",
-          border: "1px solid #252838",
+          background: "var(--bg-card)",
+          border: "1px solid var(--border)",
           borderRadius: "12px",
           padding: "24px",
           textAlign: "center",
           marginTop: "24px",
         }}>
-          <p style={{ fontSize: "15px", color: "#8a8ea0" }}>🔒 Toto vlákno je zamčené</p>
+          <p style={{ fontSize: "15px", color: "var(--text-dim)" }}>🔒 Toto vlákno je zamčené</p>
         </div>
       ) : isBanned ? (
         <div style={{
@@ -498,13 +498,13 @@ export default function ThreadPage() {
         </div>
       ) : user ? (
         <div style={{
-          background: "#1a1e2e",
-          border: "1px solid #252838",
+          background: "var(--bg-card)",
+          border: "1px solid var(--border)",
           borderRadius: "12px",
           padding: "20px",
           marginTop: "24px",
         }}>
-          <h3 style={{ fontSize: "15px", fontWeight: 600, color: "#e0e0e0", marginBottom: "12px" }}>
+          <h3 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-body)", marginBottom: "12px" }}>
             ✍️ Odpovědět
           </h3>
           <textarea
@@ -516,10 +516,10 @@ export default function ThreadPage() {
             style={{
               width: "100%",
               padding: "12px 14px",
-              background: "#1e2233",
-              border: "1px solid #2a2f45",
+              background: "var(--bg-input)",
+              border: "1px solid var(--border-input)",
               borderRadius: "8px",
-              color: "#e0e0e0",
+              color: "var(--text-body)",
               fontSize: "14px",
               lineHeight: 1.6,
               outline: "none",
@@ -533,8 +533,8 @@ export default function ThreadPage() {
               disabled={submitting || !replyContent.trim()}
               style={{
                 padding: "10px 24px",
-                background: !replyContent.trim() ? "#353a50" : "#f0a030",
-                color: !replyContent.trim() ? "#6a6e80" : "#0f1117",
+                background: !replyContent.trim() ? "var(--border-hover)" : "var(--accent)",
+                color: !replyContent.trim() ? "var(--text-dimmer)" : "var(--bg-page)",
                 border: "none",
                 borderRadius: "8px",
                 fontSize: "14px",
@@ -548,16 +548,16 @@ export default function ThreadPage() {
         </div>
       ) : (
         <div style={{
-          background: "#1a1e2e",
-          border: "1px solid #252838",
+          background: "var(--bg-card)",
+          border: "1px solid var(--border)",
           borderRadius: "12px",
           padding: "24px",
           textAlign: "center",
           marginTop: "24px",
         }}>
-          <p style={{ fontSize: "14px", color: "#8a8ea0" }}>
+          <p style={{ fontSize: "14px", color: "var(--text-dim)" }}>
             Pro odpověď se musíte{" "}
-            <Link href="/prihlaseni" style={{ color: "#f0a030", textDecoration: "none" }}>přihlásit</Link>
+            <Link href="/prihlaseni" style={{ color: "var(--accent)", textDecoration: "none" }}>přihlásit</Link>
           </p>
         </div>
       )}
@@ -578,14 +578,14 @@ export default function ThreadPage() {
           onClick={(e) => { if (e.target === e.currentTarget) { setReportTarget(null); setReportReason(""); } }}
         >
           <div style={{
-            background: "#1a1e2e",
-            border: "1px solid #252838",
+            background: "var(--bg-card)",
+            border: "1px solid var(--border)",
             borderRadius: "16px",
             padding: "32px",
             maxWidth: "480px",
             width: "100%",
           }}>
-            <h2 style={{ fontSize: "20px", fontWeight: 700, color: "#fff", marginBottom: "16px" }}>⚠️ Nahlásit příspěvek</h2>
+            <h2 style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px" }}>⚠️ Nahlásit příspěvek</h2>
             <textarea
               value={reportReason}
               onChange={(e) => setReportReason(e.target.value)}
@@ -594,10 +594,10 @@ export default function ThreadPage() {
               style={{
                 width: "100%",
                 padding: "12px 14px",
-                background: "#1e2233",
-                border: "1px solid #2a2f45",
+                background: "var(--bg-input)",
+                border: "1px solid var(--border-input)",
                 borderRadius: "8px",
-                color: "#e0e0e0",
+                color: "var(--text-body)",
                 fontSize: "14px",
                 outline: "none",
                 resize: "vertical",
@@ -607,7 +607,7 @@ export default function ThreadPage() {
             <div style={{ display: "flex", gap: "8px", marginTop: "16px", justifyContent: "flex-end" }}>
               <button
                 onClick={() => { setReportTarget(null); setReportReason(""); }}
-                style={{ padding: "10px 20px", background: "#353a50", color: "#a0a4b8", border: "none", borderRadius: "8px", fontSize: "14px", cursor: "pointer" }}
+                style={{ padding: "10px 20px", background: "var(--border-hover)", color: "var(--text-muted)", border: "none", borderRadius: "8px", fontSize: "14px", cursor: "pointer" }}
               >
                 Zrušit
               </button>
@@ -616,8 +616,8 @@ export default function ThreadPage() {
                 disabled={reportSubmitting || !reportReason.trim()}
                 style={{
                   padding: "10px 20px",
-                  background: !reportReason.trim() ? "#353a50" : "#ef4444",
-                  color: !reportReason.trim() ? "#6a6e80" : "#fff",
+                  background: !reportReason.trim() ? "var(--border-hover)" : "#ef4444",
+                  color: !reportReason.trim() ? "var(--text-dimmer)" : "#fff",
                   border: "none",
                   borderRadius: "8px",
                   fontSize: "14px",
@@ -675,8 +675,8 @@ function PostCard(props: PostCardProps) {
 
   return (
     <div style={{
-      background: props.isHidden ? "rgba(220,53,69,0.03)" : "#1a1e2e",
-      border: `1px solid ${props.isHidden ? "rgba(220,53,69,0.2)" : "#252838"}`,
+      background: props.isHidden ? "rgba(220,53,69,0.03)" : "var(--bg-card)",
+      border: `1px solid ${props.isHidden ? "rgba(220,53,69,0.2)" : "var(--border)"}`,
       borderRadius: "12px",
       marginBottom: "12px",
       overflow: "hidden",
@@ -693,18 +693,18 @@ function PostCard(props: PostCardProps) {
             <img src={props.authorAvatar} alt="" style={{ width: 48, height: 48, borderRadius: "50%", objectFit: "cover", marginBottom: "8px" }} />
           ) : (
             <div style={{
-              width: 48, height: 48, borderRadius: "50%", background: "#353a50",
+              width: 48, height: 48, borderRadius: "50%", background: "var(--border-hover)",
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: "18px", color: "#a0a4b8", fontWeight: 600, marginBottom: "8px",
+              fontSize: "18px", color: "var(--text-muted)", fontWeight: 600, marginBottom: "8px",
             }}>
               {initials}
             </div>
           )}
-          <div style={{ fontSize: "13px", fontWeight: 600, color: "#e0e0e0", textAlign: "center" }}>{props.authorName}</div>
-          <div style={{ fontSize: "11px", color: "#555a70", marginTop: "4px" }}>
+          <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-body)", textAlign: "center" }}>{props.authorName}</div>
+          <div style={{ fontSize: "11px", color: "var(--text-faint)", marginTop: "4px" }}>
             Registrován: {formatCzechDate(props.authorRegistered)}
           </div>
-          <div style={{ fontSize: "11px", color: "#555a70" }}>
+          <div style={{ fontSize: "11px", color: "var(--text-faint)" }}>
             Příspěvků: {props.authorPostCount}
           </div>
         </div>
@@ -717,20 +717,20 @@ function PostCard(props: PostCardProps) {
               <img src={props.authorAvatar} alt="" style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover" }} />
             ) : (
               <div style={{
-                width: 28, height: 28, borderRadius: "50%", background: "#353a50",
+                width: 28, height: 28, borderRadius: "50%", background: "var(--border-hover)",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: "12px", color: "#a0a4b8",
+                fontSize: "12px", color: "var(--text-muted)",
               }}>
                 {initials}
               </div>
             )}
-            <span style={{ fontSize: "13px", fontWeight: 600, color: "#e0e0e0" }}>{props.authorName}</span>
+            <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-body)" }}>{props.authorName}</span>
           </div>
 
           {/* Date */}
-          <div style={{ fontSize: "12px", color: "#555a70", marginBottom: "12px" }}>
+          <div style={{ fontSize: "12px", color: "var(--text-faint)", marginBottom: "12px" }}>
             {timeAgo(props.createdAt)}
-            {wasEdited && <span style={{ color: "#6a6e80", marginLeft: "8px" }}>(upraveno)</span>}
+            {wasEdited && <span style={{ color: "var(--text-dimmer)", marginLeft: "8px" }}>(upraveno)</span>}
           </div>
 
           {/* Content or edit form */}
@@ -743,10 +743,10 @@ function PostCard(props: PostCardProps) {
                 style={{
                   width: "100%",
                   padding: "12px 14px",
-                  background: "#1e2233",
-                  border: "1px solid #2a2f45",
+                  background: "var(--bg-input)",
+                  border: "1px solid var(--border-input)",
                   borderRadius: "8px",
-                  color: "#e0e0e0",
+                  color: "var(--text-body)",
                   fontSize: "14px",
                   lineHeight: 1.6,
                   outline: "none",
@@ -755,20 +755,20 @@ function PostCard(props: PostCardProps) {
                 }}
               />
               <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
-                <button onClick={props.onSaveEdit} disabled={props.submitting} style={{ padding: "8px 16px", background: "#f0a030", color: "#0f1117", border: "none", borderRadius: "6px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
+                <button onClick={props.onSaveEdit} disabled={props.submitting} style={{ padding: "8px 16px", background: "var(--accent)", color: "var(--bg-page)", border: "none", borderRadius: "6px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
                   {props.submitting ? "Ukládám..." : "Uložit"}
                 </button>
-                <button onClick={props.onCancelEdit} style={{ padding: "8px 16px", background: "#353a50", color: "#a0a4b8", border: "none", borderRadius: "6px", fontSize: "13px", cursor: "pointer" }}>
+                <button onClick={props.onCancelEdit} style={{ padding: "8px 16px", background: "var(--border-hover)", color: "var(--text-muted)", border: "none", borderRadius: "6px", fontSize: "13px", cursor: "pointer" }}>
                   Zrušit
                 </button>
               </div>
             </div>
           ) : (
-            <div style={{ fontSize: "14px", color: "#e0e0e0", lineHeight: 1.7, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+            <div style={{ fontSize: "14px", color: "var(--text-body)", lineHeight: 1.7, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
               {props.content.split("\n").map((line, i) => {
                 if (line.startsWith("> ")) {
                   return (
-                    <div key={i} style={{ borderLeft: "3px solid #353a50", paddingLeft: "12px", color: "#8a8ea0", fontStyle: "italic", margin: "4px 0" }}>
+                    <div key={i} style={{ borderLeft: "3px solid var(--border-hover)", paddingLeft: "12px", color: "var(--text-dim)", fontStyle: "italic", margin: "4px 0" }}>
                       {line.substring(2)}
                     </div>
                   );
@@ -791,7 +791,7 @@ function PostCard(props: PostCardProps) {
                     disabled={!props.userId}
                     style={{
                       padding: "4px 10px",
-                      background: myReaction ? "rgba(240,160,48,0.15)" : "rgba(138,142,160,0.08)",
+                      background: myReaction ? "var(--accent-border)" : "rgba(138,142,160,0.08)",
                       border: `1px solid ${myReaction ? "rgba(240,160,48,0.4)" : "rgba(138,142,160,0.15)"}`,
                       borderRadius: "20px",
                       fontSize: "13px",
@@ -799,7 +799,7 @@ function PostCard(props: PostCardProps) {
                       display: "flex",
                       alignItems: "center",
                       gap: "4px",
-                      color: myReaction ? "#f0a030" : "#8a8ea0",
+                      color: myReaction ? "var(--accent)" : "var(--text-dim)",
                       transition: "all 0.15s",
                     }}
                   >
@@ -851,7 +851,7 @@ const modBtnStyle: React.CSSProperties = {
   background: "rgba(138,142,160,0.1)",
   border: "1px solid rgba(138,142,160,0.2)",
   borderRadius: "6px",
-  color: "#a0a4b8",
+  color: "var(--text-muted)",
   fontSize: "12px",
   cursor: "pointer",
 };
@@ -860,7 +860,7 @@ const actionBtnStyle: React.CSSProperties = {
   padding: "4px 10px",
   background: "none",
   border: "none",
-  color: "#6a6e80",
+  color: "var(--text-dimmer)",
   fontSize: "12px",
   cursor: "pointer",
   transition: "color 0.15s",

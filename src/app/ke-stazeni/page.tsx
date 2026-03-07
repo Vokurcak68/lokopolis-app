@@ -165,8 +165,8 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
     >
       <div
         style={{
-          background: "#1a1e2e",
-          border: "1px solid #252838",
+          background: "var(--bg-card)",
+          border: "1px solid var(--border)",
           borderRadius: "16px",
           padding: "32px",
           maxWidth: "520px",
@@ -176,7 +176,7 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
-          <h2 style={{ fontSize: "20px", fontWeight: 700, color: "#fff" }}>
+          <h2 style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-primary)" }}>
             ➕ Nahrát soubor
           </h2>
           <button
@@ -184,7 +184,7 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
             style={{
               background: "none",
               border: "none",
-              color: "#8a8ea0",
+              color: "var(--text-dim)",
               fontSize: "24px",
               cursor: "pointer",
               padding: "4px",
@@ -197,7 +197,7 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
         <form onSubmit={handleSubmit}>
           {/* Název */}
           <div style={{ marginBottom: "16px" }}>
-            <label style={{ display: "block", fontSize: "13px", color: "#a0a4b8", marginBottom: "6px", fontWeight: 500 }}>
+            <label style={{ display: "block", fontSize: "13px", color: "var(--text-muted)", marginBottom: "6px", fontWeight: 500 }}>
               Název *
             </label>
             <input
@@ -209,10 +209,10 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
               style={{
                 width: "100%",
                 padding: "10px 14px",
-                background: "#1e2233",
-                border: "1px solid #2a2f45",
+                background: "var(--bg-input)",
+                border: "1px solid var(--border-input)",
                 borderRadius: "8px",
-                color: "#e0e0e0",
+                color: "var(--text-body)",
                 fontSize: "14px",
                 outline: "none",
               }}
@@ -221,7 +221,7 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
 
           {/* Popis */}
           <div style={{ marginBottom: "16px" }}>
-            <label style={{ display: "block", fontSize: "13px", color: "#a0a4b8", marginBottom: "6px", fontWeight: 500 }}>
+            <label style={{ display: "block", fontSize: "13px", color: "var(--text-muted)", marginBottom: "6px", fontWeight: 500 }}>
               Popis
             </label>
             <textarea
@@ -232,10 +232,10 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
               style={{
                 width: "100%",
                 padding: "10px 14px",
-                background: "#1e2233",
-                border: "1px solid #2a2f45",
+                background: "var(--bg-input)",
+                border: "1px solid var(--border-input)",
                 borderRadius: "8px",
-                color: "#e0e0e0",
+                color: "var(--text-body)",
                 fontSize: "14px",
                 outline: "none",
                 resize: "vertical",
@@ -245,7 +245,7 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
 
           {/* Kategorie */}
           <div style={{ marginBottom: "16px" }}>
-            <label style={{ display: "block", fontSize: "13px", color: "#a0a4b8", marginBottom: "6px", fontWeight: 500 }}>
+            <label style={{ display: "block", fontSize: "13px", color: "var(--text-muted)", marginBottom: "6px", fontWeight: 500 }}>
               Kategorie
             </label>
             <select
@@ -254,10 +254,10 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
               style={{
                 width: "100%",
                 padding: "10px 14px",
-                background: "#1e2233",
-                border: "1px solid #2a2f45",
+                background: "var(--bg-input)",
+                border: "1px solid var(--border-input)",
                 borderRadius: "8px",
-                color: "#e0e0e0",
+                color: "var(--text-body)",
                 fontSize: "14px",
                 outline: "none",
               }}
@@ -270,29 +270,29 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
 
           {/* Přístup */}
           <div style={{ marginBottom: "16px" }}>
-            <label style={{ display: "block", fontSize: "13px", color: "#a0a4b8", marginBottom: "8px", fontWeight: 500 }}>
+            <label style={{ display: "block", fontSize: "13px", color: "var(--text-muted)", marginBottom: "8px", fontWeight: 500 }}>
               Přístup
             </label>
             <div style={{ display: "flex", gap: "16px" }}>
-              <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "14px", color: "#e0e0e0" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "14px", color: "var(--text-body)" }}>
                 <input
                   type="radio"
                   name="access"
                   value="public"
                   checked={access === "public"}
                   onChange={() => setAccess("public")}
-                  style={{ accentColor: "#f0a030" }}
+                  style={{ accentColor: "var(--accent)" }}
                 />
                 🌐 Veřejné
               </label>
-              <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "14px", color: "#e0e0e0" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "14px", color: "var(--text-body)" }}>
                 <input
                   type="radio"
                   name="access"
                   value="authenticated"
                   checked={access === "authenticated"}
                   onChange={() => setAccess("authenticated")}
-                  style={{ accentColor: "#f0a030" }}
+                  style={{ accentColor: "var(--accent)" }}
                 />
                 🔒 Jen přihlášení
               </label>
@@ -301,7 +301,7 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
 
           {/* Soubor — drag & drop */}
           <div style={{ marginBottom: "20px" }}>
-            <label style={{ display: "block", fontSize: "13px", color: "#a0a4b8", marginBottom: "6px", fontWeight: 500 }}>
+            <label style={{ display: "block", fontSize: "13px", color: "var(--text-muted)", marginBottom: "6px", fontWeight: 500 }}>
               Soubor *
             </label>
             <div
@@ -310,13 +310,13 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
               onDrop={handleDrop}
               onClick={() => document.getElementById("file-input")?.click()}
               style={{
-                border: `2px dashed ${dragOver ? "#f0a030" : "#2a2f45"}`,
+                border: `2px dashed ${dragOver ? "var(--accent)" : "var(--border-input)"}`,
                 borderRadius: "12px",
                 padding: "32px 20px",
                 textAlign: "center",
                 cursor: "pointer",
                 transition: "border-color 0.2s",
-                background: dragOver ? "rgba(240,160,48,0.05)" : "transparent",
+                background: dragOver ? "var(--accent-bg-subtle)" : "transparent",
               }}
             >
               <input
@@ -331,18 +331,18 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
                   <div style={{ fontSize: "32px", marginBottom: "8px" }}>
                     {getFileIcon(file.type, file.name).emoji}
                   </div>
-                  <div style={{ fontSize: "14px", color: "#e0e0e0", fontWeight: 500 }}>{file.name}</div>
-                  <div style={{ fontSize: "12px", color: "#6a6e80", marginTop: "4px" }}>
+                  <div style={{ fontSize: "14px", color: "var(--text-body)", fontWeight: 500 }}>{file.name}</div>
+                  <div style={{ fontSize: "12px", color: "var(--text-dimmer)", marginTop: "4px" }}>
                     {formatFileSize(file.size)}
                   </div>
                 </div>
               ) : (
                 <div>
                   <div style={{ fontSize: "32px", marginBottom: "8px" }}>📁</div>
-                  <div style={{ fontSize: "14px", color: "#8a8ea0" }}>
+                  <div style={{ fontSize: "14px", color: "var(--text-dim)" }}>
                     Přetáhněte soubor sem nebo klikněte pro výběr
                   </div>
-                  <div style={{ fontSize: "12px", color: "#555a70", marginTop: "6px" }}>
+                  <div style={{ fontSize: "12px", color: "var(--text-faint)", marginTop: "6px" }}>
                     PDF, STL, ZIP, RAR, 7Z, JPG, PNG, DXF, SVG · max 50 MB
                   </div>
                 </div>
@@ -354,10 +354,10 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
           {error && (
             <div style={{
               padding: "10px 14px",
-              background: "rgba(220,53,69,0.1)",
+              background: "var(--danger-bg)",
               border: "1px solid rgba(220,53,69,0.3)",
               borderRadius: "8px",
-              color: "#ff6b6b",
+              color: "var(--danger)",
               fontSize: "13px",
               marginBottom: "16px",
             }}>
@@ -372,8 +372,8 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
             style={{
               width: "100%",
               padding: "12px",
-              background: uploading || !file || !title.trim() ? "#353a50" : "#f0a030",
-              color: uploading || !file || !title.trim() ? "#6a6e80" : "#0f1117",
+              background: uploading || !file || !title.trim() ? "var(--border-hover)" : "var(--accent)",
+              color: uploading || !file || !title.trim() ? "var(--text-dimmer)" : "var(--accent-text-on)",
               border: "none",
               borderRadius: "10px",
               fontSize: "15px",
@@ -492,10 +492,10 @@ export default function DownloadsPage() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px", flexWrap: "wrap", gap: "16px" }}>
         <div>
           <h1 style={{ fontSize: "32px", fontWeight: 700, marginBottom: "8px" }}>
-            <span style={{ color: "#fff" }}>Ke </span>
-            <span style={{ color: "#f0a030" }}>stažení</span>
+            <span style={{ color: "var(--text-primary)" }}>Ke </span>
+            <span style={{ color: "var(--accent)" }}>stažení</span>
           </h1>
-          <p style={{ fontSize: "15px", color: "#8a8ea0" }}>
+          <p style={{ fontSize: "15px", color: "var(--text-dim)" }}>
             Kolejové plány, STL modely, návody a další soubory ke stažení
           </p>
         </div>
@@ -504,8 +504,8 @@ export default function DownloadsPage() {
             onClick={() => setShowUpload(true)}
             style={{
               padding: "10px 20px",
-              background: "#f0a030",
-              color: "#0f1117",
+              background: "var(--accent)",
+              color: "var(--accent-text-on)",
               border: "none",
               borderRadius: "10px",
               fontSize: "14px",
@@ -516,8 +516,8 @@ export default function DownloadsPage() {
               gap: "6px",
               transition: "background 0.2s",
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "#ffb84d")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "#f0a030")}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
           >
             ➕ Nahrát soubor
           </button>
@@ -534,10 +534,10 @@ export default function DownloadsPage() {
               onClick={() => setActiveCategory(cat.value)}
               style={{
                 padding: "8px 16px",
-                background: isActive ? "rgba(240,160,48,0.15)" : "#1a1e2e",
-                border: `1px solid ${isActive ? "#f0a030" : "#252838"}`,
+                background: isActive ? "var(--accent-border)" : "var(--bg-card)",
+                border: `1px solid ${isActive ? "var(--accent)" : "var(--border)"}`,
                 borderRadius: "8px",
-                color: isActive ? "#f0a030" : "#a0a4b8",
+                color: isActive ? "var(--accent)" : "var(--text-muted)",
                 fontSize: "13px",
                 fontWeight: 500,
                 cursor: "pointer",
@@ -557,13 +557,13 @@ export default function DownloadsPage() {
       {loading || authLoading ? (
         <div style={{ textAlign: "center", padding: "64px 0" }}>
           <div style={{ fontSize: "32px", marginBottom: "12px" }}>⏳</div>
-          <p style={{ color: "#6a6e80", fontSize: "14px" }}>Načítám soubory...</p>
+          <p style={{ color: "var(--text-dimmer)", fontSize: "14px" }}>Načítám soubory...</p>
         </div>
       ) : downloads.length === 0 ? (
         <div style={{ textAlign: "center", padding: "64px 0" }}>
           <div style={{ fontSize: "48px", marginBottom: "16px" }}>📂</div>
-          <p style={{ color: "#8a8ea0", fontSize: "16px", marginBottom: "4px" }}>Žádné soubory k zobrazení</p>
-          <p style={{ color: "#555a70", fontSize: "13px" }}>
+          <p style={{ color: "var(--text-dim)", fontSize: "16px", marginBottom: "4px" }}>Žádné soubory k zobrazení</p>
+          <p style={{ color: "var(--text-faint)", fontSize: "13px" }}>
             {activeCategory !== "all" ? "Zkuste jinou kategorii" : "Zatím nebyly nahrány žádné soubory"}
           </p>
         </div>
@@ -584,8 +584,8 @@ export default function DownloadsPage() {
               <div
                 key={dl.id}
                 style={{
-                  background: "#1a1e2e",
-                  border: "1px solid #252838",
+                  background: "var(--bg-card)",
+                  border: "1px solid var(--border)",
                   borderRadius: "12px",
                   padding: "20px",
                   transition: "all 0.2s",
@@ -593,12 +593,12 @@ export default function DownloadsPage() {
                   flexDirection: "column",
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = "#353a50";
+                  e.currentTarget.style.borderColor = "var(--border-hover)";
                   e.currentTarget.style.transform = "translateY(-2px)";
                   e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.2)";
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = "#252838";
+                  e.currentTarget.style.borderColor = "var(--border)";
                   e.currentTarget.style.transform = "translateY(0)";
                   e.currentTarget.style.boxShadow = "none";
                 }}
@@ -616,10 +616,10 @@ export default function DownloadsPage() {
                       fontSize: "24px",
                       flexShrink: 0,
                       background:
-                        icon.colorClass === "pdf" ? "rgba(220,53,69,0.15)" :
-                        icon.colorClass === "stl" ? "rgba(32,201,151,0.15)" :
+                        icon.colorClass === "pdf" ? "var(--danger-bg)" :
+                        icon.colorClass === "stl" ? "var(--success-bg)" :
                         icon.colorClass === "zip" ? "rgba(102,126,234,0.15)" :
-                        icon.colorClass === "img" ? "rgba(240,160,48,0.15)" :
+                        icon.colorClass === "img" ? "var(--accent-border)" :
                         icon.colorClass === "dxf" ? "rgba(160,100,220,0.15)" :
                         "rgba(138,142,160,0.15)",
                     }}
@@ -627,26 +627,26 @@ export default function DownloadsPage() {
                     {icon.emoji}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <h3 style={{ fontSize: "15px", fontWeight: 600, color: "#e0e0e0", marginBottom: "4px", lineHeight: 1.4 }}>
+                    <h3 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-body)", marginBottom: "4px", lineHeight: 1.4 }}>
                       {dl.title}
                     </h3>
                     {dl.description && (
-                      <p style={{ fontSize: "13px", color: "#6a6e80", lineHeight: 1.4, marginBottom: "8px" }}>
+                      <p style={{ fontSize: "13px", color: "var(--text-dimmer)", lineHeight: 1.4, marginBottom: "8px" }}>
                         {dl.description}
                       </p>
                     )}
                     <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center" }}>
-                      <span style={{ fontSize: "11px", color: "#555a70", background: "#1e2233", padding: "2px 8px", borderRadius: "4px" }}>
+                      <span style={{ fontSize: "11px", color: "var(--text-faint)", background: "var(--bg-input)", padding: "2px 8px", borderRadius: "4px" }}>
                         {ext}
                       </span>
-                      <span style={{ fontSize: "11px", color: "#555a70" }}>
+                      <span style={{ fontSize: "11px", color: "var(--text-faint)" }}>
                         {formatFileSize(dl.file_size)}
                       </span>
-                      <span style={{ fontSize: "11px", color: "#555a70" }}>
+                      <span style={{ fontSize: "11px", color: "var(--text-faint)" }}>
                         ⬇️ {dl.download_count}×
                       </span>
                       {dl.access === "authenticated" && (
-                        <span style={{ fontSize: "11px", color: "#f0a030" }}>
+                        <span style={{ fontSize: "11px", color: "var(--accent)" }}>
                           🔒 Pro přihlášené
                         </span>
                       )}
@@ -655,7 +655,7 @@ export default function DownloadsPage() {
                 </div>
 
                 {/* Download button + admin delete */}
-                <div style={{ marginTop: "16px", paddingTop: "12px", borderTop: "1px solid #252838", display: "flex", gap: "8px" }}>
+                <div style={{ marginTop: "16px", paddingTop: "12px", borderTop: "1px solid var(--border)", display: "flex", gap: "8px" }}>
                   {needsAuth ? (
                     <a
                       href="/prihlaseni"
@@ -664,10 +664,10 @@ export default function DownloadsPage() {
                         textAlign: "center",
                         padding: "10px",
                         flex: 1,
-                        background: "rgba(240,160,48,0.1)",
-                        border: "1px solid rgba(240,160,48,0.3)",
+                        background: "var(--accent-bg)",
+                        border: "1px solid var(--accent-border-strong)",
                         borderRadius: "8px",
-                        color: "#f0a030",
+                        color: "var(--accent)",
                         fontSize: "13px",
                         fontWeight: 500,
                         textDecoration: "none",
@@ -683,20 +683,20 @@ export default function DownloadsPage() {
                         display: "block",
                         flex: 1,
                         padding: "10px",
-                        background: "rgba(240,160,48,0.15)",
-                        border: "1px solid rgba(240,160,48,0.3)",
+                        background: "var(--accent-bg)",
+                        border: "1px solid var(--accent-border-strong)",
                         borderRadius: "8px",
-                        color: "#f0a030",
+                        color: "var(--accent)",
                         fontSize: "13px",
                         fontWeight: 600,
                         cursor: "pointer",
                         transition: "all 0.2s",
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.background = "rgba(240,160,48,0.25)";
+                        e.currentTarget.style.background = "var(--accent-border)";
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.background = "rgba(240,160,48,0.15)";
+                        e.currentTarget.style.background = "var(--accent-border)";
                       }}
                     >
                       ⬇️ Stáhnout
@@ -707,10 +707,10 @@ export default function DownloadsPage() {
                       onClick={() => handleDelete(dl)}
                       style={{
                         padding: "10px 14px",
-                        background: "rgba(220,53,69,0.1)",
+                        background: "var(--danger-bg)",
                         border: "1px solid rgba(220,53,69,0.3)",
                         borderRadius: "8px",
-                        color: "#ff6b6b",
+                        color: "var(--danger)",
                         fontSize: "13px",
                         fontWeight: 600,
                         cursor: "pointer",
@@ -721,7 +721,7 @@ export default function DownloadsPage() {
                         e.currentTarget.style.background = "rgba(220,53,69,0.2)";
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.background = "rgba(220,53,69,0.1)";
+                        e.currentTarget.style.background = "var(--danger-bg)";
                       }}
                     >
                       🗑️

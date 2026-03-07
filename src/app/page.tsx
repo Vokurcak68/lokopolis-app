@@ -288,7 +288,7 @@ export default function Home() {
       <section className="hero-section">
         <div style={{ position: "relative", zIndex: 2, padding: "0 20px", textAlign: "center" }}>
           <BadgeLogo size="lg" />
-          <p style={{ fontSize: "20px", color: "#8a8ea0", maxWidth: "560px", margin: "16px auto 32px" }}>
+          <p style={{ fontSize: "20px", color: "var(--text-dim)", maxWidth: "560px", margin: "16px auto 32px" }}>
             Návody, recenze, kolejové plány a komunita modelářů
           </p>
           <form
@@ -297,8 +297,8 @@ export default function Home() {
               display: "flex",
               maxWidth: "480px",
               margin: "0 auto",
-              background: "#1e2233",
-              border: "1px solid #2a2f45",
+              background: "var(--bg-input)",
+              border: "1px solid var(--border-input)",
               borderRadius: "12px",
               overflow: "hidden",
             }}
@@ -313,7 +313,7 @@ export default function Home() {
                 padding: "14px 20px",
                 background: "transparent",
                 border: "none",
-                color: "#fff",
+                color: "var(--text-primary)",
                 fontSize: "15px",
                 outline: "none",
               }}
@@ -322,9 +322,9 @@ export default function Home() {
               type="submit"
               style={{
                 padding: "14px 24px",
-                background: "#f0a030",
+                background: "var(--accent)",
                 border: "none",
-                color: "#0f1117",
+                color: "var(--accent-text-on)",
                 fontWeight: 600,
                 fontSize: "14px",
                 cursor: "pointer",
@@ -337,7 +337,7 @@ export default function Home() {
       </section>
 
       {/* ===================== STATS BAR ===================== */}
-      <div className="stats-bar" style={{ background: "#161822", padding: "14px 0" }}>
+      <div className="stats-bar" style={{ background: "var(--bg-header)", padding: "14px 0" }}>
         <div
           className="stats-bar-inner"
           style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 20px", display: "flex", justifyContent: "center", gap: "48px" }}
@@ -349,8 +349,8 @@ export default function Home() {
             { num: stats.photos, label: "V galerii" },
           ].map((s) => (
             <div key={s.label} style={{ textAlign: "center" }}>
-              <div className="stats-num" style={{ fontSize: "24px", fontWeight: 700, color: "#f0a030" }}>{s.num}</div>
-              <div className="stats-label" style={{ fontSize: "12px", color: "#6a6e80", textTransform: "uppercase", letterSpacing: "1px", marginTop: "2px" }}>
+              <div className="stats-num" style={{ fontSize: "24px", fontWeight: 700, color: "var(--accent)" }}>{s.num}</div>
+              <div className="stats-label" style={{ fontSize: "12px", color: "var(--text-dimmer)", textTransform: "uppercase", letterSpacing: "1px", marginTop: "2px" }}>
                 {s.label}
               </div>
             </div>
@@ -361,8 +361,8 @@ export default function Home() {
       {/* ===================== CATEGORIES ===================== */}
       <section style={{ maxWidth: "1200px", margin: "48px auto 0", padding: "0 20px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
-          <h2 style={{ fontSize: "24px", fontWeight: 700, color: "#fff" }}>Kategorie</h2>
-          <Link href="#" style={{ fontSize: "13px", color: "#f0a030", textDecoration: "none" }}>
+          <h2 style={{ fontSize: "24px", fontWeight: 700, color: "var(--text-primary)" }}>Kategorie</h2>
+          <Link href="#" style={{ fontSize: "13px", color: "var(--accent)", textDecoration: "none" }}>
             Zobrazit vše →
           </Link>
         </div>
@@ -377,8 +377,8 @@ export default function Home() {
             <Link key={cat.href} href={cat.href} style={{ textDecoration: "none" }}>
               <div className="cat-card">
                 <div style={{ fontSize: "36px", marginBottom: "10px" }}>{cat.icon}</div>
-                <div style={{ fontSize: "14px", fontWeight: 600, color: "#e0e0e0" }}>{cat.title}</div>
-                <div style={{ fontSize: "12px", color: "#6a6e80", marginTop: "4px" }}>{cat.count} článků</div>
+                <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-body)" }}>{cat.title}</div>
+                <div style={{ fontSize: "12px", color: "var(--text-dimmer)", marginTop: "4px" }}>{cat.count} článků</div>
               </div>
             </Link>
           ))}
@@ -388,8 +388,8 @@ export default function Home() {
       {/* ===================== LATEST ARTICLES ===================== */}
       <section style={{ maxWidth: "1200px", margin: "48px auto 0", padding: "0 20px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
-          <h2 style={{ fontSize: "24px", fontWeight: 700, color: "#fff" }}>Nejnovější články</h2>
-          <Link href="/clanky" style={{ fontSize: "13px", color: "#f0a030", textDecoration: "none" }}>
+          <h2 style={{ fontSize: "24px", fontWeight: 700, color: "var(--text-primary)" }}>Nejnovější články</h2>
+          <Link href="/clanky" style={{ fontSize: "13px", color: "var(--accent)", textDecoration: "none" }}>
             Všechny články →
           </Link>
         </div>
@@ -427,24 +427,24 @@ export default function Home() {
                             width: "24px",
                             height: "24px",
                             borderRadius: "50%",
-                            background: "#353a50",
+                            background: "var(--border-hover)",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
                             fontSize: "11px",
-                            color: "#a0a4b8",
+                            color: "var(--text-muted)",
                           }}
                         >
                           {initials}
                         </div>
                       )}
-                      <span style={{ fontSize: "12px", color: "#6a6e80" }}>{authorName}</span>
-                      <span style={{ fontSize: "12px", color: "#555a70" }}>· {date}</span>
+                      <span style={{ fontSize: "12px", color: "var(--text-dimmer)" }}>{authorName}</span>
+                      <span style={{ fontSize: "12px", color: "var(--text-faint)" }}>· {date}</span>
                     </div>
-                    <h3 style={{ fontSize: "16px", fontWeight: 600, color: "#fff", marginBottom: "8px", lineHeight: 1.4 }}>
+                    <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "8px", lineHeight: 1.4 }}>
                       {a.title}
                     </h3>
-                    <p style={{ fontSize: "13px", color: "#8a8ea0", lineHeight: 1.5 }}>
+                    <p style={{ fontSize: "13px", color: "var(--text-dim)", lineHeight: 1.5 }}>
                       {a.excerpt || ""}
                     </p>
                   </div>
@@ -458,8 +458,8 @@ export default function Home() {
       {/* ===================== DOWNLOADS ===================== */}
       <section style={{ maxWidth: "1200px", margin: "48px auto 0", padding: "0 20px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
-          <h2 style={{ fontSize: "24px", fontWeight: 700, color: "#fff" }}>Ke stažení</h2>
-          <Link href="/ke-stazeni" style={{ fontSize: "13px", color: "#f0a030", textDecoration: "none" }}>
+          <h2 style={{ fontSize: "24px", fontWeight: 700, color: "var(--text-primary)" }}>Ke stažení</h2>
+          <Link href="/ke-stazeni" style={{ fontSize: "13px", color: "var(--accent)", textDecoration: "none" }}>
             Vše ke stažení →
           </Link>
         </div>
@@ -479,13 +479,13 @@ export default function Home() {
                   <div className="dl-card">
                     <div className={`dl-icon ${icon.iconClass}`}>{icon.iconEmoji}</div>
                     <div>
-                      <h4 style={{ fontSize: "14px", color: "#e0e0e0", marginBottom: "4px" }}>{d.title}</h4>
-                      {d.description && <p style={{ fontSize: "12px", color: "#6a6e80" }}>{d.description}</p>}
+                      <h4 style={{ fontSize: "14px", color: "var(--text-body)", marginBottom: "4px" }}>{d.title}</h4>
+                      {d.description && <p style={{ fontSize: "12px", color: "var(--text-dimmer)" }}>{d.description}</p>}
                       <div style={{ display: "flex", gap: "12px", marginTop: "6px" }}>
-                        <span style={{ fontSize: "11px", color: "#555a70" }}>
+                        <span style={{ fontSize: "11px", color: "var(--text-faint)" }}>
                           {ext} · {formatSize(d.file_size)}
                         </span>
-                        <span style={{ fontSize: "11px", color: "#555a70" }}>⬇️ {d.download_count}×</span>
+                        <span style={{ fontSize: "11px", color: "var(--text-faint)" }}>⬇️ {d.download_count}×</span>
                       </div>
                     </div>
                   </div>
@@ -495,7 +495,7 @@ export default function Home() {
           </div>
         ) : (
           <div style={{ textAlign: "center", padding: "32px 0" }}>
-            <p style={{ fontSize: "14px", color: "#6a6e80" }}>Zatím žádné soubory ke stažení</p>
+            <p style={{ fontSize: "14px", color: "var(--text-dimmer)" }}>Zatím žádné soubory ke stažení</p>
           </div>
         )}
       </section>
@@ -508,7 +508,7 @@ export default function Home() {
         {/* Main content */}
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
-            <h2 style={{ fontSize: "24px", fontWeight: 700, color: "#fff" }}>Populární tento měsíc</h2>
+            <h2 style={{ fontSize: "24px", fontWeight: 700, color: "var(--text-primary)" }}>Populární tento měsíc</h2>
           </div>
           {popularArticles.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: "20px" }}>
@@ -524,20 +524,20 @@ export default function Home() {
                       {a.category && <span className="article-badge">{a.category.icon} {a.category.name}</span>}
                     </div>
                     <div style={{ padding: "16px" }}>
-                      <h3 style={{ fontSize: "16px", fontWeight: 600, color: "#fff", marginBottom: "8px", lineHeight: 1.4 }}>
+                      <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "8px", lineHeight: 1.4 }}>
                         {a.title}
                       </h3>
-                      <p style={{ fontSize: "13px", color: "#8a8ea0", lineHeight: 1.5 }}>{a.excerpt || ""}</p>
+                      <p style={{ fontSize: "13px", color: "var(--text-dim)", lineHeight: 1.5 }}>{a.excerpt || ""}</p>
                       <div
                         style={{
                           display: "flex",
                           gap: "16px",
                           marginTop: "12px",
                           paddingTop: "12px",
-                          borderTop: "1px solid #252838",
+                          borderTop: "1px solid var(--border)",
                         }}
                       >
-                        <span style={{ fontSize: "12px", color: "#6a6e80", display: "flex", alignItems: "center", gap: "4px" }}>
+                        <span style={{ fontSize: "12px", color: "var(--text-dimmer)", display: "flex", alignItems: "center", gap: "4px" }}>
                           👁️ {a.view_count.toLocaleString("cs-CZ")}
                         </span>
                       </div>
@@ -547,7 +547,7 @@ export default function Home() {
               ))}
             </div>
           ) : (
-            <p style={{ fontSize: "14px", color: "#6a6e80", textAlign: "center", padding: "32px 0" }}>
+            <p style={{ fontSize: "14px", color: "var(--text-dimmer)", textAlign: "center", padding: "32px 0" }}>
               Zatím žádné zobrazení — články se tu objeví po prvních návštěvách
             </p>
           )}
@@ -579,9 +579,9 @@ export default function Home() {
                 );
               })
             ) : (
-              <p style={{ fontSize: "13px", color: "#6a6e80" }}>Žádné nadcházející akce</p>
+              <p style={{ fontSize: "13px", color: "var(--text-dimmer)" }}>Žádné nadcházející akce</p>
             )}
-            <Link href="/akce" style={{ fontSize: "12px", color: "#f0a030", textDecoration: "none", display: "block", marginTop: "10px" }}>
+            <Link href="/akce" style={{ fontSize: "12px", color: "var(--accent)", textDecoration: "none", display: "block", marginTop: "10px" }}>
               Všechny akce →
             </Link>
           </div>
@@ -602,21 +602,21 @@ export default function Home() {
           {/* Forum widget */}
           <div className="widget">
             <h3>💬 Fórum</h3>
-            <p style={{ fontSize: "13px", color: "#8a8ea0", marginBottom: "8px" }}>
+            <p style={{ fontSize: "13px", color: "var(--text-dim)", marginBottom: "8px" }}>
               💬 {forumStats.thread_count} vláken · {forumStats.post_count} příspěvků
             </p>
             {forumStats.last_thread_title && forumStats.last_thread_id && (
               <Link
                 href={`/forum/${forumStats.last_thread_section_slug || "obecna-diskuze"}/${forumStats.last_thread_id}`}
-                style={{ fontSize: "12px", color: "#f0a030", textDecoration: "none", display: "block", marginBottom: "8px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}
+                style={{ fontSize: "12px", color: "var(--accent)", textDecoration: "none", display: "block", marginBottom: "8px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}
               >
                 📄 {forumStats.last_thread_title}
               </Link>
             )}
-            <Link href="/forum" style={{ fontSize: "13px", color: "#f0a030", textDecoration: "none", fontWeight: 600 }}>
+            <Link href="/forum" style={{ fontSize: "13px", color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>
               Přejít na fórum →
             </Link>
-            <div style={{ marginTop: "10px", fontSize: "12px", color: "#555a70" }}>
+            <div style={{ marginTop: "10px", fontSize: "12px", color: "var(--text-faint)" }}>
               Celkem registrováno: {memberCount !== null ? memberCount.toLocaleString("cs-CZ") : stats.members} členů
             </div>
           </div>
@@ -634,18 +634,18 @@ export default function Home() {
                         display: "inline-flex",
                         alignItems: "center",
                         gap: "4px",
-                        background: "rgba(240,160,48,0.1)",
-                        border: "1px solid rgba(240,160,48,0.3)",
+                        background: "var(--accent-bg)",
+                        border: "1px solid var(--accent-border-strong)",
                         borderRadius: "20px",
                         padding: "4px 12px",
-                        color: "#f0a030",
+                        color: "var(--accent)",
                         fontSize: "12px",
                         cursor: "pointer",
                         textDecoration: "none",
                         transition: "background 0.2s",
                       }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(240,160,48,0.2)")}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(240,160,48,0.1)")}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-border)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent-bg)")}
                     >
                       {t.name}
                       <span style={{ fontSize: "10px", color: "rgba(240,160,48,0.6)", marginLeft: "2px" }}>

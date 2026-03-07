@@ -95,12 +95,12 @@ function EventCard({
     <div
       ref={cardRef}
       style={{
-        background: needsAuth ? "#1a1e2e" : "#1a1e2e",
-        border: "1px solid #252838",
+        background: needsAuth ? "var(--bg-card)" : "var(--bg-card)",
+        border: "1px solid var(--border)",
         borderRadius: "14px",
         overflow: "hidden",
         transition: "all 0.2s",
-        borderBottom: isPast ? "3px solid #353a50" : "3px solid #f0a030",
+        borderBottom: isPast ? "3px solid var(--border-hover)" : "3px solid var(--accent)",
         position: "relative",
         opacity: isPast ? 0.6 : 1,
         filter: needsAuth ? "none" : "none",
@@ -109,7 +109,7 @@ function EventCard({
         if (cardRef.current) {
           cardRef.current.style.transform = "translateY(-3px)";
           cardRef.current.style.boxShadow = "0 8px 24px rgba(0,0,0,0.3)";
-          cardRef.current.style.borderColor = "#353a50";
+          cardRef.current.style.borderColor = "var(--border-hover)";
           if (!isPast) cardRef.current.style.opacity = "1";
           else cardRef.current.style.opacity = "0.8";
         }
@@ -118,7 +118,7 @@ function EventCard({
         if (cardRef.current) {
           cardRef.current.style.transform = "translateY(0)";
           cardRef.current.style.boxShadow = "none";
-          cardRef.current.style.borderColor = "#252838";
+          cardRef.current.style.borderColor = "var(--border)";
           cardRef.current.style.opacity = isPast ? "0.6" : "1";
         }
       }}
@@ -175,11 +175,11 @@ function EventCard({
             position: "absolute",
             top: event.cover_image_url ? "12px" : "12px",
             right: "12px",
-            background: "rgba(240,160,48,0.2)",
+            background: "var(--accent-border)",
             padding: "4px 10px",
             borderRadius: "6px",
             fontSize: "12px",
-            color: "#f0a030",
+            color: "var(--accent)",
             fontWeight: 500,
             zIndex: 5,
           }}
@@ -200,8 +200,8 @@ function EventCard({
         >
           <div
             style={{
-              background: isPast ? "#252838" : "#f0a030",
-              color: isPast ? "#6a6e80" : "#0f1117",
+              background: isPast ? "var(--border)" : "var(--accent)",
+              color: isPast ? "var(--text-dimmer)" : "var(--accent-text-on)",
               borderRadius: "10px 10px 0 0",
               padding: "4px 8px",
               fontSize: "11px",
@@ -214,14 +214,14 @@ function EventCard({
           </div>
           <div
             style={{
-              background: isPast ? "#1e2233" : "rgba(240,160,48,0.1)",
-              border: `1px solid ${isPast ? "#252838" : "rgba(240,160,48,0.3)"}`,
+              background: isPast ? "var(--bg-input)" : "var(--accent-bg)",
+              border: `1px solid ${isPast ? "var(--border)" : "var(--accent-border-strong)"}`,
               borderTop: "none",
               borderRadius: "0 0 10px 10px",
               padding: "8px",
               fontSize: "28px",
               fontWeight: 800,
-              color: isPast ? "#6a6e80" : "#f0a030",
+              color: isPast ? "var(--text-dimmer)" : "var(--accent)",
               lineHeight: 1,
             }}
           >
@@ -237,7 +237,7 @@ function EventCard({
               <a
                 href="/prihlaseni"
                 style={{
-                  color: "#f0a030",
+                  color: "var(--accent)",
                   fontSize: "14px",
                   fontWeight: 500,
                   textDecoration: "none",
@@ -252,7 +252,7 @@ function EventCard({
                 style={{
                   fontSize: "18px",
                   fontWeight: 700,
-                  color: "#fff",
+                  color: "var(--text-primary)",
                   marginBottom: "8px",
                   lineHeight: 1.3,
                 }}
@@ -268,7 +268,7 @@ function EventCard({
                   gap: "12px",
                   marginBottom: "10px",
                   fontSize: "13px",
-                  color: "#a0a4b8",
+                  color: "var(--text-muted)",
                 }}
               >
                 <span>📅 {formatCzechDateRange(event.event_date, event.end_date)}</span>
@@ -282,7 +282,7 @@ function EventCard({
                   <p
                     style={{
                       fontSize: "14px",
-                      color: "#8a8ea0",
+                      color: "var(--text-dim)",
                       lineHeight: 1.6,
                       margin: 0,
                       whiteSpace: "pre-wrap",
@@ -297,7 +297,7 @@ function EventCard({
                       style={{
                         background: "none",
                         border: "none",
-                        color: "#f0a030",
+                        color: "var(--accent)",
                         fontSize: "13px",
                         cursor: "pointer",
                         padding: "4px 0",
@@ -320,20 +320,20 @@ function EventCard({
                     display: "inline-flex",
                     alignItems: "center",
                     gap: "6px",
-                    color: "#f0a030",
+                    color: "var(--accent)",
                     fontSize: "13px",
                     fontWeight: 500,
                     textDecoration: "none",
                     padding: "6px 12px",
-                    background: "rgba(240,160,48,0.1)",
+                    background: "var(--accent-bg)",
                     borderRadius: "8px",
                     transition: "background 0.2s",
                   }}
                   onMouseEnter={(e) =>
-                    (e.currentTarget.style.background = "rgba(240,160,48,0.2)")
+                    (e.currentTarget.style.background = "var(--accent-border)")
                   }
                   onMouseLeave={(e) =>
-                    (e.currentTarget.style.background = "rgba(240,160,48,0.1)")
+                    (e.currentTarget.style.background = "var(--accent-bg)")
                   }
                 >
                   🔗 Web akce
@@ -356,20 +356,20 @@ function EventCard({
             bottom: "12px",
             right: "12px",
             padding: "6px 10px",
-            background: "rgba(220,53,69,0.15)",
+            background: "var(--danger-bg)",
             border: "1px solid rgba(220,53,69,0.3)",
             borderRadius: "8px",
-            color: "#ff6b6b",
+            color: "var(--danger)",
             fontSize: "14px",
             cursor: "pointer",
             transition: "background 0.2s",
             zIndex: 10,
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = "rgba(220,53,69,0.3)";
+            e.currentTarget.style.background = "var(--danger-border)";
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = "rgba(220,53,69,0.15)";
+            e.currentTarget.style.background = "var(--danger-bg)";
           }}
         >
           🗑️
@@ -484,10 +484,10 @@ function AddEventModal({
   const inputStyle: React.CSSProperties = {
     width: "100%",
     padding: "10px 14px",
-    background: "#1e2233",
-    border: "1px solid #2a2f45",
+    background: "var(--bg-input)",
+    border: "1px solid var(--border-input)",
     borderRadius: "8px",
-    color: "#e0e0e0",
+    color: "var(--text-body)",
     fontSize: "14px",
     outline: "none",
     boxSizing: "border-box",
@@ -496,7 +496,7 @@ function AddEventModal({
   const labelStyle: React.CSSProperties = {
     display: "block",
     fontSize: "13px",
-    color: "#a0a4b8",
+    color: "var(--text-muted)",
     marginBottom: "6px",
     fontWeight: 500,
   };
@@ -519,8 +519,8 @@ function AddEventModal({
     >
       <div
         style={{
-          background: "#1a1e2e",
-          border: "1px solid #252838",
+          background: "var(--bg-card)",
+          border: "1px solid var(--border)",
           borderRadius: "16px",
           padding: "32px",
           maxWidth: "560px",
@@ -537,7 +537,7 @@ function AddEventModal({
             marginBottom: "24px",
           }}
         >
-          <h2 style={{ fontSize: "20px", fontWeight: 700, color: "#fff" }}>
+          <h2 style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-primary)" }}>
             ➕ Přidat akci
           </h2>
           <button
@@ -545,7 +545,7 @@ function AddEventModal({
             style={{
               background: "none",
               border: "none",
-              color: "#8a8ea0",
+              color: "var(--text-dim)",
               fontSize: "24px",
               cursor: "pointer",
               padding: "4px",
@@ -665,14 +665,14 @@ function AddEventModal({
                 document.getElementById("event-cover-input")?.click()
               }
               style={{
-                border: `2px dashed ${dragOver ? "#f0a030" : "#2a2f45"}`,
+                border: `2px dashed ${dragOver ? "var(--accent)" : "var(--border-input)"}`,
                 borderRadius: "12px",
                 padding: "24px 20px",
                 textAlign: "center",
                 cursor: "pointer",
                 transition: "border-color 0.2s",
                 background: dragOver
-                  ? "rgba(240,160,48,0.05)"
+                  ? "var(--accent-bg-subtle)"
                   : "transparent",
               }}
             >
@@ -688,20 +688,20 @@ function AddEventModal({
               {coverFile ? (
                 <div>
                   <div style={{ fontSize: "24px", marginBottom: "6px" }}>📷</div>
-                  <div style={{ fontSize: "14px", color: "#e0e0e0", fontWeight: 500 }}>
+                  <div style={{ fontSize: "14px", color: "var(--text-body)", fontWeight: 500 }}>
                     {coverFile.name}
                   </div>
-                  <div style={{ fontSize: "12px", color: "#6a6e80", marginTop: "4px" }}>
+                  <div style={{ fontSize: "12px", color: "var(--text-dimmer)", marginTop: "4px" }}>
                     {(coverFile.size / (1024 * 1024)).toFixed(1)} MB
                   </div>
                 </div>
               ) : (
                 <div>
                   <div style={{ fontSize: "24px", marginBottom: "6px" }}>📷</div>
-                  <div style={{ fontSize: "14px", color: "#8a8ea0" }}>
+                  <div style={{ fontSize: "14px", color: "var(--text-dim)" }}>
                     Přetáhněte obrázek sem nebo klikněte
                   </div>
-                  <div style={{ fontSize: "12px", color: "#555a70", marginTop: "4px" }}>
+                  <div style={{ fontSize: "12px", color: "var(--text-faint)", marginTop: "4px" }}>
                     JPEG, PNG, GIF, WebP · max 10 MB
                   </div>
                 </div>
@@ -720,7 +720,7 @@ function AddEventModal({
                   gap: "6px",
                   cursor: "pointer",
                   fontSize: "14px",
-                  color: "#e0e0e0",
+                  color: "var(--text-body)",
                 }}
               >
                 <input
@@ -729,7 +729,7 @@ function AddEventModal({
                   value="public"
                   checked={access === "public"}
                   onChange={() => setAccess("public")}
-                  style={{ accentColor: "#f0a030" }}
+                  style={{ accentColor: "var(--accent)" }}
                 />
                 🌐 Veřejné
               </label>
@@ -740,7 +740,7 @@ function AddEventModal({
                   gap: "6px",
                   cursor: "pointer",
                   fontSize: "14px",
-                  color: "#e0e0e0",
+                  color: "var(--text-body)",
                 }}
               >
                 <input
@@ -749,7 +749,7 @@ function AddEventModal({
                   value="authenticated"
                   checked={access === "authenticated"}
                   onChange={() => setAccess("authenticated")}
-                  style={{ accentColor: "#f0a030" }}
+                  style={{ accentColor: "var(--accent)" }}
                 />
                 🔒 Jen přihlášení
               </label>
@@ -761,10 +761,10 @@ function AddEventModal({
             <div
               style={{
                 padding: "10px 14px",
-                background: "rgba(220,53,69,0.1)",
+                background: "var(--danger-bg)",
                 border: "1px solid rgba(220,53,69,0.3)",
                 borderRadius: "8px",
-                color: "#ff6b6b",
+                color: "var(--danger)",
                 fontSize: "13px",
                 marginBottom: "16px",
               }}
@@ -781,9 +781,9 @@ function AddEventModal({
               width: "100%",
               padding: "12px",
               background:
-                saving || !title.trim() || !eventDate ? "#353a50" : "#f0a030",
+                saving || !title.trim() || !eventDate ? "var(--border-hover)" : "var(--accent)",
               color:
-                saving || !title.trim() || !eventDate ? "#6a6e80" : "#0f1117",
+                saving || !title.trim() || !eventDate ? "var(--text-dimmer)" : "var(--accent-text-on)",
               border: "none",
               borderRadius: "10px",
               fontSize: "15px",
@@ -902,10 +902,10 @@ export default function EventsPage() {
               marginBottom: "8px",
             }}
           >
-            <span style={{ color: "#fff" }}>Plánované </span>
-            <span style={{ color: "#f0a030" }}>akce</span>
+            <span style={{ color: "var(--text-primary)" }}>Plánované </span>
+            <span style={{ color: "var(--accent)" }}>akce</span>
           </h1>
-          <p style={{ fontSize: "15px", color: "#8a8ea0" }}>
+          <p style={{ fontSize: "15px", color: "var(--text-dim)" }}>
             Výstavy, setkání a události ze světa modelové železnice
           </p>
         </div>
@@ -914,8 +914,8 @@ export default function EventsPage() {
             onClick={() => setShowAddModal(true)}
             style={{
               padding: "10px 20px",
-              background: "#f0a030",
-              color: "#0f1117",
+              background: "var(--accent)",
+              color: "var(--accent-text-on)",
               border: "none",
               borderRadius: "10px",
               fontSize: "14px",
@@ -927,10 +927,10 @@ export default function EventsPage() {
               transition: "background 0.2s",
             }}
             onMouseEnter={(e) =>
-              (e.currentTarget.style.background = "#ffb84d")
+              (e.currentTarget.style.background = "var(--accent-hover)")
             }
             onMouseLeave={(e) =>
-              (e.currentTarget.style.background = "#f0a030")
+              (e.currentTarget.style.background = "var(--accent)")
             }
           >
             ➕ Přidat akci
@@ -962,11 +962,11 @@ export default function EventsPage() {
               style={{
                 padding: "8px 16px",
                 background: isActive
-                  ? "rgba(240,160,48,0.15)"
-                  : "#1a1e2e",
-                border: `1px solid ${isActive ? "#f0a030" : "#252838"}`,
+                  ? "var(--accent-border)"
+                  : "var(--bg-card)",
+                border: `1px solid ${isActive ? "var(--accent)" : "var(--border)"}`,
                 borderRadius: "8px",
-                color: isActive ? "#f0a030" : "#a0a4b8",
+                color: isActive ? "var(--accent)" : "var(--text-muted)",
                 fontSize: "13px",
                 fontWeight: 500,
                 cursor: "pointer",
@@ -981,7 +981,7 @@ export default function EventsPage() {
                 <span
                   style={{
                     fontSize: "11px",
-                    color: isActive ? "#f0a030" : "#555a70",
+                    color: isActive ? "var(--accent)" : "var(--text-faint)",
                     marginLeft: "2px",
                   }}
                 >
@@ -997,7 +997,7 @@ export default function EventsPage() {
       {loading || authLoading ? (
         <div style={{ textAlign: "center", padding: "64px 0" }}>
           <div style={{ fontSize: "32px", marginBottom: "12px" }}>⏳</div>
-          <p style={{ color: "#6a6e80", fontSize: "14px" }}>
+          <p style={{ color: "var(--text-dimmer)", fontSize: "14px" }}>
             Načítám akce...
           </p>
         </div>
@@ -1006,7 +1006,7 @@ export default function EventsPage() {
           <div style={{ fontSize: "48px", marginBottom: "16px" }}>📅</div>
           <p
             style={{
-              color: "#8a8ea0",
+              color: "var(--text-dim)",
               fontSize: "16px",
               marginBottom: "4px",
             }}
@@ -1017,7 +1017,7 @@ export default function EventsPage() {
               ? "Žádné proběhlé akce"
               : "Zatím nejsou žádné akce"}
           </p>
-          <p style={{ color: "#555a70", fontSize: "13px" }}>
+          <p style={{ color: "var(--text-faint)", fontSize: "13px" }}>
             {activeFilter === "upcoming"
               ? "Zkuste se podívat na proběhlé akce"
               : "Nové akce budou brzy přidány"}
@@ -1032,7 +1032,7 @@ export default function EventsPage() {
                 style={{
                   fontSize: "18px",
                   fontWeight: 600,
-                  color: "#f0a030",
+                  color: "var(--accent)",
                   marginBottom: "20px",
                   display: "flex",
                   alignItems: "center",
@@ -1086,7 +1086,7 @@ export default function EventsPage() {
                 style={{
                   fontSize: "18px",
                   fontWeight: 600,
-                  color: "#6a6e80",
+                  color: "var(--text-dimmer)",
                   marginBottom: "20px",
                   display: "flex",
                   alignItems: "center",

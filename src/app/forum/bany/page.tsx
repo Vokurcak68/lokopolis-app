@@ -103,33 +103,33 @@ export default function BansPage() {
     return (
       <div style={{ maxWidth: "900px", margin: "0 auto", padding: "64px 20px", textAlign: "center" }}>
         <div style={{ fontSize: "48px", marginBottom: "16px" }}>🔒</div>
-        <h1 style={{ fontSize: "24px", color: "#fff", marginBottom: "8px" }}>Přístup odepřen</h1>
-        <Link href="/forum" style={{ color: "#f0a030", textDecoration: "none" }}>← Zpět na fórum</Link>
+        <h1 style={{ fontSize: "24px", color: "var(--text-primary)", marginBottom: "8px" }}>Přístup odepřen</h1>
+        <Link href="/forum" style={{ color: "var(--accent)", textDecoration: "none" }}>← Zpět na fórum</Link>
       </div>
     );
   }
 
   return (
     <div style={{ maxWidth: "900px", margin: "0 auto", padding: "48px 20px" }}>
-      <div style={{ marginBottom: "24px", fontSize: "13px", color: "#6a6e80" }}>
-        <Link href="/forum" style={{ color: "#f0a030", textDecoration: "none" }}>Fórum</Link>
+      <div style={{ marginBottom: "24px", fontSize: "13px", color: "var(--text-dimmer)" }}>
+        <Link href="/forum" style={{ color: "var(--accent)", textDecoration: "none" }}>Fórum</Link>
         <span style={{ margin: "0 8px" }}>›</span>
-        <span style={{ color: "#a0a4b8" }}>Správa banů</span>
+        <span style={{ color: "var(--text-muted)" }}>Správa banů</span>
       </div>
 
-      <h1 style={{ fontSize: "28px", fontWeight: 700, color: "#fff", marginBottom: "32px" }}>
+      <h1 style={{ fontSize: "28px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "32px" }}>
         🚫 Správa banů
       </h1>
 
       {/* New ban form */}
       <div style={{
-        background: "#1a1e2e",
-        border: "1px solid #252838",
+        background: "var(--bg-card)",
+        border: "1px solid var(--border)",
         borderRadius: "12px",
         padding: "20px",
         marginBottom: "32px",
       }}>
-        <h3 style={{ fontSize: "15px", fontWeight: 600, color: "#e0e0e0", marginBottom: "16px" }}>
+        <h3 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-body)", marginBottom: "16px" }}>
           Zabanovat uživatele
         </h3>
         <form onSubmit={handleBan}>
@@ -167,8 +167,8 @@ export default function BansPage() {
             disabled={submitting || !banUserId}
             style={{
               padding: "10px 20px",
-              background: !banUserId ? "#353a50" : "#ef4444",
-              color: !banUserId ? "#6a6e80" : "#fff",
+              background: !banUserId ? "var(--border-hover)" : "#ef4444",
+              color: !banUserId ? "var(--text-dimmer)" : "#fff",
               border: "none",
               borderRadius: "8px",
               fontSize: "14px",
@@ -184,12 +184,12 @@ export default function BansPage() {
       {/* Bans list */}
       {loading ? (
         <div style={{ textAlign: "center", padding: "32px 0" }}>
-          <p style={{ color: "#6a6e80", fontSize: "14px" }}>Načítám...</p>
+          <p style={{ color: "var(--text-dimmer)", fontSize: "14px" }}>Načítám...</p>
         </div>
       ) : bans.length === 0 ? (
         <div style={{ textAlign: "center", padding: "32px 0" }}>
           <div style={{ fontSize: "48px", marginBottom: "16px" }}>✅</div>
-          <p style={{ color: "#8a8ea0", fontSize: "16px" }}>Žádní zabanovaní uživatelé</p>
+          <p style={{ color: "var(--text-dim)", fontSize: "16px" }}>Žádní zabanovaní uživatelé</p>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -201,8 +201,8 @@ export default function BansPage() {
 
             return (
               <div key={ban.id} style={{
-                background: "#1a1e2e",
-                border: `1px solid ${isActive ? "rgba(220,53,69,0.3)" : "#252838"}`,
+                background: "var(--bg-card)",
+                border: `1px solid ${isActive ? "rgba(220,53,69,0.3)" : "var(--border)"}`,
                 borderRadius: "10px",
                 padding: "16px 20px",
                 display: "flex",
@@ -215,18 +215,18 @@ export default function BansPage() {
                   <img src={ban.user.avatar_url} alt="" style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }} />
                 ) : (
                   <div style={{
-                    width: 40, height: 40, borderRadius: "50%", background: "#353a50",
+                    width: 40, height: 40, borderRadius: "50%", background: "var(--border-hover)",
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: "16px", color: "#a0a4b8",
+                    fontSize: "16px", color: "var(--text-muted)",
                   }}>
                     {userName.charAt(0).toUpperCase()}
                   </div>
                 )}
 
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: "15px", fontWeight: 600, color: "#e0e0e0" }}>{userName}</div>
-                  {ban.reason && <div style={{ fontSize: "12px", color: "#6a6e80", marginTop: "2px" }}>Důvod: {ban.reason}</div>}
-                  <div style={{ fontSize: "11px", color: "#555a70", marginTop: "4px" }}>
+                  <div style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-body)" }}>{userName}</div>
+                  {ban.reason && <div style={{ fontSize: "12px", color: "var(--text-dimmer)", marginTop: "2px" }}>Důvod: {ban.reason}</div>}
+                  <div style={{ fontSize: "11px", color: "var(--text-faint)", marginTop: "4px" }}>
                     Zabanoval: {bannerName} · {timeAgo(ban.created_at)}
                     {ban.expires_at && (
                       <span> · Vyprší: {formatCzechDate(ban.expires_at)}</span>
@@ -242,7 +242,7 @@ export default function BansPage() {
                     fontSize: "11px",
                     fontWeight: 600,
                     background: isActive ? "rgba(220,53,69,0.15)" : "rgba(138,142,160,0.15)",
-                    color: isActive ? "#ff6b6b" : "#8a8ea0",
+                    color: isActive ? "#ff6b6b" : "var(--text-dim)",
                   }}>
                     {isExpired ? "Vypršel" : "Aktivní"}
                   </span>
@@ -274,10 +274,10 @@ export default function BansPage() {
 const inputStyle: React.CSSProperties = {
   width: "100%",
   padding: "10px 14px",
-  background: "#1e2233",
-  border: "1px solid #2a2f45",
+  background: "var(--bg-input)",
+  border: "1px solid var(--border-input)",
   borderRadius: "8px",
-  color: "#e0e0e0",
+  color: "var(--text-body)",
   fontSize: "14px",
   outline: "none",
 };

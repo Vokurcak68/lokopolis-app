@@ -3,7 +3,7 @@ import BadgeLogo from "./BadgeLogo";
 
 export default function Footer() {
   return (
-    <footer style={{ marginTop: "64px", background: "#161822", borderTop: "1px solid #252838", padding: "48px 0 24px" }}>
+    <footer style={{ marginTop: "64px", background: "var(--bg-header)", borderTop: "1px solid var(--border)", padding: "48px 0 24px" }}>
       <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 20px" }}>
         {/* Footer grid */}
         <div
@@ -17,7 +17,7 @@ export default function Footer() {
                 <BadgeLogo size="sm" />
               </Link>
             </div>
-            <p style={{ fontSize: "13px", color: "#6a6e80", maxWidth: "280px" }}>
+            <p style={{ fontSize: "13px", color: "var(--text-dimmer)", maxWidth: "280px" }}>
               Česká komunita modelové železnice. Články, návody, recenze, galerie a vše pro vaše kolejiště.
             </p>
           </div>
@@ -28,7 +28,7 @@ export default function Footer() {
               style={{
                 fontSize: "13px",
                 fontWeight: 600,
-                color: "#fff",
+                color: "var(--text-primary)",
                 textTransform: "uppercase",
                 letterSpacing: "1px",
                 marginBottom: "16px",
@@ -36,16 +36,16 @@ export default function Footer() {
             >
               Obsah
             </h4>
-            <Link href="/clanky" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
+            <Link href="/clanky" style={{ display: "block", fontSize: "13px", color: "var(--text-dimmer)", padding: "4px 0", textDecoration: "none" }}>
               Články
             </Link>
-            <Link href="/galerie" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
+            <Link href="/galerie" style={{ display: "block", fontSize: "13px", color: "var(--text-dimmer)", padding: "4px 0", textDecoration: "none" }}>
               Galerie
             </Link>
-            <Link href="/ke-stazeni" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
+            <Link href="/ke-stazeni" style={{ display: "block", fontSize: "13px", color: "var(--text-dimmer)", padding: "4px 0", textDecoration: "none" }}>
               Ke stažení
             </Link>
-            <Link href="/akce" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
+            <Link href="/akce" style={{ display: "block", fontSize: "13px", color: "var(--text-dimmer)", padding: "4px 0", textDecoration: "none" }}>
               Akce
             </Link>
           </div>
@@ -56,7 +56,7 @@ export default function Footer() {
               style={{
                 fontSize: "13px",
                 fontWeight: 600,
-                color: "#fff",
+                color: "var(--text-primary)",
                 textTransform: "uppercase",
                 letterSpacing: "1px",
                 marginBottom: "16px",
@@ -64,16 +64,16 @@ export default function Footer() {
             >
               Komunita
             </h4>
-            <Link href="/forum" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
+            <Link href="/forum" style={{ display: "block", fontSize: "13px", color: "var(--text-dimmer)", padding: "4px 0", textDecoration: "none" }}>
               Fórum
             </Link>
-            <Link href="/komunita" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
+            <Link href="/komunita" style={{ display: "block", fontSize: "13px", color: "var(--text-dimmer)", padding: "4px 0", textDecoration: "none" }}>
               Členové
             </Link>
-            <Link href="/pravidla" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
+            <Link href="/pravidla" style={{ display: "block", fontSize: "13px", color: "var(--text-dimmer)", padding: "4px 0", textDecoration: "none" }}>
               Pravidla
             </Link>
-            <Link href="/forum/nove-vlakno" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
+            <Link href="/forum/nove-vlakno" style={{ display: "block", fontSize: "13px", color: "var(--text-dimmer)", padding: "4px 0", textDecoration: "none" }}>
               Nový příspěvek
             </Link>
           </div>
@@ -84,7 +84,7 @@ export default function Footer() {
               style={{
                 fontSize: "13px",
                 fontWeight: 600,
-                color: "#fff",
+                color: "var(--text-primary)",
                 textTransform: "uppercase",
                 letterSpacing: "1px",
                 marginBottom: "16px",
@@ -92,13 +92,13 @@ export default function Footer() {
             >
               Info
             </h4>
-            <Link href="/o-projektu" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
+            <Link href="/o-projektu" style={{ display: "block", fontSize: "13px", color: "var(--text-dimmer)", padding: "4px 0", textDecoration: "none" }}>
               O projektu
             </Link>
-            <Link href="/kontakt" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
+            <Link href="/kontakt" style={{ display: "block", fontSize: "13px", color: "var(--text-dimmer)", padding: "4px 0", textDecoration: "none" }}>
               Kontakt
             </Link>
-            <Link href="/podporte-nas" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
+            <Link href="/podporte-nas" style={{ display: "block", fontSize: "13px", color: "var(--text-dimmer)", padding: "4px 0", textDecoration: "none" }}>
               Podpořte nás
             </Link>
           </div>
@@ -107,14 +107,14 @@ export default function Footer() {
         {/* Copyright */}
         <div
           style={{
-            borderTop: "1px solid #252838",
+            borderTop: "1px solid var(--border)",
             paddingTop: "24px",
             display: "flex",
             justifyContent: "space-between",
             flexWrap: "wrap",
             gap: "8px",
             fontSize: "12px",
-            color: "#555a70",
+            color: "var(--text-faint)",
           }}
         >
           <span>© 2026 Lokopolis.cz — Svět modelové železnice</span>

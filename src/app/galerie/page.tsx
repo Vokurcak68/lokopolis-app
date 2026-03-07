@@ -99,7 +99,7 @@ function Lightbox({
           right: "20px",
           background: "rgba(255,255,255,0.1)",
           border: "none",
-          color: "#fff",
+          color: "var(--text-primary)",
           fontSize: "28px",
           cursor: "pointer",
           width: "48px",
@@ -125,7 +125,7 @@ function Lightbox({
             transform: "translateY(-50%)",
             background: "rgba(255,255,255,0.1)",
             border: "none",
-            color: "#fff",
+            color: "var(--text-primary)",
             fontSize: "28px",
             cursor: "pointer",
             width: "48px",
@@ -152,7 +152,7 @@ function Lightbox({
             transform: "translateY(-50%)",
             background: "rgba(255,255,255,0.1)",
             border: "none",
-            color: "#fff",
+            color: "var(--text-primary)",
             fontSize: "28px",
             cursor: "pointer",
             width: "48px",
@@ -219,13 +219,13 @@ function Lightbox({
           />
         )}
         <div style={{ textAlign: "center" }}>
-          <h3 style={{ color: "#fff", fontSize: "18px", fontWeight: 600, marginBottom: "4px" }}>
+          <h3 style={{ color: "var(--text-primary)", fontSize: "18px", fontWeight: 600, marginBottom: "4px" }}>
             {item.title}
           </h3>
           {item.description && (
-            <p style={{ color: "#a0a4b8", fontSize: "14px" }}>{item.description}</p>
+            <p style={{ color: "var(--text-muted)", fontSize: "14px" }}>{item.description}</p>
           )}
-          <p style={{ color: "#555a70", fontSize: "12px", marginTop: "4px" }}>
+          <p style={{ color: "var(--text-faint)", fontSize: "12px", marginTop: "4px" }}>
             {currentIndex + 1} / {items.length}
           </p>
         </div>
@@ -380,8 +380,8 @@ function UploadModal({
     >
       <div
         style={{
-          background: "#1a1e2e",
-          border: "1px solid #252838",
+          background: "var(--bg-card)",
+          border: "1px solid var(--border)",
           borderRadius: "16px",
           padding: "32px",
           maxWidth: "520px",
@@ -398,7 +398,7 @@ function UploadModal({
             marginBottom: "24px",
           }}
         >
-          <h2 style={{ fontSize: "20px", fontWeight: 700, color: "#fff" }}>
+          <h2 style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-primary)" }}>
             ➕ Přidat do galerie
           </h2>
           <button
@@ -406,7 +406,7 @@ function UploadModal({
             style={{
               background: "none",
               border: "none",
-              color: "#8a8ea0",
+              color: "var(--text-dim)",
               fontSize: "24px",
               cursor: "pointer",
               padding: "4px",
@@ -423,7 +423,7 @@ function UploadModal({
               style={{
                 display: "block",
                 fontSize: "13px",
-                color: "#a0a4b8",
+                color: "var(--text-muted)",
                 marginBottom: "8px",
                 fontWeight: 500,
               }}
@@ -446,7 +446,7 @@ function UploadModal({
                     gap: "6px",
                     cursor: "pointer",
                     fontSize: "14px",
-                    color: "#e0e0e0",
+                    color: "var(--text-body)",
                   }}
                 >
                   <input
@@ -460,7 +460,7 @@ function UploadModal({
                       setYoutubeUrl("");
                       setError("");
                     }}
-                    style={{ accentColor: "#f0a030" }}
+                    style={{ accentColor: "var(--accent)" }}
                   />
                   {opt.label}
                 </label>
@@ -474,7 +474,7 @@ function UploadModal({
               style={{
                 display: "block",
                 fontSize: "13px",
-                color: "#a0a4b8",
+                color: "var(--text-muted)",
                 marginBottom: "6px",
                 fontWeight: 500,
               }}
@@ -490,10 +490,10 @@ function UploadModal({
               style={{
                 width: "100%",
                 padding: "10px 14px",
-                background: "#1e2233",
-                border: "1px solid #2a2f45",
+                background: "var(--bg-input)",
+                border: "1px solid var(--border-input)",
                 borderRadius: "8px",
-                color: "#e0e0e0",
+                color: "var(--text-body)",
                 fontSize: "14px",
                 outline: "none",
                 boxSizing: "border-box",
@@ -507,7 +507,7 @@ function UploadModal({
               style={{
                 display: "block",
                 fontSize: "13px",
-                color: "#a0a4b8",
+                color: "var(--text-muted)",
                 marginBottom: "6px",
                 fontWeight: 500,
               }}
@@ -522,10 +522,10 @@ function UploadModal({
               style={{
                 width: "100%",
                 padding: "10px 14px",
-                background: "#1e2233",
-                border: "1px solid #2a2f45",
+                background: "var(--bg-input)",
+                border: "1px solid var(--border-input)",
                 borderRadius: "8px",
-                color: "#e0e0e0",
+                color: "var(--text-body)",
                 fontSize: "14px",
                 outline: "none",
                 resize: "vertical",
@@ -540,7 +540,7 @@ function UploadModal({
               style={{
                 display: "block",
                 fontSize: "13px",
-                color: "#a0a4b8",
+                color: "var(--text-muted)",
                 marginBottom: "8px",
                 fontWeight: 500,
               }}
@@ -555,7 +555,7 @@ function UploadModal({
                   gap: "6px",
                   cursor: "pointer",
                   fontSize: "14px",
-                  color: "#e0e0e0",
+                  color: "var(--text-body)",
                 }}
               >
                 <input
@@ -564,7 +564,7 @@ function UploadModal({
                   value="public"
                   checked={access === "public"}
                   onChange={() => setAccess("public")}
-                  style={{ accentColor: "#f0a030" }}
+                  style={{ accentColor: "var(--accent)" }}
                 />
                 🌐 Veřejné
               </label>
@@ -575,7 +575,7 @@ function UploadModal({
                   gap: "6px",
                   cursor: "pointer",
                   fontSize: "14px",
-                  color: "#e0e0e0",
+                  color: "var(--text-body)",
                 }}
               >
                 <input
@@ -584,7 +584,7 @@ function UploadModal({
                   value="authenticated"
                   checked={access === "authenticated"}
                   onChange={() => setAccess("authenticated")}
-                  style={{ accentColor: "#f0a030" }}
+                  style={{ accentColor: "var(--accent)" }}
                 />
                 🔒 Jen přihlášení
               </label>
@@ -598,7 +598,7 @@ function UploadModal({
                 style={{
                   display: "block",
                   fontSize: "13px",
-                  color: "#a0a4b8",
+                  color: "var(--text-muted)",
                   marginBottom: "6px",
                   fontWeight: 500,
                 }}
@@ -616,10 +616,10 @@ function UploadModal({
                 style={{
                   width: "100%",
                   padding: "10px 14px",
-                  background: "#1e2233",
-                  border: "1px solid #2a2f45",
+                  background: "var(--bg-input)",
+                  border: "1px solid var(--border-input)",
                   borderRadius: "8px",
-                  color: "#e0e0e0",
+                  color: "var(--text-body)",
                   fontSize: "14px",
                   outline: "none",
                   boxSizing: "border-box",
@@ -635,7 +635,7 @@ function UploadModal({
                       width: "100%",
                       maxWidth: "320px",
                       borderRadius: "8px",
-                      border: "1px solid #252838",
+                      border: "1px solid var(--border)",
                     }}
                   />
                 </div>
@@ -650,7 +650,7 @@ function UploadModal({
                 style={{
                   display: "block",
                   fontSize: "13px",
-                  color: "#a0a4b8",
+                  color: "var(--text-muted)",
                   marginBottom: "6px",
                   fontWeight: 500,
                 }}
@@ -668,14 +668,14 @@ function UploadModal({
                   document.getElementById("gallery-file-input")?.click()
                 }
                 style={{
-                  border: `2px dashed ${dragOver ? "#f0a030" : "#2a2f45"}`,
+                  border: `2px dashed ${dragOver ? "var(--accent)" : "var(--border-input)"}`,
                   borderRadius: "12px",
                   padding: "32px 20px",
                   textAlign: "center",
                   cursor: "pointer",
                   transition: "border-color 0.2s",
                   background: dragOver
-                    ? "rgba(240,160,48,0.05)"
+                    ? "var(--accent-bg-subtle)"
                     : "transparent",
                 }}
               >
@@ -696,7 +696,7 @@ function UploadModal({
                     <div
                       style={{
                         fontSize: "14px",
-                        color: "#e0e0e0",
+                        color: "var(--text-body)",
                         fontWeight: 500,
                       }}
                     >
@@ -705,7 +705,7 @@ function UploadModal({
                     <div
                       style={{
                         fontSize: "12px",
-                        color: "#6a6e80",
+                        color: "var(--text-dimmer)",
                         marginTop: "4px",
                       }}
                     >
@@ -717,13 +717,13 @@ function UploadModal({
                     <div style={{ fontSize: "32px", marginBottom: "8px" }}>
                       {mediaType === "image" ? "📷" : "🎬"}
                     </div>
-                    <div style={{ fontSize: "14px", color: "#8a8ea0" }}>
+                    <div style={{ fontSize: "14px", color: "var(--text-dim)" }}>
                       Přetáhněte soubor sem nebo klikněte pro výběr
                     </div>
                     <div
                       style={{
                         fontSize: "12px",
-                        color: "#555a70",
+                        color: "var(--text-faint)",
                         marginTop: "6px",
                       }}
                     >
@@ -740,10 +740,10 @@ function UploadModal({
             <div
               style={{
                 padding: "10px 14px",
-                background: "rgba(220,53,69,0.1)",
+                background: "var(--danger-bg)",
                 border: "1px solid rgba(220,53,69,0.3)",
                 borderRadius: "8px",
-                color: "#ff6b6b",
+                color: "var(--danger)",
                 fontSize: "13px",
                 marginBottom: "16px",
               }}
@@ -760,9 +760,9 @@ function UploadModal({
               width: "100%",
               padding: "12px",
               background:
-                uploading || !title.trim() ? "#353a50" : "#f0a030",
+                uploading || !title.trim() ? "var(--border-hover)" : "var(--accent)",
               color:
-                uploading || !title.trim() ? "#6a6e80" : "#0f1117",
+                uploading || !title.trim() ? "var(--text-dimmer)" : "var(--accent-text-on)",
               border: "none",
               borderRadius: "10px",
               fontSize: "15px",
@@ -820,13 +820,13 @@ function GalleryCard({
     <div
       ref={cardRef}
       style={{
-        background: "#1a1e2e",
-        border: "1px solid #252838",
+        background: "var(--bg-card)",
+        border: "1px solid var(--border)",
         borderRadius: "12px",
         overflow: "hidden",
         cursor: needsAuth ? "default" : "pointer",
         transition: "all 0.2s",
-        borderBottom: "3px solid #f0a030",
+        borderBottom: "3px solid var(--accent)",
         position: "relative",
         breakInside: "avoid",
         marginBottom: "16px",
@@ -838,14 +838,14 @@ function GalleryCard({
         if (cardRef.current) {
           cardRef.current.style.transform = "translateY(-3px)";
           cardRef.current.style.boxShadow = "0 8px 24px rgba(0,0,0,0.3)";
-          cardRef.current.style.borderColor = "#353a50";
+          cardRef.current.style.borderColor = "var(--border-hover)";
         }
       }}
       onMouseLeave={() => {
         if (cardRef.current) {
           cardRef.current.style.transform = "translateY(0)";
           cardRef.current.style.boxShadow = "none";
-          cardRef.current.style.borderColor = "#252838";
+          cardRef.current.style.borderColor = "var(--border)";
         }
       }}
     >
@@ -854,7 +854,7 @@ function GalleryCard({
         style={{
           width: "100%",
           aspectRatio: item.type === "youtube" ? "16/9" : "4/3",
-          background: "#12141e",
+          background: "var(--bg-page)",
           position: "relative",
           overflow: "hidden",
         }}
@@ -868,7 +868,7 @@ function GalleryCard({
               flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
-              background: "#12141e",
+              background: "var(--bg-page)",
               position: "relative",
             }}
           >
@@ -900,7 +900,7 @@ function GalleryCard({
                 href="/prihlaseni"
                 onClick={(e) => e.stopPropagation()}
                 style={{
-                  color: "#f0a030",
+                  color: "var(--accent)",
                   fontSize: "14px",
                   fontWeight: 500,
                   textDecoration: "none",
@@ -959,7 +959,7 @@ function GalleryCard({
               alignItems: "center",
               justifyContent: "center",
               fontSize: "48px",
-              color: "#353a50",
+              color: "var(--border-hover)",
             }}
           >
             {typeIcon}
@@ -976,7 +976,7 @@ function GalleryCard({
             padding: "4px 8px",
             borderRadius: "6px",
             fontSize: "11px",
-            color: "#a0a4b8",
+            color: "var(--text-muted)",
             display: "flex",
             alignItems: "center",
             gap: "4px",
@@ -992,11 +992,11 @@ function GalleryCard({
               position: "absolute",
               top: "8px",
               right: "8px",
-              background: "rgba(240,160,48,0.2)",
+              background: "var(--accent-border)",
               padding: "4px 8px",
               borderRadius: "6px",
               fontSize: "11px",
-              color: "#f0a030",
+              color: "var(--accent)",
             }}
           >
             🔒
@@ -1010,7 +1010,7 @@ function GalleryCard({
           style={{
             fontSize: "15px",
             fontWeight: 600,
-            color: "#e0e0e0",
+            color: "var(--text-body)",
             marginBottom: "4px",
             lineHeight: 1.4,
           }}
@@ -1021,7 +1021,7 @@ function GalleryCard({
           <p
             style={{
               fontSize: "13px",
-              color: "#6a6e80",
+              color: "var(--text-dimmer)",
               lineHeight: 1.4,
               marginBottom: "0",
             }}
@@ -1043,20 +1043,20 @@ function GalleryCard({
             bottom: "12px",
             right: "12px",
             padding: "6px 10px",
-            background: "rgba(220,53,69,0.15)",
+            background: "var(--danger-bg)",
             border: "1px solid rgba(220,53,69,0.3)",
             borderRadius: "8px",
-            color: "#ff6b6b",
+            color: "var(--danger)",
             fontSize: "14px",
             cursor: "pointer",
             transition: "background 0.2s",
             zIndex: 10,
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = "rgba(220,53,69,0.3)";
+            e.currentTarget.style.background = "var(--danger-border)";
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = "rgba(220,53,69,0.15)";
+            e.currentTarget.style.background = "var(--danger-bg)";
           }}
         >
           🗑️
@@ -1167,10 +1167,10 @@ export default function GalleryPage() {
               marginBottom: "8px",
             }}
           >
-            <span style={{ color: "#fff" }}>Foto</span>
-            <span style={{ color: "#f0a030" }}>galerie</span>
+            <span style={{ color: "var(--text-primary)" }}>Foto</span>
+            <span style={{ color: "var(--accent)" }}>galerie</span>
           </h1>
-          <p style={{ fontSize: "15px", color: "#8a8ea0" }}>
+          <p style={{ fontSize: "15px", color: "var(--text-dim)" }}>
             Fotky, videa a záznamy ze světa modelové železnice
           </p>
         </div>
@@ -1179,8 +1179,8 @@ export default function GalleryPage() {
             onClick={() => setShowUpload(true)}
             style={{
               padding: "10px 20px",
-              background: "#f0a030",
-              color: "#0f1117",
+              background: "var(--accent)",
+              color: "var(--accent-text-on)",
               border: "none",
               borderRadius: "10px",
               fontSize: "14px",
@@ -1192,10 +1192,10 @@ export default function GalleryPage() {
               transition: "background 0.2s",
             }}
             onMouseEnter={(e) =>
-              (e.currentTarget.style.background = "#ffb84d")
+              (e.currentTarget.style.background = "var(--accent-hover)")
             }
             onMouseLeave={(e) =>
-              (e.currentTarget.style.background = "#f0a030")
+              (e.currentTarget.style.background = "var(--accent)")
             }
           >
             ➕ Přidat do galerie
@@ -1221,11 +1221,11 @@ export default function GalleryPage() {
               style={{
                 padding: "8px 16px",
                 background: isActive
-                  ? "rgba(240,160,48,0.15)"
-                  : "#1a1e2e",
-                border: `1px solid ${isActive ? "#f0a030" : "#252838"}`,
+                  ? "var(--accent-border)"
+                  : "var(--bg-card)",
+                border: `1px solid ${isActive ? "var(--accent)" : "var(--border)"}`,
                 borderRadius: "8px",
-                color: isActive ? "#f0a030" : "#a0a4b8",
+                color: isActive ? "var(--accent)" : "var(--text-muted)",
                 fontSize: "13px",
                 fontWeight: 500,
                 cursor: "pointer",
@@ -1245,7 +1245,7 @@ export default function GalleryPage() {
       {loading || authLoading ? (
         <div style={{ textAlign: "center", padding: "64px 0" }}>
           <div style={{ fontSize: "32px", marginBottom: "12px" }}>⏳</div>
-          <p style={{ color: "#6a6e80", fontSize: "14px" }}>
+          <p style={{ color: "var(--text-dimmer)", fontSize: "14px" }}>
             Načítám galerii...
           </p>
         </div>
@@ -1254,14 +1254,14 @@ export default function GalleryPage() {
           <div style={{ fontSize: "48px", marginBottom: "16px" }}>🖼️</div>
           <p
             style={{
-              color: "#8a8ea0",
+              color: "var(--text-dim)",
               fontSize: "16px",
               marginBottom: "4px",
             }}
           >
             Galerie je zatím prázdná
           </p>
-          <p style={{ color: "#555a70", fontSize: "13px" }}>
+          <p style={{ color: "var(--text-faint)", fontSize: "13px" }}>
             {activeFilter !== "all"
               ? "Zkuste jiný filtr"
               : "Zatím nebyl přidán žádný obsah"}

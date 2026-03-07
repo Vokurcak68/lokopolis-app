@@ -271,25 +271,25 @@ export default function ArticleDetailPage() {
 
       {/* Tags */}
       {articleTags.length > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "48px", paddingTop: "16px", borderTop: "1px solid #252838" }}>
-          <span style={{ fontSize: "13px", color: "#6a6e80", marginRight: "4px", lineHeight: "28px" }}>🏷️</span>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "48px", paddingTop: "16px", borderTop: "1px solid var(--border)" }}>
+          <span style={{ fontSize: "13px", color: "var(--text-dimmer)", marginRight: "4px", lineHeight: "28px" }}>🏷️</span>
           {articleTags.map((tag) => (
             <Link
               key={tag.id}
               href={`/hledat?tag=${tag.slug}`}
               style={{
                 display: "inline-block",
-                background: "rgba(240,160,48,0.1)",
-                border: "1px solid rgba(240,160,48,0.3)",
+                background: "var(--accent-bg)",
+                border: "1px solid var(--accent-border-strong)",
                 borderRadius: "20px",
                 padding: "4px 12px",
-                color: "#f0a030",
+                color: "var(--accent)",
                 fontSize: "12px",
                 textDecoration: "none",
                 transition: "background 0.2s",
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(240,160,48,0.2)")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(240,160,48,0.1)")}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-border)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent-bg)")}
             >
               {tag.name}
             </Link>

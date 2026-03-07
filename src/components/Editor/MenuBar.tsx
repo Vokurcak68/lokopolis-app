@@ -91,7 +91,7 @@ export default function MenuBar({ editor, onImageUpload }: MenuBarProps) {
   if (!editor) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-0.5 px-3 py-2 border-b border-white/10 bg-[#1a1e2e]/80 sticky top-0 z-10 backdrop-blur-sm">
+    <div className="flex flex-wrap items-center gap-0.5 px-3 py-2 border-b border-white/10 bg-[var(--bg-card)]/80 sticky top-0 z-10 backdrop-blur-sm">
       {/* Text formatting */}
       <MenuButton
         onClick={() => editor.chain().focus().toggleBold().run()}

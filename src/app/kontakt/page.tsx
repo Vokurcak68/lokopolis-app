@@ -15,10 +15,10 @@ export default function ContactPage() {
   const inputStyle: React.CSSProperties = {
     width: "100%",
     padding: "12px 16px",
-    background: "#1e2233",
-    border: "1px solid #2a2f45",
+    background: "var(--bg-input)",
+    border: "1px solid var(--border-input)",
     borderRadius: "8px",
-    color: "#e0e0e0",
+    color: "var(--text-body)",
     fontSize: "14px",
     outline: "none",
   };
@@ -27,7 +27,7 @@ export default function ContactPage() {
     display: "block",
     fontSize: "13px",
     fontWeight: 600,
-    color: "#a0a4b8",
+    color: "var(--text-muted)",
     marginBottom: "6px",
   };
 
@@ -35,10 +35,10 @@ export default function ContactPage() {
     <div style={{ maxWidth: "800px", margin: "0 auto", padding: "48px 20px" }}>
       {/* Header */}
       <h1 style={{ fontSize: "32px", fontWeight: 700, marginBottom: "8px" }}>
-        <span style={{ color: "#fff" }}>Kontaktujte </span>
-        <span style={{ color: "#f0a030" }}>nás</span>
+        <span style={{ color: "var(--text-primary)" }}>Kontaktujte </span>
+        <span style={{ color: "var(--accent)" }}>nás</span>
       </h1>
-      <p style={{ fontSize: "15px", color: "#8a8ea0", marginBottom: "40px" }}>
+      <p style={{ fontSize: "15px", color: "var(--text-dim)", marginBottom: "40px" }}>
         Máte dotaz, nápad nebo připomínku? Napište nám.
       </p>
 
@@ -47,28 +47,28 @@ export default function ContactPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
           <div
             style={{
-              background: "#1a1e2e",
-              border: "1px solid #252838",
+              background: "var(--bg-card)",
+              border: "1px solid var(--border)",
               borderRadius: "12px",
               padding: "24px",
             }}
           >
-            <h3 style={{ fontSize: "16px", fontWeight: 600, color: "#f0a030", marginBottom: "16px" }}>
+            <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--accent)", marginBottom: "16px" }}>
               📬 Jak nás zastihnout
             </h3>
             <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
               <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
                 <span style={{ fontSize: "20px" }}>📧</span>
                 <div>
-                  <div style={{ fontSize: "12px", color: "#6a6e80" }}>E-mail</div>
-                  <div style={{ fontSize: "14px", color: "#e0e0e0" }}>info@lokopolis.cz</div>
+                  <div style={{ fontSize: "12px", color: "var(--text-dimmer)" }}>E-mail</div>
+                  <div style={{ fontSize: "14px", color: "var(--text-body)" }}>info@lokopolis.cz</div>
                 </div>
               </div>
               <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
                 <span style={{ fontSize: "20px" }}>💬</span>
                 <div>
-                  <div style={{ fontSize: "12px", color: "#6a6e80" }}>Fórum</div>
-                  <Link href="/forum" style={{ fontSize: "14px", color: "#f0a030", textDecoration: "none" }}>
+                  <div style={{ fontSize: "12px", color: "var(--text-dimmer)" }}>Fórum</div>
+                  <Link href="/forum" style={{ fontSize: "14px", color: "var(--accent)", textDecoration: "none" }}>
                     Diskuzní fórum Lokopolis
                   </Link>
                 </div>
@@ -78,13 +78,13 @@ export default function ContactPage() {
 
           <div
             style={{
-              background: "#1a1e2e",
-              border: "1px solid #252838",
+              background: "var(--bg-card)",
+              border: "1px solid var(--border)",
               borderRadius: "12px",
               padding: "24px",
             }}
           >
-            <h3 style={{ fontSize: "16px", fontWeight: 600, color: "#f0a030", marginBottom: "16px" }}>
+            <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--accent)", marginBottom: "16px" }}>
               ❓ Časté dotazy
             </h3>
             <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -95,8 +95,8 @@ export default function ContactPage() {
                 { q: "Našel jsem chybu. Co mám dělat?", a: "Napište nám přes formulář nebo do fóra." },
               ].map((faq) => (
                 <div key={faq.q}>
-                  <div style={{ fontSize: "13px", fontWeight: 600, color: "#e0e0e0", marginBottom: "2px" }}>{faq.q}</div>
-                  <div style={{ fontSize: "13px", color: "#8a8ea0", lineHeight: 1.5 }}>{faq.a}</div>
+                  <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-body)", marginBottom: "2px" }}>{faq.q}</div>
+                  <div style={{ fontSize: "13px", color: "var(--text-dim)", lineHeight: 1.5 }}>{faq.a}</div>
                 </div>
               ))}
             </div>
@@ -106,8 +106,8 @@ export default function ContactPage() {
         {/* Contact form */}
         <div
           style={{
-            background: "#1a1e2e",
-            border: "1px solid #252838",
+            background: "var(--bg-card)",
+            border: "1px solid var(--border)",
             borderRadius: "12px",
             padding: "24px",
           }}
@@ -115,17 +115,17 @@ export default function ContactPage() {
           {submitted ? (
             <div style={{ textAlign: "center", padding: "40px 0" }}>
               <div style={{ fontSize: "48px", marginBottom: "16px" }}>✅</div>
-              <h3 style={{ fontSize: "18px", color: "#fff", marginBottom: "8px" }}>Děkujeme za zprávu!</h3>
-              <p style={{ fontSize: "14px", color: "#8a8ea0", marginBottom: "20px" }}>
+              <h3 style={{ fontSize: "18px", color: "var(--text-primary)", marginBottom: "8px" }}>Děkujeme za zprávu!</h3>
+              <p style={{ fontSize: "14px", color: "var(--text-dim)", marginBottom: "20px" }}>
                 Ozveme se vám co nejdříve.
               </p>
               <button
                 onClick={() => { setSubmitted(false); setForm({ name: "", email: "", subject: "", message: "" }); }}
                 style={{
                   padding: "10px 20px",
-                  background: "rgba(240,160,48,0.15)",
-                  color: "#f0a030",
-                  border: "1px solid rgba(240,160,48,0.3)",
+                  background: "var(--accent-border)",
+                  color: "var(--accent)",
+                  border: "1px solid var(--accent-border-strong)",
                   borderRadius: "8px",
                   fontSize: "14px",
                   cursor: "pointer",
@@ -136,7 +136,7 @@ export default function ContactPage() {
             </div>
           ) : (
             <form onSubmit={handleSubmit}>
-              <h3 style={{ fontSize: "16px", fontWeight: 600, color: "#f0a030", marginBottom: "20px" }}>
+              <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--accent)", marginBottom: "20px" }}>
                 ✉️ Napište nám
               </h3>
               <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -188,8 +188,8 @@ export default function ContactPage() {
                   type="submit"
                   style={{
                     padding: "12px 24px",
-                    background: "#f0a030",
-                    color: "#0f1117",
+                    background: "var(--accent)",
+                    color: "var(--bg-page)",
                     border: "none",
                     borderRadius: "8px",
                     fontSize: "15px",

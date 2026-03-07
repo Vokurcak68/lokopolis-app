@@ -140,10 +140,10 @@ export default function ForumPage() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px", flexWrap: "wrap", gap: "16px" }}>
         <div>
           <h1 style={{ fontSize: "32px", fontWeight: 700, marginBottom: "8px" }}>
-            <span style={{ color: "#fff" }}>Diskuzní </span>
-            <span style={{ color: "#f0a030" }}>fórum</span>
+            <span style={{ color: "var(--text-primary)" }}>Diskuzní </span>
+            <span style={{ color: "var(--accent)" }}>fórum</span>
           </h1>
-          <p style={{ fontSize: "15px", color: "#8a8ea0" }}>
+          <p style={{ fontSize: "15px", color: "var(--text-dim)" }}>
             Povídejte si s ostatními modeláři, sdílejte zkušenosti a ptejte se
           </p>
         </div>
@@ -152,9 +152,9 @@ export default function ForumPage() {
             onClick={() => setEditMode(!editMode)}
             style={{
               padding: "10px 20px",
-              background: editMode ? "rgba(220,53,69,0.15)" : "rgba(240,160,48,0.15)",
-              color: editMode ? "#ff6b6b" : "#f0a030",
-              border: `1px solid ${editMode ? "rgba(220,53,69,0.3)" : "rgba(240,160,48,0.3)"}`,
+              background: editMode ? "rgba(220,53,69,0.15)" : "var(--accent-border)",
+              color: editMode ? "#ff6b6b" : "var(--accent)",
+              border: `1px solid ${editMode ? "rgba(220,53,69,0.3)" : "var(--accent-border-strong)"}`,
               borderRadius: "10px",
               fontSize: "14px",
               fontWeight: 600,
@@ -169,7 +169,7 @@ export default function ForumPage() {
       {loading ? (
         <div style={{ textAlign: "center", padding: "64px 0" }}>
           <div style={{ fontSize: "32px", marginBottom: "12px" }}>⏳</div>
-          <p style={{ color: "#6a6e80", fontSize: "14px" }}>Načítám fórum...</p>
+          <p style={{ color: "var(--text-dimmer)", fontSize: "14px" }}>Načítám fórum...</p>
         </div>
       ) : (
         <>
@@ -179,8 +179,8 @@ export default function ForumPage() {
               <div key={sec.id}>
                 {editingSection?.id === sec.id ? (
                   <div style={{
-                    background: "#1a1e2e",
-                    border: "1px solid #f0a030",
+                    background: "var(--bg-card)",
+                    border: "1px solid var(--accent)",
                     borderRadius: "12px",
                     padding: "20px",
                   }}>
@@ -194,10 +194,10 @@ export default function ForumPage() {
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: "8px" }}>
-                      <button onClick={handleUpdateSection} disabled={saving} style={{ ...btnStyle, background: "#f0a030", color: "#0f1117" }}>
+                      <button onClick={handleUpdateSection} disabled={saving} style={{ ...btnStyle, background: "var(--accent)", color: "var(--bg-page)" }}>
                         {saving ? "Ukládám..." : "Uložit"}
                       </button>
-                      <button onClick={() => setEditingSection(null)} style={{ ...btnStyle, background: "#353a50", color: "#a0a4b8" }}>
+                      <button onClick={() => setEditingSection(null)} style={{ ...btnStyle, background: "var(--border-hover)", color: "var(--text-muted)" }}>
                         Zrušit
                       </button>
                     </div>
@@ -206,8 +206,8 @@ export default function ForumPage() {
                   <Link href={`/forum/${sec.slug}`} style={{ textDecoration: "none" }}>
                     <div
                       style={{
-                        background: "#1a1e2e",
-                        border: "1px solid #252838",
+                        background: "var(--bg-card)",
+                        border: "1px solid var(--border)",
                         borderRadius: "12px",
                         padding: "20px",
                         display: "flex",
@@ -217,11 +217,11 @@ export default function ForumPage() {
                         cursor: "pointer",
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.borderColor = "#353a50";
+                        e.currentTarget.style.borderColor = "var(--border-hover)";
                         e.currentTarget.style.transform = "translateY(-1px)";
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor = "#252838";
+                        e.currentTarget.style.borderColor = "var(--border)";
                         e.currentTarget.style.transform = "translateY(0)";
                       }}
                     >
@@ -230,7 +230,7 @@ export default function ForumPage() {
                         width: "52px",
                         height: "52px",
                         borderRadius: "12px",
-                        background: "rgba(240,160,48,0.1)",
+                        background: "var(--accent-bg)",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -242,31 +242,31 @@ export default function ForumPage() {
 
                       {/* Info */}
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <h3 style={{ fontSize: "16px", fontWeight: 600, color: "#e0e0e0", marginBottom: "4px" }}>
+                        <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-body)", marginBottom: "4px" }}>
                           {sec.name}
                         </h3>
                         {sec.description && (
-                          <p style={{ fontSize: "13px", color: "#6a6e80", lineHeight: 1.4 }}>{sec.description}</p>
+                          <p style={{ fontSize: "13px", color: "var(--text-dimmer)", lineHeight: 1.4 }}>{sec.description}</p>
                         )}
                       </div>
 
                       {/* Stats */}
                       <div className="hidden md:flex" style={{ alignItems: "center", gap: "24px", flexShrink: 0 }}>
                         <div style={{ textAlign: "center" }}>
-                          <div style={{ fontSize: "18px", fontWeight: 700, color: "#f0a030" }}>{sec.thread_count}</div>
-                          <div style={{ fontSize: "11px", color: "#6a6e80" }}>vláken</div>
+                          <div style={{ fontSize: "18px", fontWeight: 700, color: "var(--accent)" }}>{sec.thread_count}</div>
+                          <div style={{ fontSize: "11px", color: "var(--text-dimmer)" }}>vláken</div>
                         </div>
                         <div style={{ textAlign: "center" }}>
-                          <div style={{ fontSize: "18px", fontWeight: 700, color: "#a0a4b8" }}>{sec.post_count}</div>
-                          <div style={{ fontSize: "11px", color: "#6a6e80" }}>příspěvků</div>
+                          <div style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-muted)" }}>{sec.post_count}</div>
+                          <div style={{ fontSize: "11px", color: "var(--text-dimmer)" }}>příspěvků</div>
                         </div>
                         {sec.last_thread_title && (
                           <div style={{ maxWidth: "200px" }}>
-                            <div style={{ fontSize: "12px", color: "#8a8ea0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            <div style={{ fontSize: "12px", color: "var(--text-dim)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                               {sec.last_thread_title}
                             </div>
                             {sec.last_post_at_val && (
-                              <div style={{ fontSize: "11px", color: "#555a70" }}>
+                              <div style={{ fontSize: "11px", color: "var(--text-faint)" }}>
                                 {timeAgo(sec.last_post_at_val)}
                               </div>
                             )}
@@ -279,7 +279,7 @@ export default function ForumPage() {
                         <div style={{ display: "flex", gap: "6px", flexShrink: 0 }} onClick={(e) => e.preventDefault()}>
                           <button
                             onClick={(e) => { e.preventDefault(); e.stopPropagation(); setEditingSection(sec); }}
-                            style={{ padding: "6px 12px", background: "rgba(240,160,48,0.15)", border: "1px solid rgba(240,160,48,0.3)", borderRadius: "6px", color: "#f0a030", fontSize: "12px", cursor: "pointer" }}
+                            style={{ padding: "6px 12px", background: "var(--accent-border)", border: "1px solid var(--accent-border-strong)", borderRadius: "6px", color: "var(--accent)", fontSize: "12px", cursor: "pointer" }}
                           >
                             ✏️
                           </button>
@@ -301,13 +301,13 @@ export default function ForumPage() {
           {/* Add section form */}
           {editMode && isAdmin && (
             <div style={{
-              background: "#1a1e2e",
-              border: "1px dashed #353a50",
+              background: "var(--bg-card)",
+              border: "1px dashed var(--border-hover)",
               borderRadius: "12px",
               padding: "20px",
               marginTop: "16px",
             }}>
-              <h4 style={{ fontSize: "14px", color: "#f0a030", marginBottom: "12px", fontWeight: 600 }}>➕ Přidat sekci</h4>
+              <h4 style={{ fontSize: "14px", color: "var(--accent)", marginBottom: "12px", fontWeight: 600 }}>➕ Přidat sekci</h4>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
                 <input value={newSection.name} onChange={(e) => setNewSection({ ...newSection, name: e.target.value })} placeholder="Název" style={inputStyle} />
                 <input value={newSection.slug} onChange={(e) => setNewSection({ ...newSection, slug: e.target.value })} placeholder="Slug (url-friendly)" style={inputStyle} />
@@ -319,8 +319,8 @@ export default function ForumPage() {
               </div>
               <button onClick={handleAddSection} disabled={saving || !newSection.name.trim() || !newSection.slug.trim()} style={{
                 padding: "10px 20px",
-                background: !newSection.name.trim() || !newSection.slug.trim() ? "#353a50" : "#f0a030",
-                color: !newSection.name.trim() || !newSection.slug.trim() ? "#6a6e80" : "#0f1117",
+                background: !newSection.name.trim() || !newSection.slug.trim() ? "var(--border-hover)" : "var(--accent)",
+                color: !newSection.name.trim() || !newSection.slug.trim() ? "var(--text-dimmer)" : "var(--bg-page)",
                 border: "none",
                 borderRadius: "8px",
                 fontSize: "14px",
@@ -352,7 +352,7 @@ export default function ForumPage() {
                 background: "rgba(138,142,160,0.1)",
                 border: "1px solid rgba(138,142,160,0.3)",
                 borderRadius: "10px",
-                color: "#8a8ea0",
+                color: "var(--text-dim)",
                 fontSize: "14px",
                 fontWeight: 600,
                 textDecoration: "none",
@@ -370,10 +370,10 @@ export default function ForumPage() {
 const inputStyle: React.CSSProperties = {
   width: "100%",
   padding: "10px 14px",
-  background: "#1e2233",
-  border: "1px solid #2a2f45",
+  background: "var(--bg-input)",
+  border: "1px solid var(--border-input)",
   borderRadius: "8px",
-  color: "#e0e0e0",
+  color: "var(--text-body)",
   fontSize: "14px",
   outline: "none",
 };

@@ -14,7 +14,7 @@ export default function BadgeLogo({ size = "sm" }: BadgeLogoProps) {
           display: "inline-flex",
           flexDirection: "column",
           alignItems: "center",
-          border: "3px solid #f0a030",
+          border: "3px solid var(--accent)",
           borderRadius: "16px",
           padding: "16px 40px 14px",
         }}
@@ -23,7 +23,7 @@ export default function BadgeLogo({ size = "sm" }: BadgeLogoProps) {
           style={{
             fontSize: "12px",
             letterSpacing: "4px",
-            color: "#f0a030",
+            color: "var(--accent)",
             textTransform: "uppercase",
             marginBottom: "2px",
           }}
@@ -38,14 +38,14 @@ export default function BadgeLogo({ size = "sm" }: BadgeLogoProps) {
             lineHeight: 1.1,
           }}
         >
-          <span style={{ color: "#fff" }}>LOKO</span>
-          <span style={{ color: "#f0a030" }}>POLIS</span>
+          <span style={{ color: "var(--text-primary)" }}>LOKO</span>
+          <span style={{ color: "var(--accent)" }}>POLIS</span>
         </span>
         <span
           style={{
             fontSize: "11px",
             letterSpacing: "3px",
-            color: "#6a6e80",
+            color: "var(--text-dimmer)",
             textTransform: "uppercase",
             marginTop: "2px",
           }}
@@ -62,7 +62,7 @@ export default function BadgeLogo({ size = "sm" }: BadgeLogoProps) {
         display: "inline-flex",
         flexDirection: "column",
         alignItems: "center",
-        border: "1.5px solid #f0a030",
+        border: "1.5px solid var(--accent)",
         borderRadius: "7px",
         padding: "4px 11px 3px",
       }}
@@ -71,7 +71,7 @@ export default function BadgeLogo({ size = "sm" }: BadgeLogoProps) {
         style={{
           fontSize: "6px",
           letterSpacing: "2px",
-          color: "#f0a030",
+          color: "var(--accent)",
           textTransform: "uppercase",
         }}
       >
@@ -85,14 +85,14 @@ export default function BadgeLogo({ size = "sm" }: BadgeLogoProps) {
           lineHeight: 1.2,
         }}
       >
-        <span style={{ color: "#fff" }}>LOKO</span>
-        <span style={{ color: "#f0a030" }}>POLIS</span>
+        <span style={{ color: "var(--text-primary)" }}>LOKO</span>
+        <span style={{ color: "var(--accent)" }}>POLIS</span>
       </span>
       <span
         style={{
           fontSize: "5px",
           letterSpacing: "1.5px",
-          color: "#6a6e80",
+          color: "var(--text-dimmer)",
           textTransform: "uppercase",
         }}
       >

@@ -12,7 +12,7 @@ export default function NewThreadPage() {
     <Suspense fallback={
       <div style={{ maxWidth: "700px", margin: "0 auto", padding: "64px 20px", textAlign: "center" }}>
         <div style={{ fontSize: "32px", marginBottom: "12px" }}>⏳</div>
-        <p style={{ color: "#6a6e80", fontSize: "14px" }}>Načítám...</p>
+        <p style={{ color: "var(--text-dimmer)", fontSize: "14px" }}>Načítám...</p>
       </div>
     }>
       <NewThreadContent />
@@ -90,7 +90,7 @@ function NewThreadContent() {
     return (
       <div style={{ maxWidth: "700px", margin: "0 auto", padding: "64px 20px", textAlign: "center" }}>
         <div style={{ fontSize: "32px", marginBottom: "12px" }}>⏳</div>
-        <p style={{ color: "#6a6e80", fontSize: "14px" }}>Načítám...</p>
+        <p style={{ color: "var(--text-dimmer)", fontSize: "14px" }}>Načítám...</p>
       </div>
     );
   }
@@ -99,9 +99,9 @@ function NewThreadContent() {
     return (
       <div style={{ maxWidth: "700px", margin: "0 auto", padding: "64px 20px", textAlign: "center" }}>
         <div style={{ fontSize: "48px", marginBottom: "16px" }}>🔒</div>
-        <h1 style={{ fontSize: "24px", color: "#fff", marginBottom: "8px" }}>Přihlaste se</h1>
-        <p style={{ color: "#8a8ea0", marginBottom: "16px" }}>Pro založení vlákna se musíte přihlásit</p>
-        <Link href="/prihlaseni" style={{ color: "#f0a030", textDecoration: "none" }}>→ Přihlášení</Link>
+        <h1 style={{ fontSize: "24px", color: "var(--text-primary)", marginBottom: "8px" }}>Přihlaste se</h1>
+        <p style={{ color: "var(--text-dim)", marginBottom: "16px" }}>Pro založení vlákna se musíte přihlásit</p>
+        <Link href="/prihlaseni" style={{ color: "var(--accent)", textDecoration: "none" }}>→ Přihlášení</Link>
       </div>
     );
   }
@@ -111,7 +111,7 @@ function NewThreadContent() {
       <div style={{ maxWidth: "700px", margin: "0 auto", padding: "64px 20px", textAlign: "center" }}>
         <div style={{ fontSize: "48px", marginBottom: "16px" }}>🚫</div>
         <h1 style={{ fontSize: "24px", color: "#ff6b6b", marginBottom: "8px" }}>Zákaz přispívání</h1>
-        <p style={{ color: "#8a8ea0" }}>Máte zákaz přispívat na fórum</p>
+        <p style={{ color: "var(--text-dim)" }}>Máte zákaz přispívat na fórum</p>
       </div>
     );
   }
@@ -119,20 +119,20 @@ function NewThreadContent() {
   return (
     <div style={{ maxWidth: "700px", margin: "0 auto", padding: "48px 20px" }}>
       {/* Breadcrumb */}
-      <div style={{ marginBottom: "24px", fontSize: "13px", color: "#6a6e80" }}>
-        <Link href="/forum" style={{ color: "#f0a030", textDecoration: "none" }}>Fórum</Link>
+      <div style={{ marginBottom: "24px", fontSize: "13px", color: "var(--text-dimmer)" }}>
+        <Link href="/forum" style={{ color: "var(--accent)", textDecoration: "none" }}>Fórum</Link>
         <span style={{ margin: "0 8px" }}>›</span>
-        <span style={{ color: "#a0a4b8" }}>Nové vlákno</span>
+        <span style={{ color: "var(--text-muted)" }}>Nové vlákno</span>
       </div>
 
-      <h1 style={{ fontSize: "28px", fontWeight: 700, color: "#fff", marginBottom: "32px" }}>
+      <h1 style={{ fontSize: "28px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "32px" }}>
         📝 Nové vlákno
       </h1>
 
       <form onSubmit={handleSubmit}>
         {/* Section */}
         <div style={{ marginBottom: "20px" }}>
-          <label style={{ display: "block", fontSize: "13px", color: "#a0a4b8", marginBottom: "6px", fontWeight: 500 }}>
+          <label style={{ display: "block", fontSize: "13px", color: "var(--text-muted)", marginBottom: "6px", fontWeight: 500 }}>
             Sekce *
           </label>
           <select
@@ -142,10 +142,10 @@ function NewThreadContent() {
             style={{
               width: "100%",
               padding: "12px 14px",
-              background: "#1e2233",
-              border: "1px solid #2a2f45",
+              background: "var(--bg-input)",
+              border: "1px solid var(--border-input)",
               borderRadius: "8px",
-              color: "#e0e0e0",
+              color: "var(--text-body)",
               fontSize: "14px",
               outline: "none",
             }}
@@ -159,8 +159,8 @@ function NewThreadContent() {
 
         {/* Title */}
         <div style={{ marginBottom: "20px" }}>
-          <label style={{ display: "block", fontSize: "13px", color: "#a0a4b8", marginBottom: "6px", fontWeight: 500 }}>
-            Nadpis * <span style={{ color: "#555a70", fontWeight: 400 }}>(min. 5 znaků)</span>
+          <label style={{ display: "block", fontSize: "13px", color: "var(--text-muted)", marginBottom: "6px", fontWeight: 500 }}>
+            Nadpis * <span style={{ color: "var(--text-faint)", fontWeight: 400 }}>(min. 5 znaků)</span>
           </label>
           <input
             type="text"
@@ -172,10 +172,10 @@ function NewThreadContent() {
             style={{
               width: "100%",
               padding: "12px 14px",
-              background: "#1e2233",
-              border: "1px solid #2a2f45",
+              background: "var(--bg-input)",
+              border: "1px solid var(--border-input)",
               borderRadius: "8px",
-              color: "#e0e0e0",
+              color: "var(--text-body)",
               fontSize: "14px",
               outline: "none",
             }}
@@ -184,8 +184,8 @@ function NewThreadContent() {
 
         {/* Content */}
         <div style={{ marginBottom: "20px" }}>
-          <label style={{ display: "block", fontSize: "13px", color: "#a0a4b8", marginBottom: "6px", fontWeight: 500 }}>
-            Obsah * <span style={{ color: "#555a70", fontWeight: 400 }}>(min. 10 znaků)</span>
+          <label style={{ display: "block", fontSize: "13px", color: "var(--text-muted)", marginBottom: "6px", fontWeight: 500 }}>
+            Obsah * <span style={{ color: "var(--text-faint)", fontWeight: 400 }}>(min. 10 znaků)</span>
           </label>
           <textarea
             value={content}
@@ -197,10 +197,10 @@ function NewThreadContent() {
             style={{
               width: "100%",
               padding: "12px 14px",
-              background: "#1e2233",
-              border: "1px solid #2a2f45",
+              background: "var(--bg-input)",
+              border: "1px solid var(--border-input)",
               borderRadius: "8px",
-              color: "#e0e0e0",
+              color: "var(--text-body)",
               fontSize: "14px",
               lineHeight: 1.6,
               outline: "none",
@@ -230,8 +230,8 @@ function NewThreadContent() {
             disabled={submitting}
             style={{
               padding: "12px 28px",
-              background: submitting ? "#353a50" : "#f0a030",
-              color: submitting ? "#6a6e80" : "#0f1117",
+              background: submitting ? "var(--border-hover)" : "var(--accent)",
+              color: submitting ? "var(--text-dimmer)" : "var(--bg-page)",
               border: "none",
               borderRadius: "10px",
               fontSize: "15px",
@@ -245,8 +245,8 @@ function NewThreadContent() {
             href={selectedSlug ? `/forum/${selectedSlug}` : "/forum"}
             style={{
               padding: "12px 28px",
-              background: "#353a50",
-              color: "#a0a4b8",
+              background: "var(--border-hover)",
+              color: "var(--text-muted)",
               border: "none",
               borderRadius: "10px",
               fontSize: "15px",

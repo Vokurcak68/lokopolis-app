@@ -7,10 +7,10 @@ export default function SupportPage() {
     <div style={{ maxWidth: "800px", margin: "0 auto", padding: "48px 20px" }}>
       {/* Header */}
       <h1 style={{ fontSize: "32px", fontWeight: 700, marginBottom: "8px" }}>
-        <span style={{ color: "#fff" }}>Podpořte </span>
-        <span style={{ color: "#f0a030" }}>Lokopolis</span>
+        <span style={{ color: "var(--text-primary)" }}>Podpořte </span>
+        <span style={{ color: "var(--accent)" }}>Lokopolis</span>
       </h1>
-      <p style={{ fontSize: "15px", color: "#8a8ea0", marginBottom: "40px" }}>
+      <p style={{ fontSize: "15px", color: "var(--text-dim)", marginBottom: "40px" }}>
         Lokopolis je komunitní projekt bez reklam. Vaše podpora nám pomáhá udržet web v chodu.
       </p>
 
@@ -18,13 +18,13 @@ export default function SupportPage() {
         {/* Free ways */}
         <section
           style={{
-            background: "#1a1e2e",
-            border: "1px solid #252838",
+            background: "var(--bg-card)",
+            border: "1px solid var(--border)",
             borderRadius: "12px",
             padding: "28px",
           }}
         >
-          <h2 style={{ fontSize: "20px", fontWeight: 600, color: "#f0a030", marginBottom: "16px" }}>
+          <h2 style={{ fontSize: "20px", fontWeight: 600, color: "var(--accent)", marginBottom: "16px" }}>
             🆓 Zdarma — a přesto nám hodně pomůžete
           </h2>
           <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
@@ -63,20 +63,20 @@ export default function SupportPage() {
                   gap: "14px",
                   alignItems: "flex-start",
                   padding: "14px",
-                  background: "rgba(240,160,48,0.04)",
+                  background: "var(--accent-bg-subtle)",
                   borderRadius: "8px",
                 }}
               >
                 <span style={{ fontSize: "24px", flexShrink: 0 }}>{item.icon}</span>
                 <div>
-                  <div style={{ fontSize: "15px", fontWeight: 600, color: "#e0e0e0", marginBottom: "4px" }}>
+                  <div style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-body)", marginBottom: "4px" }}>
                     {item.title}
                   </div>
-                  <div style={{ fontSize: "13px", color: "#8a8ea0", lineHeight: 1.5, marginBottom: item.link ? "6px" : "0" }}>
+                  <div style={{ fontSize: "13px", color: "var(--text-dim)", lineHeight: 1.5, marginBottom: item.link ? "6px" : "0" }}>
                     {item.desc}
                   </div>
                   {item.link && (
-                    <Link href={item.link} style={{ fontSize: "13px", color: "#f0a030", textDecoration: "none" }}>
+                    <Link href={item.link} style={{ fontSize: "13px", color: "var(--accent)", textDecoration: "none" }}>
                       {item.linkText}
                     </Link>
                   )}
@@ -89,33 +89,33 @@ export default function SupportPage() {
         {/* Financial support */}
         <section
           style={{
-            background: "#1a1e2e",
-            border: "1px solid rgba(240,160,48,0.3)",
+            background: "var(--bg-card)",
+            border: "1px solid var(--accent-border-strong)",
             borderRadius: "12px",
             padding: "28px",
           }}
         >
-          <h2 style={{ fontSize: "20px", fontWeight: 600, color: "#f0a030", marginBottom: "16px" }}>
+          <h2 style={{ fontSize: "20px", fontWeight: 600, color: "var(--accent)", marginBottom: "16px" }}>
             ☕ Finanční podpora
           </h2>
-          <p style={{ fontSize: "15px", color: "#c8c8d0", lineHeight: 1.7, marginBottom: "16px" }}>
+          <p style={{ fontSize: "15px", color: "var(--text-secondary)", lineHeight: 1.7, marginBottom: "16px" }}>
             Provoz webu stojí peníze — hosting, doména, databáze. Pokud vám Lokopolis přijde užitečný
             a chcete nám pomoct s náklady, budeme moc rádi za jakýkoliv příspěvek.
           </p>
           <div
             style={{
               padding: "20px",
-              background: "rgba(240,160,48,0.06)",
+              background: "var(--accent-bg-medium)",
               borderRadius: "10px",
               textAlign: "center",
             }}
           >
-            <div style={{ fontSize: "14px", color: "#8a8ea0", marginBottom: "8px" }}>
+            <div style={{ fontSize: "14px", color: "var(--text-dim)", marginBottom: "8px" }}>
               Možnosti podpory připravujeme
             </div>
-            <div style={{ fontSize: "13px", color: "#6a6e80" }}>
+            <div style={{ fontSize: "13px", color: "var(--text-dimmer)" }}>
               Chcete nás podpořit už teď? Napište nám na{" "}
-              <Link href="/kontakt" style={{ color: "#f0a030", textDecoration: "none" }}>kontaktní stránce</Link>.
+              <Link href="/kontakt" style={{ color: "var(--accent)", textDecoration: "none" }}>kontaktní stránce</Link>.
             </div>
           </div>
         </section>
@@ -123,13 +123,13 @@ export default function SupportPage() {
         {/* What the money goes to */}
         <section
           style={{
-            background: "#1a1e2e",
-            border: "1px solid #252838",
+            background: "var(--bg-card)",
+            border: "1px solid var(--border)",
             borderRadius: "12px",
             padding: "28px",
           }}
         >
-          <h2 style={{ fontSize: "20px", fontWeight: 600, color: "#f0a030", marginBottom: "16px" }}>
+          <h2 style={{ fontSize: "20px", fontWeight: 600, color: "var(--accent)", marginBottom: "16px" }}>
             💰 Na co jdou peníze?
           </h2>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px" }}>
@@ -144,13 +144,13 @@ export default function SupportPage() {
                 style={{
                   textAlign: "center",
                   padding: "16px",
-                  background: "rgba(240,160,48,0.04)",
+                  background: "var(--accent-bg-subtle)",
                   borderRadius: "8px",
                 }}
               >
                 <div style={{ fontSize: "28px", marginBottom: "8px" }}>{item.icon}</div>
-                <div style={{ fontSize: "14px", fontWeight: 600, color: "#e0e0e0", marginBottom: "4px" }}>{item.label}</div>
-                <div style={{ fontSize: "12px", color: "#6a6e80" }}>{item.desc}</div>
+                <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-body)", marginBottom: "4px" }}>{item.label}</div>
+                <div style={{ fontSize: "12px", color: "var(--text-dimmer)" }}>{item.desc}</div>
               </div>
             ))}
           </div>
@@ -161,16 +161,16 @@ export default function SupportPage() {
           style={{
             textAlign: "center",
             padding: "24px",
-            background: "rgba(240,160,48,0.06)",
-            border: "1px solid rgba(240,160,48,0.15)",
+            background: "var(--accent-bg-medium)",
+            border: "1px solid var(--accent-border)",
             borderRadius: "12px",
           }}
         >
           <div style={{ fontSize: "32px", marginBottom: "12px" }}>🙏</div>
-          <p style={{ fontSize: "16px", color: "#e0e0e0", fontWeight: 600, marginBottom: "4px" }}>
+          <p style={{ fontSize: "16px", color: "var(--text-body)", fontWeight: 600, marginBottom: "4px" }}>
             Děkujeme!
           </p>
-          <p style={{ fontSize: "14px", color: "#8a8ea0" }}>
+          <p style={{ fontSize: "14px", color: "var(--text-dim)" }}>
             Každý příspěvek — ať už článek, fotka nebo dobrá rada — dělá Lokopolis lepším místem.
           </p>
         </div>

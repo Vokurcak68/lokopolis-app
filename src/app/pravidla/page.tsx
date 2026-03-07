@@ -79,10 +79,10 @@ export default function RulesPage() {
     <div style={{ maxWidth: "800px", margin: "0 auto", padding: "48px 20px" }}>
       {/* Header */}
       <h1 style={{ fontSize: "32px", fontWeight: 700, marginBottom: "8px" }}>
-        <span style={{ color: "#fff" }}>Pravidla </span>
-        <span style={{ color: "#f0a030" }}>komunity</span>
+        <span style={{ color: "var(--text-primary)" }}>Pravidla </span>
+        <span style={{ color: "var(--accent)" }}>komunity</span>
       </h1>
-      <p style={{ fontSize: "15px", color: "#8a8ea0", marginBottom: "40px" }}>
+      <p style={{ fontSize: "15px", color: "var(--text-dim)", marginBottom: "40px" }}>
         Aby se tu všem líbilo a dobře spolupracovalo, dodržujte prosím tato pravidla.
       </p>
 
@@ -92,18 +92,18 @@ export default function RulesPage() {
           <section
             key={sec.title}
             style={{
-              background: "#1a1e2e",
-              border: "1px solid #252838",
+              background: "var(--bg-card)",
+              border: "1px solid var(--border)",
               borderRadius: "12px",
               padding: "24px 28px",
             }}
           >
-            <h2 style={{ fontSize: "18px", fontWeight: 600, color: "#f0a030", marginBottom: "14px" }}>
+            <h2 style={{ fontSize: "18px", fontWeight: 600, color: "var(--accent)", marginBottom: "14px" }}>
               {sec.icon} {sec.title}
             </h2>
             <ul style={{ margin: 0, paddingLeft: "20px", display: "flex", flexDirection: "column", gap: "8px" }}>
               {sec.rules.map((rule, i) => (
-                <li key={i} style={{ fontSize: "14px", color: "#c8c8d0", lineHeight: 1.6 }}>
+                <li key={i} style={{ fontSize: "14px", color: "var(--text-secondary)", lineHeight: 1.6 }}>
                   {rule}
                 </li>
               ))}
@@ -117,16 +117,16 @@ export default function RulesPage() {
         style={{
           marginTop: "32px",
           padding: "20px 24px",
-          background: "rgba(240,160,48,0.06)",
-          border: "1px solid rgba(240,160,48,0.15)",
+          background: "var(--accent-bg-medium)",
+          border: "1px solid var(--accent-border)",
           borderRadius: "12px",
           textAlign: "center",
         }}
       >
-        <p style={{ fontSize: "14px", color: "#a0a4b8", lineHeight: 1.6 }}>
+        <p style={{ fontSize: "14px", color: "var(--text-muted)", lineHeight: 1.6 }}>
           Registrací na Lokopolis souhlasíte s těmito pravidly. Pravidla mohou být kdykoliv aktualizována.
           <br />
-          <span style={{ color: "#6a6e80", fontSize: "13px" }}>Poslední aktualizace: březen 2026</span>
+          <span style={{ color: "var(--text-dimmer)", fontSize: "13px" }}>Poslední aktualizace: březen 2026</span>
         </p>
       </div>
     </div>

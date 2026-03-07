@@ -321,7 +321,7 @@ export default function NewArticlePage() {
           </button>
           <button
             onClick={() => router.push("/")}
-            className="px-5 py-2.5 rounded-lg bg-primary text-[#0f1117] font-semibold text-sm"
+            className="px-5 py-2.5 rounded-lg bg-primary text-[var(--bg-page)] font-semibold text-sm"
           >
             Na hlavní stránku
           </button>
@@ -346,7 +346,7 @@ export default function NewArticlePage() {
           <button
             onClick={() => handlePublish(false)}
             disabled={saving}
-            className="px-5 py-2.5 rounded-lg bg-primary text-[#0f1117] font-semibold text-sm hover:bg-primary/90 transition-all disabled:opacity-50"
+            className="px-5 py-2.5 rounded-lg bg-primary text-[var(--bg-page)] font-semibold text-sm hover:bg-primary/90 transition-all disabled:opacity-50"
           >
             {saving ? "Publikuji…" : "Publikovat"}
           </button>
@@ -387,7 +387,7 @@ export default function NewArticlePage() {
           <select
             value={categoryId}
             onChange={(e) => setCategoryId(e.target.value)}
-            className="w-full px-4 py-2.5 rounded-lg bg-[#12141f] border border-white/10 text-white text-sm outline-none focus:border-primary/50 transition-colors appearance-none cursor-pointer"
+            className="w-full px-4 py-2.5 rounded-lg bg-[var(--bg-input)] border border-white/10 text-white text-sm outline-none focus:border-primary/50 transition-colors appearance-none cursor-pointer"
           >
             <option value="">Vyberte kategorii…</option>
             {categories.map((cat) => (
@@ -442,8 +442,8 @@ export default function NewArticlePage() {
 
       {/* Tags */}
       <div style={{ marginBottom: "24px" }}>
-        <label style={{ display: "block", fontSize: "11px", color: "#6b7280", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-          Štítky {selectedTags.length > 0 && <span style={{ color: "#555a70" }}>({selectedTags.length}/10)</span>}
+        <label style={{ display: "block", fontSize: "11px", color: "var(--text-dimmer)", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          Štítky {selectedTags.length > 0 && <span style={{ color: "var(--text-faint)" }}>({selectedTags.length}/10)</span>}
         </label>
         <div
           style={{
@@ -451,7 +451,7 @@ export default function NewArticlePage() {
             flexWrap: "wrap",
             gap: "6px",
             padding: "8px 12px",
-            background: "#12141f",
+            background: "var(--bg-page)",
             border: "1px solid rgba(255,255,255,0.1)",
             borderRadius: "8px",
             alignItems: "center",
@@ -466,11 +466,11 @@ export default function NewArticlePage() {
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "4px",
-                background: "rgba(240,160,48,0.1)",
-                border: "1px solid rgba(240,160,48,0.3)",
+                background: "var(--accent-bg)",
+                border: "1px solid var(--accent-border-strong)",
                 borderRadius: "20px",
                 padding: "4px 12px",
-                color: "#f0a030",
+                color: "var(--accent)",
                 fontSize: "12px",
               }}
             >
@@ -481,7 +481,7 @@ export default function NewArticlePage() {
                 style={{
                   background: "none",
                   border: "none",
-                  color: "#f0a030",
+                  color: "var(--accent)",
                   cursor: "pointer",
                   padding: "0 0 0 2px",
                   fontSize: "14px",
@@ -510,7 +510,7 @@ export default function NewArticlePage() {
                 background: "transparent",
                 border: "none",
                 outline: "none",
-                color: "#fff",
+                color: "var(--text-primary)",
                 fontSize: "13px",
                 padding: "2px 0",
               }}
@@ -526,8 +526,8 @@ export default function NewArticlePage() {
                 left: 0,
                 right: 0,
                 marginTop: "4px",
-                background: "#1a1e2e",
-                border: "1px solid #252838",
+                background: "var(--bg-card)",
+                border: "1px solid var(--border)",
                 borderRadius: "8px",
                 zIndex: 50,
                 maxHeight: "200px",
@@ -547,11 +547,11 @@ export default function NewArticlePage() {
                     padding: "8px 14px",
                     background: "transparent",
                     border: "none",
-                    color: "#e0e0e0",
+                    color: "var(--text-body)",
                     fontSize: "13px",
                     cursor: "pointer",
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(240,160,48,0.1)")}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-bg)")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
                   {tag.name}
@@ -569,8 +569,8 @@ export default function NewArticlePage() {
                 left: 0,
                 right: 0,
                 marginTop: "4px",
-                background: "#1a1e2e",
-                border: "1px solid #252838",
+                background: "var(--bg-card)",
+                border: "1px solid var(--border)",
                 borderRadius: "8px",
                 zIndex: 50,
                 boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
@@ -586,11 +586,11 @@ export default function NewArticlePage() {
                   padding: "8px 14px",
                   background: "transparent",
                   border: "none",
-                  color: "#f0a030",
+                  color: "var(--accent)",
                   fontSize: "13px",
                   cursor: "pointer",
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(240,160,48,0.1)")}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-bg)")}
                 onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
               >
                 + Vytvořit štítek &quot;{tagInput.trim()}&quot;
@@ -620,7 +620,7 @@ export default function NewArticlePage() {
         <button
           onClick={() => handlePublish(false)}
           disabled={saving}
-          className="flex-1 px-4 py-3 rounded-lg bg-primary text-[#0f1117] font-semibold text-sm disabled:opacity-50"
+          className="flex-1 px-4 py-3 rounded-lg bg-primary text-[var(--bg-page)] font-semibold text-sm disabled:opacity-50"
         >
           {saving ? "Publikuji…" : "Publikovat"}
         </button>
