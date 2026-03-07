@@ -130,6 +130,7 @@ export default function Home() {
   const [memberCount, setMemberCount] = useState<number | null>(null);
   const [popularArticles, setPopularArticles] = useState<PopularArticle[]>([]);
   const [popularTags, setPopularTags] = useState<PopularTag[]>([]);
+  const [forumStats, setForumStats] = useState<{ thread_count: number; post_count: number; last_thread_title: string | null; last_thread_id: string | null; last_thread_section_slug: string | null }>({ thread_count: 0, post_count: 0, last_thread_title: null, last_thread_id: null, last_thread_section_slug: null });
 
   useEffect(() => {
     async function fetchAll() {
@@ -177,6 +178,28 @@ export default function Home() {
           const { data: tagsData } = await supabase.rpc("get_popular_tags", { max_results: 15 });
           if (tagsData && tagsData.length > 0) {
             setPopularTags(tagsData as PopularTag[]);
+          }
+        } catch {
+          // keep empty
+        }
+
+        // Forum stats
+        try {
+          const { data: fStats } = await supabase.rpc("get_forum_stats");
+          if (fStats && fStats.length > 0) {
+            const fs = fStats[0] as { thread_count: number; post_count: number };
+            const { data: lastT } = await supabase.from("forum_threads").select("id, title, section:forum_sections(slug)").order("last_post_at", { ascending: false }).limit(1);
+            const lt = lastT && lastT.length > 0 ? lastT[0] : null;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const secData = lt?.section as any;
+            const secSlug = Array.isArray(secData) ? secData[0]?.slug : secData?.slug;
+            setForumStats({
+              thread_count: fs.thread_count || 0,
+              post_count: fs.post_count || 0,
+              last_thread_title: lt?.title || null,
+              last_thread_id: lt?.id || null,
+              last_thread_section_slug: secSlug || null,
+            });
           }
         } catch {
           // keep empty
@@ -576,13 +599,26 @@ export default function Home() {
             </ul>
           </div>
 
-          {/* Online */}
+          {/* Forum widget */}
           <div className="widget">
-            <h3>🟢 Komunita</h3>
-            <p style={{ fontSize: "13px", color: "#8a8ea0" }}>
-              <span className="online-dot" />
-              Celkem registrováno: {memberCount !== null ? memberCount.toLocaleString("cs-CZ") : stats.members} členů
+            <h3>💬 Fórum</h3>
+            <p style={{ fontSize: "13px", color: "#8a8ea0", marginBottom: "8px" }}>
+              💬 {forumStats.thread_count} vláken · {forumStats.post_count} příspěvků
             </p>
+            {forumStats.last_thread_title && forumStats.last_thread_id && (
+              <Link
+                href={`/forum/${forumStats.last_thread_section_slug || "obecna-diskuze"}/${forumStats.last_thread_id}`}
+                style={{ fontSize: "12px", color: "#f0a030", textDecoration: "none", display: "block", marginBottom: "8px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}
+              >
+                📄 {forumStats.last_thread_title}
+              </Link>
+            )}
+            <Link href="/forum" style={{ fontSize: "13px", color: "#f0a030", textDecoration: "none", fontWeight: 600 }}>
+              Přejít na fórum →
+            </Link>
+            <div style={{ marginTop: "10px", fontSize: "12px", color: "#555a70" }}>
+              Celkem registrováno: {memberCount !== null ? memberCount.toLocaleString("cs-CZ") : stats.members} členů
+            </div>
           </div>
 
           {/* Tags */}

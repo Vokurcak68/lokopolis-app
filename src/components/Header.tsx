@@ -13,7 +13,7 @@ const navItems = [
   { label: "Galerie", href: "/galerie" },
   { label: "Ke stažení", href: "/ke-stazeni" },
   { label: "Akce", href: "/akce" },
-  { label: "Fórum", href: "#" },
+  { label: "Fórum", href: "/forum" },
 ];
 
 export default function Header() {

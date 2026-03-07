@@ -126,6 +126,91 @@ export interface CommentWithAuthor extends Comment {
   author: Profile | null;
 }
 
+// Forum types
+export type ForumReportStatus = "pending" | "resolved" | "dismissed";
+
+export interface ForumSection {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  icon: string | null;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface ForumThread {
+  id: string;
+  section_id: string;
+  author_id: string;
+  title: string;
+  content: string;
+  is_pinned: boolean;
+  is_locked: boolean;
+  post_count: number;
+  last_post_at: string;
+  last_post_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ForumPost {
+  id: string;
+  thread_id: string;
+  author_id: string;
+  content: string;
+  is_hidden: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ForumReaction {
+  id: string;
+  post_id: string | null;
+  thread_id: string | null;
+  user_id: string;
+  emoji: string;
+  created_at: string;
+}
+
+export interface ForumReport {
+  id: string;
+  post_id: string | null;
+  thread_id: string | null;
+  reporter_id: string;
+  reason: string;
+  status: ForumReportStatus;
+  resolved_by: string | null;
+  resolved_at: string | null;
+  created_at: string;
+}
+
+export interface ForumBan {
+  id: string;
+  user_id: string;
+  banned_by: string;
+  reason: string | null;
+  expires_at: string | null;
+  created_at: string;
+}
+
+// Rozšířené forum typy
+export interface ForumThreadWithRelations extends ForumThread {
+  author: Profile | null;
+  section: ForumSection | null;
+  last_poster: Profile | null;
+}
+
+export interface ForumPostWithRelations extends ForumPost {
+  author: Profile | null;
+}
+
+export interface ForumSectionWithCounts extends ForumSection {
+  thread_count: number;
+  post_count: number;
+  last_thread: { title: string; id: string; last_post_at: string } | null;
+}
+
 // Supabase Database type pro type-safe klienta
 export interface Database {
   public: {
