@@ -1,7 +1,7 @@
 "use client";
 
 interface BadgeLogoProps {
-  size?: "sm" | "lg";
+  size?: "xs" | "sm" | "lg";
 }
 
 export default function BadgeLogo({ size = "sm" }: BadgeLogoProps) {
@@ -62,15 +62,15 @@ export default function BadgeLogo({ size = "sm" }: BadgeLogoProps) {
         display: "inline-flex",
         flexDirection: "column",
         alignItems: "center",
-        border: "2px solid #f0a030",
-        borderRadius: "10px",
-        padding: "6px 16px 5px",
+        border: "1.5px solid #f0a030",
+        borderRadius: "7px",
+        padding: "4px 11px 3px",
       }}
     >
       <span
         style={{
-          fontSize: "8px",
-          letterSpacing: "3px",
+          fontSize: "6px",
+          letterSpacing: "2px",
           color: "#f0a030",
           textTransform: "uppercase",
         }}
@@ -79,9 +79,9 @@ export default function BadgeLogo({ size = "sm" }: BadgeLogoProps) {
       </span>
       <span
         style={{
-          fontSize: "20px",
+          fontSize: "14px",
           fontWeight: 800,
-          letterSpacing: "-0.5px",
+          letterSpacing: "-0.3px",
           lineHeight: 1.2,
         }}
       >
@@ -90,8 +90,8 @@ export default function BadgeLogo({ size = "sm" }: BadgeLogoProps) {
       </span>
       <span
         style={{
-          fontSize: "7px",
-          letterSpacing: "2px",
+          fontSize: "5px",
+          letterSpacing: "1.5px",
           color: "#6a6e80",
           textTransform: "uppercase",
         }}
