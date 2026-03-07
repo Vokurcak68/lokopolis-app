@@ -461,7 +461,7 @@ function AlbumCard({
       <div
         style={{
           width: "100%",
-          aspectRatio: "16/10",
+          height: "200px",
           position: "relative",
           overflow: "hidden",
         }}
@@ -602,23 +602,20 @@ function AlbumCard({
           borderTop: "1px solid var(--border)",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          {album.description && (
-            <p
-              style={{
-                fontSize: "13px",
-                color: "var(--text-dimmer)",
-                lineHeight: 1.4,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-                maxWidth: "220px",
-              }}
-            >
-              {album.description}
-            </p>
-          )}
-        </div>
+        <p
+          style={{
+            fontSize: "13px",
+            color: "var(--text-dimmer)",
+            lineHeight: 1.4,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            maxWidth: "220px",
+            margin: 0,
+          }}
+        >
+          {album.description || "\u00A0"}
+        </p>
         <div
           style={{
             fontSize: "12px",
