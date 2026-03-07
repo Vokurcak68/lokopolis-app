@@ -15,7 +15,7 @@ const navItems = [
   { label: "Ke stažení", href: "/ke-stazeni" },
   { label: "Akce", href: "/akce" },
   { label: "Fórum", href: "/forum" },
-  { label: "🛤️ Návrhář", href: "/navrhar-trati" },
+  { label: "🛤️ Návrhář", href: "/navrhar-trati", adminOnly: true },
 ];
 
 function ThemeToggle() {
@@ -85,7 +85,7 @@ export default function Header() {
         </Link>
 
         <nav className="desktop-nav" style={{ gap: 0 }}>
-          {navItems.map((item) => (
+          {navItems.filter((item) => !item.adminOnly || isAdmin).map((item) => (
             <Link
               key={item.href + item.label}
               href={item.href}
@@ -212,7 +212,7 @@ export default function Header() {
       {mobileMenuOpen && (
         <nav className="mobile-menu" style={{ padding: "0 20px 16px", borderTop: "1px solid var(--border)" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: "4px", paddingTop: "12px" }}>
-            {navItems.map((item) => (
+            {navItems.filter((item) => !item.adminOnly || isAdmin).map((item) => (
               <Link
                 key={item.href + item.label}
                 href={item.href}
