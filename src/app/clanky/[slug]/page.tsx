@@ -44,6 +44,11 @@ export default function ArticleDetailPage() {
 
       setArticle(data as unknown as ArticleWithRelations);
       setLoading(false);
+
+      // Increment view count (fire & forget)
+      void (async () => {
+        try { await supabase.rpc("increment_article_view", { target_article_id: data.id }); } catch {}
+      })();
     }
     fetchArticle();
   }, [slug]);

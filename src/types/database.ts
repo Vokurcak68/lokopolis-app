@@ -37,6 +37,7 @@ export interface Article {
   author_id: string | null;
   status: ArticleStatus;
   verified: boolean;
+  view_count: number;
   published_at: string | null;
   created_at: string;
   updated_at: string;

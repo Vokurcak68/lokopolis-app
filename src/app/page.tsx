@@ -62,26 +62,15 @@ interface DownloadItem {
   download_count: number;
 }
 
-const popularArticles = [
-  {
-    id: 10,
-    emoji: "🌲",
-    badge: "Krajina",
-    title: "Realistické stromy za pár korun — domácí výroba",
-    excerpt: "Návod na výrobu stromů z mořské houby, drátku a posypů. Výsledek překvapí.",
-    views: "1 203",
-    likes: 89,
-  },
-  {
-    id: 11,
-    emoji: "🛤️",
-    badge: "Stavba",
-    title: "Moje první kolejiště — chyby, kterým se vyhnout",
-    excerpt: "Co bych udělal jinak, kdyby mohl začít znovu. Praktické rady pro začátečníky.",
-    views: "2 150",
-    likes: 134,
-  },
-];
+interface PopularArticle {
+  id: string;
+  slug: string;
+  title: string;
+  excerpt: string | null;
+  cover_image_url: string | null;
+  view_count: number;
+  category: { name: string; icon: string } | null;
+}
 
 interface EventItem {
   id: string;
@@ -132,6 +121,7 @@ export default function Home() {
   const [recentDownloads, setRecentDownloads] = useState<DownloadItem[]>([]);
   const [upcomingEvents, setUpcomingEvents] = useState<EventItem[]>([]);
   const [memberCount, setMemberCount] = useState<number | null>(null);
+  const [popularArticles, setPopularArticles] = useState<PopularArticle[]>([]);
 
   useEffect(() => {
     async function fetchAll() {
@@ -172,6 +162,40 @@ export default function Home() {
         // Events
         if (eventsRes.data && eventsRes.data.length > 0) {
           setUpcomingEvents(eventsRes.data as EventItem[]);
+        }
+
+        // Popular articles (by views this month)
+        try {
+          const { data: popIds } = await supabase.rpc("get_popular_articles", { days_back: 30, max_results: 4 });
+          if (popIds && popIds.length > 0) {
+            const ids = popIds.map((p: { article_id: string }) => p.article_id);
+            const viewMap: Record<string, number> = {};
+            popIds.forEach((p: { article_id: string; view_count_period: number }) => {
+              viewMap[p.article_id] = Number(p.view_count_period);
+            });
+            const { data: popArticles } = await supabase
+              .from("articles")
+              .select("id, slug, title, excerpt, cover_image_url, view_count, category:categories(name, icon)")
+              .in("id", ids);
+            if (popArticles && popArticles.length > 0) {
+              const sorted = (popArticles as unknown as PopularArticle[]).sort(
+                (a, b) => (viewMap[b.id] || 0) - (viewMap[a.id] || 0)
+              );
+              setPopularArticles(sorted);
+            }
+          } else {
+            // Fallback — nejnovější články pokud nejsou žádné views
+            const { data: fallback } = await supabase
+              .from("articles")
+              .select("id, slug, title, excerpt, cover_image_url, view_count, category:categories(name, icon)")
+              .eq("status", "published")
+              .eq("verified", true)
+              .order("published_at", { ascending: false })
+              .limit(4);
+            if (fallback) setPopularArticles(fallback as unknown as PopularArticle[]);
+          }
+        } catch {
+          // fallback — keep empty
         }
 
         // Latest articles
@@ -445,38 +469,47 @@ export default function Home() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
             <h2 style={{ fontSize: "24px", fontWeight: 700, color: "#fff" }}>Populární tento měsíc</h2>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: "20px" }}>
-            {popularArticles.map((a) => (
-              <div key={a.id} className="article-card">
-                <div className="article-img">
-                  <div className="placeholder">{a.emoji}</div>
-                  <span className="article-badge">{a.badge}</span>
-                </div>
-                <div style={{ padding: "16px" }}>
-                  <h3 style={{ fontSize: "16px", fontWeight: 600, color: "#fff", marginBottom: "8px", lineHeight: 1.4 }}>
-                    {a.title}
-                  </h3>
-                  <p style={{ fontSize: "13px", color: "#8a8ea0", lineHeight: 1.5 }}>{a.excerpt}</p>
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "16px",
-                      marginTop: "12px",
-                      paddingTop: "12px",
-                      borderTop: "1px solid #252838",
-                    }}
-                  >
-                    <span style={{ fontSize: "12px", color: "#6a6e80", display: "flex", alignItems: "center", gap: "4px" }}>
-                      👁️ {a.views}
-                    </span>
-                    <span style={{ fontSize: "12px", color: "#6a6e80", display: "flex", alignItems: "center", gap: "4px" }}>
-                      ❤️ {a.likes}
-                    </span>
+          {popularArticles.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: "20px" }}>
+              {popularArticles.map((a) => (
+                <Link key={a.id} href={`/clanky/${a.slug}`} style={{ textDecoration: "none" }}>
+                  <div className="article-card">
+                    <div className="article-img">
+                      {a.cover_image_url ? (
+                        <img src={a.cover_image_url} alt={a.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      ) : (
+                        <div className="placeholder">{a.category?.icon || "📄"}</div>
+                      )}
+                      {a.category && <span className="article-badge">{a.category.icon} {a.category.name}</span>}
+                    </div>
+                    <div style={{ padding: "16px" }}>
+                      <h3 style={{ fontSize: "16px", fontWeight: 600, color: "#fff", marginBottom: "8px", lineHeight: 1.4 }}>
+                        {a.title}
+                      </h3>
+                      <p style={{ fontSize: "13px", color: "#8a8ea0", lineHeight: 1.5 }}>{a.excerpt || ""}</p>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: "16px",
+                          marginTop: "12px",
+                          paddingTop: "12px",
+                          borderTop: "1px solid #252838",
+                        }}
+                      >
+                        <span style={{ fontSize: "12px", color: "#6a6e80", display: "flex", alignItems: "center", gap: "4px" }}>
+                          👁️ {a.view_count.toLocaleString("cs-CZ")}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            ))}
-          </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <p style={{ fontSize: "14px", color: "#6a6e80", textAlign: "center", padding: "32px 0" }}>
+              Zatím žádné zobrazení — články se tu objeví po prvních návštěvách
+            </p>
+          )}
         </div>
 
         {/* Sidebar */}
