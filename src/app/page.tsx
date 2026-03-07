@@ -11,18 +11,18 @@ import { supabase } from "@/lib/supabase";
    ============================================================ */
 
 const defaultCategories = [
-  { title: "Stavba kolejiště", icon: "🏗️", defaultCount: 214, href: "/kategorie/stavba-kolejiste", slug: "stavba-kolejiste" },
-  { title: "Recenze modelů", icon: "🔍", defaultCount: 186, href: "/kategorie/recenze", slug: "recenze" },
-  { title: "Návody & tipy", icon: "🔧", defaultCount: 153, href: "/kategorie/navody-a-tipy", slug: "navody-a-tipy" },
-  { title: "Krajina & scenérie", icon: "🎨", defaultCount: 128, href: "/kategorie/krajina-a-zelen", slug: "krajina-a-zelen" },
-  { title: "Digitalizace", icon: "⚡", defaultCount: 97, href: "/kategorie/digitalni-rizeni", slug: "digitalni-rizeni" },
-  { title: "Přestavby", icon: "🚃", defaultCount: 142, href: "/kategorie/prestavby", slug: "prestavby" },
-  { title: "Kolejové plány", icon: "📐", defaultCount: 85, href: "/kategorie/kolejove-plany", slug: "kolejove-plany" },
-  { title: "Modelové domy", icon: "🏠", defaultCount: 74, href: "/kategorie/modelove-domy", slug: "modelove-domy" },
-  { title: "Nátěry & patina", icon: "🖌️", defaultCount: 63, href: "/kategorie/natery-a-patina", slug: "natery-a-patina" },
-  { title: "Osvětlení", icon: "💡", defaultCount: 52, href: "/kategorie/osvetleni", slug: "osvetleni" },
-  { title: "3D tisk", icon: "🖨️", defaultCount: 41, href: "/kategorie/3d-tisk", slug: "3d-tisk" },
-  { title: "Ze světa", icon: "🌍", defaultCount: 38, href: "/kategorie/ze-sveta", slug: "ze-sveta" },
+  { title: "Stavba kolejiště", icon: "🏗️", href: "/kategorie/stavba-kolejiste", slug: "stavba-kolejiste" },
+  { title: "Recenze modelů", icon: "🔍", href: "/kategorie/recenze", slug: "recenze" },
+  { title: "Návody & tipy", icon: "🔧", href: "/kategorie/navody-a-tipy", slug: "navody-a-tipy" },
+  { title: "Krajina & scenérie", icon: "🎨", href: "/kategorie/krajina-a-zelen", slug: "krajina-a-zelen" },
+  { title: "Digitalizace", icon: "⚡", href: "/kategorie/digitalni-rizeni", slug: "digitalni-rizeni" },
+  { title: "Přestavby", icon: "🚃", href: "/kategorie/prestavby", slug: "prestavby" },
+  { title: "Kolejové plány", icon: "📐", href: "/kategorie/kolejove-plany", slug: "kolejove-plany" },
+  { title: "Modelové domy", icon: "🏠", href: "/kategorie/modelove-domy", slug: "modelove-domy" },
+  { title: "Nátěry & patina", icon: "🖌️", href: "/kategorie/natery-a-patina", slug: "natery-a-patina" },
+  { title: "Osvětlení", icon: "💡", href: "/kategorie/osvetleni", slug: "osvetleni" },
+  { title: "3D tisk", icon: "🖨️", href: "/kategorie/3d-tisk", slug: "3d-tisk" },
+  { title: "Ze světa", icon: "🌍", href: "/kategorie/ze-sveta", slug: "ze-sveta" },
 ];
 
 interface LatestArticle {
@@ -81,13 +81,7 @@ interface EventItem {
 
 const CZECH_MONTHS_SHORT = ["Led", "Úno", "Bře", "Dub", "Kvě", "Čvn", "Čvc", "Srp", "Zář", "Říj", "Lis", "Pro"];
 
-const defaultAuthors = [
-  { name: "Petr Havlík", count: 42 },
-  { name: "Milan Kratochvíl", count: 38 },
-  { name: "Jan Novotný", count: 29 },
-  { name: "Tomáš Müller", count: 24 },
-  { name: "Radek Dvořák", count: 21 },
-];
+const defaultAuthors: { name: string; count: number }[] = [];
 
 interface PopularTag {
   id: string;
@@ -120,7 +114,7 @@ export default function Home() {
   });
 
   const [categories, setCategories] = useState(
-    defaultCategories.map(c => ({ ...c, count: c.defaultCount }))
+    defaultCategories.map(c => ({ ...c, count: 0 }))
   );
 
   const [latestArticles, setLatestArticles] = useState<LatestArticle[]>([]);
@@ -254,7 +248,7 @@ export default function Home() {
           setCategories(prev =>
             prev.map(c => ({
               ...c,
-              count: counts[c.slug] !== undefined ? counts[c.slug] : c.defaultCount,
+              count: counts[c.slug] || 0,
             }))
           );
         }
