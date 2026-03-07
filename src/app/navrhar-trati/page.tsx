@@ -787,6 +787,223 @@ function LayoutSVG({ result, form }: { result: LayoutResult; form: FormData }) {
 }
 
 /* ===========================
+   AI SVG RENDERER
+   =========================== */
+function AILayoutSVG({ aiResult, form }: { aiResult: { trackPlan?: { segments: { type: string; description: string; position?: string }[] }; features?: string[] }; form: FormData }) {
+  const boardW = form.width * 10;
+  const boardH = form.height * 10;
+  const padding = 60;
+  const svgW = 800;
+
+  let totalW = boardW;
+  let totalH = boardH;
+  if (form.boardShape === "l-shape") {
+    totalW = Math.max(boardW, form.width2 * 10);
+    totalH = boardH + form.height2 * 10;
+  } else if (form.boardShape === "u-shape") {
+    totalW = boardW + 2 * form.uArmDepth * 10;
+  }
+
+  const svgH = (totalH / totalW) * (svgW - padding * 2) + padding * 2;
+  const sc = (svgW - padding * 2) / totalW;
+  const offX = padding;
+  const offY = padding / 2;
+
+  // Board polygon
+  let boardPath = "";
+  if (form.boardShape === "rectangle") {
+    boardPath = `M ${offX} ${offY} h ${boardW * sc} v ${boardH * sc} h ${-boardW * sc} Z`;
+  } else if (form.boardShape === "l-shape") {
+    const w1 = boardW * sc, h1 = boardH * sc;
+    const w2 = form.width2 * 10 * sc, h2 = form.height2 * 10 * sc;
+    if (form.lCorner === "bottom-left" || form.lCorner === "top-left") {
+      boardPath = `M ${offX} ${offY} h ${w1} v ${h1} h ${-(w1 - w2)} v ${h2} h ${-w2} Z`;
+    } else {
+      boardPath = `M ${offX} ${offY} h ${w1} v ${h1 + h2} h ${-w2} v ${-h2} h ${-(w1 - w2)} Z`;
+    }
+  } else if (form.boardShape === "u-shape") {
+    const armW = form.uArmDepth * 10 * sc;
+    const w = boardW * sc, h = boardH * sc;
+    boardPath = `M ${offX} ${offY} h ${armW} v ${h * 0.4} h ${w} v ${-h * 0.4} h ${armW} v ${h} h ${-(w + 2 * armW)} Z`;
+  }
+
+  const segments = aiResult.trackPlan?.segments ?? [];
+
+  // Position mapping to coordinates
+  const posToCoord = (pos: string | undefined): { x: number; y: number } => {
+    const cx = offX + (boardW / 2) * sc;
+    const cy = offY + (boardH / 2) * sc;
+    const bw = boardW * sc;
+    const bh = boardH * sc;
+    switch (pos) {
+      case "top": return { x: cx, y: offY + bh * 0.12 };
+      case "top-center": return { x: cx, y: offY + bh * 0.12 };
+      case "top-left": return { x: offX + bw * 0.2, y: offY + bh * 0.15 };
+      case "top-right": return { x: offX + bw * 0.8, y: offY + bh * 0.15 };
+      case "bottom": return { x: cx, y: offY + bh * 0.88 };
+      case "bottom-center": return { x: cx, y: offY + bh * 0.88 };
+      case "bottom-left": return { x: offX + bw * 0.2, y: offY + bh * 0.85 };
+      case "bottom-right": return { x: offX + bw * 0.8, y: offY + bh * 0.85 };
+      case "left": return { x: offX + bw * 0.1, y: cy };
+      case "right": return { x: offX + bw * 0.9, y: cy };
+      case "center": return { x: cx, y: cy };
+      default: return { x: cx, y: cy };
+    }
+  };
+
+  // Draw mainline as oval
+  const cx = offX + (boardW / 2) * sc;
+  const cy = offY + (boardH / 2) * sc;
+  const rx = boardW * sc * 0.42;
+  const ry = boardH * sc * 0.35;
+
+  const segIcons: Record<string, string> = {
+    mainline: "🛤️", station: "🏛️", siding: "🔀", tunnel: "🚇",
+    bridge: "🌉", depot: "🏗️", "freight-yard": "📦",
+    "passing-loop": "🔄", "industrial-spur": "🏭", turntable: "🔁",
+  };
+
+  return (
+    <svg
+      viewBox={`0 0 ${svgW} ${svgH + 10}`}
+      style={{ width: "100%", maxWidth: "800px", background: "var(--bg-card)", borderRadius: "12px", border: "1px solid var(--border)" }}
+    >
+      {/* Board shape */}
+      <path d={boardPath} fill="var(--bg-input)" stroke="var(--border-hover)" strokeWidth="2" />
+
+      {/* Grid */}
+      {Array.from({ length: Math.floor(totalW / 100) + 1 }, (_, i) => (
+        <line key={`gv${i}`} x1={offX + i * 100 * sc} y1={offY} x2={offX + i * 100 * sc} y2={offY + totalH * sc}
+          stroke="var(--border)" strokeWidth="0.5" strokeDasharray="4,4" opacity="0.5" />
+      ))}
+      {Array.from({ length: Math.floor(totalH / 100) + 1 }, (_, i) => (
+        <line key={`gh${i}`} x1={offX} y1={offY + i * 100 * sc} x2={offX + totalW * sc} y2={offY + i * 100 * sc}
+          stroke="var(--border)" strokeWidth="0.5" strokeDasharray="4,4" opacity="0.5" />
+      ))}
+
+      {/* Dimension labels */}
+      <text x={offX + boardW * sc / 2} y={offY - 10} fill="var(--text-dim)" fontSize="12" textAnchor="middle">{form.width} cm</text>
+      <text x={offX - 10} y={offY + boardH * sc / 2} fill="var(--text-dim)" fontSize="12" textAnchor="middle"
+        transform={`rotate(-90, ${offX - 10}, ${offY + boardH * sc / 2})`}>{form.height} cm</text>
+
+      {/* Main track oval */}
+      <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="none" stroke="var(--accent)" strokeWidth="3.5" />
+
+      {/* Segments from AI */}
+      {segments.map((seg, i) => {
+        if (seg.type === "mainline") return null; // already drawn as oval
+        const pos = posToCoord(seg.position);
+
+        if (seg.type === "tunnel") {
+          // Dashed arc section
+          const angle = seg.position?.includes("left") ? Math.PI : seg.position?.includes("right") ? 0 : seg.position?.includes("top") ? -Math.PI / 2 : Math.PI / 2;
+          const tx = cx + Math.cos(angle) * rx * 0.9;
+          const ty = cy + Math.sin(angle) * ry * 0.9;
+          return (
+            <g key={i}>
+              <rect x={tx - 25} y={ty - 8} width={50} height={16} rx="8" fill="var(--bg-page)" stroke="var(--accent)" strokeWidth="2" strokeDasharray="4,3" opacity="0.7" />
+              <text x={tx} y={ty + 4} fill="var(--text-dim)" fontSize="9" textAnchor="middle">🚇</text>
+            </g>
+          );
+        }
+
+        if (seg.type === "station" || seg.type === "passing-loop") {
+          // Station rectangle with multiple tracks
+          const sw = Math.min(rx * 0.8, 120);
+          return (
+            <g key={i}>
+              <rect x={pos.x - sw / 2} y={pos.y - 18} width={sw} height={28} rx="4"
+                fill="var(--accent)" opacity="0.1" stroke="var(--accent)" strokeWidth="1" />
+              {/* Station tracks */}
+              <line x1={pos.x - sw / 2 + 8} y1={pos.y - 5} x2={pos.x + sw / 2 - 8} y2={pos.y - 5}
+                stroke="var(--accent)" strokeWidth="2" opacity="0.6" />
+              <line x1={pos.x - sw / 2 + 15} y1={pos.y + 5} x2={pos.x + sw / 2 - 15} y2={pos.y + 5}
+                stroke="var(--accent)" strokeWidth="1.5" opacity="0.4" />
+              <text x={pos.x} y={pos.y + 25} fill="var(--accent)" fontSize="10" textAnchor="middle" fontWeight="600">
+                {segIcons[seg.type] || "📍"} {seg.type === "station" ? "Stanice" : "Výhybna"}
+              </text>
+            </g>
+          );
+        }
+
+        if (seg.type === "siding" || seg.type === "industrial-spur") {
+          // Spur track branching off
+          const dir = (seg.position?.includes("right")) ? 1 : -1;
+          const sy = (seg.position?.includes("top")) ? -1 : 1;
+          return (
+            <g key={i}>
+              <line x1={pos.x} y1={pos.y} x2={pos.x + dir * 40} y2={pos.y + sy * 25}
+                stroke="var(--accent)" strokeWidth="2" opacity="0.5" />
+              <line x1={pos.x + dir * 40} y1={pos.y + sy * 25} x2={pos.x + dir * 80} y2={pos.y + sy * 25}
+                stroke="var(--accent)" strokeWidth="2" opacity="0.5" />
+              <line x1={pos.x + dir * 80 + dir * 3} y1={pos.y + sy * 25 - 5} x2={pos.x + dir * 80 + dir * 3} y2={pos.y + sy * 25 + 5}
+                stroke="var(--accent)" strokeWidth="2.5" />
+              <text x={pos.x + dir * 50} y={pos.y + sy * 42} fill="var(--text-dim)" fontSize="9" textAnchor="middle">
+                {segIcons[seg.type] || "📍"} {seg.type === "siding" ? "Odstavná" : "Vlečka"}
+              </text>
+            </g>
+          );
+        }
+
+        if (seg.type === "bridge") {
+          return (
+            <g key={i}>
+              <rect x={pos.x - 20} y={pos.y - 6} width={40} height={12} rx="2"
+                fill="none" stroke="var(--accent)" strokeWidth="1.5" strokeDasharray="3,2" />
+              <line x1={pos.x - 20} y1={pos.y + 6} x2={pos.x - 15} y2={pos.y + 14} stroke="var(--accent)" strokeWidth="1" opacity="0.5" />
+              <line x1={pos.x + 20} y1={pos.y + 6} x2={pos.x + 15} y2={pos.y + 14} stroke="var(--accent)" strokeWidth="1" opacity="0.5" />
+              <text x={pos.x} y={pos.y + 24} fill="var(--text-dim)" fontSize="9" textAnchor="middle">🌉 Most</text>
+            </g>
+          );
+        }
+
+        if (seg.type === "depot" || seg.type === "freight-yard") {
+          const dw = 60;
+          return (
+            <g key={i}>
+              <rect x={pos.x - dw / 2} y={pos.y - 12} width={dw} height={24} rx="3"
+                fill="var(--accent)" opacity="0.08" stroke="var(--accent)" strokeWidth="0.8" />
+              <line x1={pos.x - dw / 2 + 5} y1={pos.y - 3} x2={pos.x + dw / 2 - 5} y2={pos.y - 3}
+                stroke="var(--accent)" strokeWidth="1.5" opacity="0.5" />
+              <line x1={pos.x - dw / 2 + 10} y1={pos.y + 5} x2={pos.x + dw / 2 - 10} y2={pos.y + 5}
+                stroke="var(--accent)" strokeWidth="1" opacity="0.35" />
+              <text x={pos.x} y={pos.y + 24} fill="var(--text-dim)" fontSize="9" textAnchor="middle">
+                {segIcons[seg.type]} {seg.type === "depot" ? "Depo" : "Nákladiště"}
+              </text>
+            </g>
+          );
+        }
+
+        if (seg.type === "turntable") {
+          return (
+            <g key={i}>
+              <circle cx={pos.x} cy={pos.y} r={15} fill="none" stroke="var(--accent)" strokeWidth="1.5" opacity="0.6" />
+              <line x1={pos.x - 12} y1={pos.y} x2={pos.x + 12} y2={pos.y} stroke="var(--accent)" strokeWidth="2" opacity="0.7" />
+              <text x={pos.x} y={pos.y + 25} fill="var(--text-dim)" fontSize="9" textAnchor="middle">🔁 Točna</text>
+            </g>
+          );
+        }
+
+        // Generic fallback
+        return (
+          <g key={i}>
+            <circle cx={pos.x} cy={pos.y} r={4} fill="var(--accent)" opacity="0.6" />
+            <text x={pos.x} y={pos.y + 16} fill="var(--text-dim)" fontSize="8" textAnchor="middle">
+              {segIcons[seg.type] || "📍"}
+            </text>
+          </g>
+        );
+      })}
+
+      {/* Scale indicator */}
+      <text x={offX + totalW * sc - 5} y={svgH - 5} fill="var(--text-faint)" fontSize="10" textAnchor="end">
+        {form.scale} 1:{form.scale === "H0" ? 87 : form.scale === "TT" ? 120 : 160} · AI návrh
+      </text>
+    </svg>
+  );
+}
+
+/* ===========================
    BOARD SHAPE OPTIONS
    =========================== */
 const BOARD_SHAPES: { value: BoardShape; label: string; icon: string }[] = [
@@ -1195,6 +1412,14 @@ export default function TrackDesignerPage() {
 
             {aiResult && (
               <>
+                {/* AI SVG Plan */}
+                <div style={{ ...cardStyle, marginBottom: "20px", textAlign: "center" }}>
+                  <h2 style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px", textAlign: "left" }}>
+                    📐 Kolejový plán
+                  </h2>
+                  <AILayoutSVG aiResult={aiResult} form={form} />
+                </div>
+
                 {/* AI Description */}
                 <div style={{ ...cardStyle, marginBottom: "20px" }}>
                   <h2 style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
