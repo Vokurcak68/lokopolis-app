@@ -84,7 +84,7 @@ export default function Header() {
           <BadgeLogo size="sm" />
         </Link>
 
-        <nav className="hidden md:flex" style={{ gap: 0 }}>
+        <nav className="desktop-nav" style={{ gap: 0 }}>
           {navItems.map((item) => (
             <Link
               key={item.href + item.label}
@@ -96,7 +96,7 @@ export default function Header() {
           ))}
         </nav>
 
-        <div className="hidden md:flex" style={{ alignItems: "center", gap: "12px" }}>
+        <div className="desktop-actions" style={{ alignItems: "center", gap: "12px" }}>
           <span style={{ color: "var(--text-muted)", cursor: "pointer", fontSize: "18px", padding: "8px" }}>
             🔍
           </span>
@@ -194,7 +194,7 @@ export default function Header() {
           )}
         </div>
 
-        <div className="md:hidden" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+        <div className="mobile-controls" style={{ alignItems: "center", gap: "8px" }}>
           <ThemeToggle />
           <button
             style={{ color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer" }}
@@ -213,7 +213,7 @@ export default function Header() {
       </div>
 
       {mobileMenuOpen && (
-        <nav className="md:hidden" style={{ padding: "0 20px 16px", borderTop: "1px solid var(--border)" }}>
+        <nav className="mobile-menu" style={{ padding: "0 20px 16px", borderTop: "1px solid var(--border)" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: "4px", paddingTop: "12px" }}>
             {navItems.map((item) => (
               <Link

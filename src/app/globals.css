@@ -574,6 +574,33 @@ a:hover {
   margin: 32px 0;
 }
 
+/* === HEADER RESPONSIVE === */
+.desktop-nav,
+.desktop-actions {
+  display: none;
+}
+.mobile-controls {
+  display: flex;
+}
+.mobile-menu {
+  display: block;
+}
+
+@media (min-width: 768px) {
+  .desktop-nav {
+    display: flex;
+  }
+  .desktop-actions {
+    display: flex;
+  }
+  .mobile-controls {
+    display: none !important;
+  }
+  .mobile-menu {
+    display: none !important;
+  }
+}
+
 /* === TAG CLOUD === */
 .tag {
   background: var(--bg-input);
