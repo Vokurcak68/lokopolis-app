@@ -805,6 +805,14 @@ const L_CORNERS: { value: LCorner; label: string }[] = [
 /* ===========================
    MAIN PAGE
    =========================== */
+interface AIResult {
+  description: string;
+  bom: { name: string; nameCz: string; type: string; count: number }[];
+  features: string[];
+  warnings: string[];
+  trackPlan?: { segments: { type: string; description: string; position?: string }[] };
+}
+
 export default function TrackDesignerPage() {
   const [form, setForm] = useState<FormData>({
     boardShape: "rectangle",
@@ -818,12 +826,20 @@ export default function TrackDesignerPage() {
     trackSystem: "roco-line",
     character: "prujezdna-stanice",
   });
+  const [prompt, setPrompt] = useState("");
   const [result, setResult] = useState<LayoutResult | null>(null);
+  const [aiResult, setAiResult] = useState<AIResult | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [mode, setMode] = useState<"local" | "ai">("local");
   const resultRef = useRef<HTMLDivElement>(null);
 
-  const handleGenerate = useCallback(() => {
+  const handleGenerateLocal = useCallback(() => {
     setGenerating(true);
+    setMode("local");
+    setAiResult(null);
+    setAiError(null);
     setTimeout(() => {
       const layout = generateLayout(form);
       setResult(layout);
@@ -831,6 +847,48 @@ export default function TrackDesignerPage() {
       setTimeout(() => resultRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     }, 600);
   }, [form]);
+
+  const handleGenerateAI = useCallback(async () => {
+    setAiGenerating(true);
+    setMode("ai");
+    setResult(null);
+    setAiError(null);
+    setAiResult(null);
+
+    try {
+      const res = await fetch("/api/generate-track", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: prompt || "Navrhni optimální kolejiště podle zadaných parametrů.",
+          boardShape: form.boardShape,
+          width: form.width,
+          height: form.height,
+          width2: form.width2,
+          height2: form.height2,
+          uArmDepth: form.uArmDepth,
+          lCorner: form.lCorner,
+          scale: form.scale,
+          trackSystem: form.trackSystem,
+          character: form.character,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setAiError(data.error || "Neznámá chyba");
+      } else if (data.result) {
+        setAiResult(data.result);
+      } else {
+        setAiError("AI nevrátila výsledek");
+      }
+    } catch {
+      setAiError("Chyba připojení k serveru");
+    } finally {
+      setAiGenerating(false);
+      setTimeout(() => resultRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+    }
+  }, [form, prompt]);
 
   const update = <K extends keyof FormData>(key: K, val: FormData[K]) =>
     setForm((prev) => ({ ...prev, [key]: val }));
@@ -1047,29 +1105,237 @@ export default function TrackDesignerPage() {
             </div>
           </div>
 
-          {/* Generate button */}
-          <button
-            onClick={handleGenerate}
-            disabled={generating}
-            style={{
-              width: "100%",
-              padding: "14px",
-              borderRadius: "10px",
-              border: "none",
-              background: generating ? "var(--border-hover)" : "var(--accent)",
-              color: generating ? "var(--text-dim)" : "var(--accent-text-on)",
-              fontSize: "16px",
-              fontWeight: 700,
-              cursor: generating ? "not-allowed" : "pointer",
-              transition: "all 0.2s",
-            }}
-          >
-            {generating ? "⏳ Generuji plán..." : "🚂 Vygenerovat kolejový plán"}
-          </button>
+          {/* AI Prompt */}
+          <div style={{ marginBottom: "20px" }}>
+            <label style={labelStyle}>
+              ✨ Popište svou představu (volitelné — pro AI návrh)
+            </label>
+            <textarea
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              placeholder="Např.: Chci horskou trať s jedním tunelem, malou stanicí a odstavnou kolejí. Preferuji větší poloměry oblouků. Vlak by měl jezdit v kruhu bez nutnosti vracení."
+              rows={3}
+              style={{
+                ...inputStyle,
+                resize: "vertical" as const,
+                minHeight: "70px",
+                fontFamily: "inherit",
+                lineHeight: 1.5,
+              }}
+            />
+          </div>
+
+          {/* Generate buttons */}
+          <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+            <button
+              onClick={handleGenerateAI}
+              disabled={aiGenerating || generating}
+              style={{
+                flex: "1 1 200px",
+                padding: "14px",
+                borderRadius: "10px",
+                border: "none",
+                background: aiGenerating ? "var(--border-hover)" : "linear-gradient(135deg, #667eea, #764ba2)",
+                color: aiGenerating ? "var(--text-dim)" : "#fff",
+                fontSize: "16px",
+                fontWeight: 700,
+                cursor: aiGenerating ? "not-allowed" : "pointer",
+                transition: "all 0.2s",
+              }}
+            >
+              {aiGenerating ? "🤖 AI přemýšlí..." : "🤖 AI návrh"}
+            </button>
+            <button
+              onClick={handleGenerateLocal}
+              disabled={generating || aiGenerating}
+              style={{
+                flex: "1 1 200px",
+                padding: "14px",
+                borderRadius: "10px",
+                border: "none",
+                background: generating ? "var(--border-hover)" : "var(--accent)",
+                color: generating ? "var(--text-dim)" : "var(--accent-text-on)",
+                fontSize: "16px",
+                fontWeight: 700,
+                cursor: generating ? "not-allowed" : "pointer",
+                transition: "all 0.2s",
+              }}
+            >
+              {generating ? "⏳ Generuji..." : "⚡ Rychlý návrh"}
+            </button>
+          </div>
+          <p style={{ fontSize: "12px", color: "var(--text-faint)", marginTop: "8px", textAlign: "center" }}>
+            🤖 AI návrh — umělá inteligence navrhne plán podle vašeho popisu &nbsp;|&nbsp; ⚡ Rychlý návrh — okamžitý algoritmus
+          </p>
         </div>
 
-        {/* Result */}
-        {result && (
+        {/* AI Result */}
+        {mode === "ai" && (aiResult || aiError || aiGenerating) && (
+          <div ref={resultRef} style={{ marginTop: "32px" }}>
+            {aiGenerating && (
+              <div style={{ ...cardStyle, textAlign: "center", padding: "48px 24px" }}>
+                <div style={{ fontSize: "48px", marginBottom: "16px", animation: "pulse 1.5s ease-in-out infinite" }}>🤖</div>
+                <p style={{ fontSize: "16px", color: "var(--text-muted)" }}>AI navrhuje kolejiště...</p>
+                <p style={{ fontSize: "13px", color: "var(--text-faint)", marginTop: "8px" }}>Obvykle to trvá 5-15 sekund</p>
+                <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
+              </div>
+            )}
+
+            {aiError && (
+              <div style={{ ...cardStyle, borderColor: "var(--danger)" }}>
+                <h2 style={{ fontSize: "18px", fontWeight: 700, color: "var(--danger)", marginBottom: "12px" }}>
+                  ❌ Chyba
+                </h2>
+                <p style={{ fontSize: "15px", color: "var(--text-secondary)" }}>{aiError}</p>
+                <p style={{ fontSize: "13px", color: "var(--text-faint)", marginTop: "8px" }}>
+                  Zkuste to znovu, nebo použijte ⚡ Rychlý návrh
+                </p>
+              </div>
+            )}
+
+            {aiResult && (
+              <>
+                {/* AI Description */}
+                <div style={{ ...cardStyle, marginBottom: "20px" }}>
+                  <h2 style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
+                    🤖 AI návrh kolejiště
+                  </h2>
+                  <p style={{ fontSize: "15px", color: "var(--text-secondary)", lineHeight: 1.7 }}>
+                    {aiResult.description}
+                  </p>
+
+                  {/* Features */}
+                  {aiResult.features && aiResult.features.length > 0 && (
+                    <div style={{ marginTop: "16px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                      {aiResult.features.map((f, i) => (
+                        <span key={i} style={{
+                          padding: "4px 12px",
+                          borderRadius: "20px",
+                          background: "var(--accent-bg)",
+                          border: "1px solid var(--accent-border)",
+                          color: "var(--accent)",
+                          fontSize: "12px",
+                          fontWeight: 600,
+                        }}>
+                          {f}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Track plan description */}
+                  {aiResult.trackPlan?.segments && aiResult.trackPlan.segments.length > 0 && (
+                    <div style={{ marginTop: "20px" }}>
+                      <h3 style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-muted)", marginBottom: "10px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                        Rozložení tratě
+                      </h3>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                        {aiResult.trackPlan.segments.map((seg, i) => {
+                          const segIcons: Record<string, string> = {
+                            mainline: "🛤️", station: "🏛️", siding: "🔀", tunnel: "🚇",
+                            bridge: "🌉", depot: "🏗️", "freight-yard": "📦",
+                            "passing-loop": "🔄", "industrial-spur": "🏭", turntable: "🔁",
+                          };
+                          return (
+                            <div key={i} style={{
+                              padding: "10px 14px",
+                              background: "var(--bg-input)",
+                              borderRadius: "8px",
+                              border: "1px solid var(--border-light)",
+                              display: "flex",
+                              gap: "10px",
+                              alignItems: "flex-start",
+                            }}>
+                              <span style={{ fontSize: "18px", flexShrink: 0 }}>{segIcons[seg.type] || "📍"}</span>
+                              <div>
+                                <span style={{ fontSize: "13px", color: "var(--text-body)" }}>{seg.description}</span>
+                                {seg.position && (
+                                  <span style={{ fontSize: "11px", color: "var(--text-faint)", marginLeft: "8px" }}>
+                                    ({seg.position})
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* AI Warnings */}
+                  {aiResult.warnings && aiResult.warnings.length > 0 && (
+                    <div style={{ marginTop: "16px", padding: "12px 16px", background: "rgba(255, 193, 7, 0.1)", border: "1px solid rgba(255, 193, 7, 0.3)", borderRadius: "8px" }}>
+                      {aiResult.warnings.map((w, i) => (
+                        <p key={i} style={{ fontSize: "13px", color: "#ffc107", margin: i > 0 ? "6px 0 0" : "0" }}>
+                          ⚠️ {w}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* AI BOM */}
+                <div style={cardStyle}>
+                  <h2 style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px" }}>
+                    🛒 Seznam dílů (AI)
+                  </h2>
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr>
+                          <th style={{ textAlign: "left", padding: "10px 12px", borderBottom: "2px solid var(--border)", color: "var(--accent)", fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                            Typ
+                          </th>
+                          <th style={{ textAlign: "left", padding: "10px 12px", borderBottom: "2px solid var(--border)", color: "var(--accent)", fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                            Díl
+                          </th>
+                          <th style={{ textAlign: "left", padding: "10px 12px", borderBottom: "2px solid var(--border)", color: "var(--accent)", fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                            Označení
+                          </th>
+                          <th style={{ textAlign: "center", padding: "10px 12px", borderBottom: "2px solid var(--border)", color: "var(--accent)", fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                            Počet
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {aiResult.bom.map((item, i) => {
+                          const typeIcons: Record<string, string> = {
+                            straight: "➖", curve: "↪️", "turnout-left": "↙️", "turnout-right": "↗️", crossing: "✖️",
+                          };
+                          return (
+                            <tr key={i} style={{ borderBottom: "1px solid var(--border-light)" }}>
+                              <td style={{ padding: "10px 12px", fontSize: "14px" }}>
+                                {typeIcons[item.type] || "🔧"}
+                              </td>
+                              <td style={{ padding: "10px 12px", fontSize: "14px", color: "var(--text-body)" }}>
+                                {item.nameCz}
+                              </td>
+                              <td style={{ padding: "10px 12px", fontSize: "13px", color: "var(--text-dim)" }}>
+                                {item.name}
+                              </td>
+                              <td style={{ padding: "10px 12px", fontSize: "16px", fontWeight: 700, color: "var(--accent)", textAlign: "center" }}>
+                                {item.count}×
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style={{ marginTop: "16px", paddingTop: "12px", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: "14px", color: "var(--text-dim)" }}>Celkem dílů</span>
+                    <span style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-primary)" }}>
+                      {aiResult.bom.reduce((sum, item) => sum + item.count, 0)}×
+                    </span>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Local Result */}
+        {mode === "local" && result && (
           <div ref={resultRef} style={{ marginTop: "32px" }}>
             {/* SVG */}
             <div style={{ ...cardStyle, marginBottom: "20px", textAlign: "center" }}>
