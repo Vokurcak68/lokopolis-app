@@ -45,7 +45,7 @@ export default function Footer() {
             <Link href="/ke-stazeni" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
               Ke stažení
             </Link>
-            <Link href="#" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
+            <Link href="/akce" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
               Akce
             </Link>
           </div>
@@ -64,16 +64,16 @@ export default function Footer() {
             >
               Komunita
             </h4>
-            <Link href="#" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
+            <Link href="/forum" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
               Fórum
             </Link>
             <Link href="/komunita" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
               Členové
             </Link>
-            <Link href="#" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
+            <Link href="/pravidla" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
               Pravidla
             </Link>
-            <Link href="#" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
+            <Link href="/forum/nove-vlakno" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
               Nový příspěvek
             </Link>
           </div>
@@ -92,16 +92,13 @@ export default function Footer() {
             >
               Info
             </h4>
-            <Link href="#" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
+            <Link href="/o-projektu" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
               O projektu
             </Link>
-            <Link href="#" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
+            <Link href="/kontakt" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
               Kontakt
             </Link>
-            <Link href="#" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
-              RSS
-            </Link>
-            <Link href="#" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
+            <Link href="/podporte-nas" style={{ display: "block", fontSize: "13px", color: "#6a6e80", padding: "4px 0", textDecoration: "none" }}>
               Podpořte nás
             </Link>
           </div>
