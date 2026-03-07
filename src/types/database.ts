@@ -1,6 +1,8 @@
 export type UserRole = "user" | "author" | "moderator" | "admin";
 export type ArticleStatus = "draft" | "pending" | "published" | "rejected";
 export type CommentStatus = "published" | "hidden";
+export type DownloadAccess = "public" | "authenticated";
+export type DownloadCategory = "kolejovy-plan" | "stl-model" | "3d-tisk" | "navod" | "software" | "ostatni";
 
 export interface Profile {
   id: string;
@@ -46,6 +48,23 @@ export interface Comment {
   content: string;
   status: CommentStatus;
   created_at: string;
+}
+
+export interface Download {
+  id: string;
+  title: string;
+  description: string | null;
+  file_url: string;
+  file_name: string;
+  file_size: number | null;
+  file_type: string | null;
+  thumbnail_url: string | null;
+  category: DownloadCategory;
+  access: DownloadAccess;
+  download_count: number;
+  uploaded_by: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 // Rozšířené typy s relacemi
