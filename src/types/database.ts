@@ -3,6 +3,7 @@ export type ArticleStatus = "draft" | "pending" | "published" | "rejected";
 export type CommentStatus = "published" | "hidden";
 export type DownloadAccess = "public" | "authenticated";
 export type DownloadCategory = "kolejovy-plan" | "stl-model" | "3d-tisk" | "navod" | "software" | "ostatni";
+export type EventAccess = "public" | "authenticated";
 
 export interface Profile {
   id: string;
@@ -80,6 +81,23 @@ export interface GalleryItem {
   thumbnail_url: string | null;
   access: GalleryAccess;
   uploaded_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Event types
+export interface Event {
+  id: string;
+  title: string;
+  description: string | null;
+  event_date: string;
+  event_time: string | null;
+  end_date: string | null;
+  location: string | null;
+  url: string | null;
+  cover_image_url: string | null;
+  access: EventAccess;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -12,7 +12,7 @@ const navItems = [
   { label: "Články", href: "/clanky" },
   { label: "Galerie", href: "/galerie" },
   { label: "Ke stažení", href: "/ke-stazeni" },
-  { label: "Akce", href: "#" },
+  { label: "Akce", href: "/akce" },
   { label: "Fórum", href: "#" },
 ];
 
