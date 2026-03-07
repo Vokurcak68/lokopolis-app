@@ -436,6 +436,27 @@ export default function DownloadsPage() {
     }
   }, [fetchDownloads, authLoading]);
 
+  async function handleDelete(dl: Download) {
+    if (!confirm(`Opravdu smazat "${dl.title}"?`)) return;
+
+    try {
+      // 1. Smazat soubor ze storage
+      const urlParts = dl.file_url.split("/downloads/");
+      if (urlParts[1]) {
+        const storagePath = decodeURIComponent(urlParts[1]);
+        await supabase.storage.from("downloads").remove([storagePath]);
+      }
+
+      // 2. Smazat záznam z DB
+      const { error } = await supabase.from("downloads").delete().eq("id", dl.id);
+      if (error) throw error;
+
+      fetchDownloads();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Chyba při mazání");
+    }
+  }
+
   async function handleDownload(dl: Download) {
     // Increment counter
     try {
@@ -633,8 +654,8 @@ export default function DownloadsPage() {
                   </div>
                 </div>
 
-                {/* Download button */}
-                <div style={{ marginTop: "16px", paddingTop: "12px", borderTop: "1px solid #252838" }}>
+                {/* Download button + admin delete */}
+                <div style={{ marginTop: "16px", paddingTop: "12px", borderTop: "1px solid #252838", display: "flex", gap: "8px" }}>
                   {needsAuth ? (
                     <a
                       href="/prihlaseni"
@@ -642,6 +663,7 @@ export default function DownloadsPage() {
                         display: "block",
                         textAlign: "center",
                         padding: "10px",
+                        flex: 1,
                         background: "rgba(240,160,48,0.1)",
                         border: "1px solid rgba(240,160,48,0.3)",
                         borderRadius: "8px",
@@ -659,7 +681,7 @@ export default function DownloadsPage() {
                       onClick={() => handleDownload(dl)}
                       style={{
                         display: "block",
-                        width: "100%",
+                        flex: 1,
                         padding: "10px",
                         background: "rgba(240,160,48,0.15)",
                         border: "1px solid rgba(240,160,48,0.3)",
@@ -678,6 +700,31 @@ export default function DownloadsPage() {
                       }}
                     >
                       ⬇️ Stáhnout
+                    </button>
+                  )}
+                  {isAdmin && (
+                    <button
+                      onClick={() => handleDelete(dl)}
+                      style={{
+                        padding: "10px 14px",
+                        background: "rgba(220,53,69,0.1)",
+                        border: "1px solid rgba(220,53,69,0.3)",
+                        borderRadius: "8px",
+                        color: "#ff6b6b",
+                        fontSize: "13px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        transition: "all 0.2s",
+                        flexShrink: 0,
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = "rgba(220,53,69,0.2)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = "rgba(220,53,69,0.1)";
+                      }}
+                    >
+                      🗑️
                     </button>
                   )}
                 </div>
