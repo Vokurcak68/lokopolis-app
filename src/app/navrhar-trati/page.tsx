@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback, useRef } from "react";
 
 /* ===========================
    TYPES
@@ -41,68 +41,54 @@ interface FormData {
 }
 
 /* ===========================
-   AI TRACK TYPES
+   TRACK PLAN TYPES
    =========================== */
-interface TrackStraight {
-  type: "straight";
-  x1: number; y1: number; x2: number; y2: number;
-  label?: string;
-  secondary?: boolean;
+interface Point {
+  x: number;
+  y: number;
 }
-interface TrackCurve {
-  type: "curve";
-  cx: number; cy: number; r: number;
-  startAngle: number; endAngle: number;
-  label?: string;
-  secondary?: boolean;
+
+interface TrackElement {
+  type: "straight" | "curve";
+  start: Point;
+  end: Point;
+  center?: Point;
+  radius?: number;
+  startAngle?: number;
+  endAngle?: number;
+  layer: "main" | "secondary" | "siding";
+  pieceId: string;
+  tunnel?: boolean;
 }
-interface TrackTurnout {
-  type: "turnout";
-  x: number; y: number;
-  angle: number;
-  direction: "left" | "right";
-  label?: string;
+
+interface BOMItem {
+  id: string;
+  name: string;
+  nameCz: string;
+  type: string;
+  count: number;
 }
-interface TrackStation {
-  type: "station";
-  x: number; y: number;
+
+interface StationMarker {
+  x: number;
+  y: number;
   width: number;
-  tracks: number;
-  label?: string;
+  height: number;
+  label: string;
 }
-interface TrackBuffer {
-  type: "buffer";
-  x: number; y: number;
+
+interface TunnelPortal {
+  x: number;
+  y: number;
   angle: number;
 }
-interface TrackTunnel {
-  type: "tunnel";
-  x1: number; y1: number; x2: number; y2: number;
-  label?: string;
-  secondary?: boolean;
-}
-interface TrackBridge {
-  type: "bridge";
-  x1: number; y1: number; x2: number; y2: number;
-  label?: string;
-  secondary?: boolean;
-}
 
-type TrackSegment = TrackStraight | TrackCurve | TrackTurnout | TrackStation | TrackBuffer | TrackTunnel | TrackBridge;
-
-interface TrackLabel {
-  x: number; y: number;
-  text: string;
-  fontSize?: number;
-}
-
-interface AIResult {
-  description: string;
-  bom: { name: string; nameCz: string; type: string; count: number }[];
+interface TrackPlan {
+  tracks: TrackElement[];
+  bom: BOMItem[];
   warnings: string[];
-  tracks: TrackSegment[];
-  labels?: TrackLabel[];
-  board: { width: number; height: number };
+  stations: StationMarker[];
+  tunnelPortals: TunnelPortal[];
 }
 
 /* ===========================
@@ -187,412 +173,6 @@ const CHARACTER_OPTIONS: { value: LayoutCharacter; label: string; icon: string; 
 ];
 
 /* ===========================
-   AI TRACK PLAN SVG RENDERER
-   =========================== */
-function AITrackPlanSVG({ tracks, labels, board, form }: {
-  tracks: TrackSegment[];
-  labels?: TrackLabel[];
-  board: { width: number; height: number };
-  form: FormData;
-}) {
-  const boardW = board.width;
-  const boardH = board.height;
-  const padding = 60;
-  const svgW = 800;
-
-  // Compute total SVG area based on board shape
-  let totalW = boardW;
-  let totalH = boardH;
-  if (form.boardShape === "l-shape") {
-    totalW = Math.max(boardW, form.width2 * 10);
-    totalH = boardH + form.height2 * 10;
-  } else if (form.boardShape === "u-shape") {
-    totalW = boardW + 2 * form.uArmDepth * 10;
-  }
-
-  const svgH = (totalH / totalW) * (svgW - padding * 2) + padding * 2;
-  const sc = (svgW - padding * 2) / totalW;
-  const offX = padding;
-  const offY = padding / 2;
-
-  // Transform mm coordinates to SVG coordinates
-  const tx = (x: number) => offX + x * sc;
-  const ty = (y: number) => offY + y * sc;
-
-  // Board polygon path
-  let boardPath = "";
-  if (form.boardShape === "rectangle") {
-    boardPath = `M ${offX} ${offY} h ${boardW * sc} v ${boardH * sc} h ${-boardW * sc} Z`;
-  } else if (form.boardShape === "l-shape") {
-    const w1 = boardW * sc, h1 = boardH * sc;
-    const w2 = form.width2 * 10 * sc, h2 = form.height2 * 10 * sc;
-    if (form.lCorner === "bottom-left" || form.lCorner === "top-left") {
-      boardPath = `M ${offX} ${offY} h ${w1} v ${h1} h ${-(w1 - w2)} v ${h2} h ${-w2} Z`;
-    } else {
-      boardPath = `M ${offX} ${offY} h ${w1} v ${h1 + h2} h ${-w2} v ${-h2} h ${-(w1 - w2)} Z`;
-    }
-  } else if (form.boardShape === "u-shape") {
-    const armW = form.uArmDepth * 10 * sc;
-    const w = boardW * sc, h = boardH * sc;
-    boardPath = `M ${offX} ${offY} h ${armW} v ${h * 0.4} h ${w} v ${-h * 0.4} h ${armW} v ${h} h ${-(w + 2 * armW)} Z`;
-  }
-
-  // Grid lines
-  const gridLinesV = Math.floor(totalW / 100) + 1;
-  const gridLinesH = Math.floor(totalH / 100) + 1;
-
-  // Helper: SVG arc path for a curve segment
-  const curveArcPath = (seg: TrackCurve): string => {
-    const r = seg.r * sc;
-    const cxs = tx(seg.cx);
-    const cys = ty(seg.cy);
-    // Convert angles to radians (0° = right/east, clockwise)
-    const startRad = (seg.startAngle * Math.PI) / 180;
-    const endRad = (seg.endAngle * Math.PI) / 180;
-    const sx = cxs + r * Math.cos(startRad);
-    const sy = cys + r * Math.sin(startRad);
-    const ex = cxs + r * Math.cos(endRad);
-    const ey = cys + r * Math.sin(endRad);
-
-    // Determine sweep
-    let angleDiff = seg.endAngle - seg.startAngle;
-    if (angleDiff < 0) angleDiff += 360;
-    const largeArc = angleDiff > 180 ? 1 : 0;
-    const sweepFlag = 1; // clockwise
-
-    return `M ${sx} ${sy} A ${r} ${r} 0 ${largeArc} ${sweepFlag} ${ex} ${ey}`;
-  };
-
-  // Render individual track segments
-  const renderSegment = (seg: TrackSegment, i: number) => {
-    const isSecondary = "secondary" in seg && seg.secondary;
-
-    switch (seg.type) {
-      case "straight": {
-        return (
-          <g key={`t${i}`}>
-            <line
-              x1={tx(seg.x1)} y1={ty(seg.y1)}
-              x2={tx(seg.x2)} y2={ty(seg.y2)}
-              stroke="var(--accent)"
-              strokeWidth={isSecondary ? 2 : 3.5}
-              strokeLinecap="round"
-              opacity={isSecondary ? 0.5 : 1}
-            />
-            {seg.label && (
-              <text
-                x={(tx(seg.x1) + tx(seg.x2)) / 2}
-                y={(ty(seg.y1) + ty(seg.y2)) / 2 - 8}
-                fill="var(--text-dim)" fontSize="9" textAnchor="middle"
-              >
-                {seg.label}
-              </text>
-            )}
-          </g>
-        );
-      }
-
-      case "curve": {
-        const pathD = curveArcPath(seg);
-        return (
-          <g key={`t${i}`}>
-            <path
-              d={pathD}
-              fill="none"
-              stroke="var(--accent)"
-              strokeWidth={isSecondary ? 2 : 3.5}
-              strokeLinecap="round"
-              opacity={isSecondary ? 0.5 : 1}
-            />
-            {seg.label && (() => {
-              const midAngle = ((seg.startAngle + seg.endAngle) / 2 * Math.PI) / 180;
-              const lx = tx(seg.cx) + seg.r * sc * Math.cos(midAngle);
-              const ly = ty(seg.cy) + seg.r * sc * Math.sin(midAngle);
-              return (
-                <text x={lx} y={ly - 8} fill="var(--text-dim)" fontSize="9" textAnchor="middle">
-                  {seg.label}
-                </text>
-              );
-            })()}
-          </g>
-        );
-      }
-
-      case "turnout": {
-        // Draw turnout: main straight + diverging branch
-        const len = 30 * sc;
-        const angleRad = (seg.angle * Math.PI) / 180;
-        // Assume the turnout is oriented horizontally (0° = east) for now
-        // We draw a short straight and a diverging line
-        const sx = tx(seg.x);
-        const sy = ty(seg.y);
-        const dirMul = seg.direction === "left" ? -1 : 1;
-
-        return (
-          <g key={`t${i}`}>
-            {/* Main straight path through turnout */}
-            <line
-              x1={sx - len / 2} y1={sy}
-              x2={sx + len / 2} y2={sy}
-              stroke="var(--accent)" strokeWidth="3.5" strokeLinecap="round"
-            />
-            {/* Diverging path */}
-            <line
-              x1={sx} y1={sy}
-              x2={sx + len / 2} y2={sy + dirMul * len * Math.tan(angleRad)}
-              stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" opacity="0.6"
-            />
-            {/* Turnout marker dot */}
-            <circle cx={sx} cy={sy} r={3} fill="var(--accent)" opacity="0.8" />
-            {seg.label && (
-              <text x={sx} y={sy - 10} fill="var(--text-dim)" fontSize="8" textAnchor="middle">
-                {seg.label}
-              </text>
-            )}
-          </g>
-        );
-      }
-
-      case "station": {
-        const sx = tx(seg.x);
-        const sy = ty(seg.y);
-        const sw = seg.width * sc;
-        const trackSpacing = 12;
-        const stationH = (seg.tracks + 1) * trackSpacing;
-
-        return (
-          <g key={`t${i}`}>
-            {/* Station platform background */}
-            <rect
-              x={sx} y={sy}
-              width={sw} height={stationH}
-              fill="var(--accent)" opacity="0.08"
-              stroke="var(--accent)" strokeWidth="0.8"
-              rx="4" strokeDasharray="4,2"
-            />
-            {/* Station tracks */}
-            {Array.from({ length: seg.tracks }, (_, ti) => (
-              <line
-                key={`st${i}-${ti}`}
-                x1={sx + 8} y1={sy + (ti + 1) * trackSpacing}
-                x2={sx + sw - 8} y2={sy + (ti + 1) * trackSpacing}
-                stroke="var(--accent)"
-                strokeWidth={ti === 0 ? 3 : 2}
-                strokeLinecap="round"
-                opacity={ti === 0 ? 1 : 0.4 + 0.1 * ti}
-              />
-            ))}
-            {/* Platform rectangle between tracks */}
-            {seg.tracks >= 2 && (
-              <rect
-                x={sx + sw * 0.15} y={sy + trackSpacing + 3}
-                width={sw * 0.7} height={trackSpacing - 6}
-                fill="var(--accent)" opacity="0.12" rx="2"
-              />
-            )}
-            {/* Station label */}
-            {seg.label && (
-              <text
-                x={sx + sw / 2} y={sy - 6}
-                fill="var(--accent)" fontSize="11" textAnchor="middle" fontWeight="600"
-              >
-                🏛️ {seg.label}
-              </text>
-            )}
-          </g>
-        );
-      }
-
-      case "buffer": {
-        const bx = tx(seg.x);
-        const by = ty(seg.y);
-        const angleRad = (seg.angle * Math.PI) / 180;
-        // Perpendicular line
-        const perpLen = 8;
-        const px = Math.cos(angleRad + Math.PI / 2) * perpLen;
-        const py = Math.sin(angleRad + Math.PI / 2) * perpLen;
-
-        return (
-          <g key={`t${i}`}>
-            <line
-              x1={bx - px} y1={by - py}
-              x2={bx + px} y2={by + py}
-              stroke="var(--accent)" strokeWidth="3" strokeLinecap="round"
-            />
-            <circle cx={bx} cy={by} r={2.5} fill="var(--accent)" />
-          </g>
-        );
-      }
-
-      case "tunnel": {
-        return (
-          <g key={`t${i}`}>
-            <line
-              x1={tx(seg.x1)} y1={ty(seg.y1)}
-              x2={tx(seg.x2)} y2={ty(seg.y2)}
-              stroke="var(--accent)"
-              strokeWidth={isSecondary ? 2 : 3.5}
-              strokeLinecap="round"
-              strokeDasharray="8,4"
-              opacity={isSecondary ? 0.4 : 0.7}
-            />
-            {/* Tunnel portal markers */}
-            <rect
-              x={tx(seg.x1) - 4} y={ty(seg.y1) - 4}
-              width="8" height="8" rx="2"
-              fill="var(--text-dim)" opacity="0.4"
-            />
-            <rect
-              x={tx(seg.x2) - 4} y={ty(seg.y2) - 4}
-              width="8" height="8" rx="2"
-              fill="var(--text-dim)" opacity="0.4"
-            />
-            {seg.label && (
-              <text
-                x={(tx(seg.x1) + tx(seg.x2)) / 2}
-                y={(ty(seg.y1) + ty(seg.y2)) / 2 - 10}
-                fill="var(--text-dim)" fontSize="9" textAnchor="middle"
-              >
-                🚇 {seg.label}
-              </text>
-            )}
-          </g>
-        );
-      }
-
-      case "bridge": {
-        const bx1 = tx(seg.x1), by1 = ty(seg.y1);
-        const bx2 = tx(seg.x2), by2 = ty(seg.y2);
-        const dx = bx2 - bx1;
-        const dy = by2 - by1;
-        const len = Math.sqrt(dx * dx + dy * dy);
-        const pierCount = Math.max(2, Math.round(len / 30));
-        // Perpendicular direction for piers
-        const nx = -dy / len;
-        const ny = dx / len;
-        const pierH = 10;
-
-        return (
-          <g key={`t${i}`}>
-            {/* Track line */}
-            <line
-              x1={bx1} y1={by1} x2={bx2} y2={by2}
-              stroke="var(--accent)"
-              strokeWidth={isSecondary ? 2 : 3.5}
-              strokeLinecap="round"
-              opacity={isSecondary ? 0.5 : 1}
-            />
-            {/* Pier supports */}
-            {Array.from({ length: pierCount }, (_, pi) => {
-              const t = (pi + 0.5) / pierCount;
-              const px = bx1 + dx * t;
-              const py = by1 + dy * t;
-              return (
-                <line
-                  key={`pier${i}-${pi}`}
-                  x1={px} y1={py}
-                  x2={px + nx * pierH} y2={py + ny * pierH}
-                  stroke="var(--accent)" strokeWidth="1.5" opacity="0.4"
-                />
-              );
-            })}
-            {/* Base line connecting pier bottoms */}
-            <line
-              x1={bx1 + nx * pierH} y1={by1 + ny * pierH}
-              x2={bx2 + nx * pierH} y2={by2 + ny * pierH}
-              stroke="var(--accent)" strokeWidth="1" opacity="0.25"
-            />
-            {seg.label && (
-              <text
-                x={(bx1 + bx2) / 2} y={(by1 + by2) / 2 - 10}
-                fill="var(--text-dim)" fontSize="9" textAnchor="middle"
-              >
-                🌉 {seg.label}
-              </text>
-            )}
-          </g>
-        );
-      }
-
-      default:
-        return null;
-    }
-  };
-
-  return (
-    <svg
-      viewBox={`0 0 ${svgW} ${Math.max(svgH + 10, 200)}`}
-      style={{
-        width: "100%",
-        maxWidth: "800px",
-        background: "var(--bg-card)",
-        borderRadius: "12px",
-        border: "1px solid var(--border)",
-      }}
-    >
-      {/* Board shape background */}
-      <path
-        d={boardPath}
-        fill="var(--bg-input)"
-        stroke="var(--border-hover)"
-        strokeWidth="2"
-      />
-
-      {/* Grid lines every 100mm */}
-      {Array.from({ length: gridLinesV }, (_, i) => (
-        <line
-          key={`gv${i}`}
-          x1={offX + i * 100 * sc} y1={offY}
-          x2={offX + i * 100 * sc} y2={offY + totalH * sc}
-          stroke="var(--border)" strokeWidth="0.5" strokeDasharray="4,4" opacity="0.4"
-        />
-      ))}
-      {Array.from({ length: gridLinesH }, (_, i) => (
-        <line
-          key={`gh${i}`}
-          x1={offX} y1={offY + i * 100 * sc}
-          x2={offX + totalW * sc} y2={offY + i * 100 * sc}
-          stroke="var(--border)" strokeWidth="0.5" strokeDasharray="4,4" opacity="0.4"
-        />
-      ))}
-
-      {/* Dimension labels on edges */}
-      <text x={offX + boardW * sc / 2} y={offY - 10} fill="var(--text-dim)" fontSize="12" textAnchor="middle">
-        {form.width} cm ({boardW} mm)
-      </text>
-      <text
-        x={offX - 10} y={offY + boardH * sc / 2}
-        fill="var(--text-dim)" fontSize="12" textAnchor="middle"
-        transform={`rotate(-90, ${offX - 10}, ${offY + boardH * sc / 2})`}
-      >
-        {form.height} cm ({boardH} mm)
-      </text>
-
-      {/* Track segments */}
-      {tracks.map((seg, i) => renderSegment(seg, i))}
-
-      {/* Labels from AI */}
-      {labels?.map((lbl, i) => (
-        <text
-          key={`lbl${i}`}
-          x={tx(lbl.x)} y={ty(lbl.y)}
-          fill="var(--text-dim)"
-          fontSize={lbl.fontSize ? lbl.fontSize * sc * 1.5 : 10}
-          textAnchor="middle"
-        >
-          {lbl.text}
-        </text>
-      ))}
-
-      {/* Scale indicator */}
-      <text x={offX + totalW * sc - 5} y={Math.max(svgH, 190) - 5} fill="var(--text-faint)" fontSize="10" textAnchor="end">
-        {form.scale} 1:{SCALE_FACTOR[form.scale]} · {TRACK_CATALOGS[form.trackSystem].name} · AI návrh
-      </text>
-    </svg>
-  );
-}
-
-/* ===========================
    BOARD SHAPE OPTIONS
    =========================== */
 const BOARD_SHAPES: { value: BoardShape; label: string; icon: string }[] = [
@@ -607,6 +187,888 @@ const L_CORNERS: { value: LCorner; label: string }[] = [
   { value: "bottom-left", label: "Vlevo dole" },
   { value: "bottom-right", label: "Vpravo dole" },
 ];
+
+/* ===========================
+   HELPER: Get catalog pieces
+   =========================== */
+function getCatalogPieces(trackSystem: TrackSystem) {
+  const catalog = TRACK_CATALOGS[trackSystem];
+  const pieces = catalog.pieces;
+  // Find the primary straight (longest)
+  const straights = pieces.filter((p) => p.type === "straight" && p.length).sort((a, b) => (b.length ?? 0) - (a.length ?? 0));
+  const shortStraights = pieces.filter((p) => p.type === "straight" && p.length).sort((a, b) => (a.length ?? 0) - (b.length ?? 0));
+  // Find curves sorted by radius (smallest first = tightest)
+  const curves = pieces.filter((p) => p.type === "curve" && p.radius && p.angle).sort((a, b) => (a.radius ?? 0) - (b.radius ?? 0));
+  const turnoutLeft = pieces.find((p) => p.type === "turnout-left");
+  const turnoutRight = pieces.find((p) => p.type === "turnout-right");
+
+  return {
+    primaryStraight: straights[0],
+    shortStraight: shortStraights[0],
+    allStraights: straights,
+    innerCurve: curves[0],
+    outerCurve: curves.length > 1 ? curves[1] : curves[0],
+    allCurves: curves,
+    turnoutLeft,
+    turnoutRight,
+  };
+}
+
+/* ===========================
+   TRACK PLAN GENERATOR
+   =========================== */
+function generateTrackPlan(form: FormData): TrackPlan {
+  const catalog = getCatalogPieces(form.trackSystem);
+  const tracks: TrackElement[] = [];
+  const bomMap: Map<string, { piece: TrackPiece; count: number }> = new Map();
+  const warnings: string[] = [];
+  const stations: StationMarker[] = [];
+  const tunnelPortals: TunnelPortal[] = [];
+
+  const addBom = (piece: TrackPiece, count: number = 1) => {
+    const existing = bomMap.get(piece.id);
+    if (existing) {
+      existing.count += count;
+    } else {
+      bomMap.set(piece.id, { piece, count });
+    }
+  };
+
+  // Board dimensions in mm
+  const boardW = form.width * 10;
+  const boardH = form.height * 10;
+  const margin = 50; // mm from edges
+
+  // Get primary pieces
+  const straightPiece = catalog.primaryStraight;
+  const shortPiece = catalog.shortStraight;
+  const curvePiece = catalog.innerCurve;
+  const outerCurvePiece = catalog.outerCurve;
+
+  if (!straightPiece || !curvePiece) {
+    return { tracks: [], bom: [], warnings: ["Nedostatek dílů v katalogu"], stations: [], tunnelPortals: [] };
+  }
+
+  const R = curvePiece.radius!;
+  const curveAngleDeg = curvePiece.angle!;
+  const curveAngleRad = (curveAngleDeg * Math.PI) / 180;
+  const piecesFor180 = Math.ceil(180 / curveAngleDeg);
+  const L = straightPiece.length!;
+
+  // Build oval helper: creates an oval loop at given center, fitting within constraints
+  function buildOval(
+    centerX: number,
+    centerY: number,
+    availW: number,
+    availH: number,
+    curveR: number,
+    curvePc: TrackPiece,
+    straightPc: TrackPiece,
+    layer: "main" | "secondary" | "siding"
+  ): { elements: TrackElement[]; topStraightStart: Point; topStraightEnd: Point; bottomStraightStart: Point; bottomStraightEnd: Point; actualW: number; actualH: number; numStraights: number } {
+    const elements: TrackElement[] = [];
+    const sLen = straightPc.length!;
+    const cAngleDeg = curvePc.angle!;
+    const cAngleRad = (cAngleDeg * Math.PI) / 180;
+    const pFor180 = Math.ceil(180 / cAngleDeg);
+
+    // Available horizontal space for straights = total width - 2 * curve radius
+    const straightAvail = availW - 2 * curveR;
+    if (straightAvail < sLen) {
+      // Not enough space — try with minimum
+      warnings.push(`Deska je příliš úzká pro zvolený systém kolejí (potřeba min. ${Math.ceil((2 * curveR + sLen) / 10)} cm šířky)`);
+    }
+
+    const numStraights = Math.max(1, Math.floor(straightAvail / sLen));
+    const actualStraightLen = numStraights * sLen;
+
+    // Oval geometry:
+    // Top straight: left to right at y = centerY - (availH/2 - curveR) mapped to topY
+    // Bottom straight: right to left at bottomY
+    // Left curve: 180° turning from bottom to top
+    // Right curve: 180° turning from top to bottom
+
+    const topY = centerY - curveR;
+    const bottomY = centerY + curveR;
+    const leftX = centerX - actualStraightLen / 2;
+    const rightX = centerX + actualStraightLen / 2;
+
+    // Top straight segments (going right)
+    for (let i = 0; i < numStraights; i++) {
+      const sx = leftX + i * sLen;
+      elements.push({
+        type: "straight",
+        start: { x: sx, y: topY },
+        end: { x: sx + sLen, y: topY },
+        layer,
+        pieceId: straightPc.id,
+      });
+      addBom(straightPc);
+    }
+
+    // Right curve (top to bottom, 180° clockwise)
+    const rightCenterX = rightX;
+    const rightCenterY = centerY;
+    for (let i = 0; i < pFor180; i++) {
+      const sa = -Math.PI / 2 + i * cAngleRad;
+      const ea = sa + cAngleRad;
+      elements.push({
+        type: "curve",
+        start: {
+          x: rightCenterX + curveR * Math.cos(sa),
+          y: rightCenterY + curveR * Math.sin(sa),
+        },
+        end: {
+          x: rightCenterX + curveR * Math.cos(ea),
+          y: rightCenterY + curveR * Math.sin(ea),
+        },
+        center: { x: rightCenterX, y: rightCenterY },
+        radius: curveR,
+        startAngle: sa,
+        endAngle: ea,
+        layer,
+        pieceId: curvePc.id,
+      });
+      addBom(curvePc);
+    }
+
+    // Bottom straight segments (going left)
+    for (let i = 0; i < numStraights; i++) {
+      const sx = rightX - i * sLen;
+      elements.push({
+        type: "straight",
+        start: { x: sx, y: bottomY },
+        end: { x: sx - sLen, y: bottomY },
+        layer,
+        pieceId: straightPc.id,
+      });
+      addBom(straightPc);
+    }
+
+    // Left curve (bottom to top, 180° clockwise)
+    const leftCenterX = leftX;
+    const leftCenterY = centerY;
+    for (let i = 0; i < pFor180; i++) {
+      const sa = Math.PI / 2 + i * cAngleRad;
+      const ea = sa + cAngleRad;
+      elements.push({
+        type: "curve",
+        start: {
+          x: leftCenterX + curveR * Math.cos(sa),
+          y: leftCenterY + curveR * Math.sin(sa),
+        },
+        end: {
+          x: leftCenterX + curveR * Math.cos(ea),
+          y: leftCenterY + curveR * Math.sin(ea),
+        },
+        center: { x: leftCenterX, y: leftCenterY },
+        radius: curveR,
+        startAngle: sa,
+        endAngle: ea,
+        layer,
+        pieceId: curvePc.id,
+      });
+      addBom(curvePc);
+    }
+
+    return {
+      elements,
+      topStraightStart: { x: leftX, y: topY },
+      topStraightEnd: { x: rightX, y: topY },
+      bottomStraightStart: { x: rightX, y: bottomY },
+      bottomStraightEnd: { x: leftX, y: bottomY },
+      actualW: actualStraightLen + 2 * curveR,
+      actualH: 2 * curveR,
+      numStraights,
+    };
+  }
+
+  // Build a siding branch: a short straight track branching off
+  function buildSiding(
+    startX: number,
+    startY: number,
+    heading: number, // radians, direction of main track
+    side: "left" | "right",
+    numPieces: number,
+    straightPc: TrackPiece,
+    turnoutPc: TrackPiece
+  ): TrackElement[] {
+    const elements: TrackElement[] = [];
+    const branchAngle = side === "right" ? heading + (15 * Math.PI) / 180 : heading - (15 * Math.PI) / 180;
+    const tLen = turnoutPc.length ?? straightPc.length!;
+    const sLen = straightPc.length!;
+
+    // Turnout piece (on main line, but we represent just the diverging branch)
+    const tEndX = startX + tLen * Math.cos(branchAngle);
+    const tEndY = startY + tLen * Math.sin(branchAngle);
+    elements.push({
+      type: "straight",
+      start: { x: startX, y: startY },
+      end: { x: tEndX, y: tEndY },
+      layer: "siding",
+      pieceId: turnoutPc.id,
+    });
+    addBom(turnoutPc);
+
+    // Straight siding pieces
+    let cx = tEndX;
+    let cy = tEndY;
+    for (let i = 0; i < numPieces; i++) {
+      const nx = cx + sLen * Math.cos(branchAngle);
+      const ny = cy + sLen * Math.sin(branchAngle);
+      elements.push({
+        type: "straight",
+        start: { x: cx, y: cy },
+        end: { x: nx, y: ny },
+        layer: "siding",
+        pieceId: straightPc.id,
+      });
+      addBom(straightPc);
+      cx = nx;
+      cy = ny;
+    }
+
+    return elements;
+  }
+
+  // The center of the oval on the board
+  const cx = boardW / 2;
+  const cy = boardH / 2;
+  const usableW = boardW - 2 * margin;
+  const usableH = boardH - 2 * margin;
+
+  // Adjust curve radius to fit height
+  // Oval height = 2*R, so R must be <= usableH/2
+  let effectiveR = R;
+  if (2 * R > usableH) {
+    // Find a smaller curve if available
+    const fittingCurve = catalog.allCurves.find((c) => c.radius! * 2 <= usableH);
+    if (fittingCurve) {
+      effectiveR = fittingCurve.radius!;
+    } else {
+      effectiveR = usableH / 2;
+      warnings.push("Hloubka desky je malá — oblouky nemusí přesně odpovídat katalogu.");
+    }
+  }
+
+  const effectiveCurvePiece = catalog.allCurves.find((c) => c.radius === effectiveR) ?? curvePiece;
+
+  switch (form.character) {
+    case "mala-diorama": {
+      // Simple oval + maybe 1 siding
+      const oval = buildOval(cx, cy, usableW, usableH, effectiveR, effectiveCurvePiece, straightPiece, "main");
+      tracks.push(...oval.elements);
+
+      // Add one siding on the top straight, roughly 1/3 from left
+      if (oval.numStraights >= 2) {
+        const sidingX = oval.topStraightStart.x + L;
+        const sidingY = oval.topStraightStart.y;
+        const turnout = catalog.turnoutRight;
+        if (turnout) {
+          const siding = buildSiding(sidingX, sidingY, 0, "right", 2, shortPiece ?? straightPiece, turnout);
+          tracks.push(...siding);
+        }
+      }
+      break;
+    }
+
+    case "prujezdna-stanice": {
+      // Oval with passing loop (station) on top straight
+      const oval = buildOval(cx, cy, usableW, usableH, effectiveR, effectiveCurvePiece, straightPiece, "main");
+      tracks.push(...oval.elements);
+
+      // Passing loop: two turnouts splitting to a parallel track on top straight
+      if (oval.numStraights >= 3 && catalog.turnoutLeft && catalog.turnoutRight) {
+        const tl = catalog.turnoutLeft;
+        const tr = catalog.turnoutRight;
+        const tLen = tl.length ?? L;
+        const trackSpacing = 30; // mm between parallel tracks
+
+        // Entry turnout (left diverge = goes "up" in SVG = negative Y)
+        // Actually: for a passing loop on top straight going right,
+        // we split to a track above (lower Y) and merge back
+        const entryX = oval.topStraightStart.x + L;
+        const entryY = oval.topStraightStart.y;
+        const exitX = oval.topStraightEnd.x - L;
+
+        // Secondary track parallel above the main
+        const secY = entryY - trackSpacing;
+        const branchAngle = Math.atan2(-trackSpacing, tLen);
+
+        // Entry diverge
+        const entryEndX = entryX + tLen * Math.cos(branchAngle);
+        const entryEndY = entryY + tLen * Math.sin(branchAngle);
+        tracks.push({
+          type: "straight",
+          start: { x: entryX, y: entryY },
+          end: { x: entryEndX, y: entryEndY },
+          layer: "secondary",
+          pieceId: tl.id,
+        });
+        addBom(tl);
+
+        // Parallel straight(s)
+        const parallelLen = exitX - entryX - 2 * tLen;
+        const numParallel = Math.max(1, Math.floor(parallelLen / L));
+        for (let i = 0; i < numParallel; i++) {
+          const sx = entryEndX + i * L;
+          tracks.push({
+            type: "straight",
+            start: { x: sx, y: secY },
+            end: { x: sx + L, y: secY },
+            layer: "secondary",
+            pieceId: straightPiece.id,
+          });
+          addBom(straightPiece);
+        }
+
+        // Exit merge
+        const exitMergeStartX = entryEndX + numParallel * L;
+        tracks.push({
+          type: "straight",
+          start: { x: exitMergeStartX, y: secY },
+          end: { x: exitX, y: entryY },
+          layer: "secondary",
+          pieceId: tr.id,
+        });
+        addBom(tr);
+
+        // Station platform marker
+        stations.push({
+          x: entryEndX + 20,
+          y: secY + 2,
+          width: numParallel * L - 40,
+          height: trackSpacing - 4,
+          label: "Stanice",
+        });
+      }
+      break;
+    }
+
+    case "horska-trat": {
+      // Single track oval with 1-2 sidings, tunnel on one curve
+      const oval = buildOval(cx, cy, usableW, usableH, effectiveR, effectiveCurvePiece, straightPiece, "main");
+      tracks.push(...oval.elements);
+
+      // Mark left curve segments as tunnel
+      const leftCurveElements = oval.elements.filter(
+        (e) => e.type === "curve" && e.center && e.center.x < cx
+      );
+      leftCurveElements.forEach((e) => {
+        e.tunnel = true;
+      });
+
+      // Add tunnel portals at top-left and bottom-left of the oval
+      if (leftCurveElements.length > 0) {
+        tunnelPortals.push(
+          { x: leftCurveElements[0].start.x, y: leftCurveElements[0].start.y, angle: Math.PI },
+          { x: leftCurveElements[leftCurveElements.length - 1].end.x, y: leftCurveElements[leftCurveElements.length - 1].end.y, angle: Math.PI }
+        );
+      }
+
+      // Siding on bottom straight
+      if (oval.numStraights >= 2 && catalog.turnoutLeft) {
+        const sidingX = oval.bottomStraightEnd.x + L;
+        const sidingY = oval.bottomStraightEnd.y;
+        const siding = buildSiding(sidingX, sidingY, Math.PI, "left", 2, shortPiece ?? straightPiece, catalog.turnoutLeft);
+        tracks.push(...siding);
+      }
+      break;
+    }
+
+    case "hlavni-koridor": {
+      // Double track oval (inner + outer loop)
+      const trackSpacing = 30; // mm between the two tracks
+      const innerR = effectiveR;
+      const outerR = effectiveR + trackSpacing;
+      const outerCurvePc = catalog.allCurves.find((c) => c.radius! >= outerR) ?? catalog.outerCurve;
+
+      // Inner oval
+      const innerOval = buildOval(cx, cy, usableW - 2 * trackSpacing, usableH - 2 * trackSpacing, innerR, effectiveCurvePiece, straightPiece, "main");
+      tracks.push(...innerOval.elements);
+
+      // Outer oval (uses outer radius)
+      const outerOval = buildOval(cx, cy, usableW, usableH, outerR, outerCurvePc, straightPiece, "secondary");
+      tracks.push(...outerOval.elements);
+      break;
+    }
+
+    case "stanice-vlecky": {
+      // Oval with large station area (3-4 parallel tracks, freight siding)
+      const oval = buildOval(cx, cy, usableW, usableH, effectiveR, effectiveCurvePiece, straightPiece, "main");
+      tracks.push(...oval.elements);
+
+      const trackSpacing = 25;
+      const stationTracks = 3;
+
+      if (oval.numStraights >= 4 && catalog.turnoutLeft && catalog.turnoutRight) {
+        const tl = catalog.turnoutLeft;
+        const tr = catalog.turnoutRight;
+        const tLen = tl.length ?? L;
+
+        for (let t = 1; t <= stationTracks; t++) {
+          const secY = oval.topStraightStart.y - t * trackSpacing;
+          const entryX = oval.topStraightStart.x + L;
+          const exitX = oval.topStraightEnd.x - L;
+          const branchAngle = Math.atan2(-trackSpacing * t, tLen);
+
+          // Entry
+          tracks.push({
+            type: "straight",
+            start: { x: entryX, y: oval.topStraightStart.y },
+            end: { x: entryX + tLen * Math.cos(branchAngle), y: oval.topStraightStart.y + tLen * Math.sin(branchAngle) },
+            layer: "secondary",
+            pieceId: tl.id,
+          });
+          addBom(tl);
+
+          // Parallel straights
+          const parallelLen = exitX - entryX - 2 * tLen;
+          const numP = Math.max(1, Math.floor(parallelLen / L));
+          const startPX = entryX + tLen * Math.cos(branchAngle);
+          for (let i = 0; i < numP; i++) {
+            tracks.push({
+              type: "straight",
+              start: { x: startPX + i * L, y: secY },
+              end: { x: startPX + (i + 1) * L, y: secY },
+              layer: t === 1 ? "secondary" : "siding",
+              pieceId: straightPiece.id,
+            });
+            addBom(straightPiece);
+          }
+
+          // Exit merge
+          tracks.push({
+            type: "straight",
+            start: { x: startPX + numP * L, y: secY },
+            end: { x: exitX, y: oval.topStraightStart.y },
+            layer: "secondary",
+            pieceId: tr.id,
+          });
+          addBom(tr);
+        }
+
+        // Station platform
+        const stEntryX = oval.topStraightStart.x + L + (tl.length ?? L);
+        const stWidth = (oval.topStraightEnd.x - L - (tr.length ?? L)) - stEntryX;
+        stations.push({
+          x: stEntryX,
+          y: oval.topStraightStart.y - stationTracks * trackSpacing - 5,
+          width: Math.max(stWidth, 100),
+          height: stationTracks * trackSpacing + 10,
+          label: "Nádraží",
+        });
+
+        // Freight siding on bottom
+        if (catalog.turnoutRight) {
+          const fSidingX = oval.bottomStraightStart.x - L * 2;
+          const fSidingY = oval.bottomStraightStart.y;
+          const siding = buildSiding(fSidingX, fSidingY, Math.PI, "left", 3, shortPiece ?? straightPiece, catalog.turnoutRight);
+          tracks.push(...siding);
+        }
+      }
+      break;
+    }
+
+    case "prumyslova-vlecka": {
+      // Point-to-point with multiple industrial spurs
+      // We'll still build an oval base but add spurs
+      const oval = buildOval(cx, cy, usableW, usableH, effectiveR, effectiveCurvePiece, straightPiece, "main");
+      tracks.push(...oval.elements);
+
+      // Industrial spurs on bottom straight
+      const spurPositions = [1, 3, 5];
+      for (const pos of spurPositions) {
+        if (pos < oval.numStraights && catalog.turnoutLeft) {
+          const spurX = oval.bottomStraightEnd.x + pos * L;
+          const spurY = oval.bottomStraightEnd.y;
+          const spur = buildSiding(spurX, spurY, Math.PI, "left", 2, shortPiece ?? straightPiece, catalog.turnoutLeft);
+          tracks.push(...spur);
+        }
+      }
+
+      // Top spur
+      if (oval.numStraights >= 3 && catalog.turnoutRight) {
+        const spurX = oval.topStraightStart.x + L * 2;
+        const spurY = oval.topStraightStart.y;
+        const spur = buildSiding(spurX, spurY, 0, "right", 3, shortPiece ?? straightPiece, catalog.turnoutRight);
+        tracks.push(...spur);
+      }
+      break;
+    }
+  }
+
+  // Build BOM list
+  const bom: BOMItem[] = [];
+  bomMap.forEach(({ piece, count }) => {
+    bom.push({
+      id: piece.id,
+      name: piece.name,
+      nameCz: piece.nameCz,
+      type: piece.type,
+      count,
+    });
+  });
+  bom.sort((a, b) => {
+    const order = ["straight", "curve", "turnout-left", "turnout-right", "crossing"];
+    return order.indexOf(a.type) - order.indexOf(b.type);
+  });
+
+  return { tracks, bom, warnings, stations, tunnelPortals };
+}
+
+/* ===========================
+   SVG RENDERER COMPONENT
+   =========================== */
+function TrackPlanSVG({
+  plan,
+  form,
+}: {
+  plan: TrackPlan;
+  form: FormData;
+}) {
+  const boardW = form.width * 10; // mm
+  const boardH = form.height * 10;
+  const padding = 70;
+  const svgW = 900;
+
+  // Compute SVG height proportionally
+  const svgContentW = svgW - padding * 2;
+  const sc = svgContentW / boardW;
+  const svgH = boardH * sc + padding * 2;
+  const offX = padding;
+  const offY = padding;
+
+  // Transform mm → SVG coordinates
+  const tx = (x: number) => offX + x * sc;
+  const ty = (y: number) => offY + y * sc;
+
+  // Grid dots every 100mm
+  const gridDotsX = Math.floor(boardW / 100) + 1;
+  const gridDotsY = Math.floor(boardH / 100) + 1;
+
+  // Board path
+  let boardPath = "";
+  if (form.boardShape === "rectangle") {
+    boardPath = `M ${offX} ${offY} h ${boardW * sc} v ${boardH * sc} h ${-boardW * sc} Z`;
+  } else if (form.boardShape === "l-shape") {
+    const w1 = boardW * sc, h1 = boardH * sc;
+    const w2 = form.width2 * 10 * sc, h2 = form.height2 * 10 * sc;
+    boardPath = `M ${offX} ${offY} h ${w1} v ${h1} h ${-(w1 - w2)} v ${h2} h ${-w2} Z`;
+  } else if (form.boardShape === "u-shape") {
+    const armW = form.uArmDepth * 10 * sc;
+    const w = boardW * sc, h = boardH * sc;
+    boardPath = `M ${offX} ${offY} h ${armW} v ${h * 0.4} h ${w} v ${-h * 0.4} h ${armW} v ${h} h ${-(w + 2 * armW)} Z`;
+  }
+
+  // Render sleeper marks for a straight segment
+  const renderStraightSleepers = (x1: number, y1: number, x2: number, y2: number, strokeW: number) => {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 1) return null;
+    const nx = -dy / len;
+    const ny = dx / len;
+    const sleeperSpacing = 12;
+    const count = Math.max(1, Math.floor(len / sleeperSpacing));
+    const halfW = strokeW * 1.2;
+
+    const sleepers: React.ReactElement[] = [];
+    for (let i = 1; i < count; i++) {
+      const t = i / count;
+      const px = x1 + dx * t;
+      const py = y1 + dy * t;
+      sleepers.push(
+        <line
+          key={`sl${i}`}
+          x1={px - nx * halfW}
+          y1={py - ny * halfW}
+          x2={px + nx * halfW}
+          y2={py + ny * halfW}
+          stroke="var(--accent)"
+          strokeWidth={0.8}
+          opacity={0.35}
+        />
+      );
+    }
+    return sleepers;
+  };
+
+  // Render sleeper marks along a curve
+  const renderCurveSleepers = (
+    centerX: number,
+    centerY: number,
+    radius: number,
+    startAngle: number,
+    endAngle: number,
+    strokeW: number
+  ) => {
+    const halfW = strokeW * 1.2;
+    let angleDiff = endAngle - startAngle;
+    if (angleDiff < 0) angleDiff += Math.PI * 2;
+    const arcLen = radius * angleDiff * sc;
+    const sleeperSpacing = 12;
+    const count = Math.max(1, Math.floor(arcLen / sleeperSpacing));
+
+    const sleepers: React.ReactElement[] = [];
+    for (let i = 1; i < count; i++) {
+      const t = i / count;
+      const a = startAngle + angleDiff * t;
+      const px = centerX + radius * sc * Math.cos(a);
+      const py = centerY + radius * sc * Math.sin(a);
+      // Radial direction for sleeper
+      const nx = Math.cos(a);
+      const ny = Math.sin(a);
+      sleepers.push(
+        <line
+          key={`csl${i}`}
+          x1={px - nx * halfW}
+          y1={py - ny * halfW}
+          x2={px + nx * halfW}
+          y2={py + ny * halfW}
+          stroke="var(--accent)"
+          strokeWidth={0.8}
+          opacity={0.35}
+        />
+      );
+    }
+    return sleepers;
+  };
+
+  // Render a single track element
+  const renderTrack = (el: TrackElement, i: number) => {
+    const isSiding = el.layer === "siding";
+    const isSecondary = el.layer === "secondary";
+    const strokeW = isSiding ? 2.5 : isSecondary ? 3 : 4;
+    const opacity = isSiding ? 0.55 : isSecondary ? 0.75 : 1;
+    const dashArray = el.tunnel ? "8,5" : undefined;
+
+    if (el.type === "straight") {
+      const x1 = tx(el.start.x);
+      const y1 = ty(el.start.y);
+      const x2 = tx(el.end.x);
+      const y2 = ty(el.end.y);
+
+      return (
+        <g key={`tr${i}`}>
+          {renderStraightSleepers(x1, y1, x2, y2, strokeW)}
+          <line
+            x1={x1} y1={y1} x2={x2} y2={y2}
+            stroke="var(--accent)"
+            strokeWidth={strokeW}
+            strokeLinecap="round"
+            opacity={opacity}
+            strokeDasharray={dashArray}
+          />
+        </g>
+      );
+    }
+
+    if (el.type === "curve" && el.center && el.radius != null && el.startAngle != null && el.endAngle != null) {
+      const cxs = tx(el.center.x);
+      const cys = ty(el.center.y);
+      const r = el.radius * sc;
+      const sa = el.startAngle;
+      const ea = el.endAngle;
+      const sx = cxs + r * Math.cos(sa);
+      const sy = cys + r * Math.sin(sa);
+      const ex = cxs + r * Math.cos(ea);
+      const ey = cys + r * Math.sin(ea);
+
+      let angleDiff = ea - sa;
+      if (angleDiff < 0) angleDiff += Math.PI * 2;
+      const largeArc = angleDiff > Math.PI ? 1 : 0;
+
+      const pathD = `M ${sx} ${sy} A ${r} ${r} 0 ${largeArc} 1 ${ex} ${ey}`;
+
+      return (
+        <g key={`tr${i}`}>
+          {renderCurveSleepers(cxs, cys, el.radius, sa, ea, strokeW)}
+          <path
+            d={pathD}
+            fill="none"
+            stroke="var(--accent)"
+            strokeWidth={strokeW}
+            strokeLinecap="round"
+            opacity={opacity}
+            strokeDasharray={dashArray}
+          />
+        </g>
+      );
+    }
+
+    return null;
+  };
+
+  // Render station markers
+  const renderStation = (st: StationMarker, i: number) => (
+    <g key={`st${i}`}>
+      <rect
+        x={tx(st.x)}
+        y={ty(st.y)}
+        width={st.width * sc}
+        height={st.height * sc}
+        fill="var(--accent)"
+        opacity={0.06}
+        stroke="var(--accent)"
+        strokeWidth={0.8}
+        strokeDasharray="4,2"
+        rx={4}
+      />
+      <text
+        x={tx(st.x) + (st.width * sc) / 2}
+        y={ty(st.y) - 6}
+        fill="var(--accent)"
+        fontSize={11}
+        textAnchor="middle"
+        fontWeight={600}
+      >
+        🏛️ {st.label}
+      </text>
+    </g>
+  );
+
+  // Render tunnel portals
+  const renderTunnelPortal = (tp: TunnelPortal, i: number) => {
+    const px = tx(tp.x);
+    const py = ty(tp.y);
+    return (
+      <g key={`tp${i}`}>
+        {/* Arch shape */}
+        <path
+          d={`M ${px - 8} ${py + 4} Q ${px - 8} ${py - 8} ${px} ${py - 10} Q ${px + 8} ${py - 8} ${px + 8} ${py + 4} Z`}
+          fill="var(--text-dim)"
+          opacity={0.3}
+          stroke="var(--text-dim)"
+          strokeWidth={1}
+        />
+        <text x={px} y={py - 14} fill="var(--text-dim)" fontSize={8} textAnchor="middle">
+          🚇
+        </text>
+      </g>
+    );
+  };
+
+  return (
+    <svg
+      viewBox={`0 0 ${svgW} ${Math.max(svgH, 250)}`}
+      style={{
+        width: "100%",
+        maxWidth: "900px",
+        background: "var(--bg-card)",
+        borderRadius: "12px",
+        border: "1px solid var(--border)",
+      }}
+    >
+      {/* Board background */}
+      <path
+        d={boardPath}
+        fill="var(--bg-input)"
+        stroke="var(--border-hover)"
+        strokeWidth={2}
+      />
+
+      {/* Grid dots */}
+      {Array.from({ length: gridDotsX }, (_, xi) =>
+        Array.from({ length: gridDotsY }, (_, yi) => (
+          <circle
+            key={`gd${xi}-${yi}`}
+            cx={offX + xi * 100 * sc}
+            cy={offY + yi * 100 * sc}
+            r={1.2}
+            fill="var(--border)"
+            opacity={0.4}
+          />
+        ))
+      )}
+
+      {/* Dimension labels */}
+      {/* Top: width */}
+      <line
+        x1={offX} y1={offY - 20}
+        x2={offX + boardW * sc} y2={offY - 20}
+        stroke="var(--text-faint)" strokeWidth={0.8}
+        markerStart="url(#arrowL)" markerEnd="url(#arrowR)"
+      />
+      <text
+        x={offX + (boardW * sc) / 2}
+        y={offY - 26}
+        fill="var(--text-dim)"
+        fontSize={11}
+        textAnchor="middle"
+        fontWeight={600}
+      >
+        {form.width} cm
+      </text>
+
+      {/* Left: height */}
+      <line
+        x1={offX - 20} y1={offY}
+        x2={offX - 20} y2={offY + boardH * sc}
+        stroke="var(--text-faint)" strokeWidth={0.8}
+        markerStart="url(#arrowU)" markerEnd="url(#arrowD)"
+      />
+      <text
+        x={offX - 26}
+        y={offY + (boardH * sc) / 2}
+        fill="var(--text-dim)"
+        fontSize={11}
+        textAnchor="middle"
+        fontWeight={600}
+        transform={`rotate(-90, ${offX - 26}, ${offY + (boardH * sc) / 2})`}
+      >
+        {form.height} cm
+      </text>
+
+      {/* Arrow markers */}
+      <defs>
+        <marker id="arrowR" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="0">
+          <path d="M0,0 L6,3 L0,6" fill="var(--text-faint)" />
+        </marker>
+        <marker id="arrowL" markerWidth="6" markerHeight="6" refX="1" refY="3" orient="180">
+          <path d="M0,0 L6,3 L0,6" fill="var(--text-faint)" />
+        </marker>
+        <marker id="arrowD" markerWidth="6" markerHeight="6" refX="3" refY="5" orient="90">
+          <path d="M0,0 L6,3 L0,6" fill="var(--text-faint)" />
+        </marker>
+        <marker id="arrowU" markerWidth="6" markerHeight="6" refX="3" refY="1" orient="270">
+          <path d="M0,0 L6,3 L0,6" fill="var(--text-faint)" />
+        </marker>
+      </defs>
+
+      {/* Station markers */}
+      {plan.stations.map((st, i) => renderStation(st, i))}
+
+      {/* Track elements */}
+      {plan.tracks.map((el, i) => renderTrack(el, i))}
+
+      {/* Tunnel portals */}
+      {plan.tunnelPortals.map((tp, i) => renderTunnelPortal(tp, i))}
+
+      {/* Legend */}
+      <g transform={`translate(${offX + boardW * sc - 130}, ${offY + boardH * sc + 20})`}>
+        <rect x={0} y={0} width={140} height={70} rx={6} fill="var(--bg-card)" stroke="var(--border)" strokeWidth={0.8} opacity={0.95} />
+        <text x={10} y={16} fill="var(--text-dim)" fontSize={9} fontWeight={700}>LEGENDA</text>
+        <line x1={10} y1={24} x2={35} y2={24} stroke="var(--accent)" strokeWidth={4} strokeLinecap="round" />
+        <text x={42} y={28} fill="var(--text-dim)" fontSize={8}>Hlavní trať</text>
+        <line x1={10} y1={38} x2={35} y2={38} stroke="var(--accent)" strokeWidth={3} strokeLinecap="round" opacity={0.75} />
+        <text x={42} y={42} fill="var(--text-dim)" fontSize={8}>Objízdná / 2. kolej</text>
+        <line x1={10} y1={52} x2={35} y2={52} stroke="var(--accent)" strokeWidth={2.5} strokeLinecap="round" opacity={0.55} />
+        <text x={42} y={56} fill="var(--text-dim)" fontSize={8}>Vlečka / odstavná</text>
+      </g>
+
+      {/* Scale indicator */}
+      <text
+        x={offX + 5}
+        y={offY + boardH * sc + 40}
+        fill="var(--text-faint)"
+        fontSize={10}
+      >
+        Měřítko {form.scale} (1:{SCALE_FACTOR[form.scale]}) · {TRACK_CATALOGS[form.trackSystem].name}
+      </text>
+    </svg>
+  );
+}
 
 /* ===========================
    MAIN PAGE
@@ -624,51 +1086,22 @@ export default function TrackDesignerPage() {
     trackSystem: "roco-line",
     character: "prujezdna-stanice",
   });
-  const [prompt, setPrompt] = useState("");
-  const [aiResult, setAiResult] = useState<AIResult | null>(null);
-  const [aiGenerating, setAiGenerating] = useState(false);
-  const [aiError, setAiError] = useState<string | null>(null);
+  const [plan, setPlan] = useState<TrackPlan | null>(null);
+  const [generating, setGenerating] = useState(false);
   const resultRef = useRef<HTMLDivElement>(null);
 
-  const handleGenerate = useCallback(async () => {
-    setAiGenerating(true);
-    setAiError(null);
-    setAiResult(null);
+  const handleGenerate = useCallback(() => {
+    setGenerating(true);
+    setPlan(null);
 
-    try {
-      const res = await fetch("/api/generate-track", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: prompt || "Navrhni optimální kolejiště podle zadaných parametrů.",
-          boardShape: form.boardShape,
-          width: form.width,
-          height: form.height,
-          width2: form.width2,
-          height2: form.height2,
-          uArmDepth: form.uArmDepth,
-          lCorner: form.lCorner,
-          scale: form.scale,
-          trackSystem: form.trackSystem,
-          character: form.character,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        setAiError(data.error || "Neznámá chyba");
-      } else if (data.result) {
-        setAiResult(data.result);
-      } else {
-        setAiError("AI nevrátila výsledek");
-      }
-    } catch {
-      setAiError("Chyba připojení k serveru");
-    } finally {
-      setAiGenerating(false);
+    // Use requestAnimationFrame to allow the UI to update before heavy computation
+    requestAnimationFrame(() => {
+      const result = generateTrackPlan(form);
+      setPlan(result);
+      setGenerating(false);
       setTimeout(() => resultRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
-    }
-  }, [form, prompt]);
+    });
+  }, [form]);
 
   const update = <K extends keyof FormData>(key: K, val: FormData[K]) =>
     setForm((prev) => ({ ...prev, [key]: val }));
@@ -726,7 +1159,7 @@ export default function TrackDesignerPage() {
           Návrhář tratí
         </h1>
         <p style={{ fontSize: "15px", color: "var(--text-dim)", maxWidth: "500px", margin: "0 auto" }}>
-          Zadejte rozměry a charakter — AI navrhne kolejový plán i seznam dílů
+          Zadejte rozměry a charakter — generátor navrhne kolejový plán i seznam dílů
         </p>
       </div>
 
@@ -883,107 +1316,48 @@ export default function TrackDesignerPage() {
             </div>
           </div>
 
-          {/* AI Prompt */}
-          <div style={{ marginBottom: "20px" }}>
-            <label style={labelStyle}>
-              ✨ Popište svou představu (volitelné)
-            </label>
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Např.: Chci horskou trať s jedním tunelem, malou stanicí a odstavnou kolejí. Preferuji větší poloměry oblouků. Vlak by měl jezdit v kruhu bez nutnosti vracení."
-              rows={3}
-              style={{
-                ...inputStyle,
-                resize: "vertical" as const,
-                minHeight: "70px",
-                fontFamily: "inherit",
-                lineHeight: 1.5,
-              }}
-            />
-          </div>
-
-          {/* Single generate button */}
+          {/* Generate button */}
           <button
             onClick={handleGenerate}
-            disabled={aiGenerating}
+            disabled={generating}
             style={{
               width: "100%",
               padding: "16px",
               borderRadius: "10px",
               border: "none",
-              background: aiGenerating ? "var(--border-hover)" : "linear-gradient(135deg, #667eea, #764ba2)",
-              color: aiGenerating ? "var(--text-dim)" : "#fff",
+              background: generating ? "var(--border-hover)" : "linear-gradient(135deg, #667eea, #764ba2)",
+              color: generating ? "var(--text-dim)" : "#fff",
               fontSize: "17px",
               fontWeight: 700,
-              cursor: aiGenerating ? "not-allowed" : "pointer",
+              cursor: generating ? "not-allowed" : "pointer",
               transition: "all 0.2s",
               letterSpacing: "0.3px",
             }}
           >
-            {aiGenerating ? "🤖 AI navrhuje kolejiště..." : "🤖 Navrhnout kolejiště"}
+            {generating ? "⏳ Generuji kolejiště..." : "🚂 Navrhnout kolejiště"}
           </button>
         </div>
 
         {/* Results area */}
         <div ref={resultRef} style={{ marginTop: "32px" }}>
-          {/* Loading state */}
-          {aiGenerating && (
-            <div style={{ ...cardStyle, textAlign: "center", padding: "48px 24px" }}>
-              <div style={{ position: "relative", width: "80px", height: "80px", margin: "0 auto 20px" }}>
-                {/* Animated train track circle */}
-                <svg width="80" height="80" viewBox="0 0 80 80" style={{ animation: "spin 3s linear infinite" }}>
-                  <circle cx="40" cy="40" r="30" fill="none" stroke="var(--border)" strokeWidth="3" strokeDasharray="6,4" />
-                  <circle cx="40" cy="10" r="5" fill="var(--accent)">
-                    <animate attributeName="opacity" values="1;0.3;1" dur="1.5s" repeatCount="indefinite" />
-                  </circle>
-                </svg>
-                <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", fontSize: "28px" }}>
-                  🚂
-                </div>
-              </div>
-              <p style={{ fontSize: "16px", color: "var(--text-muted)", fontWeight: 600 }}>AI navrhuje kolejiště...</p>
-              <p style={{ fontSize: "13px", color: "var(--text-faint)", marginTop: "8px" }}>Generování geometrie tratě, obvykle 10-20 sekund</p>
-              <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-            </div>
-          )}
-
-          {/* Error state */}
-          {aiError && (
-            <div style={{ ...cardStyle, borderColor: "var(--danger)" }}>
-              <h2 style={{ fontSize: "18px", fontWeight: 700, color: "var(--danger)", marginBottom: "12px" }}>
-                ❌ Chyba
-              </h2>
-              <p style={{ fontSize: "15px", color: "var(--text-secondary)" }}>{aiError}</p>
-              <p style={{ fontSize: "13px", color: "var(--text-faint)", marginTop: "8px" }}>
-                Zkuste to znovu — AI občas neodpoví napoprvé.
-              </p>
-            </div>
-          )}
-
           {/* Results */}
-          {aiResult && (
+          {plan && (
             <>
               {/* 1. SVG Track Plan */}
               <div style={{ ...cardStyle, marginBottom: "20px", textAlign: "center" }}>
                 <h2 style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px", textAlign: "left" }}>
                   📐 Kolejový plán
                 </h2>
-                <AITrackPlanSVG
-                  tracks={aiResult.tracks ?? []}
-                  labels={aiResult.labels}
-                  board={aiResult.board ?? { width: form.width * 10, height: form.height * 10 }}
-                  form={form}
-                />
+                <TrackPlanSVG plan={plan} form={form} />
               </div>
 
               {/* 2. Warnings */}
-              {aiResult.warnings && aiResult.warnings.length > 0 && (
+              {plan.warnings.length > 0 && (
                 <div style={{ ...cardStyle, marginBottom: "20px", borderColor: "rgba(255, 193, 7, 0.4)" }}>
                   <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#ffc107", marginBottom: "12px" }}>
                     ⚠️ Upozornění
                   </h2>
-                  {aiResult.warnings.map((w, i) => (
+                  {plan.warnings.map((w, i) => (
                     <p key={i} style={{ fontSize: "14px", color: "var(--text-secondary)", margin: i > 0 ? "8px 0 0" : "0", lineHeight: 1.6 }}>
                       • {w}
                     </p>
@@ -1008,7 +1382,7 @@ export default function TrackDesignerPage() {
                             color: "var(--accent)",
                             fontSize: "12px",
                             fontWeight: 700,
-                            textTransform: "uppercase",
+                            textTransform: "uppercase" as const,
                             letterSpacing: "0.5px",
                           }}>
                             {header}
@@ -1017,12 +1391,12 @@ export default function TrackDesignerPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {aiResult.bom.map((item, i) => {
+                      {plan.bom.map((item, i) => {
                         const typeIcons: Record<string, string> = {
                           straight: "➖", curve: "↪️", "turnout-left": "↙️", "turnout-right": "↗️", crossing: "✖️",
                         };
                         return (
-                          <tr key={i} style={{ borderBottom: "1px solid var(--border-light)" }}>
+                          <tr key={i} style={{ borderBottom: "1px solid var(--border-light, var(--border))" }}>
                             <td style={{ padding: "10px 12px", fontSize: "14px" }}>
                               {typeIcons[item.type] || "🔧"}
                             </td>
@@ -1048,7 +1422,7 @@ export default function TrackDesignerPage() {
                 }}>
                   <span style={{ fontSize: "14px", color: "var(--text-dim)" }}>Celkem dílů</span>
                   <span style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-primary)" }}>
-                    {aiResult.bom.reduce((sum, item) => sum + item.count, 0)}×
+                    {plan.bom.reduce((sum, item) => sum + item.count, 0)}×
                   </span>
                 </div>
               </div>
