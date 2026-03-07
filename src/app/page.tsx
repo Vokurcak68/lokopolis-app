@@ -36,41 +36,31 @@ interface LatestArticle {
   category: { name: string; icon: string } | null;
 }
 
-const demoDownloads = [
-  {
-    id: 1,
-    iconClass: "pdf",
-    iconEmoji: "📄",
-    title: "Kolejový plán — Podhorské nádraží",
-    desc: "Plán 250×120cm, epocha IV, dvoukolejná trať",
-    type: "PDF",
-    size: "3.2 MB",
-    downloads: 184,
-    rating: 4.8,
-  },
-  {
-    id: 2,
-    iconClass: "stl",
-    iconEmoji: "🧊",
-    title: "3D tisk — Telefonní budka ČSD",
-    desc: "STL soubor pro tisk v měřítku TT i H0",
-    type: "STL",
-    size: "1.8 MB",
-    downloads: 97,
-    rating: 4.5,
-  },
-  {
-    id: 3,
-    iconClass: "zip",
-    iconEmoji: "📦",
-    title: "Obtisky — ČD Cargo vozy řady Eas",
-    desc: "Potiskový arch pro laserovou tiskárnu",
-    type: "ZIP",
-    size: "5.4 MB",
-    downloads: 142,
-    rating: 4.9,
-  },
-];
+function getFileIconClass(fileName: string): { iconClass: string; iconEmoji: string } {
+  const ext = fileName.split(".").pop()?.toLowerCase() || "";
+  if (ext === "pdf") return { iconClass: "pdf", iconEmoji: "📄" };
+  if (ext === "stl") return { iconClass: "stl", iconEmoji: "🧊" };
+  if (["zip", "rar", "7z"].includes(ext)) return { iconClass: "zip", iconEmoji: "📦" };
+  if (["jpg", "jpeg", "png", "gif", "webp", "svg"].includes(ext)) return { iconClass: "img", iconEmoji: "🖼️" };
+  if (["dxf"].includes(ext)) return { iconClass: "dxf", iconEmoji: "📐" };
+  return { iconClass: "other", iconEmoji: "📁" };
+}
+
+function formatSize(bytes: number | null): string {
+  if (!bytes) return "";
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
+
+interface DownloadItem {
+  id: string;
+  title: string;
+  description: string | null;
+  file_name: string;
+  file_size: number | null;
+  download_count: number;
+}
 
 const popularArticles = [
   {
@@ -93,11 +83,14 @@ const popularArticles = [
   },
 ];
 
-const events = [
-  { month: "Bře", day: "15", name: "Modelářská burza Praha", location: "Kulturní dům Barikádníků" },
-  { month: "Bře", day: "22", name: "Výstava Kolín", location: "Výstaviště TPCA" },
-  { month: "Dub", day: "5", name: "TT sraz Olomouc", location: "Klub přátel kolejí" },
-];
+interface EventItem {
+  id: string;
+  title: string;
+  event_date: string;
+  location: string | null;
+}
+
+const CZECH_MONTHS_SHORT = ["Led", "Úno", "Bře", "Dub", "Kvě", "Čvn", "Čvc", "Srp", "Zář", "Říj", "Lis", "Pro"];
 
 const defaultAuthors = [
   { name: "Petr Havlík", count: 42 },
@@ -136,29 +129,49 @@ export default function Home() {
 
   const [latestArticles, setLatestArticles] = useState<LatestArticle[]>([]);
   const [activeAuthors, setActiveAuthors] = useState(defaultAuthors);
+  const [recentDownloads, setRecentDownloads] = useState<DownloadItem[]>([]);
+  const [upcomingEvents, setUpcomingEvents] = useState<EventItem[]>([]);
+  const [memberCount, setMemberCount] = useState<number | null>(null);
 
   useEffect(() => {
     async function fetchAll() {
       try {
-        // All 4 queries in parallel
-        const [statsRes, membersRes, latestRes, catCountsRes, authorsRes] = await Promise.all([
+        const today = new Date().toISOString().split("T")[0];
+
+        // All queries in parallel
+        const [statsRes, membersRes, latestRes, catCountsRes, authorsRes, downloadsRes, eventsRes, dlCountRes, galleryCountRes] = await Promise.all([
           supabase.from("articles").select("*", { count: "exact", head: true }).eq("status", "published").eq("verified", true),
           supabase.from("profiles").select("*", { count: "exact", head: true }),
           supabase.from("articles").select("id, slug, title, excerpt, cover_image_url, published_at, author:profiles(display_name, username, avatar_url), category:categories(name, icon)").eq("status", "published").eq("verified", true).order("published_at", { ascending: false }).limit(3),
           supabase.from("articles").select("category:categories(slug)").eq("status", "published").eq("verified", true),
           supabase.from("articles").select("author:profiles(display_name, username)").eq("status", "published").eq("verified", true),
+          supabase.from("downloads").select("id, title, description, file_name, file_size, download_count").eq("access", "public").order("created_at", { ascending: false }).limit(3),
+          supabase.from("events").select("id, title, event_date, location").gte("event_date", today).order("event_date", { ascending: true }).limit(3),
+          supabase.from("downloads").select("*", { count: "exact", head: true }),
+          supabase.from("gallery_items").select("*", { count: "exact", head: true }),
         ]);
 
         // Stats
         const artCount = statsRes.count;
-        const memberCount = membersRes.count;
-        if (artCount !== null || memberCount !== null) {
-          setStats({
-            articles: artCount !== null ? artCount.toLocaleString("cs-CZ") : "1 247",
-            members: memberCount !== null ? memberCount.toLocaleString("cs-CZ") : "385",
-            downloads: "92",
-            photos: "4 820",
-          });
+        const memCount = membersRes.count;
+        const dlCount = dlCountRes.count;
+        const galCount = galleryCountRes.count;
+        if (memCount !== null) setMemberCount(memCount);
+        setStats({
+          articles: artCount !== null ? artCount.toLocaleString("cs-CZ") : "0",
+          members: memCount !== null ? memCount.toLocaleString("cs-CZ") : "0",
+          downloads: dlCount !== null ? dlCount.toLocaleString("cs-CZ") : "0",
+          photos: galCount !== null ? galCount.toLocaleString("cs-CZ") : "0",
+        });
+
+        // Downloads
+        if (downloadsRes.data && downloadsRes.data.length > 0) {
+          setRecentDownloads(downloadsRes.data as DownloadItem[]);
+        }
+
+        // Events
+        if (eventsRes.data && eventsRes.data.length > 0) {
+          setUpcomingEvents(eventsRes.data as EventItem[]);
         }
 
         // Latest articles
@@ -268,7 +281,7 @@ export default function Home() {
             { num: stats.articles, label: "Článků" },
             { num: stats.members, label: "Členů" },
             { num: stats.downloads, label: "Ke stažení" },
-            { num: stats.photos, label: "Fotografií" },
+            { num: stats.photos, label: "V galerii" },
           ].map((s) => (
             <div key={s.label} style={{ textAlign: "center" }}>
               <div className="stats-num" style={{ fontSize: "24px", fontWeight: 700, color: "#f0a030" }}>{s.num}</div>
@@ -385,30 +398,41 @@ export default function Home() {
             Vše ke stažení →
           </Link>
         </div>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
-            gap: "16px",
-          }}
-        >
-          {demoDownloads.map((d) => (
-            <div key={d.id} className="dl-card">
-              <div className={`dl-icon ${d.iconClass}`}>{d.iconEmoji}</div>
-              <div>
-                <h4 style={{ fontSize: "14px", color: "#e0e0e0", marginBottom: "4px" }}>{d.title}</h4>
-                <p style={{ fontSize: "12px", color: "#6a6e80" }}>{d.desc}</p>
-                <div style={{ display: "flex", gap: "12px", marginTop: "6px" }}>
-                  <span style={{ fontSize: "11px", color: "#555a70" }}>
-                    {d.type} · {d.size}
-                  </span>
-                  <span style={{ fontSize: "11px", color: "#555a70" }}>⬇️ {d.downloads}×</span>
-                  <span style={{ fontSize: "11px", color: "#555a70" }}>⭐ {d.rating}</span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+        {recentDownloads.length > 0 ? (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+              gap: "16px",
+            }}
+          >
+            {recentDownloads.map((d) => {
+              const icon = getFileIconClass(d.file_name);
+              const ext = d.file_name.split(".").pop()?.toUpperCase() || "";
+              return (
+                <Link key={d.id} href="/ke-stazeni" style={{ textDecoration: "none" }}>
+                  <div className="dl-card">
+                    <div className={`dl-icon ${icon.iconClass}`}>{icon.iconEmoji}</div>
+                    <div>
+                      <h4 style={{ fontSize: "14px", color: "#e0e0e0", marginBottom: "4px" }}>{d.title}</h4>
+                      {d.description && <p style={{ fontSize: "12px", color: "#6a6e80" }}>{d.description}</p>}
+                      <div style={{ display: "flex", gap: "12px", marginTop: "6px" }}>
+                        <span style={{ fontSize: "11px", color: "#555a70" }}>
+                          {ext} · {formatSize(d.file_size)}
+                        </span>
+                        <span style={{ fontSize: "11px", color: "#555a70" }}>⬇️ {d.download_count}×</span>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        ) : (
+          <div style={{ textAlign: "center", padding: "32px 0" }}>
+            <p style={{ fontSize: "14px", color: "#6a6e80" }}>Zatím žádné soubory ke stažení</p>
+          </div>
+        )}
       </section>
 
       {/* ===================== MAIN + SIDEBAR ===================== */}
@@ -460,19 +484,32 @@ export default function Home() {
           {/* Events */}
           <div className="widget">
             <h3>📅 Nadcházející akce</h3>
-            {events.map((e, i) => (
-              <div key={i} className="event-item">
-                <div className="event-date">
-                  <span className="month">{e.month}</span>
-                  <span className="day">{e.day}</span>
-                </div>
-                <div className="event-info">
-                  <strong>{e.name}</strong>
-                  <br />
-                  {e.location}
-                </div>
-              </div>
-            ))}
+            {upcomingEvents.length > 0 ? (
+              upcomingEvents.map((e) => {
+                const d = new Date(e.event_date);
+                const month = CZECH_MONTHS_SHORT[d.getMonth()];
+                const day = d.getDate().toString();
+                return (
+                  <Link key={e.id} href="/akce" style={{ textDecoration: "none", color: "inherit" }}>
+                    <div className="event-item">
+                      <div className="event-date">
+                        <span className="month">{month}</span>
+                        <span className="day">{day}</span>
+                      </div>
+                      <div className="event-info">
+                        <strong>{e.title}</strong>
+                        {e.location && <><br />{e.location}</>}
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })
+            ) : (
+              <p style={{ fontSize: "13px", color: "#6a6e80" }}>Žádné nadcházející akce</p>
+            )}
+            <Link href="/akce" style={{ fontSize: "12px", color: "#f0a030", textDecoration: "none", display: "block", marginTop: "10px" }}>
+              Všechny akce →
+            </Link>
           </div>
 
           {/* Active authors */}
@@ -490,13 +527,10 @@ export default function Home() {
 
           {/* Online */}
           <div className="widget">
-            <h3>🟢 Online</h3>
+            <h3>🟢 Komunita</h3>
             <p style={{ fontSize: "13px", color: "#8a8ea0" }}>
               <span className="online-dot" />
-              12 uživatelů online
-            </p>
-            <p style={{ fontSize: "12px", color: "#555a70", marginTop: "8px" }}>
-              Celkem registrováno: 385 členů
+              Celkem registrováno: {memberCount !== null ? memberCount.toLocaleString("cs-CZ") : stats.members} členů
             </p>
           </div>
 
