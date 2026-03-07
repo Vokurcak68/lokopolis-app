@@ -82,8 +82,24 @@ export interface GalleryItem {
   thumbnail_url: string | null;
   access: GalleryAccess;
   uploaded_by: string | null;
+  album_id: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// Gallery Album types
+export interface GalleryAlbum {
+  id: string;
+  title: string;
+  description: string | null;
+  cover_image_url: string | null;
+  access: GalleryAccess;
+  created_by: string | null;
+  item_count: number;
+  created_at: string;
+  updated_at: string;
+  // Joined fields
+  author_username?: string;
 }
 
 // Event types

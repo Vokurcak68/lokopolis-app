@@ -1,40 +1,18 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/components/Auth/AuthProvider";
-import type { GalleryItem, GalleryItemType, GalleryAccess } from "@/types/database";
+import { timeAgo } from "@/lib/timeAgo";
+import type { GalleryAlbum, GalleryAccess } from "@/types/database";
 
 /* ============================================================
    HELPERS
    ============================================================ */
 
-const FILTERS: { value: GalleryItemType | "all"; label: string; icon: string }[] = [
-  { value: "all", label: "Vše", icon: "🖼️" },
-  { value: "image", label: "Fotky", icon: "📷" },
-  { value: "video", label: "Videa", icon: "🎬" },
-  { value: "youtube", label: "YouTube", icon: "▶️" },
-];
-
-function extractYouTubeId(url: string): string | null {
-  const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
-  ];
-  for (const p of patterns) {
-    const m = url.match(p);
-    if (m) return m[1];
-  }
-  return null;
-}
-
-function isValidYouTubeUrl(url: string): boolean {
-  return extractYouTubeId(url) !== null;
-}
-
 const IMAGE_ACCEPT = ".jpg,.jpeg,.png,.gif,.webp";
-const VIDEO_ACCEPT = ".mp4,.webm,.mov";
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
-const MAX_VIDEO_SIZE = 100 * 1024 * 1024;
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -42,244 +20,48 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/* ============================================================
-   LIGHTBOX
-   ============================================================ */
-
-function Lightbox({
-  items,
-  currentIndex,
-  onClose,
-  onNavigate,
-}: {
-  items: GalleryItem[];
-  currentIndex: number;
-  onClose: () => void;
-  onNavigate: (index: number) => void;
-}) {
-  const item = items[currentIndex];
-
-  useEffect(() => {
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-      if (e.key === "ArrowLeft" && currentIndex > 0) onNavigate(currentIndex - 1);
-      if (e.key === "ArrowRight" && currentIndex < items.length - 1) onNavigate(currentIndex + 1);
-    }
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", handleKey);
-    return () => {
-      document.body.style.overflow = "";
-      window.removeEventListener("keydown", handleKey);
-    };
-  }, [currentIndex, items.length, onClose, onNavigate]);
-
-  const ytId = item.type === "youtube" ? extractYouTubeId(item.media_url) : null;
-
-  return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 2000,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "rgba(0,0,0,0.9)",
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      {/* Close */}
-      <button
-        onClick={onClose}
-        style={{
-          position: "absolute",
-          top: "20px",
-          right: "20px",
-          background: "rgba(255,255,255,0.1)",
-          border: "none",
-          color: "var(--text-primary)",
-          fontSize: "28px",
-          cursor: "pointer",
-          width: "48px",
-          height: "48px",
-          borderRadius: "50%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 2001,
-        }}
-      >
-        ✕
-      </button>
-
-      {/* Prev */}
-      {currentIndex > 0 && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onNavigate(currentIndex - 1); }}
-          style={{
-            position: "absolute",
-            left: "20px",
-            top: "50%",
-            transform: "translateY(-50%)",
-            background: "rgba(255,255,255,0.1)",
-            border: "none",
-            color: "var(--text-primary)",
-            fontSize: "28px",
-            cursor: "pointer",
-            width: "48px",
-            height: "48px",
-            borderRadius: "50%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 2001,
-          }}
-        >
-          ‹
-        </button>
-      )}
-
-      {/* Next */}
-      {currentIndex < items.length - 1 && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onNavigate(currentIndex + 1); }}
-          style={{
-            position: "absolute",
-            right: "20px",
-            top: "50%",
-            transform: "translateY(-50%)",
-            background: "rgba(255,255,255,0.1)",
-            border: "none",
-            color: "var(--text-primary)",
-            fontSize: "28px",
-            cursor: "pointer",
-            width: "48px",
-            height: "48px",
-            borderRadius: "50%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 2001,
-          }}
-        >
-          ›
-        </button>
-      )}
-
-      {/* Content */}
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          maxWidth: "90vw",
-          maxHeight: "85vh",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: "16px",
-        }}
-      >
-        {item.type === "image" && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={item.media_url}
-            alt={item.title}
-            style={{
-              maxWidth: "90vw",
-              maxHeight: "80vh",
-              objectFit: "contain",
-              borderRadius: "8px",
-            }}
-          />
-        )}
-        {item.type === "video" && (
-          <video
-            src={item.media_url}
-            controls
-            autoPlay
-            style={{
-              maxWidth: "90vw",
-              maxHeight: "80vh",
-              borderRadius: "8px",
-            }}
-          />
-        )}
-        {item.type === "youtube" && ytId && (
-          <iframe
-            src={`https://www.youtube.com/embed/${ytId}?autoplay=1`}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-            style={{
-              width: "min(90vw, 960px)",
-              height: "min(70vh, 540px)",
-              border: "none",
-              borderRadius: "8px",
-            }}
-          />
-        )}
-        <div style={{ textAlign: "center" }}>
-          <h3 style={{ color: "var(--text-primary)", fontSize: "18px", fontWeight: 600, marginBottom: "4px" }}>
-            {item.title}
-          </h3>
-          {item.description && (
-            <p style={{ color: "var(--text-muted)", fontSize: "14px" }}>{item.description}</p>
-          )}
-          <p style={{ color: "var(--text-faint)", fontSize: "12px", marginTop: "4px" }}>
-            {currentIndex + 1} / {items.length}
-          </p>
-        </div>
-      </div>
-    </div>
-  );
+function itemCountLabel(count: number): string {
+  if (count === 0) return "Prázdné";
+  if (count === 1) return "1 položka";
+  if (count >= 2 && count <= 4) return `${count} položky`;
+  return `${count} položek`;
 }
 
 /* ============================================================
-   UPLOAD MODAL
+   CREATE ALBUM MODAL
    ============================================================ */
 
-function UploadModal({
+function CreateAlbumModal({
   onClose,
-  onUploaded,
+  onCreated,
 }: {
   onClose: () => void;
-  onUploaded: () => void;
+  onCreated: () => void;
 }) {
   const { user } = useAuth();
-  const [mediaType, setMediaType] = useState<GalleryItemType>("image");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [access, setAccess] = useState<GalleryAccess>("public");
-  const [youtubeUrl, setYoutubeUrl] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [dragOver, setDragOver] = useState(false);
 
-  function validateFile(f: File): string | null {
-    if (mediaType === "image") {
-      const validExt = ["jpg", "jpeg", "png", "gif", "webp"];
-      const ext = f.name.split(".").pop()?.toLowerCase() || "";
-      if (!validExt.includes(ext)) return `Nepodporovaný formát (.${ext}). Povolené: ${validExt.join(", ")}`;
-      if (f.size > MAX_IMAGE_SIZE) return `Obrázek je příliš velký (${formatFileSize(f.size)}). Maximum je 10 MB.`;
-    } else if (mediaType === "video") {
-      const validExt = ["mp4", "webm", "mov"];
-      const ext = f.name.split(".").pop()?.toLowerCase() || "";
-      if (!validExt.includes(ext)) return `Nepodporovaný formát (.${ext}). Povolené: ${validExt.join(", ")}`;
-      if (f.size > MAX_VIDEO_SIZE) return `Video je příliš velké (${formatFileSize(f.size)}). Maximum je 100 MB.`;
-    }
-    return null;
-  }
-
   function handleFileSelect(f: File) {
-    const err = validateFile(f);
-    if (err) {
-      setError(err);
-      setFile(null);
-    } else {
-      setError("");
-      setFile(f);
+    const validExt = ["jpg", "jpeg", "png", "gif", "webp"];
+    const ext = f.name.split(".").pop()?.toLowerCase() || "";
+    if (!validExt.includes(ext)) {
+      setError(`Nepodporovaný formát (.${ext}). Povolené: ${validExt.join(", ")}`);
+      setCoverFile(null);
+      return;
     }
+    if (f.size > MAX_IMAGE_SIZE) {
+      setError(`Obrázek je příliš velký (${formatFileSize(f.size)}). Maximum je 10 MB.`);
+      setCoverFile(null);
+      return;
+    }
+    setError("");
+    setCoverFile(f);
   }
 
   function handleDrop(e: React.DragEvent) {
@@ -293,36 +75,19 @@ function UploadModal({
     e.preventDefault();
     if (!title.trim() || !user) return;
 
-    if (mediaType === "youtube") {
-      if (!youtubeUrl.trim() || !isValidYouTubeUrl(youtubeUrl)) {
-        setError("Zadejte platnou YouTube URL");
-        return;
-      }
-    } else if (!file) {
-      setError("Vyberte soubor");
-      return;
-    }
-
-    setUploading(true);
+    setSaving(true);
     setError("");
 
     try {
-      let mediaUrl = "";
-      let thumbnailUrl: string | null = null;
+      let coverImageUrl: string | null = null;
 
-      if (mediaType === "youtube") {
-        mediaUrl = youtubeUrl.trim();
-        const ytId = extractYouTubeId(mediaUrl);
-        if (ytId) {
-          thumbnailUrl = `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`;
-        }
-      } else if (file) {
-        const fileExt = file.name.split(".").pop();
-        const filePath = `${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
+      if (coverFile) {
+        const fileExt = coverFile.name.split(".").pop();
+        const filePath = `albums/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
 
         const { error: uploadErr } = await supabase.storage
           .from("gallery")
-          .upload(filePath, file);
+          .upload(filePath, coverFile);
 
         if (uploadErr) throw uploadErr;
 
@@ -330,37 +95,28 @@ function UploadModal({
           .from("gallery")
           .getPublicUrl(filePath);
 
-        mediaUrl = urlData.publicUrl;
+        coverImageUrl = urlData.publicUrl;
       }
 
-      const { error: dbErr } = await supabase.from("gallery_items").insert({
+      const { error: dbErr } = await supabase.from("gallery_albums").insert({
         title: title.trim(),
         description: description.trim() || null,
-        type: mediaType,
-        media_url: mediaUrl,
-        thumbnail_url: thumbnailUrl,
+        cover_image_url: coverImageUrl,
         access,
-        uploaded_by: user.id,
+        created_by: user.id,
       });
 
       if (dbErr) throw dbErr;
 
-      onUploaded();
+      onCreated();
       onClose();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Chyba při nahrávání";
+      const msg = err instanceof Error ? err.message : "Chyba při vytváření alba";
       setError(msg);
     } finally {
-      setUploading(false);
+      setSaving(false);
     }
   }
-
-  const acceptStr = mediaType === "image" ? IMAGE_ACCEPT : VIDEO_ACCEPT;
-  const maxSizeLabel = mediaType === "image" ? "10 MB" : "100 MB";
-  const formatsLabel =
-    mediaType === "image"
-      ? "JPEG, PNG, GIF, WebP"
-      : "MP4, WebM, MOV";
 
   return (
     <div
@@ -399,7 +155,7 @@ function UploadModal({
           }}
         >
           <h2 style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-primary)" }}>
-            ➕ Přidat do galerie
+            📁 Nové album
           </h2>
           <button
             onClick={onClose}
@@ -417,58 +173,7 @@ function UploadModal({
         </div>
 
         <form onSubmit={handleSubmit}>
-          {/* Typ média */}
-          <div style={{ marginBottom: "16px" }}>
-            <label
-              style={{
-                display: "block",
-                fontSize: "13px",
-                color: "var(--text-muted)",
-                marginBottom: "8px",
-                fontWeight: 500,
-              }}
-            >
-              Typ média
-            </label>
-            <div style={{ display: "flex", gap: "12px" }}>
-              {(
-                [
-                  { value: "image", label: "📷 Fotka" },
-                  { value: "video", label: "🎬 Video" },
-                  { value: "youtube", label: "▶️ YouTube" },
-                ] as const
-              ).map((opt) => (
-                <label
-                  key={opt.value}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    cursor: "pointer",
-                    fontSize: "14px",
-                    color: "var(--text-body)",
-                  }}
-                >
-                  <input
-                    type="radio"
-                    name="mediaType"
-                    value={opt.value}
-                    checked={mediaType === opt.value}
-                    onChange={() => {
-                      setMediaType(opt.value);
-                      setFile(null);
-                      setYoutubeUrl("");
-                      setError("");
-                    }}
-                    style={{ accentColor: "var(--accent)" }}
-                  />
-                  {opt.label}
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {/* Název */}
+          {/* Název alba */}
           <div style={{ marginBottom: "16px" }}>
             <label
               style={{
@@ -479,14 +184,14 @@ function UploadModal({
                 fontWeight: 500,
               }}
             >
-              Název *
+              Název alba *
             </label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               required
-              placeholder="Název položky galerie"
+              placeholder="Např. Výstava Praha 2025"
               style={{
                 width: "100%",
                 padding: "10px 14px",
@@ -517,7 +222,7 @@ function UploadModal({
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Volitelný popis..."
+              placeholder="Volitelný popis alba..."
               rows={3}
               style={{
                 width: "100%",
@@ -591,149 +296,71 @@ function UploadModal({
             </div>
           </div>
 
-          {/* YouTube URL */}
-          {mediaType === "youtube" && (
-            <div style={{ marginBottom: "16px" }}>
-              <label
-                style={{
-                  display: "block",
-                  fontSize: "13px",
-                  color: "var(--text-muted)",
-                  marginBottom: "6px",
-                  fontWeight: 500,
-                }}
-              >
-                YouTube URL *
-              </label>
+          {/* Cover image */}
+          <div style={{ marginBottom: "20px" }}>
+            <label
+              style={{
+                display: "block",
+                fontSize: "13px",
+                color: "var(--text-muted)",
+                marginBottom: "6px",
+                fontWeight: 500,
+              }}
+            >
+              Titulní obrázek (volitelné)
+            </label>
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOver(true);
+              }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={handleDrop}
+              onClick={() =>
+                document.getElementById("album-cover-input")?.click()
+              }
+              style={{
+                border: `2px dashed ${dragOver ? "var(--accent)" : "var(--border-input)"}`,
+                borderRadius: "12px",
+                padding: "24px 20px",
+                textAlign: "center",
+                cursor: "pointer",
+                transition: "border-color 0.2s",
+                background: dragOver ? "var(--accent-bg-subtle)" : "transparent",
+              }}
+            >
               <input
-                type="url"
-                value={youtubeUrl}
+                id="album-cover-input"
+                type="file"
+                accept={IMAGE_ACCEPT}
                 onChange={(e) => {
-                  setYoutubeUrl(e.target.value);
-                  setError("");
+                  if (e.target.files?.[0]) handleFileSelect(e.target.files[0]);
                 }}
-                placeholder="https://www.youtube.com/watch?v=..."
-                style={{
-                  width: "100%",
-                  padding: "10px 14px",
-                  background: "var(--bg-input)",
-                  border: "1px solid var(--border-input)",
-                  borderRadius: "8px",
-                  color: "var(--text-body)",
-                  fontSize: "14px",
-                  outline: "none",
-                  boxSizing: "border-box",
-                }}
+                style={{ display: "none" }}
               />
-              {youtubeUrl && isValidYouTubeUrl(youtubeUrl) && (
-                <div style={{ marginTop: "8px" }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={`https://img.youtube.com/vi/${extractYouTubeId(youtubeUrl)}/hqdefault.jpg`}
-                    alt="YouTube thumbnail"
-                    style={{
-                      width: "100%",
-                      maxWidth: "320px",
-                      borderRadius: "8px",
-                      border: "1px solid var(--border)",
-                    }}
-                  />
+              {coverFile ? (
+                <div>
+                  <div style={{ fontSize: "28px", marginBottom: "6px" }}>🖼️</div>
+                  <div style={{ fontSize: "14px", color: "var(--text-body)", fontWeight: 500 }}>
+                    {coverFile.name}
+                  </div>
+                  <div style={{ fontSize: "12px", color: "var(--text-dimmer)", marginTop: "4px" }}>
+                    {formatFileSize(coverFile.size)}
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ fontSize: "28px", marginBottom: "6px" }}>🖼️</div>
+                  <div style={{ fontSize: "13px", color: "var(--text-dim)" }}>
+                    Přetáhněte obrázek nebo klikněte pro výběr
+                  </div>
+                  <div style={{ fontSize: "12px", color: "var(--text-faint)", marginTop: "4px" }}>
+                    JPEG, PNG, GIF, WebP · max 10 MB
+                  </div>
                 </div>
               )}
             </div>
-          )}
-
-          {/* File upload (image/video) */}
-          {mediaType !== "youtube" && (
-            <div style={{ marginBottom: "20px" }}>
-              <label
-                style={{
-                  display: "block",
-                  fontSize: "13px",
-                  color: "var(--text-muted)",
-                  marginBottom: "6px",
-                  fontWeight: 500,
-                }}
-              >
-                Soubor *
-              </label>
-              <div
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setDragOver(true);
-                }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={handleDrop}
-                onClick={() =>
-                  document.getElementById("gallery-file-input")?.click()
-                }
-                style={{
-                  border: `2px dashed ${dragOver ? "var(--accent)" : "var(--border-input)"}`,
-                  borderRadius: "12px",
-                  padding: "32px 20px",
-                  textAlign: "center",
-                  cursor: "pointer",
-                  transition: "border-color 0.2s",
-                  background: dragOver
-                    ? "var(--accent-bg-subtle)"
-                    : "transparent",
-                }}
-              >
-                <input
-                  id="gallery-file-input"
-                  type="file"
-                  accept={acceptStr}
-                  onChange={(e) => {
-                    if (e.target.files?.[0]) handleFileSelect(e.target.files[0]);
-                  }}
-                  style={{ display: "none" }}
-                />
-                {file ? (
-                  <div>
-                    <div style={{ fontSize: "32px", marginBottom: "8px" }}>
-                      {mediaType === "image" ? "📷" : "🎬"}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "14px",
-                        color: "var(--text-body)",
-                        fontWeight: 500,
-                      }}
-                    >
-                      {file.name}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "12px",
-                        color: "var(--text-dimmer)",
-                        marginTop: "4px",
-                      }}
-                    >
-                      {formatFileSize(file.size)}
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    <div style={{ fontSize: "32px", marginBottom: "8px" }}>
-                      {mediaType === "image" ? "📷" : "🎬"}
-                    </div>
-                    <div style={{ fontSize: "14px", color: "var(--text-dim)" }}>
-                      Přetáhněte soubor sem nebo klikněte pro výběr
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "12px",
-                        color: "var(--text-faint)",
-                        marginTop: "6px",
-                      }}
-                    >
-                      {formatsLabel} · max {maxSizeLabel}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
+          </div>
 
           {/* Error */}
           {error && (
@@ -755,24 +382,21 @@ function UploadModal({
           {/* Submit */}
           <button
             type="submit"
-            disabled={uploading || !title.trim()}
+            disabled={saving || !title.trim()}
             style={{
               width: "100%",
               padding: "12px",
-              background:
-                uploading || !title.trim() ? "var(--border-hover)" : "var(--accent)",
-              color:
-                uploading || !title.trim() ? "var(--text-dimmer)" : "var(--accent-text-on)",
+              background: saving || !title.trim() ? "var(--border-hover)" : "var(--accent)",
+              color: saving || !title.trim() ? "var(--text-dimmer)" : "var(--accent-text-on)",
               border: "none",
               borderRadius: "10px",
               fontSize: "15px",
               fontWeight: 600,
-              cursor:
-                uploading || !title.trim() ? "not-allowed" : "pointer",
+              cursor: saving || !title.trim() ? "not-allowed" : "pointer",
               transition: "background 0.2s",
             }}
           >
-            {uploading ? "Nahrávám..." : "Přidat do galerie"}
+            {saving ? "Vytvářím..." : "Vytvořit album"}
           </button>
         </form>
       </div>
@@ -781,39 +405,28 @@ function UploadModal({
 }
 
 /* ============================================================
-   GALLERY CARD
+   ALBUM CARD
    ============================================================ */
 
-function GalleryCard({
-  item,
+function AlbumCard({
+  album,
   isAdmin,
   isAuthenticated,
-  onOpen,
   onDelete,
 }: {
-  item: GalleryItem;
+  album: GalleryAlbum;
   isAdmin: boolean;
   isAuthenticated: boolean;
-  onOpen: () => void;
   onDelete: () => void;
 }) {
+  const router = useRouter();
   const cardRef = useRef<HTMLDivElement>(null);
-  const needsAuth = item.access === "authenticated" && !isAuthenticated;
-  const ytId = item.type === "youtube" ? extractYouTubeId(item.media_url) : null;
+  const needsAuth = album.access === "authenticated" && !isAuthenticated;
 
-  const typeIcon =
-    item.type === "image" ? "📷" : item.type === "video" ? "🎬" : "▶️";
-  const typeLabel =
-    item.type === "image" ? "Fotka" : item.type === "video" ? "Video" : "YouTube";
-
-  // Thumbnail URL
-  let thumbUrl: string | null = null;
-  if (item.thumbnail_url) {
-    thumbUrl = item.thumbnail_url;
-  } else if (item.type === "youtube" && ytId) {
-    thumbUrl = `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`;
-  } else if (item.type === "image") {
-    thumbUrl = item.media_url;
+  function handleClick() {
+    if (!needsAuth) {
+      router.push(`/galerie/${album.id}`);
+    }
   }
 
   return (
@@ -826,19 +439,14 @@ function GalleryCard({
         overflow: "hidden",
         cursor: needsAuth ? "default" : "pointer",
         transition: "all 0.2s",
-        borderBottom: "3px solid var(--accent)",
         position: "relative",
-        breakInside: "avoid",
-        marginBottom: "16px",
       }}
-      onClick={() => {
-        if (!needsAuth) onOpen();
-      }}
+      onClick={handleClick}
       onMouseEnter={() => {
-        if (cardRef.current) {
+        if (cardRef.current && !needsAuth) {
           cardRef.current.style.transform = "translateY(-3px)";
           cardRef.current.style.boxShadow = "0 8px 24px rgba(0,0,0,0.3)";
-          cardRef.current.style.borderColor = "var(--border-hover)";
+          cardRef.current.style.borderColor = "var(--accent-border-strong)";
         }
       }}
       onMouseLeave={() => {
@@ -849,12 +457,11 @@ function GalleryCard({
         }
       }}
     >
-      {/* Thumbnail / preview */}
+      {/* Cover image area */}
       <div
         style={{
           width: "100%",
-          aspectRatio: item.type === "youtube" ? "16/9" : "4/3",
-          background: "var(--bg-page)",
+          aspectRatio: "16/10",
           position: "relative",
           overflow: "hidden",
         }}
@@ -868,14 +475,14 @@ function GalleryCard({
               flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
-              background: "var(--bg-page)",
+              background: "linear-gradient(135deg, var(--bg-input), var(--bg-elevated))",
               position: "relative",
             }}
           >
-            {thumbUrl && (
+            {album.cover_image_url && (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={thumbUrl}
+                src={album.cover_image_url}
                 alt=""
                 style={{
                   position: "absolute",
@@ -887,69 +494,28 @@ function GalleryCard({
                 }}
               />
             )}
-            <div
-              style={{
-                position: "relative",
-                zIndex: 1,
-                textAlign: "center",
-                padding: "20px",
-              }}
-            >
+            <div style={{ position: "relative", zIndex: 1, textAlign: "center", padding: "20px" }}>
               <div style={{ fontSize: "32px", marginBottom: "8px" }}>🔒</div>
               <a
                 href="/prihlaseni"
                 onClick={(e) => e.stopPropagation()}
-                style={{
-                  color: "var(--accent)",
-                  fontSize: "14px",
-                  fontWeight: 500,
-                  textDecoration: "none",
-                }}
+                style={{ color: "var(--accent)", fontSize: "14px", fontWeight: 500, textDecoration: "none" }}
               >
                 Přihlaste se pro zobrazení
               </a>
             </div>
           </div>
-        ) : thumbUrl ? (
-          <>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={thumbUrl}
-              alt={item.title}
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-              }}
-            />
-            {item.type !== "image" && (
-              <div
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  background: "rgba(0,0,0,0.3)",
-                }}
-              >
-                <div
-                  style={{
-                    width: "56px",
-                    height: "56px",
-                    borderRadius: "50%",
-                    background: "rgba(240,160,48,0.9)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: "24px",
-                  }}
-                >
-                  ▶
-                </div>
-              </div>
-            )}
-          </>
+        ) : album.cover_image_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={album.cover_image_url}
+            alt={album.title}
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+            }}
+          />
         ) : (
           <div
             style={{
@@ -958,40 +524,62 @@ function GalleryCard({
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              fontSize: "48px",
-              color: "var(--border-hover)",
+              background: "linear-gradient(135deg, var(--bg-input) 0%, var(--bg-elevated) 100%)",
             }}
           >
-            {typeIcon}
+            <span style={{ fontSize: "56px", opacity: 0.3 }}>📷</span>
           </div>
         )}
 
-        {/* Type badge */}
+        {/* Title overlay at bottom */}
         <div
           style={{
             position: "absolute",
-            top: "8px",
-            left: "8px",
-            background: "rgba(15,17,23,0.8)",
-            padding: "4px 8px",
-            borderRadius: "6px",
-            fontSize: "11px",
-            color: "var(--text-muted)",
-            display: "flex",
-            alignItems: "center",
-            gap: "4px",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            background: "linear-gradient(transparent, rgba(0,0,0,0.85))",
+            padding: "32px 16px 14px",
           }}
         >
-          {typeIcon} {typeLabel}
+          <h3
+            style={{
+              fontSize: "17px",
+              fontWeight: 700,
+              color: "#fff",
+              marginBottom: "2px",
+              lineHeight: 1.3,
+            }}
+          >
+            {album.title}
+          </h3>
+        </div>
+
+        {/* Item count badge */}
+        <div
+          style={{
+            position: "absolute",
+            top: "10px",
+            right: "10px",
+            background: "rgba(15,17,23,0.8)",
+            padding: "4px 10px",
+            borderRadius: "6px",
+            fontSize: "12px",
+            color: "var(--accent)",
+            fontWeight: 600,
+            backdropFilter: "blur(4px)",
+          }}
+        >
+          {itemCountLabel(album.item_count)}
         </div>
 
         {/* Access badge */}
-        {item.access === "authenticated" && (
+        {album.access === "authenticated" && (
           <div
             style={{
               position: "absolute",
-              top: "8px",
-              right: "8px",
+              top: "10px",
+              left: "10px",
               background: "var(--accent-border)",
               padding: "4px 8px",
               borderRadius: "6px",
@@ -1004,31 +592,50 @@ function GalleryCard({
         )}
       </div>
 
-      {/* Info */}
-      <div style={{ padding: "14px 16px" }}>
-        <h3
+      {/* Info bar */}
+      <div
+        style={{
+          padding: "12px 16px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          borderTop: "1px solid var(--border)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          {album.description && (
+            <p
+              style={{
+                fontSize: "13px",
+                color: "var(--text-dimmer)",
+                lineHeight: 1.4,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                maxWidth: "220px",
+              }}
+            >
+              {album.description}
+            </p>
+          )}
+        </div>
+        <div
           style={{
-            fontSize: "15px",
-            fontWeight: 600,
-            color: "var(--text-body)",
-            marginBottom: "4px",
-            lineHeight: 1.4,
+            fontSize: "12px",
+            color: "var(--text-faint)",
+            whiteSpace: "nowrap",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
           }}
         >
-          {item.title}
-        </h3>
-        {item.description && (
-          <p
-            style={{
-              fontSize: "13px",
-              color: "var(--text-dimmer)",
-              lineHeight: 1.4,
-              marginBottom: "0",
-            }}
-          >
-            {item.description}
-          </p>
-        )}
+          {album.author_username && (
+            <span style={{ color: "var(--text-dimmer)" }}>
+              {album.author_username}
+            </span>
+          )}
+          <span>{timeAgo(album.created_at)}</span>
+        </div>
       </div>
 
       {/* Admin delete */}
@@ -1040,10 +647,10 @@ function GalleryCard({
           }}
           style={{
             position: "absolute",
-            bottom: "12px",
+            bottom: "52px",
             right: "12px",
             padding: "6px 10px",
-            background: "var(--danger-bg)",
+            background: "rgba(15,17,23,0.8)",
             border: "1px solid rgba(220,53,69,0.3)",
             borderRadius: "8px",
             color: "var(--danger)",
@@ -1051,12 +658,13 @@ function GalleryCard({
             cursor: "pointer",
             transition: "background 0.2s",
             zIndex: 10,
+            backdropFilter: "blur(4px)",
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = "var(--danger-border)";
+            e.currentTarget.style.background = "var(--danger-bg)";
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = "var(--danger-bg)";
+            e.currentTarget.style.background = "rgba(15,17,23,0.8)";
           }}
         >
           🗑️
@@ -1072,78 +680,68 @@ function GalleryCard({
 
 export default function GalleryPage() {
   const { user, profile, loading: authLoading } = useAuth();
-  const [items, setItems] = useState<GalleryItem[]>([]);
+  const [albums, setAlbums] = useState<GalleryAlbum[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeFilter, setActiveFilter] = useState<GalleryItemType | "all">("all");
-  const [showUpload, setShowUpload] = useState(false);
-  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
 
   const isAdmin = profile?.role === "admin";
   const isAuthenticated = !!user;
 
-  const fetchItems = useCallback(async () => {
+  const fetchAlbums = useCallback(async () => {
     setLoading(true);
     try {
       await supabase.auth.getSession();
 
-      let query = supabase
-        .from("gallery_items")
-        .select("*")
+      const { data, error } = await supabase
+        .from("gallery_albums")
+        .select("*, profiles:created_by(username)")
         .order("created_at", { ascending: false });
 
-      if (activeFilter !== "all") {
-        query = query.eq("type", activeFilter);
-      }
-
-      const { data, error } = await query;
       if (error) throw error;
-      setItems((data as GalleryItem[]) || []);
+
+      const mapped: GalleryAlbum[] = (data || []).map((row: Record<string, unknown>) => {
+        const profiles = row.profiles as { username: string } | null;
+        return {
+          id: row.id as string,
+          title: row.title as string,
+          description: row.description as string | null,
+          cover_image_url: row.cover_image_url as string | null,
+          access: row.access as GalleryAccess,
+          created_by: row.created_by as string | null,
+          item_count: row.item_count as number,
+          created_at: row.created_at as string,
+          updated_at: row.updated_at as string,
+          author_username: profiles?.username ?? undefined,
+        };
+      });
+
+      setAlbums(mapped);
     } catch {
-      setItems([]);
+      setAlbums([]);
     } finally {
       setLoading(false);
     }
-  }, [activeFilter]);
+  }, []);
 
   useEffect(() => {
     if (!authLoading) {
-      fetchItems();
+      fetchAlbums();
     }
-  }, [fetchItems, authLoading]);
+  }, [fetchAlbums, authLoading]);
 
-  async function handleDelete(item: GalleryItem) {
-    if (!confirm(`Opravdu smazat "${item.title}"?`)) return;
+  async function handleDeleteAlbum(album: GalleryAlbum) {
+    if (!confirm(`Opravdu smazat album "${album.title}" a všechny jeho položky?`)) return;
 
     try {
-      // Delete from storage if it's a file (not YouTube)
-      if (item.type !== "youtube") {
-        const urlParts = item.media_url.split("/gallery/");
-        if (urlParts[1]) {
-          const storagePath = decodeURIComponent(urlParts[1]);
-          await supabase.storage.from("gallery").remove([storagePath]);
-        }
-      }
-
       const { error } = await supabase
-        .from("gallery_items")
+        .from("gallery_albums")
         .delete()
-        .eq("id", item.id);
+        .eq("id", album.id);
       if (error) throw error;
-
-      fetchItems();
+      fetchAlbums();
     } catch (err) {
       alert(err instanceof Error ? err.message : "Chyba při mazání");
     }
-  }
-
-  // Items that can be opened in lightbox (exclude auth-locked for unauthenticated)
-  const openableItems = items.filter(
-    (i) => !(i.access === "authenticated" && !isAuthenticated)
-  );
-
-  function openLightbox(item: GalleryItem) {
-    const idx = openableItems.findIndex((i) => i.id === item.id);
-    if (idx !== -1) setLightboxIndex(idx);
   }
 
   return (
@@ -1176,7 +774,7 @@ export default function GalleryPage() {
         </div>
         {isAdmin && (
           <button
-            onClick={() => setShowUpload(true)}
+            onClick={() => setShowCreate(true)}
             style={{
               padding: "10px 20px",
               background: "var(--accent)",
@@ -1198,60 +796,22 @@ export default function GalleryPage() {
               (e.currentTarget.style.background = "var(--accent)")
             }
           >
-            ➕ Přidat do galerie
+            📁 Nové album
           </button>
         )}
       </div>
 
-      {/* Filter buttons */}
-      <div
-        style={{
-          display: "flex",
-          gap: "8px",
-          marginBottom: "32px",
-          flexWrap: "wrap",
-        }}
-      >
-        {FILTERS.map((f) => {
-          const isActive = activeFilter === f.value;
-          return (
-            <button
-              key={f.value}
-              onClick={() => setActiveFilter(f.value)}
-              style={{
-                padding: "8px 16px",
-                background: isActive
-                  ? "var(--accent-border)"
-                  : "var(--bg-card)",
-                border: `1px solid ${isActive ? "var(--accent)" : "var(--border)"}`,
-                borderRadius: "8px",
-                color: isActive ? "var(--accent)" : "var(--text-muted)",
-                fontSize: "13px",
-                fontWeight: 500,
-                cursor: "pointer",
-                transition: "all 0.2s",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-              }}
-            >
-              {f.icon} {f.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Gallery grid */}
+      {/* Albums grid */}
       {loading || authLoading ? (
         <div style={{ textAlign: "center", padding: "64px 0" }}>
           <div style={{ fontSize: "32px", marginBottom: "12px" }}>⏳</div>
           <p style={{ color: "var(--text-dimmer)", fontSize: "14px" }}>
-            Načítám galerii...
+            Načítám alba...
           </p>
         </div>
-      ) : items.length === 0 ? (
+      ) : albums.length === 0 ? (
         <div style={{ textAlign: "center", padding: "64px 0" }}>
-          <div style={{ fontSize: "48px", marginBottom: "16px" }}>🖼️</div>
+          <div style={{ fontSize: "48px", marginBottom: "16px" }}>📷</div>
           <p
             style={{
               color: "var(--text-dim)",
@@ -1259,69 +819,54 @@ export default function GalleryPage() {
               marginBottom: "4px",
             }}
           >
-            Galerie je zatím prázdná
+            Zatím nejsou žádná alba
           </p>
           <p style={{ color: "var(--text-faint)", fontSize: "13px" }}>
-            {activeFilter !== "all"
-              ? "Zkuste jiný filtr"
-              : "Zatím nebyl přidán žádný obsah"}
+            {isAdmin
+              ? 'Vytvořte první album kliknutím na "Nové album"'
+              : "Galerie se brzy naplní obsahem"}
           </p>
         </div>
       ) : (
-        <div
-          style={{
-            columnCount: 1,
-            columnGap: "16px",
-          }}
-        >
+        <>
           <style
             dangerouslySetInnerHTML={{
               __html: `
                 @media (min-width: 640px) {
-                  .gallery-masonry { column-count: 2 !important; }
+                  .gallery-albums-grid { grid-template-columns: repeat(2, 1fr) !important; }
                 }
                 @media (min-width: 1024px) {
-                  .gallery-masonry { column-count: 3 !important; }
+                  .gallery-albums-grid { grid-template-columns: repeat(3, 1fr) !important; }
                 }
               `,
             }}
           />
           <div
-            className="gallery-masonry"
+            className="gallery-albums-grid"
             style={{
-              columnCount: 1,
-              columnGap: "16px",
+              display: "grid",
+              gridTemplateColumns: "1fr",
+              gap: "20px",
             }}
           >
-            {items.map((item) => (
-              <GalleryCard
-                key={item.id}
-                item={item}
+            {albums.map((album) => (
+              <AlbumCard
+                key={album.id}
+                album={album}
                 isAdmin={isAdmin}
                 isAuthenticated={isAuthenticated}
-                onOpen={() => openLightbox(item)}
-                onDelete={() => handleDelete(item)}
+                onDelete={() => handleDeleteAlbum(album)}
               />
             ))}
           </div>
-        </div>
+        </>
       )}
 
-      {/* Upload modal */}
-      {showUpload && (
-        <UploadModal
-          onClose={() => setShowUpload(false)}
-          onUploaded={() => fetchItems()}
-        />
-      )}
-
-      {/* Lightbox */}
-      {lightboxIndex !== null && (
-        <Lightbox
-          items={openableItems}
-          currentIndex={lightboxIndex}
-          onClose={() => setLightboxIndex(null)}
-          onNavigate={(idx) => setLightboxIndex(idx)}
+      {/* Create album modal */}
+      {showCreate && (
+        <CreateAlbumModal
+          onClose={() => setShowCreate(false)}
+          onCreated={() => fetchAlbums()}
         />
       )}
     </div>
