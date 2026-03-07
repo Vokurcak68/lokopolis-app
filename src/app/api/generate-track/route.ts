@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 // Track catalogs for the AI prompt context
 const TRACK_CATALOGS_INFO: Record<string, { name: string; straights: string[]; curves: string[]; turnouts: string[] }> = {
@@ -51,7 +51,7 @@ interface RequestBody {
 }
 
 export async function POST(request: NextRequest) {
-  if (!ANTHROPIC_API_KEY) {
+  if (!OPENAI_API_KEY) {
     return NextResponse.json({ error: "API klíč není nakonfigurován" }, { status: 500 });
   }
 
@@ -138,26 +138,27 @@ POZICE: top, bottom, left, right, center, top-left, top-right, bottom-left, bott
 Vrať POUZE platný JSON objekt, žádný markdown ani vysvětlení kolem.`;
 
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
+        "Authorization": `Bearer ${OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        model: "gpt-4o",
         max_tokens: 2000,
+        temperature: 0.7,
         messages: [
+          { role: "system", content: systemPrompt },
           { role: "user", content: userMessage },
         ],
-        system: systemPrompt,
+        response_format: { type: "json_object" },
       }),
     });
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error("Anthropic API error:", response.status, errText);
+      console.error("OpenAI API error:", response.status, errText);
       return NextResponse.json(
         { error: `AI chyba (${response.status}): ${response.statusText}` },
         { status: 502 }
@@ -165,9 +166,9 @@ Vrať POUZE platný JSON objekt, žádný markdown ani vysvětlení kolem.`;
     }
 
     const data = await response.json();
-    const aiText = data.content?.[0]?.text ?? "";
+    const aiText = data.choices?.[0]?.message?.content ?? "";
 
-    // Parse JSON from AI response (might be wrapped in ```json)
+    // Parse JSON from AI response
     let parsed;
     try {
       const jsonMatch = aiText.match(/\{[\s\S]*\}/);
