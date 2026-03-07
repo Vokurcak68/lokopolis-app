@@ -7,15 +7,23 @@ import { useState, useCallback, useRef } from "react";
    =========================== */
 type Scale = "H0" | "TT" | "N";
 type TrackSystem = "roco-line" | "roco-geo" | "tillig" | "piko-a" | "fleischmann";
-type LayoutStyle = "oval" | "dogbone" | "lshaped" | "point-to-point" | "loop-with-station" | "figure-eight";
+type BoardShape = "rectangle" | "l-shape" | "u-shape";
+type LCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
+type LayoutCharacter =
+  | "horska-trat"
+  | "hlavni-koridor"
+  | "stanice-vlecky"
+  | "mala-diorama"
+  | "prujezdna-stanice"
+  | "prumyslova-vlecka";
 
 interface TrackPiece {
   id: string;
   name: string;
   nameCz: string;
-  length?: number;     // mm (straight)
-  radius?: number;     // mm (curve)
-  angle?: number;      // degrees (curve)
+  length?: number;
+  radius?: number;
+  angle?: number;
   type: "straight" | "curve" | "turnout-left" | "turnout-right" | "crossing";
 }
 
@@ -23,7 +31,7 @@ interface PlacedPiece {
   piece: TrackPiece;
   x: number;
   y: number;
-  rotation: number; // degrees
+  rotation: number;
 }
 
 interface LayoutResult {
@@ -31,17 +39,20 @@ interface LayoutResult {
   bom: { piece: TrackPiece; count: number }[];
   description: string;
   warnings: string[];
-  dimensions: { width: number; height: number }; // actual mm used
+  dimensions: { width: number; height: number };
 }
 
 interface FormData {
-  width: number;       // cm
-  height: number;      // cm
+  boardShape: BoardShape;
+  width: number;       // cm — main width
+  height: number;      // cm — main depth
+  width2: number;      // cm — L-shape side arm width
+  height2: number;     // cm — L-shape side arm depth
+  lCorner: LCorner;    // L-shape corner position
+  uArmDepth: number;   // cm — U-shape arm depth (both sides)
   scale: Scale;
   trackSystem: TrackSystem;
-  style: LayoutStyle;
-  withStation: boolean;
-  withSiding: boolean;
+  character: LayoutCharacter;
 }
 
 /* ===========================
@@ -114,6 +125,18 @@ const TRACK_CATALOGS: Record<TrackSystem, { name: string; pieces: TrackPiece[] }
 };
 
 /* ===========================
+   CHARACTER DEFINITIONS
+   =========================== */
+const CHARACTER_OPTIONS: { value: LayoutCharacter; label: string; icon: string; desc: string }[] = [
+  { value: "horska-trat", label: "Horská trať", icon: "🏔️", desc: "Jednokolejka, tunely, stoupání" },
+  { value: "hlavni-koridor", label: "Hlavní koridor", icon: "🚄", desc: "Dvoukolejná trať, rychlé vlaky" },
+  { value: "stanice-vlecky", label: "Stanice + vlečky", icon: "🏛️", desc: "Stanice, vlečky, posun" },
+  { value: "mala-diorama", label: "Malá dioráma", icon: "🏠", desc: "Kompaktní scéna, jednoduchý ovál" },
+  { value: "prujezdna-stanice", label: "Průjezdná stanice", icon: "🔄", desc: "Ovál s výhybnou stanicí" },
+  { value: "prumyslova-vlecka", label: "Průmyslová vlečka", icon: "🏭", desc: "Vlečky, rampy, posun" },
+];
+
+/* ===========================
    LAYOUT GENERATOR
    =========================== */
 function generateLayout(form: FormData): LayoutResult {
@@ -126,197 +149,170 @@ function generateLayout(form: FormData): LayoutResult {
   const boardW = form.width * 10;
   const boardH = form.height * 10;
 
-  // Find track pieces
+  // Area factor — scale piece counts to board area relative to a 200×100cm reference
+  const refArea = 2000 * 1000; // 200cm × 100cm in mm²
+  let effectiveArea: number;
+  if (form.boardShape === "l-shape") {
+    const mainArea = boardW * boardH;
+    const sideArea = form.width2 * 10 * form.height2 * 10;
+    effectiveArea = mainArea + sideArea;
+  } else if (form.boardShape === "u-shape") {
+    const mainArea = boardW * boardH;
+    const armsArea = 2 * form.uArmDepth * 10 * boardH;
+    effectiveArea = mainArea + armsArea;
+  } else {
+    effectiveArea = boardW * boardH;
+  }
+  const areaFactor = Math.max(0.5, Math.min(3, effectiveArea / refArea));
+
+  // Find track pieces by type
   const straights = catalog.pieces.filter((p) => p.type === "straight");
   const curves = catalog.pieces.filter((p) => p.type === "curve");
   const turnoutL = catalog.pieces.find((p) => p.type === "turnout-left");
   const turnoutR = catalog.pieces.find((p) => p.type === "turnout-right");
 
-  const mainStraight = straights[0]; // longest straight
-  const mainCurve = curves[0]; // tightest curve
-  const mediumCurve = curves.length > 1 ? curves[1] : curves[0]; // wider if available
+  const mainStraight = straights[0];
+  const shortStraight = straights.length > 1 ? straights[1] : straights[0];
+  const tightCurve = curves[0]; // smallest radius
+  const wideCurve = curves.length > 1 ? curves[curves.length - 1] : curves[0]; // widest radius
+  const mediumCurve = curves.length > 2 ? curves[1] : curves[0];
 
-  if (!mainStraight || !mainCurve) {
-    return { pieces, bom: [], description: "Nelze vygenerovat — chybí díly v katalogu.", warnings: ["Katalog nemá potřebné díly."], dimensions: { width: 0, height: 0 } };
+  if (!mainStraight || !tightCurve) {
+    return {
+      pieces,
+      bom: [],
+      description: "Nelze vygenerovat — chybí díly v katalogu.",
+      warnings: ["Katalog nemá potřebné díly."],
+      dimensions: { width: 0, height: 0 },
+    };
   }
 
   const addToBom = (piece: TrackPiece, count: number = 1) => {
+    const c = Math.max(1, Math.round(count));
     const existing = bomMap.get(piece.id);
-    if (existing) existing.count += count;
-    else bomMap.set(piece.id, { piece, count });
+    if (existing) existing.count += c;
+    else bomMap.set(piece.id, { piece, count: c });
   };
 
-  // Choose curve based on available space
-  const useCurve = mediumCurve;
-  const R = useCurve.radius!;
-  const anglePer = useCurve.angle!;
-  const curvesFor180 = Math.ceil(180 / anglePer);
-  const curveSpanX = R * 2; // approximate width of 180° turn
-  const curveSpanY = R * 2;
-
-  // Calculate straight sections length
-  const SL = mainStraight.length!;
-  const availableForStraights = boardW - curveSpanX * 2 - 40; // 20mm margin each side
-  const straightCount = Math.max(2, Math.floor(availableForStraights / SL));
+  const scaledCount = (base: number) => Math.max(1, Math.round(base * areaFactor));
 
   let description = "";
-  let cx = boardW / 2;
-  let cy = boardH / 2;
+  const scaleInfo = `Měřítko ${form.scale} (1:${SCALE_FACTOR[form.scale]}), systém ${catalog.name}.`;
 
-  if (form.style === "oval") {
-    // Simple oval: straight-curve180-straight-curve180
-    const topStraights = straightCount;
-    const totalStraightLen = topStraights * SL;
+  switch (form.character) {
+    case "horska-trat": {
+      // Mountain line: single-track, tight curves, tunnels, passing loops
+      const curvesFor180 = Math.ceil(180 / (tightCurve.angle ?? 30));
+      addToBom(mainStraight, scaledCount(6));
+      if (shortStraight.id !== mainStraight.id) addToBom(shortStraight, scaledCount(4));
+      addToBom(tightCurve, scaledCount(curvesFor180 * 2 + 4));
+      if (turnoutL) addToBom(turnoutL, Math.max(1, Math.round(areaFactor)));
+      if (turnoutR) addToBom(turnoutR, Math.max(1, Math.round(areaFactor)));
 
-    // Place top straights
-    const startX = (boardW - totalStraightLen) / 2;
-    const topY = boardH / 2 - R;
-    const botY = boardH / 2 + R;
-
-    // Top straights (left to right)
-    for (let i = 0; i < topStraights; i++) {
-      pieces.push({ piece: mainStraight, x: startX + i * SL, y: topY, rotation: 0 });
-    }
-    addToBom(mainStraight, topStraights);
-
-    // Right curves (180° turn)
-    const rightCenterX = startX + totalStraightLen;
-    const rightCenterY = boardH / 2;
-    for (let i = 0; i < curvesFor180; i++) {
-      const a = -90 + i * anglePer;
-      const rad = (a * Math.PI) / 180;
-      pieces.push({
-        piece: useCurve,
-        x: rightCenterX + R * Math.cos(rad),
-        y: rightCenterY + R * Math.sin(rad),
-        rotation: a + 90,
-      });
-    }
-    addToBom(useCurve, curvesFor180);
-
-    // Bottom straights (right to left)
-    for (let i = 0; i < topStraights; i++) {
-      pieces.push({ piece: mainStraight, x: startX + (topStraights - 1 - i) * SL, y: botY, rotation: 180 });
-    }
-    addToBom(mainStraight, topStraights);
-
-    // Left curves (180° turn)
-    const leftCenterX = startX;
-    for (let i = 0; i < curvesFor180; i++) {
-      const a = 90 + i * anglePer;
-      const rad = (a * Math.PI) / 180;
-      pieces.push({
-        piece: useCurve,
-        x: leftCenterX + R * Math.cos(rad),
-        y: rightCenterY + R * Math.sin(rad),
-        rotation: a + 90,
-      });
-    }
-    addToBom(useCurve, curvesFor180);
-
-    description = `Jednoduchý ovál s ${topStraights}× rovnými na každé straně a ${curvesFor180}× oblouky v zatáčkách.`;
-
-    // Siding
-    if (form.withSiding && turnoutL && turnoutR) {
-      addToBom(turnoutL, 1);
-      addToBom(turnoutR, 1);
-      addToBom(mainStraight, 2);
-      description += ` Jedna odstavná kolej s výhybkami.`;
+      description = `${scaleInfo} Horská jednokolejná trať s těsnými oblouky (R=${tightCurve.radius}mm), výhybnou pro míjení a tunely. Trať stoupá a klesá — výškové rozdíly je třeba řešit ručně podložkami (doporučeno 3–4 % stoupání).`;
+      warnings.push("Výškové rozdíly (stoupání/klesání) je nutné vyřešit ručně pomocí podložek nebo stoupacích modulů.");
+      if (boardW < 1200 || boardH < 600) {
+        warnings.push("Pro horskou trať doporučujeme alespoň 120 × 60 cm.");
+      }
+      break;
     }
 
-    // Station
-    if (form.withStation && turnoutL && turnoutR) {
-      addToBom(turnoutL, 2);
-      addToBom(turnoutR, 2);
-      addToBom(mainStraight, 4);
-      description += ` Nádraží se 2 kolejemi a 4 výhybkami.`;
+    case "hlavni-koridor": {
+      // Main corridor: double track, wide curves, long straights, station
+      const curvesFor180 = Math.ceil(180 / (wideCurve.angle ?? 30));
+      // Double track = 2× everything for main line
+      addToBom(mainStraight, scaledCount(12)); // double the straights
+      addToBom(wideCurve, scaledCount(curvesFor180 * 2 * 2)); // double curves for both loops
+      if (mediumCurve.id !== wideCurve.id) addToBom(mediumCurve, scaledCount(curvesFor180 * 2)); // parallel inner track
+      // Station with through tracks
+      if (turnoutL) addToBom(turnoutL, Math.max(2, scaledCount(2)));
+      if (turnoutR) addToBom(turnoutR, Math.max(2, scaledCount(2)));
+      addToBom(mainStraight, scaledCount(6)); // station straights
+
+      description = `${scaleInfo} Dvoukolejný hlavní koridor s plynulými oblouky (R=${wideCurve.radius}mm), dlouhými rovnými úseky a průjezdnou stanicí. Vhodné pro rychlíky a IC vlaky.`;
+      if (boardW < 1800) {
+        warnings.push("Dvoukolejná trať s velkými poloměry vyžaduje ideálně alespoň 180 cm šířky.");
+      }
+      break;
     }
 
-    if (curveSpanX * 2 + totalStraightLen > boardW) {
-      warnings.push(`Trať se těsně nevejde do šířky ${form.width} cm — zvažte větší desku nebo menší poloměr.`);
-    }
-    if (curveSpanY > boardH) {
-      warnings.push(`Oblouky přesahují výšku desky ${form.height} cm.`);
-    }
-  } else if (form.style === "figure-eight") {
-    // Figure eight: two ovals crossing
-    const topStraights = Math.max(2, Math.floor(straightCount / 2));
-    addToBom(mainStraight, topStraights * 4);
-    addToBom(useCurve, curvesFor180 * 4);
+    case "stanice-vlecky": {
+      // Station + sidings: many turnouts, complex track
+      addToBom(mainStraight, scaledCount(10));
+      if (shortStraight.id !== mainStraight.id) addToBom(shortStraight, scaledCount(8));
+      const curvesFor90 = Math.ceil(90 / (mediumCurve.angle ?? 30));
+      addToBom(mediumCurve, scaledCount(curvesFor90 * 4));
+      // Lots of turnouts for station and sidings
+      const turnoutCount = Math.max(3, scaledCount(4));
+      if (turnoutL) addToBom(turnoutL, turnoutCount);
+      if (turnoutR) addToBom(turnoutR, turnoutCount);
 
-    description = `Osmička — dvě propojené smyčky s ${topStraights * 4}× rovnými a ${curvesFor180 * 4}× oblouky. Křížení uprostřed (vyžaduje křížový díl nebo úrovňové zkřížení).`;
-
-    if (form.withStation && turnoutL && turnoutR) {
-      addToBom(turnoutL, 2);
-      addToBom(turnoutR, 2);
-      addToBom(mainStraight, 3);
-      description += ` Nádraží v jedné smyčce.`;
+      description = `${scaleInfo} Centrální stanice s ${turnoutCount * 2}× výhybkami, průjezdními kolejemi, vlečkami k průmyslovým objektům a odstavnou skupinou. Ideální pro posunovací operace.`;
+      if (boardW < 1500) {
+        warnings.push("Složitá stanice s vlečkami vyžaduje ideálně alespoň 150 cm šířky pro pohodlné uspořádání.");
+      }
+      break;
     }
 
-    warnings.push("Osmička vyžaduje křížový díl (nebo úrovňové zkřížení) — zkontrolujte dostupnost ve vašem systému.");
-  } else if (form.style === "dogbone") {
-    // Dogbone: long straights with reversing loops at ends
-    const mainStraights = Math.max(3, straightCount);
-    addToBom(mainStraight, mainStraights * 2);
-    addToBom(useCurve, curvesFor180 * 2);
-
-    description = `Dogbone (kost) — ${mainStraights * 2}× rovných se smyčkami na obou koncích. Delší tratě pro plynulý provoz.`;
-
-    if (form.withStation && turnoutL && turnoutR) {
-      addToBom(turnoutL, 2);
-      addToBom(turnoutR, 2);
-      addToBom(mainStraight, 4);
-      description += ` Nádraží uprostřed tratě.`;
-    }
-  } else if (form.style === "lshaped") {
-    const legStraights = Math.max(2, Math.floor(straightCount * 0.6));
-    addToBom(mainStraight, legStraights * 4);
-    addToBom(useCurve, curvesFor180 * 2 + Math.ceil(90 / anglePer) * 2);
-
-    description = `Trať ve tvaru L — dvě ramena s ${legStraights * 4}× rovnými a oblouky v rozích. Vhodné pro rohové umístění.`;
-
-    if (form.withStation && turnoutL && turnoutR) {
-      addToBom(turnoutL, 2);
-      addToBom(turnoutR, 2);
-      addToBom(mainStraight, 3);
-      description += ` Nádraží v jednom rameni.`;
-    }
-  } else if (form.style === "point-to-point") {
-    const mainStraights = Math.max(4, straightCount);
-    addToBom(mainStraight, mainStraights);
-
-    if (turnoutL && turnoutR) {
-      addToBom(turnoutL, 2);
-      addToBom(turnoutR, 2);
-      addToBom(mainStraight, 4);
+    case "mala-diorama": {
+      // Small diorama: minimal, compact, simple oval or point-to-point
+      const curvesFor180 = Math.ceil(180 / (tightCurve.angle ?? 30));
+      addToBom(mainStraight, scaledCount(4));
+      addToBom(tightCurve, scaledCount(curvesFor180 * 2));
+      if (areaFactor > 0.8 && turnoutL) {
+        addToBom(turnoutL, 1);
+        if (turnoutR) addToBom(turnoutR, 1);
+        addToBom(mainStraight, 2);
+        description = `${scaleInfo} Kompaktní dioráma — jednoduchý ovál s jednou zastávkou a krátkou odstavnou kolejí. Optimalizováno pro malý prostor.`;
+      } else {
+        description = `${scaleInfo} Minimalistická dioráma — jednoduchý ovál bez výhybek. Ideální pro začátečníky nebo výstavní účely.`;
+      }
+      break;
     }
 
-    const curveSegments = Math.ceil(90 / anglePer);
-    addToBom(useCurve, curveSegments * 2);
+    case "prujezdna-stanice": {
+      // Oval with passing station: 2+ station tracks + through track
+      const curvesFor180 = Math.ceil(180 / (mediumCurve.angle ?? 30));
+      addToBom(mainStraight, scaledCount(8));
+      addToBom(mediumCurve, scaledCount(curvesFor180 * 2));
+      // Station throat: 2 turnouts each side = 4 total
+      if (turnoutL) addToBom(turnoutL, 2);
+      if (turnoutR) addToBom(turnoutR, 2);
+      // Station track straights
+      addToBom(mainStraight, scaledCount(4));
+      if (shortStraight.id !== mainStraight.id) addToBom(shortStraight, scaledCount(2));
 
-    description = `Bod-bod trať — ${mainStraights}× rovných s konečnými stanicemi na obou koncích. Realistický provoz s objíždění.`;
-  } else if (form.style === "loop-with-station") {
-    const mainStraights = straightCount;
-    addToBom(mainStraight, mainStraights * 2 + 6);
-    addToBom(useCurve, curvesFor180 * 2);
+      description = `${scaleInfo} Ovál s průjezdnou stanicí — hlavní trať (průjezdní kolej) + 2 staniční koleje s výhybkami v obou zhlavích. Umožňuje míjení a předjíždění vlaků.`;
+      break;
+    }
 
-    if (turnoutL && turnoutR) {
-      addToBom(turnoutL, 3);
-      addToBom(turnoutR, 3);
-      description = `Ovál s nádražím — ${mainStraights * 2}× rovných, 6 výhybek, 3 staniční koleje, ${curvesFor180 * 2}× oblouků.`;
-    } else {
-      description = `Ovál s prodlouženými rovnými úseky pro nádraží.`;
+    case "prumyslova-vlecka": {
+      // Industrial spur: point-to-point, many turnouts for spurs
+      addToBom(mainStraight, scaledCount(8));
+      if (shortStraight.id !== mainStraight.id) addToBom(shortStraight, scaledCount(6));
+      const curvesFor90 = Math.ceil(90 / (mediumCurve.angle ?? 30));
+      addToBom(mediumCurve, scaledCount(curvesFor90 * 2));
+      // Industrial turnouts
+      const turnoutCount = Math.max(2, scaledCount(3));
+      if (turnoutL) addToBom(turnoutL, turnoutCount);
+      if (turnoutR) addToBom(turnoutR, turnoutCount);
+
+      description = `${scaleInfo} Průmyslová vlečka — bod-bod trať s ${turnoutCount * 2}× výhybkami, nakládacími rampami, skladovými kolejemi. Zaměřeno na posunovací operace s motorovými lokomotivami.`;
+      break;
     }
   }
 
-  // Add scale info
-  const scaleInfo = `Měřítko ${form.scale} (1:${SCALE_FACTOR[form.scale]}), systém ${catalog.name}.`;
-  description = scaleInfo + " " + description;
+  // Board shape notes
+  if (form.boardShape === "l-shape") {
+    description += ` Deska tvaru L (${form.width}×${form.height} cm + rameno ${form.width2}×${form.height2} cm).`;
+  } else if (form.boardShape === "u-shape") {
+    description += ` Deska tvaru U (${form.width}×${form.height} cm + 2× ramena hloubky ${form.uArmDepth} cm).`;
+  }
 
   return {
     pieces,
     bom: Array.from(bomMap.values()).sort((a, b) => {
-      const order = { straight: 0, curve: 1, "turnout-left": 2, "turnout-right": 3, crossing: 4 };
+      const order: Record<string, number> = { straight: 0, curve: 1, "turnout-left": 2, "turnout-right": 3, crossing: 4 };
       return (order[a.piece.type] ?? 5) - (order[b.piece.type] ?? 5);
     }),
     description,
@@ -333,284 +329,457 @@ function LayoutSVG({ result, form }: { result: LayoutResult; form: FormData }) {
   const boardH = form.height * 10;
   const padding = 60;
   const svgW = 800;
-  const svgH = (boardH / boardW) * svgW;
-  const scale = (svgW - padding * 2) / boardW;
 
-  const catalog = TRACK_CATALOGS[form.trackSystem];
-  const mainCurve = catalog.pieces.find((p) => p.type === "curve")!;
-  const mainStraight = catalog.pieces.find((p) => p.type === "straight")!;
-  const R = mainCurve?.radius ?? 350;
-  const anglePer = mainCurve?.angle ?? 30;
-  const SL = mainStraight?.length ?? 230;
-  const curvesFor180 = Math.ceil(180 / anglePer);
+  // Compute total SVG area based on board shape
+  let totalW = boardW;
+  let totalH = boardH;
+  if (form.boardShape === "l-shape") {
+    totalW = Math.max(boardW, form.width2 * 10);
+    totalH = boardH + form.height2 * 10;
+  } else if (form.boardShape === "u-shape") {
+    totalW = boardW + 2 * form.uArmDepth * 10;
+    totalH = boardH;
+  }
 
-  // Calculate oval dimensions for schematic
-  const straightCount = result.bom.find(b => b.piece.type === "straight")?.count ?? 4;
-  const straightsPerSide = Math.floor(straightCount / 4) || 2;
-  const totalStraightLen = straightsPerSide * SL;
-  const ovalW = totalStraightLen + R * 2;
-  const ovalH = R * 2;
+  const svgH = (totalH / totalW) * (svgW - padding * 2) + padding * 2;
+  const scale = (svgW - padding * 2) / totalW;
 
-  // Center oval
-  const ovalCX = boardW / 2;
-  const ovalCY = boardH / 2;
-  const ovalLeft = ovalCX - ovalW / 2;
-  const ovalTop = ovalCY - ovalH / 2;
+  // Offsets for centering within the SVG
+  const offX = padding;
+  const offY = padding / 2;
 
-  const hasTurnouts = result.bom.some(b => b.piece.type === "turnout-left" || b.piece.type === "turnout-right");
+  // Board polygon path
+  let boardPath = "";
+  if (form.boardShape === "rectangle") {
+    boardPath = `M ${offX} ${offY} h ${boardW * scale} v ${boardH * scale} h ${-boardW * scale} Z`;
+  } else if (form.boardShape === "l-shape") {
+    const w1 = boardW * scale;
+    const h1 = boardH * scale;
+    const w2 = form.width2 * 10 * scale;
+    const h2 = form.height2 * 10 * scale;
+    // L-shape depends on corner
+    if (form.lCorner === "top-right") {
+      boardPath = `M ${offX} ${offY} h ${w1} v ${h1} h ${-(w1 - w2)} v ${h2} h ${-w2} Z`;
+    } else if (form.lCorner === "top-left") {
+      boardPath = `M ${offX + w2} ${offY} h ${w1 - w2} v ${h1 + h2} h ${-w1} v ${-h1} h ${w2 - 0} Z`;
+      // Simpler: draw from top-left
+      boardPath = `M ${offX} ${offY} h ${w1} v ${h1 + h2} h ${-w2} v ${-h2} h ${-(w1 - w2)} Z`;
+    } else if (form.lCorner === "bottom-right") {
+      boardPath = `M ${offX} ${offY} h ${w1} v ${h1 + h2} h ${-w2} v ${-h2} h ${-(w1 - w2)} Z`;
+    } else {
+      // bottom-left
+      boardPath = `M ${offX} ${offY} h ${w1} v ${h1} h ${-(w1 - w2)} v ${h2} h ${-w2} Z`;
+    }
+  } else if (form.boardShape === "u-shape") {
+    const armW = form.uArmDepth * 10 * scale;
+    const w = boardW * scale;
+    const h = boardH * scale;
+    // U opens upward: main bar at bottom, two arms going up
+    boardPath = `M ${offX} ${offY} h ${armW} v ${h * 0.4} h ${w - 0} v ${-h * 0.4} h ${armW} v ${h} h ${-(w + 2 * armW)} Z`;
+  }
+
+  // Grid generation based on board area
+  const gridLinesV = Math.floor(totalW / 100) + 1;
+  const gridLinesH = Math.floor(totalH / 100) + 1;
+
+  // Track schematic rendering helper
+  const renderTrackSchematic = () => {
+    const cx = offX + (boardW / 2) * scale;
+    const cy = offY + (boardH / 2) * scale;
+    const bw = boardW * scale;
+    const bh = boardH * scale;
+
+    // For non-rectangle shapes, adjust cx/cy to account for the full board
+    const fullCx = form.boardShape === "u-shape" ? offX + (totalW / 2) * scale : cx;
+
+    switch (form.character) {
+      case "mala-diorama": {
+        // Simple oval
+        const rx = Math.min(bw * 0.35, bh * 0.8);
+        const ry = Math.min(bh * 0.3, bw * 0.3);
+        return (
+          <g>
+            <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="none" stroke="var(--accent)" strokeWidth="3.5" />
+            {/* Small halt */}
+            <rect
+              x={cx - rx * 0.4} y={cy - ry - 12} width={rx * 0.8} height={10}
+              fill="var(--accent)" opacity="0.15" stroke="var(--accent)" strokeWidth="0.5" rx="2"
+            />
+            <text x={cx} y={cy - ry - 16} fill="var(--accent)" fontSize="9" textAnchor="middle" fontWeight="600">
+              Zastávka
+            </text>
+            {/* Direction arrow */}
+            <polygon
+              points={`${cx + rx * 0.5 - 5},${cy - ry - 1} ${cx + rx * 0.5 + 5},${cy - ry - 1} ${cx + rx * 0.5},${cy - ry - 8}`}
+              fill="var(--accent)"
+            />
+          </g>
+        );
+      }
+
+      case "horska-trat": {
+        // Single-track mainline with tight curves, tunnel, passing loop
+        const rx = Math.min(bw * 0.38, bh * 0.9);
+        const ry = Math.min(bh * 0.32, bw * 0.35);
+        return (
+          <g>
+            {/* Main oval track */}
+            <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="none" stroke="var(--accent)" strokeWidth="3" />
+            {/* Tunnel section (dashed) on top left */}
+            <path
+              d={`M ${cx - rx * 0.7} ${cy - ry * 0.7} A ${rx} ${ry} 0 0 1 ${cx - rx * 0.2} ${cy - ry}`}
+              fill="none" stroke="var(--accent)" strokeWidth="4" strokeDasharray="8,6" opacity="0.7"
+            />
+            {/* Tunnel portal markers */}
+            <rect x={cx - rx * 0.72 - 4} y={cy - ry * 0.72 - 4} width="8" height="8" rx="2" fill="var(--text-dim)" opacity="0.6" />
+            <text x={cx - rx * 0.72} y={cy - ry * 0.72 - 8} fill="var(--text-dim)" fontSize="8" textAnchor="middle">🚇</text>
+            {/* Passing loop */}
+            <path
+              d={`M ${cx + rx * 0.1} ${cy + ry} Q ${cx + rx * 0.3} ${cy + ry + 18} ${cx + rx * 0.6} ${cy + ry}`}
+              fill="none" stroke="var(--accent)" strokeWidth="2" opacity="0.6"
+            />
+            <text x={cx + rx * 0.35} y={cy + ry + 28} fill="var(--text-dim)" fontSize="8" textAnchor="middle">
+              Výhybna
+            </text>
+            {/* Elevation indicator */}
+            <text x={cx + rx + 8} y={cy - ry * 0.3} fill="var(--text-dim)" fontSize="9" textAnchor="start" opacity="0.7">
+              ↗ 3%
+            </text>
+            <text x={cx - rx - 8} y={cy + ry * 0.3} fill="var(--text-dim)" fontSize="9" textAnchor="end" opacity="0.7">
+              ↘ 3%
+            </text>
+          </g>
+        );
+      }
+
+      case "hlavni-koridor": {
+        // Double-track mainline with station
+        const rx = Math.min(bw * 0.38, bh * 0.9);
+        const ry = Math.min(bh * 0.28, bw * 0.3);
+        const trackGap = 8;
+        return (
+          <g>
+            {/* Outer track */}
+            <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="none" stroke="var(--accent)" strokeWidth="3" />
+            {/* Inner track (parallel) */}
+            <ellipse cx={cx} cy={cy} rx={rx - trackGap} ry={ry - trackGap} fill="none" stroke="var(--accent)" strokeWidth="2.5" opacity="0.6" />
+            {/* Station area */}
+            <rect
+              x={cx - rx * 0.45} y={cy - ry - 28} width={rx * 0.9} height={24}
+              fill="var(--accent)" opacity="0.08" stroke="var(--accent)" strokeWidth="0.5" rx="3"
+              strokeDasharray="4,2"
+            />
+            {/* Station tracks (extra parallel lines in station area) */}
+            <line
+              x1={cx - rx * 0.35} y1={cy - ry - 10} x2={cx + rx * 0.35} y2={cy - ry - 10}
+              stroke="var(--accent)" strokeWidth="2" opacity="0.4"
+            />
+            <line
+              x1={cx - rx * 0.3} y1={cy - ry - 18} x2={cx + rx * 0.3} y2={cy - ry - 18}
+              stroke="var(--accent)" strokeWidth="1.5" opacity="0.3"
+            />
+            <text x={cx} y={cy - ry - 32} fill="var(--accent)" fontSize="10" textAnchor="middle" fontWeight="600">
+              🏛️ Stanice
+            </text>
+            {/* Direction arrows on both tracks */}
+            <polygon
+              points={`${cx + rx * 0.4 - 4},${cy - ry} ${cx + rx * 0.4 + 4},${cy - ry} ${cx + rx * 0.4},${cy - ry - 7}`}
+              fill="var(--accent)"
+            />
+            <polygon
+              points={`${cx - rx * 0.4 - 4},${cy + ry} ${cx - rx * 0.4 + 4},${cy + ry} ${cx - rx * 0.4},${cy + ry + 7}`}
+              fill="var(--accent)" opacity="0.6"
+            />
+          </g>
+        );
+      }
+
+      case "stanice-vlecky": {
+        // Complex station with sidings and freight yard
+        const trackY = cy;
+        const leftX = offX + bw * 0.08;
+        const rightX = offX + bw * 0.92;
+        const stationLeft = offX + bw * 0.25;
+        const stationRight = offX + bw * 0.75;
+        return (
+          <g>
+            {/* Main through line */}
+            <line x1={leftX} y1={trackY} x2={rightX} y2={trackY} stroke="var(--accent)" strokeWidth="3.5" />
+            {/* Station area background */}
+            <rect
+              x={stationLeft} y={trackY - 45} width={stationRight - stationLeft} height={90}
+              fill="var(--accent)" opacity="0.06" stroke="var(--accent)" strokeWidth="0.5" rx="4"
+              strokeDasharray="4,2"
+            />
+            {/* Station tracks (parallel) */}
+            <line x1={stationLeft + 15} y1={trackY - 14} x2={stationRight - 15} y2={trackY - 14}
+              stroke="var(--accent)" strokeWidth="2" opacity="0.5" />
+            <line x1={stationLeft + 25} y1={trackY - 28} x2={stationRight - 25} y2={trackY - 28}
+              stroke="var(--accent)" strokeWidth="1.5" opacity="0.35" />
+            {/* Turnout lines (throat) */}
+            <line x1={stationLeft} y1={trackY} x2={stationLeft + 15} y2={trackY - 14}
+              stroke="var(--accent)" strokeWidth="2" opacity="0.5" />
+            <line x1={stationRight} y1={trackY} x2={stationRight - 15} y2={trackY - 14}
+              stroke="var(--accent)" strokeWidth="2" opacity="0.5" />
+            <line x1={stationLeft + 10} y1={trackY - 14} x2={stationLeft + 25} y2={trackY - 28}
+              stroke="var(--accent)" strokeWidth="1.5" opacity="0.35" />
+            <line x1={stationRight - 10} y1={trackY - 14} x2={stationRight - 25} y2={trackY - 28}
+              stroke="var(--accent)" strokeWidth="1.5" opacity="0.35" />
+            {/* Industrial sidings (below main line) */}
+            <line x1={stationRight - 30} y1={trackY} x2={rightX - 10} y2={trackY + 20}
+              stroke="var(--accent)" strokeWidth="2" opacity="0.4" />
+            <line x1={rightX - 10} y1={trackY + 20} x2={rightX - 5} y2={trackY + 20}
+              stroke="var(--accent)" strokeWidth="2" opacity="0.4" />
+            <line x1={rightX - 30} y1={trackY + 20} x2={rightX - 10} y2={trackY + 35}
+              stroke="var(--accent)" strokeWidth="1.5" opacity="0.3" />
+            <line x1={rightX - 10} y1={trackY + 35} x2={rightX - 5} y2={trackY + 35}
+              stroke="var(--accent)" strokeWidth="1.5" opacity="0.3" />
+            {/* Labels */}
+            <text x={(stationLeft + stationRight) / 2} y={trackY - 50} fill="var(--accent)" fontSize="10" textAnchor="middle" fontWeight="600">
+              🏛️ Stanice
+            </text>
+            <text x={rightX - 15} y={trackY + 50} fill="var(--text-dim)" fontSize="8" textAnchor="middle">
+              🏭 Vlečky
+            </text>
+            {/* Freight yard */}
+            <line x1={stationLeft - 10} y1={trackY} x2={leftX + 15} y2={trackY + 22}
+              stroke="var(--accent)" strokeWidth="2" opacity="0.4" />
+            <line x1={leftX + 15} y1={trackY + 22} x2={leftX + 60} y2={trackY + 22}
+              stroke="var(--accent)" strokeWidth="2" opacity="0.4" />
+            <line x1={leftX + 25} y1={trackY + 22} x2={leftX + 15} y2={trackY + 36}
+              stroke="var(--accent)" strokeWidth="1.5" opacity="0.3" />
+            <line x1={leftX + 15} y1={trackY + 36} x2={leftX + 55} y2={trackY + 36}
+              stroke="var(--accent)" strokeWidth="1.5" opacity="0.3" />
+            <text x={leftX + 35} y={trackY + 50} fill="var(--text-dim)" fontSize="8" textAnchor="middle">
+              Nákladní dvůr
+            </text>
+          </g>
+        );
+      }
+
+      case "prujezdna-stanice": {
+        // Oval with proper passing station
+        const rx = Math.min(bw * 0.38, bh * 0.9);
+        const ry = Math.min(bh * 0.3, bw * 0.3);
+        return (
+          <g>
+            {/* Main oval */}
+            <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="none" stroke="var(--accent)" strokeWidth="3.5" />
+            {/* Station area */}
+            <rect
+              x={cx - rx * 0.5} y={cy - ry - 35} width={rx * 1.0} height={32}
+              fill="var(--accent)" opacity="0.08" stroke="var(--accent)" strokeWidth="0.5" rx="3"
+              strokeDasharray="4,2"
+            />
+            {/* Through track (part of oval top) is already there */}
+            {/* Station track 1 */}
+            <line
+              x1={cx - rx * 0.4} y1={cy - ry - 10} x2={cx + rx * 0.4} y2={cy - ry - 10}
+              stroke="var(--accent)" strokeWidth="2.5" opacity="0.5"
+            />
+            {/* Station track 2 */}
+            <line
+              x1={cx - rx * 0.35} y1={cy - ry - 22} x2={cx + rx * 0.35} y2={cy - ry - 22}
+              stroke="var(--accent)" strokeWidth="2" opacity="0.35"
+            />
+            {/* Throat turnouts (left) */}
+            <line x1={cx - rx * 0.45} y1={cy - ry} x2={cx - rx * 0.4} y2={cy - ry - 10}
+              stroke="var(--accent)" strokeWidth="2" opacity="0.5" />
+            <line x1={cx - rx * 0.42} y1={cy - ry - 6} x2={cx - rx * 0.35} y2={cy - ry - 22}
+              stroke="var(--accent)" strokeWidth="1.5" opacity="0.35" />
+            {/* Throat turnouts (right) */}
+            <line x1={cx + rx * 0.45} y1={cy - ry} x2={cx + rx * 0.4} y2={cy - ry - 10}
+              stroke="var(--accent)" strokeWidth="2" opacity="0.5" />
+            <line x1={cx + rx * 0.42} y1={cy - ry - 6} x2={cx + rx * 0.35} y2={cy - ry - 22}
+              stroke="var(--accent)" strokeWidth="1.5" opacity="0.35" />
+            {/* Labels */}
+            <text x={cx} y={cy - ry - 40} fill="var(--accent)" fontSize="10" textAnchor="middle" fontWeight="600">
+              🔄 Průjezdná stanice
+            </text>
+            {/* Direction arrow */}
+            <polygon
+              points={`${cx + rx * 0.5 - 5},${cy - ry - 1} ${cx + rx * 0.5 + 5},${cy - ry - 1} ${cx + rx * 0.5},${cy - ry - 8}`}
+              fill="var(--accent)"
+            />
+          </g>
+        );
+      }
+
+      case "prumyslova-vlecka": {
+        // Point-to-point with industrial spurs
+        const leftX = offX + bw * 0.06;
+        const rightX = offX + bw * 0.94;
+        const trackY = cy - 10;
+        return (
+          <g>
+            {/* Main line */}
+            <line x1={leftX} y1={trackY} x2={rightX} y2={trackY} stroke="var(--accent)" strokeWidth="3.5" />
+            {/* Terminal buffer left */}
+            <line x1={leftX - 3} y1={trackY - 6} x2={leftX - 3} y2={trackY + 6} stroke="var(--accent)" strokeWidth="3" />
+            {/* Terminal buffer right */}
+            <line x1={rightX + 3} y1={trackY - 6} x2={rightX + 3} y2={trackY + 6} stroke="var(--accent)" strokeWidth="3" />
+            {/* Industrial spur 1 — loading ramp */}
+            <line x1={leftX + bw * 0.25} y1={trackY} x2={leftX + bw * 0.35} y2={trackY + 30}
+              stroke="var(--accent)" strokeWidth="2" opacity="0.5" />
+            <line x1={leftX + bw * 0.35} y1={trackY + 30} x2={leftX + bw * 0.5} y2={trackY + 30}
+              stroke="var(--accent)" strokeWidth="2" opacity="0.5" />
+            <rect x={leftX + bw * 0.38} y={trackY + 24} width={bw * 0.1} height={12}
+              fill="var(--accent)" opacity="0.1" stroke="var(--accent)" strokeWidth="0.5" rx="2" />
+            <text x={leftX + bw * 0.43} y={trackY + 55} fill="var(--text-dim)" fontSize="8" textAnchor="middle">
+              Nakládací rampa
+            </text>
+            {/* Industrial spur 2 — warehouse */}
+            <line x1={leftX + bw * 0.55} y1={trackY} x2={leftX + bw * 0.65} y2={trackY + 25}
+              stroke="var(--accent)" strokeWidth="2" opacity="0.5" />
+            <line x1={leftX + bw * 0.65} y1={trackY + 25} x2={leftX + bw * 0.8} y2={trackY + 25}
+              stroke="var(--accent)" strokeWidth="2" opacity="0.5" />
+            {/* Second spur track */}
+            <line x1={leftX + bw * 0.7} y1={trackY + 25} x2={leftX + bw * 0.75} y2={trackY + 40}
+              stroke="var(--accent)" strokeWidth="1.5" opacity="0.35" />
+            <line x1={leftX + bw * 0.75} y1={trackY + 40} x2={leftX + bw * 0.88} y2={trackY + 40}
+              stroke="var(--accent)" strokeWidth="1.5" opacity="0.35" />
+            <rect x={leftX + bw * 0.66} y={trackY + 19} width={bw * 0.12} height={12}
+              fill="var(--accent)" opacity="0.1" stroke="var(--accent)" strokeWidth="0.5" rx="2" />
+            <text x={leftX + bw * 0.72} y={trackY + 55} fill="var(--text-dim)" fontSize="8" textAnchor="middle">
+              🏭 Sklad
+            </text>
+            {/* Run-around track (for shunting) */}
+            <path
+              d={`M ${leftX + bw * 0.12} ${trackY} Q ${leftX + bw * 0.15} ${trackY - 25} ${leftX + bw * 0.22} ${trackY - 25} L ${leftX + bw * 0.42} ${trackY - 25} Q ${leftX + bw * 0.48} ${trackY - 25} ${leftX + bw * 0.5} ${trackY}`}
+              fill="none" stroke="var(--accent)" strokeWidth="2" opacity="0.45"
+            />
+            <text x={leftX + bw * 0.3} y={trackY - 30} fill="var(--text-dim)" fontSize="8" textAnchor="middle">
+              Objízdná kolej
+            </text>
+            {/* Labels */}
+            <text x={leftX} y={trackY - 14} fill="var(--text-dim)" fontSize="9" textAnchor="start">Výchozí bod</text>
+            <text x={rightX} y={trackY - 14} fill="var(--text-dim)" fontSize="9" textAnchor="end">Koncový bod</text>
+          </g>
+        );
+      }
+
+      default:
+        return null;
+    }
+  };
+
+  // For non-rect shapes, draw track adapted to shape
+  const renderShapeAdaptedTrack = () => {
+    if (form.boardShape === "rectangle") return null;
+
+    // For L and U shapes, render additional guiding track in the arms
+    if (form.boardShape === "l-shape") {
+      const w1 = boardW * scale;
+      const h1 = boardH * scale;
+      const w2 = form.width2 * 10 * scale;
+      const h2 = form.height2 * 10 * scale;
+      // Draw a continuation track into the L arm
+      const armTrackY = offY + h1 + h2 * 0.5;
+      let armTrackX1: number, armTrackX2: number;
+      if (form.lCorner === "bottom-left" || form.lCorner === "top-left") {
+        armTrackX1 = offX;
+        armTrackX2 = offX + w2;
+      } else {
+        armTrackX1 = offX + w1 - w2;
+        armTrackX2 = offX + w1;
+      }
+      return (
+        <g>
+          <line x1={armTrackX1 + 10} y1={armTrackY} x2={armTrackX2 - 10} y2={armTrackY}
+            stroke="var(--accent)" strokeWidth="2.5" opacity="0.4" strokeDasharray="6,4" />
+          <text x={(armTrackX1 + armTrackX2) / 2} y={armTrackY - 8} fill="var(--text-dim)" fontSize="8" textAnchor="middle">
+            Prodloužení tratě
+          </text>
+        </g>
+      );
+    }
+
+    if (form.boardShape === "u-shape") {
+      const armW = form.uArmDepth * 10 * scale;
+      const h = boardH * scale;
+      // Left arm track
+      // Right arm track
+      return (
+        <g>
+          {/* Left arm */}
+          <line x1={offX + armW * 0.5} y1={offY + 15} x2={offX + armW * 0.5} y2={offY + h * 0.4 - 5}
+            stroke="var(--accent)" strokeWidth="2.5" opacity="0.4" strokeDasharray="6,4" />
+          <text x={offX + armW * 0.5} y={offY + 10} fill="var(--text-dim)" fontSize="8" textAnchor="middle">
+            Rameno L
+          </text>
+          {/* Right arm */}
+          <line x1={offX + (boardW * scale) + armW + armW * 0.5} y1={offY + 15}
+            x2={offX + (boardW * scale) + armW + armW * 0.5} y2={offY + h * 0.4 - 5}
+            stroke="var(--accent)" strokeWidth="2.5" opacity="0.4" strokeDasharray="6,4" />
+          <text x={offX + (boardW * scale) + armW + armW * 0.5} y={offY + 10}
+            fill="var(--text-dim)" fontSize="8" textAnchor="middle">
+            Rameno R
+          </text>
+        </g>
+      );
+    }
+
+    return null;
+  };
 
   return (
     <svg
-      viewBox={`0 0 ${svgW} ${svgH + padding}`}
+      viewBox={`0 0 ${svgW} ${svgH + 10}`}
       style={{ width: "100%", maxWidth: "800px", background: "var(--bg-card)", borderRadius: "12px", border: "1px solid var(--border)" }}
     >
-      {/* Board */}
-      <rect
-        x={padding}
-        y={padding / 2}
-        width={boardW * scale}
-        height={boardH * scale}
+      {/* Board shape */}
+      <path
+        d={boardPath}
         fill="var(--bg-input)"
         stroke="var(--border-hover)"
         strokeWidth="2"
-        rx="4"
       />
 
       {/* Grid lines */}
-      {Array.from({ length: Math.floor(form.width / 10) + 1 }, (_, i) => (
+      {Array.from({ length: gridLinesV }, (_, i) => (
         <line
           key={`gv${i}`}
-          x1={padding + i * 100 * scale}
-          y1={padding / 2}
-          x2={padding + i * 100 * scale}
-          y2={padding / 2 + boardH * scale}
+          x1={offX + i * 100 * scale}
+          y1={offY}
+          x2={offX + i * 100 * scale}
+          y2={offY + totalH * scale}
           stroke="var(--border)"
           strokeWidth="0.5"
           strokeDasharray="4,4"
+          opacity="0.5"
         />
       ))}
-      {Array.from({ length: Math.floor(form.height / 10) + 1 }, (_, i) => (
+      {Array.from({ length: gridLinesH }, (_, i) => (
         <line
           key={`gh${i}`}
-          x1={padding}
-          y1={padding / 2 + i * 100 * scale}
-          x2={padding + boardW * scale}
-          y2={padding / 2 + i * 100 * scale}
+          x1={offX}
+          y1={offY + i * 100 * scale}
+          x2={offX + totalW * scale}
+          y2={offY + i * 100 * scale}
           stroke="var(--border)"
           strokeWidth="0.5"
           strokeDasharray="4,4"
+          opacity="0.5"
         />
       ))}
 
       {/* Dimension labels */}
-      <text x={padding + boardW * scale / 2} y={padding / 2 - 10} fill="var(--text-dim)" fontSize="12" textAnchor="middle">
+      <text x={offX + boardW * scale / 2} y={offY - 10} fill="var(--text-dim)" fontSize="12" textAnchor="middle">
         {form.width} cm
       </text>
-      <text x={padding - 10} y={padding / 2 + boardH * scale / 2} fill="var(--text-dim)" fontSize="12" textAnchor="middle" transform={`rotate(-90, ${padding - 10}, ${padding / 2 + boardH * scale / 2})`}>
+      <text x={offX - 10} y={offY + boardH * scale / 2} fill="var(--text-dim)" fontSize="12" textAnchor="middle"
+        transform={`rotate(-90, ${offX - 10}, ${offY + boardH * scale / 2})`}>
         {form.height} cm
       </text>
 
-      {/* Track layout (schematic) */}
-      {form.style === "oval" || form.style === "loop-with-station" ? (
-        <g>
-          {/* Oval path */}
-          <ellipse
-            cx={padding + ovalCX * scale}
-            cy={padding / 2 + ovalCY * scale}
-            rx={ovalW / 2 * scale}
-            ry={ovalH / 2 * scale}
-            fill="none"
-            stroke="var(--accent)"
-            strokeWidth="4"
-            strokeLinecap="round"
-          />
-          {/* Track direction arrow */}
-          <polygon
-            points={`${padding + (ovalCX + ovalW / 4) * scale - 6},${padding / 2 + ovalTop * scale - 2} ${padding + (ovalCX + ovalW / 4) * scale + 6},${padding / 2 + ovalTop * scale - 2} ${padding + (ovalCX + ovalW / 4) * scale},${padding / 2 + ovalTop * scale - 10}`}
-            fill="var(--accent)"
-          />
+      {/* Track schematic */}
+      {renderTrackSchematic()}
 
-          {/* Station area */}
-          {hasTurnouts && (
-            <g>
-              <rect
-                x={padding + (ovalCX - totalStraightLen * 0.35) * scale}
-                y={padding / 2 + (ovalTop - 15) * scale}
-                width={totalStraightLen * 0.7 * scale}
-                height={30 * scale}
-                fill="var(--accent-bg-subtle)"
-                stroke="var(--accent-border)"
-                strokeWidth="1"
-                strokeDasharray="4,2"
-                rx="4"
-              />
-              <text
-                x={padding + ovalCX * scale}
-                y={padding / 2 + (ovalTop - 25) * scale}
-                fill="var(--accent)"
-                fontSize="11"
-                textAnchor="middle"
-                fontWeight="600"
-              >
-                🏛️ Nádraží
-              </text>
-              {/* Siding tracks */}
-              <line
-                x1={padding + (ovalCX - totalStraightLen * 0.25) * scale}
-                y1={padding / 2 + (ovalTop + 8) * scale}
-                x2={padding + (ovalCX + totalStraightLen * 0.25) * scale}
-                y2={padding / 2 + (ovalTop + 8) * scale}
-                stroke="var(--accent)"
-                strokeWidth="2"
-                strokeDasharray="6,3"
-                opacity="0.6"
-              />
-            </g>
-          )}
-
-          {/* Siding */}
-          {form.withSiding && (
-            <g>
-              <line
-                x1={padding + (ovalCX + totalStraightLen * 0.1) * scale}
-                y1={padding / 2 + (ovalCY + ovalH / 2) * scale}
-                x2={padding + (ovalCX + totalStraightLen * 0.35) * scale}
-                y2={padding / 2 + (ovalCY + ovalH / 2 + 40) * scale}
-                stroke="var(--accent)"
-                strokeWidth="2.5"
-                opacity="0.5"
-              />
-              <text
-                x={padding + (ovalCX + totalStraightLen * 0.35 + 10) * scale}
-                y={padding / 2 + (ovalCY + ovalH / 2 + 40) * scale}
-                fill="var(--text-dim)"
-                fontSize="10"
-              >
-                Odstavná kolej
-              </text>
-            </g>
-          )}
-        </g>
-      ) : form.style === "figure-eight" ? (
-        <g>
-          {/* Two overlapping ovals */}
-          <ellipse
-            cx={padding + (ovalCX - ovalW * 0.25) * scale}
-            cy={padding / 2 + ovalCY * scale}
-            rx={ovalW / 3 * scale}
-            ry={ovalH / 2 * scale}
-            fill="none"
-            stroke="var(--accent)"
-            strokeWidth="4"
-          />
-          <ellipse
-            cx={padding + (ovalCX + ovalW * 0.25) * scale}
-            cy={padding / 2 + ovalCY * scale}
-            rx={ovalW / 3 * scale}
-            ry={ovalH / 2 * scale}
-            fill="none"
-            stroke="var(--accent)"
-            strokeWidth="4"
-          />
-          {/* Crossing indicator */}
-          <circle
-            cx={padding + ovalCX * scale}
-            cy={padding / 2 + ovalCY * scale}
-            r="6"
-            fill="var(--danger)"
-            stroke="var(--bg-card)"
-            strokeWidth="2"
-          />
-          <text x={padding + ovalCX * scale} y={padding / 2 + ovalCY * scale + 20} fill="var(--text-dim)" fontSize="10" textAnchor="middle">
-            Křížení
-          </text>
-        </g>
-      ) : form.style === "dogbone" ? (
-        <g>
-          {/* Two parallel lines with loops at ends */}
-          <line
-            x1={padding + (ovalCX - ovalW / 2 + R) * scale}
-            y1={padding / 2 + (ovalCY - R * 0.3) * scale}
-            x2={padding + (ovalCX + ovalW / 2 - R) * scale}
-            y2={padding / 2 + (ovalCY - R * 0.3) * scale}
-            stroke="var(--accent)" strokeWidth="4"
-          />
-          <line
-            x1={padding + (ovalCX - ovalW / 2 + R) * scale}
-            y1={padding / 2 + (ovalCY + R * 0.3) * scale}
-            x2={padding + (ovalCX + ovalW / 2 - R) * scale}
-            y2={padding / 2 + (ovalCY + R * 0.3) * scale}
-            stroke="var(--accent)" strokeWidth="4"
-          />
-          {/* End loops */}
-          <path
-            d={`M ${padding + (ovalCX - ovalW / 2 + R) * scale} ${padding / 2 + (ovalCY - R * 0.3) * scale} A ${R * 0.3 * scale} ${R * 0.3 * scale} 0 0 0 ${padding + (ovalCX - ovalW / 2 + R) * scale} ${padding / 2 + (ovalCY + R * 0.3) * scale}`}
-            fill="none" stroke="var(--accent)" strokeWidth="4"
-          />
-          <path
-            d={`M ${padding + (ovalCX + ovalW / 2 - R) * scale} ${padding / 2 + (ovalCY - R * 0.3) * scale} A ${R * 0.3 * scale} ${R * 0.3 * scale} 0 0 1 ${padding + (ovalCX + ovalW / 2 - R) * scale} ${padding / 2 + (ovalCY + R * 0.3) * scale}`}
-            fill="none" stroke="var(--accent)" strokeWidth="4"
-          />
-        </g>
-      ) : form.style === "point-to-point" ? (
-        <g>
-          {/* Main line */}
-          <line
-            x1={padding + boardW * 0.1 * scale}
-            y1={padding / 2 + ovalCY * scale}
-            x2={padding + boardW * 0.9 * scale}
-            y2={padding / 2 + ovalCY * scale}
-            stroke="var(--accent)" strokeWidth="4"
-          />
-          {/* End stations */}
-          {[0.1, 0.9].map((pos, i) => (
-            <g key={i}>
-              <rect
-                x={padding + (boardW * pos - 40) * scale}
-                y={padding / 2 + (ovalCY - 30) * scale}
-                width={80 * scale}
-                height={60 * scale}
-                fill="var(--accent-bg-subtle)"
-                stroke="var(--accent-border)"
-                strokeWidth="1"
-                rx="4"
-              />
-              <text
-                x={padding + boardW * pos * scale}
-                y={padding / 2 + (ovalCY - 35) * scale}
-                fill="var(--accent)"
-                fontSize="10"
-                textAnchor="middle"
-              >
-                🏛️ Stanice {i === 0 ? "A" : "B"}
-              </text>
-            </g>
-          ))}
-        </g>
-      ) : (
-        // L-shaped or fallback
-        <g>
-          <path
-            d={`M ${padding + boardW * 0.15 * scale} ${padding / 2 + boardH * 0.3 * scale}
-                L ${padding + boardW * 0.6 * scale} ${padding / 2 + boardH * 0.3 * scale}
-                Q ${padding + boardW * 0.7 * scale} ${padding / 2 + boardH * 0.3 * scale}
-                  ${padding + boardW * 0.7 * scale} ${padding / 2 + boardH * 0.4 * scale}
-                L ${padding + boardW * 0.7 * scale} ${padding / 2 + boardH * 0.85 * scale}`}
-            fill="none" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round"
-          />
-          <path
-            d={`M ${padding + boardW * 0.15 * scale} ${padding / 2 + boardH * 0.35 * scale}
-                L ${padding + boardW * 0.55 * scale} ${padding / 2 + boardH * 0.35 * scale}
-                Q ${padding + boardW * 0.65 * scale} ${padding / 2 + boardH * 0.35 * scale}
-                  ${padding + boardW * 0.65 * scale} ${padding / 2 + boardH * 0.45 * scale}
-                L ${padding + boardW * 0.65 * scale} ${padding / 2 + boardH * 0.85 * scale}`}
-            fill="none" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" opacity="0.6"
-          />
-        </g>
-      )}
+      {/* Shape-adapted track extensions */}
+      {renderShapeAdaptedTrack()}
 
       {/* Scale indicator */}
-      <text x={padding + boardW * scale - 5} y={svgH + padding / 2 - 5} fill="var(--text-faint)" fontSize="10" textAnchor="end">
+      <text x={offX + totalW * scale - 5} y={svgH - 5} fill="var(--text-faint)" fontSize="10" textAnchor="end">
         {form.scale} 1:{SCALE_FACTOR[form.scale]} · {TRACK_CATALOGS[form.trackSystem].name}
       </text>
     </svg>
@@ -618,17 +787,36 @@ function LayoutSVG({ result, form }: { result: LayoutResult; form: FormData }) {
 }
 
 /* ===========================
+   BOARD SHAPE OPTIONS
+   =========================== */
+const BOARD_SHAPES: { value: BoardShape; label: string; icon: string }[] = [
+  { value: "rectangle", label: "Obdélník", icon: "▬" },
+  { value: "l-shape", label: "Tvar L", icon: "⌐" },
+  { value: "u-shape", label: "Tvar U", icon: "⊔" },
+];
+
+const L_CORNERS: { value: LCorner; label: string }[] = [
+  { value: "top-left", label: "Vlevo nahoře" },
+  { value: "top-right", label: "Vpravo nahoře" },
+  { value: "bottom-left", label: "Vlevo dole" },
+  { value: "bottom-right", label: "Vpravo dole" },
+];
+
+/* ===========================
    MAIN PAGE
    =========================== */
 export default function TrackDesignerPage() {
   const [form, setForm] = useState<FormData>({
+    boardShape: "rectangle",
     width: 200,
     height: 100,
+    width2: 80,
+    height2: 60,
+    lCorner: "bottom-right",
+    uArmDepth: 40,
     scale: "H0",
     trackSystem: "roco-line",
-    style: "oval",
-    withStation: true,
-    withSiding: false,
+    character: "prujezdna-stanice",
   });
   const [result, setResult] = useState<LayoutResult | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -636,7 +824,6 @@ export default function TrackDesignerPage() {
 
   const handleGenerate = useCallback(() => {
     setGenerating(true);
-    // Simulate brief "thinking" for UX
     setTimeout(() => {
       const layout = generateLayout(form);
       setResult(layout);
@@ -684,15 +871,6 @@ export default function TrackDesignerPage() {
     padding: "24px",
   };
 
-  const layoutStyles: { value: LayoutStyle; label: string; icon: string }[] = [
-    { value: "oval", label: "Ovál", icon: "🔵" },
-    { value: "loop-with-station", label: "Ovál s nádražím", icon: "🏛️" },
-    { value: "figure-eight", label: "Osmička", icon: "8️⃣" },
-    { value: "dogbone", label: "Kost (dogbone)", icon: "🦴" },
-    { value: "point-to-point", label: "Bod-bod", icon: "🚉" },
-    { value: "lshaped", label: "Tvar L", icon: "📐" },
-  ];
-
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg-page)" }}>
       {/* Hero */}
@@ -710,7 +888,7 @@ export default function TrackDesignerPage() {
           Návrhář tratí
         </h1>
         <p style={{ fontSize: "15px", color: "var(--text-dim)", maxWidth: "500px", margin: "0 auto" }}>
-          Zadejte rozměry a styl — vygenerujeme kolejový plán i seznam dílů
+          Zadejte rozměry a charakter — vygenerujeme kolejový plán i seznam dílů
         </p>
       </div>
 
@@ -721,32 +899,105 @@ export default function TrackDesignerPage() {
             ⚙️ Parametry kolejiště
           </h2>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "20px", marginBottom: "24px" }}>
-            {/* Dimensions */}
+          {/* Board shape selector */}
+          <div style={{ marginBottom: "24px" }}>
+            <label style={labelStyle}>Tvar desky</label>
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+              {BOARD_SHAPES.map((bs) => (
+                <button
+                  key={bs.value}
+                  onClick={() => update("boardShape", bs.value)}
+                  style={{
+                    padding: "10px 20px",
+                    borderRadius: "8px",
+                    border: `2px solid ${form.boardShape === bs.value ? "var(--accent)" : "var(--border)"}`,
+                    background: form.boardShape === bs.value ? "var(--accent-bg)" : "var(--bg-input)",
+                    color: form.boardShape === bs.value ? "var(--accent)" : "var(--text-muted)",
+                    cursor: "pointer",
+                    fontSize: "14px",
+                    fontWeight: form.boardShape === bs.value ? 700 : 500,
+                    transition: "all 0.15s",
+                  }}
+                >
+                  <span style={{ marginRight: "6px" }}>{bs.icon}</span>
+                  {bs.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Dimensions — changes based on board shape */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px", marginBottom: "20px" }}>
             <div>
-              <label style={labelStyle}>Šířka desky (cm)</label>
+              <label style={labelStyle}>
+                {form.boardShape === "rectangle" ? "Šířka desky (cm)" : "Šířka hlavní části (cm)"}
+              </label>
               <input
-                type="number"
-                value={form.width}
+                type="number" value={form.width}
                 onChange={(e) => update("width", Number(e.target.value))}
-                min={60}
-                max={600}
-                style={inputStyle}
+                min={60} max={600} style={inputStyle}
               />
             </div>
             <div>
-              <label style={labelStyle}>Hloubka desky (cm)</label>
+              <label style={labelStyle}>
+                {form.boardShape === "rectangle" ? "Hloubka desky (cm)" : "Hloubka hlavní části (cm)"}
+              </label>
               <input
-                type="number"
-                value={form.height}
+                type="number" value={form.height}
                 onChange={(e) => update("height", Number(e.target.value))}
-                min={40}
-                max={400}
-                style={inputStyle}
+                min={40} max={400} style={inputStyle}
               />
             </div>
 
-            {/* Scale */}
+            {/* L-shape extra fields */}
+            {form.boardShape === "l-shape" && (
+              <>
+                <div>
+                  <label style={labelStyle}>Šířka ramene L (cm)</label>
+                  <input
+                    type="number" value={form.width2}
+                    onChange={(e) => update("width2", Number(e.target.value))}
+                    min={30} max={300} style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Hloubka ramene L (cm)</label>
+                  <input
+                    type="number" value={form.height2}
+                    onChange={(e) => update("height2", Number(e.target.value))}
+                    min={30} max={300} style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Roh L</label>
+                  <select
+                    value={form.lCorner}
+                    onChange={(e) => update("lCorner", e.target.value as LCorner)}
+                    style={selectStyle}
+                  >
+                    {L_CORNERS.map((c) => (
+                      <option key={c.value} value={c.value}>{c.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
+
+            {/* U-shape extra fields */}
+            {form.boardShape === "u-shape" && (
+              <div>
+                <label style={labelStyle}>Hloubka ramen U (cm)</label>
+                <input
+                  type="number" value={form.uArmDepth}
+                  onChange={(e) => update("uArmDepth", Number(e.target.value))}
+                  min={20} max={200} style={inputStyle}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Scale & Track system */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px", marginBottom: "24px" }}>
             <div>
               <label style={labelStyle}>Měřítko</label>
               <select value={form.scale} onChange={(e) => update("scale", e.target.value as Scale)} style={selectStyle}>
@@ -755,8 +1006,6 @@ export default function TrackDesignerPage() {
                 <option value="N">N (1:160)</option>
               </select>
             </div>
-
-            {/* Track system */}
             <div>
               <label style={labelStyle}>Systém kolejí</label>
               <select value={form.trackSystem} onChange={(e) => update("trackSystem", e.target.value as TrackSystem)} style={selectStyle}>
@@ -769,54 +1018,33 @@ export default function TrackDesignerPage() {
             </div>
           </div>
 
-          {/* Layout style picker */}
-          <div style={{ marginBottom: "24px" }}>
-            <label style={labelStyle}>Typ tratě</label>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "10px" }}>
-              {layoutStyles.map((ls) => (
+          {/* Layout character picker */}
+          <div style={{ marginBottom: "28px" }}>
+            <label style={labelStyle}>Charakter tratě</label>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(155px, 1fr))", gap: "10px" }}>
+              {CHARACTER_OPTIONS.map((ch) => (
                 <button
-                  key={ls.value}
-                  onClick={() => update("style", ls.value)}
+                  key={ch.value}
+                  onClick={() => update("character", ch.value)}
                   style={{
                     padding: "14px 12px",
                     borderRadius: "10px",
-                    border: `2px solid ${form.style === ls.value ? "var(--accent)" : "var(--border)"}`,
-                    background: form.style === ls.value ? "var(--accent-bg)" : "var(--bg-input)",
-                    color: form.style === ls.value ? "var(--accent)" : "var(--text-muted)",
+                    border: `2px solid ${form.character === ch.value ? "var(--accent)" : "var(--border)"}`,
+                    background: form.character === ch.value ? "var(--accent-bg)" : "var(--bg-input)",
+                    color: form.character === ch.value ? "var(--accent)" : "var(--text-muted)",
                     cursor: "pointer",
                     fontSize: "13px",
-                    fontWeight: form.style === ls.value ? 700 : 500,
+                    fontWeight: form.character === ch.value ? 700 : 500,
                     textAlign: "center",
                     transition: "all 0.15s",
                   }}
                 >
-                  <div style={{ fontSize: "22px", marginBottom: "4px" }}>{ls.icon}</div>
-                  {ls.label}
+                  <div style={{ fontSize: "24px", marginBottom: "4px" }}>{ch.icon}</div>
+                  <div>{ch.label}</div>
+                  <div style={{ fontSize: "11px", marginTop: "4px", opacity: 0.7, fontWeight: 400 }}>{ch.desc}</div>
                 </button>
               ))}
             </div>
-          </div>
-
-          {/* Options */}
-          <div style={{ display: "flex", gap: "20px", flexWrap: "wrap", marginBottom: "28px" }}>
-            <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", color: "var(--text-muted)", fontSize: "14px" }}>
-              <input
-                type="checkbox"
-                checked={form.withStation}
-                onChange={(e) => update("withStation", e.target.checked)}
-                style={{ accentColor: "var(--accent)" }}
-              />
-              🏛️ Nádraží
-            </label>
-            <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", color: "var(--text-muted)", fontSize: "14px" }}>
-              <input
-                type="checkbox"
-                checked={form.withSiding}
-                onChange={(e) => update("withSiding", e.target.checked)}
-                style={{ accentColor: "var(--accent)" }}
-              />
-              🔀 Odstavná kolej
-            </label>
           </div>
 
           {/* Generate button */}
@@ -863,7 +1091,7 @@ export default function TrackDesignerPage() {
               {result.warnings.length > 0 && (
                 <div style={{ marginTop: "16px", padding: "12px 16px", background: "rgba(255, 193, 7, 0.1)", border: "1px solid rgba(255, 193, 7, 0.3)", borderRadius: "8px" }}>
                   {result.warnings.map((w, i) => (
-                    <p key={i} style={{ fontSize: "13px", color: "#ffc107", margin: i > 0 ? "6px 0 0" : 0 }}>
+                    <p key={i} style={{ fontSize: "13px", color: "#ffc107", margin: i > 0 ? "6px 0 0" : "0" }}>
                       ⚠️ {w}
                     </p>
                   ))}
