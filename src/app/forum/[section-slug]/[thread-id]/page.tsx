@@ -97,55 +97,76 @@ export default function ThreadPage() {
     setPosts((data as unknown as PostRow[]) || []);
   }, [threadId]);
 
-  const fetchReactions = useCallback(async () => {
-    // Thread reactions
-    const { data: tr } = await supabase
+  const fetchReactions = useCallback(async (postIds: string[]) => {
+    // Parallel: thread reactions + post reactions for visible posts only
+    const threadReactionsPromise = supabase
       .from("forum_reactions")
       .select("*")
       .eq("thread_id", threadId);
-    setThreadReactions((tr as ForumReaction[]) || []);
 
-    // Post reactions (for all posts)
-    const { data: pr } = await supabase
-      .from("forum_reactions")
-      .select("*")
-      .not("post_id", "is", null);
+    const postReactionsPromise = postIds.length > 0
+      ? supabase.from("forum_reactions").select("*").in("post_id", postIds)
+      : Promise.resolve({ data: [] as ForumReaction[] });
 
+    const [trRes, prRes] = await Promise.all([threadReactionsPromise, postReactionsPromise]);
+
+    setThreadReactions((trRes.data as ForumReaction[]) || []);
+
+    const pr = prRes.data as ForumReaction[] | null;
     if (pr) {
       const grouped: Record<string, ForumReaction[]> = {};
-      for (const r of pr as ForumReaction[]) {
+      for (const r of pr) {
         if (r.post_id) {
           if (!grouped[r.post_id]) grouped[r.post_id] = [];
           grouped[r.post_id].push(r);
         }
       }
       setPostReactions(grouped);
+    } else {
+      setPostReactions({});
     }
   }, [threadId]);
 
   const fetchAuthorPostCounts = useCallback(async (authorIds: string[]) => {
+    // Fetch all post counts in parallel instead of sequential loop
+    const uncached = authorIds.filter(aid => authorPostCounts[aid] === undefined);
+    if (uncached.length === 0) return;
+
+    const results = await Promise.all(
+      uncached.map(aid =>
+        supabase
+          .from("forum_posts")
+          .select("*", { count: "exact", head: true })
+          .eq("author_id", aid)
+          .then(({ count }) => ({ aid, count: count || 0 }))
+      )
+    );
+
     const counts: Record<string, number> = {};
-    for (const aid of authorIds) {
-      if (authorPostCounts[aid] !== undefined) { counts[aid] = authorPostCounts[aid]; continue; }
-      const { count } = await supabase
-        .from("forum_posts")
-        .select("*", { count: "exact", head: true })
-        .eq("author_id", aid);
-      counts[aid] = count || 0;
-    }
+    for (const r of results) counts[r.aid] = r.count;
     setAuthorPostCounts(prev => ({ ...prev, ...counts }));
   }, [authorPostCounts]);
 
   useEffect(() => {
     async function init() {
       setLoading(true);
-      await fetchThread();
-      await fetchPosts(page);
-      await fetchReactions();
+      // Parallel: thread + posts, then reactions (needs post IDs)
+      const [, postsData] = await Promise.all([
+        fetchThread(),
+        fetchPosts(page),
+      ]);
+      // fetchReactions now called in a separate effect after posts are set
       setLoading(false);
     }
     init();
-  }, [fetchThread, fetchPosts, fetchReactions, page]);
+  }, [fetchThread, fetchPosts, page]);
+
+  // Fetch reactions when posts change (needs post IDs)
+  useEffect(() => {
+    if (loading) return;
+    const postIds = posts.map(p => p.id);
+    fetchReactions(postIds);
+  }, [posts, loading, fetchReactions]);
 
   // Fetch author post counts when posts change
   useEffect(() => {
@@ -265,7 +286,7 @@ export default function ThreadPage() {
       else payload.post_id = targetId;
       await supabase.from("forum_reactions").insert(payload);
     }
-    await fetchReactions();
+    await fetchReactions(posts.map(p => p.id));
   }
 
   async function handleReport() {

@@ -28,51 +28,45 @@ export default function ForumPage() {
 
   const fetchSections = useCallback(async () => {
     try {
-      const { data: secs } = await supabase
-        .from("forum_sections")
-        .select("*")
-        .order("sort_order", { ascending: true });
+      // Two parallel queries: sections + all threads (lightweight)
+      const [secRes, threadRes] = await Promise.all([
+        supabase
+          .from("forum_sections")
+          .select("*")
+          .order("sort_order", { ascending: true }),
+        supabase
+          .from("forum_threads")
+          .select("id, section_id, title, post_count, last_post_at")
+          .order("last_post_at", { ascending: false }),
+      ]);
 
+      const secs = secRes.data;
+      const allThreads = threadRes.data || [];
       if (!secs) { setSections([]); return; }
 
-      // Get thread counts and last activity for each section
-      const enriched: SectionWithStats[] = [];
-      for (const sec of secs) {
-        const { count: threadCount } = await supabase
-          .from("forum_threads")
-          .select("*", { count: "exact", head: true })
-          .eq("section_id", sec.id);
+      // Group threads by section (single pass)
+      const bySection = new Map<string, typeof allThreads>();
+      for (const t of allThreads) {
+        const arr = bySection.get(t.section_id) || [];
+        arr.push(t);
+        bySection.set(t.section_id, arr);
+      }
 
-        // Sum of all post_count values + thread count (thread content = first post)
-        const { data: threads } = await supabase
-          .from("forum_threads")
-          .select("id, post_count, title, last_post_at")
-          .eq("section_id", sec.id)
-          .order("last_post_at", { ascending: false })
-          .limit(1);
+      const enriched: SectionWithStats[] = secs.map((sec) => {
+        const threads = bySection.get(sec.id) || [];
+        const threadCount = threads.length;
+        const totalPosts = threads.reduce((sum, t) => sum + (t.post_count || 0), 0);
+        const lastThread = threads[0] || null; // already sorted by last_post_at DESC
 
-        let totalPosts = 0;
-        if (threadCount) {
-          const { data: allThreads } = await supabase
-            .from("forum_threads")
-            .select("post_count")
-            .eq("section_id", sec.id);
-          if (allThreads) {
-            totalPosts = allThreads.reduce((sum, t) => sum + (t.post_count || 0), 0);
-          }
-        }
-
-        const lastThread = threads && threads.length > 0 ? threads[0] : null;
-
-        enriched.push({
+        return {
           ...sec,
-          thread_count: threadCount || 0,
+          thread_count: threadCount,
           post_count: totalPosts,
           last_thread_title: lastThread?.title || null,
           last_thread_id: lastThread?.id || null,
           last_post_at_val: lastThread?.last_post_at || null,
-        });
-      }
+        };
+      });
 
       setSections(enriched);
     } catch {

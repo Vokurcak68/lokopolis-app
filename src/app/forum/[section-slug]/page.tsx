@@ -51,23 +51,23 @@ export default function SectionPage() {
       const from = (p - 1) * THREADS_PER_PAGE;
       const to = from + THREADS_PER_PAGE - 1;
 
-      // Count total
-      const { count } = await supabase
-        .from("forum_threads")
-        .select("*", { count: "exact", head: true })
-        .eq("section_id", sectionId);
-      setTotalThreads(count || 0);
+      // Parallel: count + data
+      const [countRes, dataRes] = await Promise.all([
+        supabase
+          .from("forum_threads")
+          .select("*", { count: "exact", head: true })
+          .eq("section_id", sectionId),
+        supabase
+          .from("forum_threads")
+          .select("id, title, is_pinned, is_locked, post_count, last_post_at, created_at, author:profiles!forum_threads_author_id_fkey(id, display_name, username, avatar_url), last_poster:profiles!forum_threads_last_post_by_fkey(id, display_name, username)")
+          .eq("section_id", sectionId)
+          .order("is_pinned", { ascending: false })
+          .order("last_post_at", { ascending: false })
+          .range(from, to),
+      ]);
 
-      // Fetch pinned first, then by last_post_at
-      const { data } = await supabase
-        .from("forum_threads")
-        .select("id, title, is_pinned, is_locked, post_count, last_post_at, created_at, author:profiles!forum_threads_author_id_fkey(id, display_name, username, avatar_url), last_poster:profiles!forum_threads_last_post_by_fkey(id, display_name, username)")
-        .eq("section_id", sectionId)
-        .order("is_pinned", { ascending: false })
-        .order("last_post_at", { ascending: false })
-        .range(from, to);
-
-      setThreads((data as unknown as ThreadRow[]) || []);
+      setTotalThreads(countRes.count || 0);
+      setThreads((dataRes.data as unknown as ThreadRow[]) || []);
     } catch {
       setThreads([]);
     } finally {
