@@ -30,10 +30,10 @@ export default function NewArticlePage() {
         // Fetch user role from profiles
         const { data: profile } = await supabase
           .from("profiles")
-          .select("role, display_name, username")
+          .select("role")
           .eq("id", data.user.id)
           .single();
-        setUser({ id: data.user.id, role: profile?.role || "user", displayName: profile?.display_name || "", username: profile?.username || "" });
+        setUser({ id: data.user.id, role: profile?.role || "user" });
       }
     });
   }, [router]);

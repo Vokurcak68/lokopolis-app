@@ -215,6 +215,39 @@ export default function Header() {
             <div style={{ paddingTop: "12px", borderTop: "1px solid #252838", marginTop: "8px" }}>
               {user ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {isAdmin && pendingCount > 0 && (
+                    <Link
+                      href="/admin/clanky"
+                      style={{
+                        color: "#f0a030",
+                        fontSize: "14px",
+                        fontWeight: 600,
+                        textDecoration: "none",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                      }}
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      🔔 Ke schválení
+                      <span
+                        style={{
+                          background: "#ef4444",
+                          color: "#fff",
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          borderRadius: "50%",
+                          width: "20px",
+                          height: "20px",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        {pendingCount}
+                      </span>
+                    </Link>
+                  )}
                   <Link
                     href="/novy-clanek"
                     style={{ color: "#f0a030", fontSize: "14px", fontWeight: 600, textDecoration: "none" }}
