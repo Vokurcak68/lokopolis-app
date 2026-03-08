@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import Turnstile from "@/components/Turnstile";
 
 export default function ContactPage() {
   const [form, setForm] = useState({ name: "", email: "", subject: "", message: "", website: "" });
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const [loadedAt] = useState(() => Date.now());
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -17,7 +19,7 @@ export default function ContactPage() {
       const res = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, _ts: loadedAt }),
+        body: JSON.stringify({ ...form, _ts: loadedAt, turnstileToken }),
       });
 
       const data = await res.json();
@@ -199,19 +201,23 @@ export default function ContactPage() {
                     style={{ ...inputStyle, resize: "vertical", minHeight: "120px" }}
                   />
                 </div>
+                <Turnstile
+                  onVerify={(token) => setTurnstileToken(token)}
+                  onExpire={() => setTurnstileToken(null)}
+                />
                 <button
                   type="submit"
-                  disabled={status === "loading"}
+                  disabled={status === "loading" || !turnstileToken}
                   style={{
                     padding: "12px 24px",
-                    background: status === "loading" ? "#b8861f" : "var(--bg-primary, #f0a030)",
+                    background: (status === "loading" || !turnstileToken) ? "#b8861f" : "var(--bg-primary, #f0a030)",
                     color: "#000",
                     border: "none",
                     borderRadius: "8px",
                     fontSize: "15px",
                     fontWeight: 600,
-                    cursor: status === "loading" ? "not-allowed" : "pointer",
-                    opacity: status === "loading" ? 0.7 : 1,
+                    cursor: (status === "loading" || !turnstileToken) ? "not-allowed" : "pointer",
+                    opacity: (status === "loading" || !turnstileToken) ? 0.5 : 1,
                     transition: "opacity 0.2s",
                   }}
                 >

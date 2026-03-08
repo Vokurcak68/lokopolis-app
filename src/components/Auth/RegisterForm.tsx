@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
+import Turnstile from "@/components/Turnstile";
 
 export default function RegisterForm({
   onSuccess,
@@ -16,6 +17,7 @@ export default function RegisterForm({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -34,6 +36,25 @@ export default function RegisterForm({
       setError(
         "Uživatelské jméno musí mít 3–30 znaků a obsahovat pouze písmena, čísla, - nebo _"
       );
+      setLoading(false);
+      return;
+    }
+
+    // Verify Turnstile token
+    if (!turnstileToken) {
+      setError("Dokončete ověření, že nejste robot.");
+      setLoading(false);
+      return;
+    }
+
+    const verifyRes = await fetch("/api/verify-turnstile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: turnstileToken }),
+    });
+
+    if (!verifyRes.ok) {
+      setError("Ověření se nezdařilo. Zkuste to znovu.");
       setLoading(false);
       return;
     }
@@ -160,9 +181,14 @@ export default function RegisterForm({
         />
       </div>
 
+      <Turnstile
+        onVerify={(token) => setTurnstileToken(token)}
+        onExpire={() => setTurnstileToken(null)}
+      />
+
       <button
         type="submit"
-        disabled={loading}
+        disabled={loading || !turnstileToken}
         className="mt-2 px-6 py-2.5 rounded-lg bg-primary text-bg-dark font-semibold hover:bg-primary-light transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {loading ? "Registrace…" : "Vytvořit účet"}

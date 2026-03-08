@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import nodemailer from "nodemailer";
+import { verifyTurnstile } from "@/lib/turnstile";
 
 // In-memory rate limiting (per Vercel instance)
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
@@ -37,12 +38,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { name, email, subject, message, website, _ts } = await req.json();
+    const { name, email, subject, message, website, _ts, turnstileToken } = await req.json();
 
     // Honeypot — hidden field "website", real users never fill it
     if (website) {
       // Silently accept (don't tip off bots that we caught them)
       return NextResponse.json({ ok: true });
+    }
+
+    // Verify Turnstile CAPTCHA
+    if (!turnstileToken) {
+      return NextResponse.json({ error: "Dokončete ověření." }, { status: 400 });
+    }
+    const turnstileValid = await verifyTurnstile(turnstileToken, ip);
+    if (!turnstileValid) {
+      return NextResponse.json({ error: "Ověření se nezdařilo." }, { status: 403 });
     }
 
     // Time-based check — form must be open at least 3s
