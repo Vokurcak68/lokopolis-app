@@ -4,6 +4,7 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import type { ArticleWithRelations, Category } from "@/types/database";
+import CategoryIcon from "@/components/CategoryIcon";
 
 export const revalidate = 60;
 
@@ -78,8 +79,8 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
         <Link href="/clanky" className="text-text-muted hover:text-primary text-sm mb-4 inline-block">
           ← Všechny články
         </Link>
-        <h1 className="text-3xl font-bold mb-2">
-          <span className="mr-3">{cat.icon}</span>
+        <h1 className="text-3xl font-bold mb-2" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <CategoryIcon slug={cat.slug} emoji={cat.icon || undefined} size={36} />
           <span className="text-[var(--text-primary)]">{cat.name}</span>
         </h1>
         {cat.description && (
@@ -90,7 +91,9 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
       {/* Articles */}
       {articles.length === 0 ? (
         <div className="text-center py-20">
-          <div className="text-5xl mb-4">{cat.icon}</div>
+          <div className="mb-4" style={{ display: "flex", justifyContent: "center" }}>
+            <CategoryIcon slug={cat.slug} emoji={cat.icon || undefined} size={52} />
+          </div>
           <h3 className="text-xl font-semibold text-[var(--text-primary)] mb-2">
             Zatím žádné články
           </h3>
@@ -116,14 +119,15 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
                     sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-4xl text-text-muted/30">
-                    {cat.icon}
+                  <div className="w-full h-full flex items-center justify-center text-text-muted/30">
+                    <CategoryIcon slug={cat.slug} emoji={cat.icon || undefined} size={48} style={{ opacity: 0.3 }} />
                   </div>
                 )}
               </div>
               <div className="p-5">
-                <span className="text-xs text-primary font-medium uppercase tracking-wider">
-                  {cat.icon} {cat.name}
+                <span className="text-xs text-primary font-medium uppercase tracking-wider" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <CategoryIcon slug={cat.slug} emoji={cat.icon || undefined} size={14} />
+                  {cat.name}
                 </span>
                 <h2 className="text-lg font-semibold text-[var(--text-primary)] mt-2 mb-2 group-hover:text-primary transition-colors line-clamp-2">
                   {article.title}

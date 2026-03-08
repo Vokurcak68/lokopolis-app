@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import CategoryIcon from "@/components/CategoryIcon";
 
 interface Article {
   id: string;
@@ -15,7 +16,7 @@ interface Article {
   published_at: string | null;
   created_at: string;
   author: { username: string; display_name: string | null } | null;
-  category: { name: string; icon: string | null } | null;
+  category: { name: string; icon: string | null; slug: string } | null;
 }
 
 export default function AdminArticlesPage() {
@@ -56,7 +57,7 @@ export default function AdminArticlesPage() {
     setLoading(true);
     let query = supabase
       .from("articles")
-      .select("id, title, slug, excerpt, status, verified, published_at, created_at, author:profiles(username, display_name), category:categories(name, icon)")
+      .select("id, title, slug, excerpt, status, verified, published_at, created_at, author:profiles(username, display_name), category:categories(name, icon, slug)")
       .order("created_at", { ascending: false });
 
     if (filter === "pending") {
@@ -175,8 +176,9 @@ export default function AdminArticlesPage() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
                   {article.category && (
-                    <span className="text-xs text-primary">
-                      {article.category.icon} {article.category.name}
+                    <span className="text-xs text-primary" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                      <CategoryIcon slug={article.category.slug} emoji={article.category.icon || undefined} size={14} />
+                      {article.category.name}
                     </span>
                   )}
                   <span className={`text-xs px-2 py-0.5 rounded-full ${

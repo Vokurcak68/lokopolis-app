@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import CategoryIcon from "@/components/CategoryIcon";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 
@@ -337,7 +338,8 @@ function SearchContent() {
                           marginBottom: "6px",
                         }}
                       >
-                        {r.category.icon} {r.category.name}
+                        <CategoryIcon slug={r.category.slug} emoji={r.category.icon || undefined} size={14} style={{ marginRight: "4px" }} />
+                        {r.category.name}
                       </span>
                     )}
 

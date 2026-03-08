@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import type { ArticleWithRelations, Category } from "@/types/database";
+import CategoryIcon from "@/components/CategoryIcon";
 
 interface ArticlesContentProps {
   articles: ArticleWithRelations[];
@@ -104,8 +105,9 @@ export default function ArticlesContent({ articles, categories }: ArticlesConten
               <div className="p-5">
                 {/* Kategorie */}
                 {article.category && (
-                  <span className="text-xs text-primary font-medium uppercase tracking-wider">
-                    {article.category.icon} {article.category.name}
+                  <span className="text-xs text-primary font-medium uppercase tracking-wider" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <CategoryIcon slug={article.category.slug} emoji={article.category.icon || undefined} size={16} />
+                    {article.category.name}
                   </span>
                 )}
 

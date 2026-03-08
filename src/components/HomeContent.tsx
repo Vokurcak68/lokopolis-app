@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import BadgeLogo from "@/components/BadgeLogo";
 import Link from "next/link";
+import CategoryIcon from "@/components/CategoryIcon";
 import type {
   HomePageData,
   LatestArticle,
@@ -203,7 +204,7 @@ export default function HomeContent({ data }: { data: HomePageData }) {
                     ) : (
                       <div className="placeholder">{a.category?.icon || "📄"}</div>
                     )}
-                    {a.category && <span className="article-badge">{a.category.icon} {a.category.name}</span>}
+                    {a.category && <span className="article-badge" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}><CategoryIcon slug={a.category.slug} emoji={a.category.icon} size={14} /> {a.category.name}</span>}
                   </div>
                   <div style={{ padding: "16px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
@@ -309,7 +310,7 @@ export default function HomeContent({ data }: { data: HomePageData }) {
                       ) : (
                         <div className="placeholder">{a.category?.icon || "📄"}</div>
                       )}
-                      {a.category && <span className="article-badge">{a.category.icon} {a.category.name}</span>}
+                      {a.category && <span className="article-badge" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}><CategoryIcon slug={a.category.slug} emoji={a.category.icon} size={14} /> {a.category.name}</span>}
                     </div>
                     <div style={{ padding: "16px" }}>
                       <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "8px", lineHeight: 1.4 }}>

@@ -13,7 +13,7 @@ export interface LatestArticle {
   cover_image_url: string | null;
   published_at: string | null;
   author: { display_name: string | null; username: string | null; avatar_url: string | null } | null;
-  category: { name: string; icon: string } | null;
+  category: { name: string; icon: string; slug: string } | null;
 }
 
 export interface DownloadItem {
@@ -32,7 +32,7 @@ export interface PopularArticle {
   excerpt: string | null;
   cover_image_url: string | null;
   view_count: number;
-  category: { name: string; icon: string } | null;
+  category: { name: string; icon: string; slug: string } | null;
 }
 
 export interface EventItem {
@@ -152,7 +152,7 @@ async function fetchHomeDataInternal(): Promise<HomePageData> {
   ] = await Promise.all([
     supabase.from("articles").select("*", { count: "exact", head: true }).eq("status", "published").eq("verified", true),
     supabase.from("profiles").select("*", { count: "exact", head: true }),
-    supabase.from("articles").select("id, slug, title, excerpt, cover_image_url, published_at, author:profiles(display_name, username, avatar_url), category:categories(name, icon)").eq("status", "published").eq("verified", true).order("published_at", { ascending: false }).limit(3),
+    supabase.from("articles").select("id, slug, title, excerpt, cover_image_url, published_at, author:profiles(display_name, username, avatar_url), category:categories(name, icon, slug)").eq("status", "published").eq("verified", true).order("published_at", { ascending: false }).limit(3),
     supabase.from("articles").select("category:categories(slug)").eq("status", "published").eq("verified", true),
     supabase.from("articles").select("author:profiles(display_name, username)").eq("status", "published").eq("verified", true),
     supabase.from("downloads").select("id, title, description, file_name, file_size, download_count").order("created_at", { ascending: false }).limit(3),
@@ -229,7 +229,7 @@ async function fetchHomeDataInternal(): Promise<HomePageData> {
       });
       const { data: popArticles } = await supabase
         .from("articles")
-        .select("id, slug, title, excerpt, cover_image_url, view_count, category:categories(name, icon)")
+        .select("id, slug, title, excerpt, cover_image_url, view_count, category:categories(name, icon, slug)")
         .in("id", ids);
       if (popArticles && popArticles.length > 0) {
         popularArticles = (popArticles as unknown as PopularArticle[]).sort(
@@ -240,7 +240,7 @@ async function fetchHomeDataInternal(): Promise<HomePageData> {
       // Fallback — latest articles if no views
       const { data: fallback } = await supabase
         .from("articles")
-        .select("id, slug, title, excerpt, cover_image_url, view_count, category:categories(name, icon)")
+        .select("id, slug, title, excerpt, cover_image_url, view_count, category:categories(name, icon, slug)")
         .eq("status", "published")
         .eq("verified", true)
         .order("published_at", { ascending: false })

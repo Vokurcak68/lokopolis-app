@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/components/Auth/AuthProvider";
 import type { ArticleWithRelations, CommentWithAuthor, Tag } from "@/types/database";
+import CategoryIcon from "@/components/CategoryIcon";
 
 interface ArticleDetailContentProps {
   article: ArticleWithRelations;
@@ -95,7 +96,8 @@ export default function ArticleDetailContent({
           <>
             <span>/</span>
             <span className="text-primary">
-              {article.category.icon} {article.category.name}
+              <CategoryIcon slug={article.category.slug} emoji={article.category.icon || undefined} size={16} style={{ marginRight: "4px" }} />
+              {article.category.name}
             </span>
           </>
         )}
