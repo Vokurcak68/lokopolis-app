@@ -36,6 +36,250 @@ const TRACK_CATALOGS_INFO: Record<string, { name: string; straights: string[]; c
   },
 };
 
+type TrackCommand =
+  | ["straight", number]
+  | ["curve", "left" | "right", number, number]
+  | ["turnout", "left" | "right", string]
+  | ["tunnel_start"]
+  | ["tunnel_end"];
+
+interface CatalogParsed {
+  straights: { length: number }[];
+  curves: { radius: number; angle: number }[];
+  turnoutLength: number;
+}
+
+function parseCatalog(trackSystem: string): CatalogParsed {
+  const cat = TRACK_CATALOGS_INFO[trackSystem];
+  const straights: { length: number }[] = [];
+  const curves: { radius: number; angle: number }[] = [];
+  let turnoutLength = 200;
+
+  for (const s of cat.straights) {
+    const m = s.match(/\((\d+(?:\.\d+)?)mm\)/);
+    if (m) straights.push({ length: parseFloat(m[1]) });
+  }
+  // Sort straights descending by length
+  straights.sort((a, b) => b.length - a.length);
+
+  for (const c of cat.curves) {
+    const m = c.match(/\((\d+(?:\.\d+)?)mm,\s*(\d+(?:\.\d+)?)°\)/);
+    if (m) curves.push({ radius: parseFloat(m[1]), angle: parseFloat(m[2]) });
+  }
+  // Sort curves ascending by radius (smallest first)
+  curves.sort((a, b) => a.radius - b.radius);
+
+  // Parse turnout length from first turnout entry
+  if (cat.turnouts.length > 0) {
+    const tm = cat.turnouts[0].match(/\((\d+(?:\.\d+)?)mm/);
+    if (tm) turnoutLength = parseFloat(tm[1]);
+  }
+
+  return { straights, curves, turnoutLength };
+}
+
+/**
+ * Build a deterministically correct base oval loop from catalog pieces.
+ * Returns commands for a closed 360° oval.
+ */
+function buildBaseLoop(trackSystem: string, boardW_mm: number, boardH_mm: number): { commands: TrackCommand[]; straightSegmentCount: number; curveSegmentCount: number } {
+  const catalog = parseCatalog(trackSystem);
+
+  if (catalog.curves.length === 0 || catalog.straights.length === 0) {
+    throw new Error("Catalog has no curves or straights");
+  }
+
+  // Pick the smallest radius curve
+  const curve = catalog.curves[0];
+  const curvesPerHalf = Math.round(180 / curve.angle); // e.g. 6 for 30°, 12 for 15°
+
+  // Calculate available straight length
+  // Oval: two straight runs connected by 180° curves at each end
+  // Each 180° turn spans 2*radius in the width direction
+  const turnDiameter = 2 * curve.radius;
+  const padding = 80; // mm padding from board edges
+  const availStraight = boardW_mm - turnDiameter - padding;
+
+  // Find the best combination of catalog straights to fill availStraight
+  const straightPieces = fitStraights(catalog.straights, Math.max(availStraight, catalog.straights[catalog.straights.length - 1].length));
+
+  const commands: TrackCommand[] = [];
+  let straightCount = 0;
+
+  // Top straight section
+  for (const len of straightPieces) {
+    commands.push(["straight", len]);
+    straightCount++;
+  }
+
+  // Right 180° turn (curves going right)
+  for (let i = 0; i < curvesPerHalf; i++) {
+    commands.push(["curve", "right", curve.radius, curve.angle]);
+  }
+
+  // Bottom straight section (same pieces)
+  for (const len of straightPieces) {
+    commands.push(["straight", len]);
+    straightCount++;
+  }
+
+  // Left 180° turn (still going right to complete the oval)
+  for (let i = 0; i < curvesPerHalf; i++) {
+    commands.push(["curve", "right", curve.radius, curve.angle]);
+  }
+
+  return {
+    commands,
+    straightSegmentCount: straightCount,
+    curveSegmentCount: curvesPerHalf * 2,
+  };
+}
+
+/**
+ * Fit catalog straight pieces to fill a target length.
+ */
+function fitStraights(available: { length: number }[], target: number): number[] {
+  const result: number[] = [];
+  let remaining = target;
+
+  // Greedy: use longest pieces first
+  for (const piece of available) {
+    while (remaining >= piece.length - 1) { // -1 for floating point tolerance
+      result.push(piece.length);
+      remaining -= piece.length;
+    }
+  }
+
+  // If we haven't placed any, use at least one of the smallest
+  if (result.length === 0 && available.length > 0) {
+    result.push(available[available.length - 1].length);
+  }
+
+  return result;
+}
+
+interface AIModification {
+  type: "add_turnout" | "tunnel";
+  at_straight?: number; // 1-based index of straight segment
+  direction?: "left" | "right";
+  branch_id?: string;
+  from_straight?: number;
+  to_straight?: number;
+}
+
+interface AIBranch {
+  id: string;
+  name: string;
+  color: string;
+  commands: Array<["straight", number] | ["curve", "left" | "right", number, number]>;
+}
+
+interface AIEnhancement {
+  name: string;
+  modifications: AIModification[];
+  branches: AIBranch[];
+  bom_notes?: string;
+}
+
+interface AIRoute {
+  id: string;
+  name: string;
+  color: string;
+  commands: TrackCommand[];
+}
+
+/**
+ * Merge base loop with AI modifications to produce final layout.
+ */
+function mergeLayout(
+  baseCommands: TrackCommand[],
+  enhancement: AIEnhancement,
+  straightSegmentCount: number,
+): { routes: AIRoute[] } {
+  // Number the straight segments (1-based)
+  // We need to identify which commands are straights
+  const indexedCommands: { cmd: TrackCommand; straightIndex: number | null }[] = [];
+  let straightIdx = 0;
+  for (const cmd of baseCommands) {
+    if (cmd[0] === "straight") {
+      straightIdx++;
+      indexedCommands.push({ cmd, straightIndex: straightIdx });
+    } else {
+      indexedCommands.push({ cmd, straightIndex: null });
+    }
+  }
+
+  // Build the main route commands with modifications applied
+  const mainCommands: TrackCommand[] = [];
+
+  // Collect tunnel ranges
+  const tunnelRanges: Set<number> = new Set();
+  for (const mod of enhancement.modifications) {
+    if (mod.type === "tunnel" && mod.from_straight && mod.to_straight) {
+      for (let i = mod.from_straight; i <= mod.to_straight; i++) {
+        tunnelRanges.add(i);
+      }
+    }
+  }
+
+  // Collect turnout positions: straightIndex -> modification
+  const turnoutMap = new Map<number, AIModification>();
+  for (const mod of enhancement.modifications) {
+    if (mod.type === "add_turnout" && mod.at_straight) {
+      turnoutMap.set(mod.at_straight, mod);
+    }
+  }
+
+  let lastTunnelState = false;
+
+  for (const { cmd, straightIndex } of indexedCommands) {
+    // Handle tunnel markers
+    if (straightIndex !== null) {
+      const inTunnel = tunnelRanges.has(straightIndex);
+      if (inTunnel && !lastTunnelState) {
+        mainCommands.push(["tunnel_start"]);
+      } else if (!inTunnel && lastTunnelState) {
+        mainCommands.push(["tunnel_end"]);
+      }
+      lastTunnelState = inTunnel;
+    }
+
+    // Check if this straight should become a turnout
+    if (straightIndex !== null && turnoutMap.has(straightIndex)) {
+      const mod = turnoutMap.get(straightIndex)!;
+      mainCommands.push(["turnout", mod.direction || "left", mod.branch_id || "siding"]);
+    } else {
+      mainCommands.push(cmd);
+    }
+  }
+
+  // Close any open tunnel
+  if (lastTunnelState) {
+    mainCommands.push(["tunnel_end"]);
+  }
+
+  const routes: AIRoute[] = [
+    {
+      id: "main",
+      name: "Hlavní trať",
+      color: "#e8a030",
+      commands: mainCommands,
+    },
+  ];
+
+  // Add branch routes from AI
+  for (const branch of enhancement.branches) {
+    routes.push({
+      id: branch.id,
+      name: branch.name,
+      color: branch.color,
+      commands: branch.commands as TrackCommand[],
+    });
+  }
+
+  return { routes };
+}
+
 interface RequestBody {
   prompt: string;
   boardShape: string;
@@ -77,6 +321,14 @@ export async function POST(request: NextRequest) {
   const boardW_mm = width * 10;
   const boardH_mm = height * 10;
 
+  // Step 1: Build deterministic base loop
+  let baseLoop;
+  try {
+    baseLoop = buildBaseLoop(trackSystem, boardW_mm, boardH_mm);
+  } catch (err) {
+    return NextResponse.json({ error: "Nepodařilo se sestavit základní smyčku: " + (err instanceof Error ? err.message : String(err)) }, { status: 500 });
+  }
+
   // Build board description
   let boardDesc = `${width}×${height} cm obdélník (${boardW_mm}×${boardH_mm} mm)`;
   if (boardShape === "l-shape") {
@@ -97,87 +349,86 @@ export async function POST(request: NextRequest) {
     "prumyslova-vlecka": "Průmyslová vlečka (vlečky, rampy, posun, nákladní provoz)",
   };
 
-  const systemPrompt = `You are an expert model railway track layout designer. You design track plans as a sequence of turtle-graphics commands.
+  // Describe base loop for AI
+  const parsedCat = parseCatalog(trackSystem);
+  const baseCurve = parsedCat.curves[0];
+  const curvesPerHalf = Math.round(180 / baseCurve.angle);
+
+  // Build description of the base loop segments
+  const baseDescription = `The base oval loop consists of:
+- ${baseLoop.straightSegmentCount} straight segments (S1 to S${baseLoop.straightSegmentCount}), half on the top side and half on the bottom side
+  - S1 to S${baseLoop.straightSegmentCount / 2} are on the top (first straight run)
+  - S${baseLoop.straightSegmentCount / 2 + 1} to S${baseLoop.straightSegmentCount} are on the bottom (return straight run)
+- ${baseLoop.curveSegmentCount} curve segments (${curvesPerHalf} curves of ${baseCurve.angle}° at each end = 360° total, ALREADY CORRECT)
+- The loop is geometrically closed and correct. DO NOT modify curves.
+
+Available catalog pieces for branches:
+- Straights: ${catalog.straights.join(", ")}
+- Curves: ${catalog.curves.join(", ")}
+- Turnouts: ${catalog.turnouts.join(", ")}`;
+
+  const systemPrompt = `You are an expert model railway layout enhancer. You receive a CORRECT base oval loop and your job is to make it interesting by adding turnouts, sidings, tunnels, and stations.
+
+THE BASE LOOP IS ALREADY GEOMETRICALLY CORRECT (360° total turning). DO NOT change the curves. You can only:
+1. Replace a straight segment with a turnout (to create a branch)
+2. Mark sections as tunnels
+3. Design branch routes (sidings, passing loops, stations)
 
 OUTPUT FORMAT: Return a JSON object with this EXACT structure:
 {
-  "name": "Layout name in Czech",
-  "routes": [
-    {
-      "id": "main",
-      "name": "Hlavní trať",
-      "color": "#e8a030",
-      "commands": [
-        ["straight", 230],
-        ["curve", "right", 380, 30],
-        ["turnout", "left", "siding1"],
-        ["tunnel_start"],
-        ["straight", 230],
-        ["tunnel_end"]
-      ]
-    },
+  "name": "Creative layout name in Czech",
+  "modifications": [
+    {"type": "add_turnout", "at_straight": 3, "direction": "left", "branch_id": "siding1"},
+    {"type": "tunnel", "from_straight": 8, "to_straight": 10}
+  ],
+  "branches": [
     {
       "id": "siding1",
       "name": "Vlečka",
       "color": "#4a9eff",
       "commands": [
-        ["curve", "left", 380, 15],
-        ["straight", 200]
+        ["curve", "left", 358, 15],
+        ["straight", 230],
+        ["straight", 230]
       ]
     }
   ],
-  "bom_notes": "Rough material estimate in Czech"
+  "bom_notes": "Material estimate in Czech"
 }
 
-COMMAND TYPES:
-- ["straight", length_mm] — straight track piece
-- ["curve", "left"|"right", radius_mm, angle_degrees] — curved track arc
-- ["turnout", "left"|"right", "branch_route_id"] — a turnout/switch. Acts as a short straight (~100mm) on the main route; the branch route starts here with a diverging curve.
-- ["tunnel_start"] — marks start of tunnel section (subsequent track drawn dashed)
-- ["tunnel_end"] — marks end of tunnel section
+MODIFICATION TYPES:
+- "add_turnout": Replace straight segment at_straight (1-based index) with a turnout. Specify direction ("left" or "right") for the diverging branch and branch_id to link to a branch.
+- "tunnel": Mark straights from_straight to to_straight as tunnel section (drawn dashed).
 
-CRITICAL RULES FOR CLOSED LOOPS:
-1. The "main" route MUST form a closed loop. The total turning must equal exactly 360°.
-   - Simple oval: 12 curves of 30° all turning "right" (or all "left") = 360°
-   - Figure-8: NOT recommended (crossing issues)
-   - Dog-bone: curves at each end totaling 180° each side
-2. All curves in the same direction add up. For a simple oval with 30° curves, you need exactly 12 curves.
-3. Straights connect the curved sections.
+BRANCH COMMANDS:
+- ["straight", length_mm]
+- ["curve", "left"|"right", radius_mm, angle_degrees]
+Use ONLY catalog dimensions for branches.
 
-GEOMETRY GUIDANCE for board ${boardW_mm}×${boardH_mm}mm:
-- A simple oval: two straight sections along the length, connected by 180° of curves at each end
-- For 30° curves with radius R: a 180° turn uses 6 curves and the turn diameter is 2*R
-- The straight sections should be roughly: board_length - 2*R
-- Make sure the layout fits within the board dimensions!
+DESIGN RULES:
+- For "horská trať": Add 1-2 tunnel sections on curves/straights, maybe one passing siding
+- For "hlavní koridor": Add a parallel passing track (2 turnouts creating a passing loop)
+- For "stanice s vlečkami": Add 2-3 turnouts with various sidings
+- For "malá dioráma": Keep it simple, maybe one short siding
+- For "průjezdná stanice": Add a passing loop (2 turnouts, parallel siding that reconnects)
+- For "průmyslová vlečka": Multiple short dead-end sidings for loading
 
-TRACK CATALOG (${catalog.name}):
-Straights: ${catalog.straights.join(", ")}
-Curves: ${catalog.curves.join(", ")}
-Turnouts: ${catalog.turnouts.join(", ")}
+PASSING LOOP PATTERN (2 turnouts + parallel track):
+Replace 2 straights with turnouts (one diverging left, one diverging right — or same direction), connect with a branch of appropriate length to form a parallel track.
 
-USE ONLY piece dimensions from this catalog! For example, if curves are 30° and radius 358mm, use those exact values.
+BRANCH COLORS: #4a9eff (blue), #66bb6a (green), #ef5350 (red), #ab47bc (purple), #26c6da (cyan)
 
-DESIGN PRINCIPLES:
-- Main route = closed loop (360° total turning)
-- Branch routes start from turnouts on the main route
-- Branch routes can be dead-end sidings (just end) or passing loops (rejoin main)
-- Be creative based on the requested character
-- Use tunnels for mountain themes
-- Use multiple turnouts/sidings for station/industrial themes
-- Keep realistic spacing between parallel tracks (at least 50mm)
+BE CREATIVE! Don't just add one siding. Make the layout interesting for the character. Use 2-4 modifications typically.`;
 
-ROUTE COLORS: Use distinct, visible colors on dark background:
-- Main: #e8a030 (warm orange)
-- Branches: #4a9eff (blue), #66bb6a (green), #ef5350 (red), #ab47bc (purple), #26c6da (cyan)`;
+  const userMessage = `Board: ${boardDesc}
+Scale: ${scale} (1:${scale === "H0" ? 87 : scale === "TT" ? 120 : 160})
+Track system: ${catalog.name}
+Character: ${characterLabels[character] ?? character}
+${prompt ? `Special requirements: ${prompt}` : "No special requirements."}
 
-  const userMessage = `Design a model railway layout:
-- Board: ${boardDesc}
-- Scale: ${scale} (1:${scale === "H0" ? 87 : scale === "TT" ? 120 : 160})
-- Track system: ${catalog.name}
-- Character: ${characterLabels[character] ?? character}
-${prompt ? `- Special requirements: ${prompt}` : "- No special requirements, design a typical layout for the chosen character."}
+${baseDescription}
 
-Return ONLY valid JSON. Use the EXACT piece dimensions from the catalog. The main route MUST close (360° total turning). Name everything in Czech.`;
+Enhance this base oval for the chosen character. Return ONLY valid JSON. Name everything in Czech. Be creative!`;
 
   try {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -189,7 +440,7 @@ Return ONLY valid JSON. Use the EXACT piece dimensions from the catalog. The mai
       body: JSON.stringify({
         model: "gpt-4o",
         max_tokens: 4000,
-        temperature: 0.7,
+        temperature: 0.8,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userMessage },
@@ -211,11 +462,11 @@ Return ONLY valid JSON. Use the EXACT piece dimensions from the catalog. The mai
     const aiText = data.choices?.[0]?.message?.content ?? "";
 
     // Parse JSON from AI response
-    let parsed;
+    let enhancement: AIEnhancement;
     try {
       const jsonMatch = aiText.match(/\{[\s\S]*\}/);
       if (!jsonMatch) throw new Error("No JSON found");
-      parsed = JSON.parse(jsonMatch[0]);
+      enhancement = JSON.parse(jsonMatch[0]);
     } catch {
       console.error("Failed to parse AI response:", aiText);
       return NextResponse.json(
@@ -224,25 +475,37 @@ Return ONLY valid JSON. Use the EXACT piece dimensions from the catalog. The mai
       );
     }
 
-    // Validate basic structure
-    if (!parsed.name || !parsed.routes || !Array.isArray(parsed.routes)) {
-      return NextResponse.json(
-        { error: "AI vrátila neúplná data — chybí name nebo routes.", raw: parsed },
-        { status: 502 }
-      );
-    }
+    // Validate enhancement structure
+    if (!enhancement.name) enhancement.name = "Kolejiště";
+    if (!enhancement.modifications) enhancement.modifications = [];
+    if (!enhancement.branches) enhancement.branches = [];
 
-    // Validate that routes have commands arrays
-    for (const route of parsed.routes) {
-      if (!route.commands || !Array.isArray(route.commands)) {
-        return NextResponse.json(
-          { error: `Trasa "${route.id || route.name}" nemá příkazy (commands).`, raw: parsed },
-          { status: 502 }
-        );
+    // Sanitize modifications: clamp at_straight to valid range
+    enhancement.modifications = enhancement.modifications.filter(mod => {
+      if (mod.type === "add_turnout") {
+        return mod.at_straight && mod.at_straight >= 1 && mod.at_straight <= baseLoop.straightSegmentCount;
       }
-    }
+      if (mod.type === "tunnel") {
+        return mod.from_straight && mod.to_straight &&
+          mod.from_straight >= 1 && mod.to_straight <= baseLoop.straightSegmentCount;
+      }
+      return false;
+    });
 
-    return NextResponse.json({ result: parsed });
+    // Step 3: Merge base loop with AI modifications
+    const merged = mergeLayout(
+      baseLoop.commands,
+      enhancement,
+      baseLoop.straightSegmentCount,
+    );
+
+    const result = {
+      name: enhancement.name,
+      routes: merged.routes,
+      bom_notes: enhancement.bom_notes || undefined,
+    };
+
+    return NextResponse.json({ result });
   } catch (err: unknown) {
     console.error("Generate track error:", err);
     return NextResponse.json(

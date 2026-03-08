@@ -17,16 +17,6 @@ type LayoutCharacter =
   | "prujezdna-stanice"
   | "prumyslova-vlecka";
 
-interface TrackPiece {
-  id: string;
-  name: string;
-  nameCz: string;
-  length?: number;
-  radius?: number;
-  angle?: number;
-  type: "straight" | "curve" | "turnout-left" | "turnout-right" | "crossing";
-}
-
 interface FormData {
   boardShape: BoardShape;
   width: number;
@@ -69,68 +59,12 @@ interface AILayoutData {
    =========================== */
 const SCALE_FACTOR: Record<Scale, number> = { H0: 87, TT: 120, N: 160 };
 
-const TRACK_CATALOGS: Record<TrackSystem, { name: string; pieces: TrackPiece[] }> = {
-  "roco-line": {
-    name: "ROCO GeoLine",
-    pieces: [
-      { id: "roco-g230", name: "G230", nameCz: "Rovná 230mm", length: 230, type: "straight" },
-      { id: "roco-g200", name: "G200", nameCz: "Rovná 200mm", length: 200, type: "straight" },
-      { id: "roco-g100", name: "G100", nameCz: "Rovná 100mm", length: 100, type: "straight" },
-      { id: "roco-r2", name: "R2 (358mm)", nameCz: "Oblouk R2 (30°)", radius: 358, angle: 30, type: "curve" },
-      { id: "roco-r3", name: "R3 (419mm)", nameCz: "Oblouk R3 (30°)", radius: 419, angle: 30, type: "curve" },
-      { id: "roco-r4", name: "R4 (481mm)", nameCz: "Oblouk R4 (30°)", radius: 481, angle: 30, type: "curve" },
-      { id: "roco-wl15", name: "WL15", nameCz: "Výhybka levá 15°", length: 230, type: "turnout-left" },
-      { id: "roco-wr15", name: "WR15", nameCz: "Výhybka pravá 15°", length: 230, type: "turnout-right" },
-    ],
-  },
-  "roco-geo": {
-    name: "ROCO Line",
-    pieces: [
-      { id: "roco2-st228", name: "ST228", nameCz: "Rovná 228,9mm", length: 228.9, type: "straight" },
-      { id: "roco2-st115", name: "ST115", nameCz: "Rovná 114,5mm", length: 114.5, type: "straight" },
-      { id: "roco2-r2", name: "R2 (358mm)", nameCz: "Oblouk R2 (30°)", radius: 358, angle: 30, type: "curve" },
-      { id: "roco2-r3", name: "R3 (419mm)", nameCz: "Oblouk R3 (30°)", radius: 419, angle: 30, type: "curve" },
-      { id: "roco2-wl", name: "WL", nameCz: "Výhybka levá", length: 230, type: "turnout-left" },
-      { id: "roco2-wr", name: "WR", nameCz: "Výhybka pravá", length: 230, type: "turnout-right" },
-    ],
-  },
-  tillig: {
-    name: "Tillig (TT)",
-    pieces: [
-      { id: "tillig-st166", name: "G1", nameCz: "Rovná 166mm", length: 166, type: "straight" },
-      { id: "tillig-st83", name: "G2", nameCz: "Rovná 83mm", length: 83, type: "straight" },
-      { id: "tillig-st41", name: "G3", nameCz: "Rovná 41,5mm", length: 41.5, type: "straight" },
-      { id: "tillig-r310", name: "R310 (15°)", nameCz: "Oblouk R310 (15°)", radius: 310, angle: 15, type: "curve" },
-      { id: "tillig-r353", name: "R353 (15°)", nameCz: "Oblouk R353 (15°)", radius: 353, angle: 15, type: "curve" },
-      { id: "tillig-r396", name: "R396 (15°)", nameCz: "Oblouk R396 (15°)", radius: 396, angle: 15, type: "curve" },
-      { id: "tillig-wl15", name: "EWL", nameCz: "Výhybka levá 15°", length: 166, type: "turnout-left" },
-      { id: "tillig-wr15", name: "EWR", nameCz: "Výhybka pravá 15°", length: 166, type: "turnout-right" },
-    ],
-  },
-  "piko-a": {
-    name: "PIKO A",
-    pieces: [
-      { id: "piko-g231", name: "G231", nameCz: "Rovná 231mm", length: 231, type: "straight" },
-      { id: "piko-g115", name: "G115", nameCz: "Rovná 115mm", length: 115, type: "straight" },
-      { id: "piko-r1", name: "R1 (360mm)", nameCz: "Oblouk R1 (30°)", radius: 360, angle: 30, type: "curve" },
-      { id: "piko-r2", name: "R2 (422mm)", nameCz: "Oblouk R2 (30°)", radius: 422, angle: 30, type: "curve" },
-      { id: "piko-r3", name: "R3 (484mm)", nameCz: "Oblouk R3 (30°)", radius: 484, angle: 30, type: "curve" },
-      { id: "piko-wl", name: "WL", nameCz: "Výhybka levá 15°", length: 239, type: "turnout-left" },
-      { id: "piko-wr", name: "WR", nameCz: "Výhybka pravá 15°", length: 239, type: "turnout-right" },
-    ],
-  },
-  fleischmann: {
-    name: "Fleischmann Profi",
-    pieces: [
-      { id: "fl-st200", name: "6101", nameCz: "Rovná 200mm", length: 200, type: "straight" },
-      { id: "fl-st100", name: "6103", nameCz: "Rovná 100mm", length: 100, type: "straight" },
-      { id: "fl-st50", name: "6104", nameCz: "Rovná 50mm", length: 50, type: "straight" },
-      { id: "fl-r1", name: "R1 (356mm)", nameCz: "Oblouk R1 (30°)", radius: 356.5, angle: 30, type: "curve" },
-      { id: "fl-r2", name: "R2 (420mm)", nameCz: "Oblouk R2 (30°)", radius: 420, angle: 30, type: "curve" },
-      { id: "fl-wl", name: "6170", nameCz: "Výhybka levá 15°", length: 200, type: "turnout-left" },
-      { id: "fl-wr", name: "6171", nameCz: "Výhybka pravá 15°", length: 200, type: "turnout-right" },
-    ],
-  },
+const TRACK_CATALOGS: Record<TrackSystem, { name: string }> = {
+  "roco-line": { name: "ROCO GeoLine" },
+  "roco-geo": { name: "ROCO Line" },
+  tillig: { name: "Tillig (TT)" },
+  "piko-a": { name: "PIKO A" },
+  fleischmann: { name: "Fleischmann Profi" },
 };
 
 /* ===========================
@@ -182,6 +116,7 @@ interface DrawCommand {
   // common
   color: string;
   dashed?: boolean;
+  isMain?: boolean;
   // turnout marker
   dotX?: number; dotY?: number;
 }
@@ -205,6 +140,7 @@ function computeLayout(data: AILayoutData): LayoutRenderData {
   }
 
   function processRoute(route: AIRoute, startTurtle: TurtleState) {
+    const isMain = route.id === "main";
     let turtle = { ...startTurtle };
     let inTunnel = false;
 
@@ -223,6 +159,7 @@ function computeLayout(data: AILayoutData): LayoutRenderData {
             heading: turtle.heading,
             color: route.color,
             dashed: inTunnel,
+            isMain,
           });
           addPoint(turtle.x, turtle.y);
           addPoint(endX, endY);
@@ -243,6 +180,8 @@ function computeLayout(data: AILayoutData): LayoutRenderData {
 
           // Start angle: from center back to current position
           const startAngle = Math.atan2(turtle.y - centerY, turtle.x - centerX);
+          // For right turn: sweep clockwise (positive angle in canvas coords)
+          // For left turn: sweep counterclockwise (negative angle)
           const endAngle = startAngle + sign * angleRad;
 
           // New position: on the circle at the end angle
@@ -250,6 +189,11 @@ function computeLayout(data: AILayoutData): LayoutRenderData {
           const newY = centerY + radius * Math.sin(endAngle);
           const newHeading = turtle.heading + sign * angleRad;
 
+          // For ctx.arc: counterclockwise parameter
+          // Right turn (sign=+1): we sweep from startAngle to endAngle where endAngle > startAngle
+          //   → counterclockwise = false (draw clockwise)
+          // Left turn (sign=-1): we sweep from startAngle to endAngle where endAngle < startAngle
+          //   → counterclockwise = true (draw counterclockwise)
           commands.push({
             type: "curve",
             cx: centerX, cy: centerY, radius,
@@ -257,12 +201,12 @@ function computeLayout(data: AILayoutData): LayoutRenderData {
             counterclockwise: direction === "left",
             color: route.color,
             dashed: inTunnel,
+            isMain,
           });
 
           // Add bounding points for the arc
           addPoint(turtle.x, turtle.y);
           addPoint(newX, newY);
-          // Also add points along the arc for better bounding
           const steps = Math.max(4, Math.ceil(angleDeg / 15));
           for (let i = 0; i <= steps; i++) {
             const t = i / steps;
@@ -283,6 +227,7 @@ function computeLayout(data: AILayoutData): LayoutRenderData {
             type: "turnout_dot",
             dotX: turtle.x, dotY: turtle.y,
             color: route.color,
+            isMain,
           });
           addPoint(turtle.x, turtle.y);
 
@@ -300,6 +245,7 @@ function computeLayout(data: AILayoutData): LayoutRenderData {
             heading: turtle.heading,
             color: route.color,
             dashed: inTunnel,
+            isMain,
           });
           addPoint(endX, endY);
           turtle = { x: endX, y: endY, heading: turtle.heading };
@@ -322,7 +268,7 @@ function computeLayout(data: AILayoutData): LayoutRenderData {
       id: route.id,
       name: route.name,
       color: route.color,
-      commandCount: route.commands.length,
+      commandCount: route.commands.filter(c => c[0] !== "tunnel_start" && c[0] !== "tunnel_end").length,
     });
   }
 
@@ -359,7 +305,7 @@ function computeLayout(data: AILayoutData): LayoutRenderData {
   if (!isFinite(minX)) { minX = 0; minY = 0; maxX = 1000; maxY = 600; }
 
   // Add some margin
-  const pad = 40;
+  const pad = 60;
   minX -= pad; minY -= pad; maxX += pad; maxY += pad;
 
   return { commands, bounds: { minX, minY, maxX, maxY }, routes: routeSummary };
@@ -393,48 +339,48 @@ function drawTrackOnCanvas(
   const availH = displayHeight - canvasPad * 2 - 60; // leave space for legend
   const scaleX = availW / contentW;
   const scaleY = availH / contentH;
-  const scale = Math.min(scaleX, scaleY);
+  const drawScale = Math.min(scaleX, scaleY);
 
   // Center offset
-  const offsetX = canvasPad + (availW - contentW * scale) / 2 - bounds.minX * scale;
-  const offsetY = canvasPad + (availH - contentH * scale) / 2 - bounds.minY * scale;
+  const offsetX = canvasPad + (availW - contentW * drawScale) / 2 - bounds.minX * drawScale;
+  const offsetY = canvasPad + (availH - contentH * drawScale) / 2 - bounds.minY * drawScale;
 
   // Transform: world coords -> canvas coords
-  function tx(x: number) { return x * scale + offsetX; }
-  function ty(y: number) { return y * scale + offsetY; }
+  function tx(x: number) { return x * drawScale + offsetX; }
+  function ty(y: number) { return y * drawScale + offsetY; }
 
   // Clear with dark background
   ctx.fillStyle = "#1a1b2e";
   ctx.fillRect(0, 0, displayWidth, displayHeight);
 
-  // Draw grid dots
+  // Draw subtle grid
   const gridStep = 100; // mm
   const gridStartX = Math.floor(bounds.minX / gridStep) * gridStep;
   const gridStartY = Math.floor(bounds.minY / gridStep) * gridStep;
-  ctx.fillStyle = "rgba(255, 255, 255, 0.06)";
+  ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
   for (let gx = gridStartX; gx <= bounds.maxX; gx += gridStep) {
     for (let gy = gridStartY; gy <= bounds.maxY; gy += gridStep) {
       ctx.beginPath();
-      ctx.arc(tx(gx), ty(gy), 1.5, 0, Math.PI * 2);
+      ctx.arc(tx(gx), ty(gy), 1, 0, Math.PI * 2);
       ctx.fill();
     }
   }
 
   // Helper: draw sleepers along a straight
-  function drawSleepers(c: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number, heading: number, color: string) {
+  function drawSleepers(c: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number, heading: number) {
     const dx = x2 - x1;
     const dy = y2 - y1;
     const len = Math.sqrt(dx * dx + dy * dy);
-    if (len < 5 * scale) return;
+    if (len < 6) return;
     const perpX = -Math.sin(heading);
     const perpY = Math.cos(heading);
-    const spacing = 15; // mm
-    const count = Math.max(1, Math.floor(len / (spacing * scale)));
-    const halfW = 5 * scale;
+    const spacing = 20 * drawScale; // every 20 scaled units
+    const count = Math.max(1, Math.floor(len / spacing));
+    const halfW = 6 * drawScale;
 
-    c.strokeStyle = color;
-    c.lineWidth = 0.8;
-    c.globalAlpha = 0.3;
+    c.strokeStyle = "#555";
+    c.lineWidth = 1;
+    c.globalAlpha = 0.25;
     for (let i = 1; i < count; i++) {
       const t = i / count;
       const px = x1 + (x2 - x1) * t;
@@ -448,18 +394,18 @@ function drawTrackOnCanvas(
   }
 
   // Helper: draw sleepers along an arc
-  function drawArcSleepers(c: CanvasRenderingContext2D, cxW: number, cyW: number, radius: number, startAngle: number, endAngle: number, counterclockwise: boolean, color: string) {
+  function drawArcSleepers(c: CanvasRenderingContext2D, cxW: number, cyW: number, radius: number, startAngle: number, endAngle: number, counterclockwise: boolean) {
     let angleDiff = endAngle - startAngle;
     if (!counterclockwise && angleDiff < 0) angleDiff += Math.PI * 2;
     if (counterclockwise && angleDiff > 0) angleDiff -= Math.PI * 2;
-    const arcLen = Math.abs(angleDiff) * radius * scale;
-    const spacing = 15;
+    const arcLen = Math.abs(angleDiff) * radius * drawScale;
+    const spacing = 20;
     const count = Math.max(1, Math.floor(arcLen / spacing));
-    const halfW = 5 * scale;
+    const halfW = 6 * drawScale;
 
-    c.strokeStyle = color;
-    c.lineWidth = 0.8;
-    c.globalAlpha = 0.3;
+    c.strokeStyle = "#555";
+    c.lineWidth = 1;
+    c.globalAlpha = 0.25;
     for (let i = 1; i < count; i++) {
       const t = i / count;
       const a = startAngle + angleDiff * t;
@@ -477,7 +423,12 @@ function drawTrackOnCanvas(
   }
 
   // Draw all commands
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
   for (const cmd of commands) {
+    const trackWidth = cmd.isMain ? 4 : 3;
+
     switch (cmd.type) {
       case "straight": {
         const sx = tx(cmd.x1!);
@@ -486,12 +437,13 @@ function drawTrackOnCanvas(
         const ey = ty(cmd.y2!);
 
         // Sleepers
-        drawSleepers(ctx, sx, sy, ex, ey, cmd.heading!, cmd.color);
+        if (!cmd.dashed) {
+          drawSleepers(ctx, sx, sy, ex, ey, cmd.heading!);
+        }
 
         // Track line
         ctx.strokeStyle = cmd.color;
-        ctx.lineWidth = 3;
-        ctx.lineCap = "round";
+        ctx.lineWidth = trackWidth;
         if (cmd.dashed) {
           ctx.setLineDash([8, 5]);
         } else {
@@ -508,15 +460,16 @@ function drawTrackOnCanvas(
       case "curve": {
         const cxCanvas = tx(cmd.cx!);
         const cyCanvas = ty(cmd.cy!);
-        const rCanvas = cmd.radius! * scale;
+        const rCanvas = cmd.radius! * drawScale;
 
         // Sleepers
-        drawArcSleepers(ctx, cmd.cx!, cmd.cy!, cmd.radius!, cmd.startAngle!, cmd.endAngle!, !!cmd.counterclockwise, cmd.color);
+        if (!cmd.dashed) {
+          drawArcSleepers(ctx, cmd.cx!, cmd.cy!, cmd.radius!, cmd.startAngle!, cmd.endAngle!, !!cmd.counterclockwise);
+        }
 
         // Arc
         ctx.strokeStyle = cmd.color;
-        ctx.lineWidth = 3;
-        ctx.lineCap = "round";
+        ctx.lineWidth = trackWidth;
         if (cmd.dashed) {
           ctx.setLineDash([8, 5]);
         } else {
@@ -533,17 +486,17 @@ function drawTrackOnCanvas(
         const dx = tx(cmd.dotX!);
         const dy = ty(cmd.dotY!);
         // Outer ring
-        ctx.strokeStyle = cmd.color;
+        ctx.strokeStyle = "#fff";
         ctx.lineWidth = 1.5;
-        ctx.globalAlpha = 0.5;
+        ctx.globalAlpha = 0.4;
         ctx.beginPath();
-        ctx.arc(dx, dy, 6, 0, Math.PI * 2);
+        ctx.arc(dx, dy, 7, 0, Math.PI * 2);
         ctx.stroke();
         // Inner dot
         ctx.fillStyle = cmd.color;
-        ctx.globalAlpha = 0.8;
+        ctx.globalAlpha = 0.9;
         ctx.beginPath();
-        ctx.arc(dx, dy, 3, 0, Math.PI * 2);
+        ctx.arc(dx, dy, 3.5, 0, Math.PI * 2);
         ctx.fill();
         ctx.globalAlpha = 1;
         break;
@@ -555,8 +508,9 @@ function drawTrackOnCanvas(
   const legendY = displayHeight - 35;
   const legendRoutes = aiData.routes;
 
-  ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
+  ctx.fillStyle = "rgba(255, 255, 255, 0.35)";
   ctx.font = "bold 10px system-ui, sans-serif";
+  ctx.textAlign = "left";
   ctx.fillText("LEGENDA", 20, legendY - 8);
 
   let legendX = 20;
@@ -566,12 +520,13 @@ function drawTrackOnCanvas(
     ctx.strokeStyle = route.color;
     ctx.lineWidth = 3;
     ctx.lineCap = "round";
+    ctx.setLineDash([]);
     ctx.beginPath();
     ctx.moveTo(legendX, legendY + 5);
     ctx.lineTo(legendX + 24, legendY + 5);
     ctx.stroke();
     // Label
-    ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+    ctx.fillStyle = "rgba(255, 255, 255, 0.55)";
     ctx.fillText(route.name, legendX + 30, legendY + 9);
     legendX += ctx.measureText(route.name).width + 50;
   }
@@ -609,7 +564,6 @@ function TrackCanvas({
     if (!canvas) return;
     drawTrackOnCanvas(canvas, layoutData, form, aiData);
 
-    // Redraw on resize
     const handleResize = () => {
       drawTrackOnCanvas(canvas, layoutData, form, aiData);
     };
@@ -622,7 +576,7 @@ function TrackCanvas({
       ref={canvasRef}
       style={{
         width: "100%",
-        height: "500px",
+        height: "600px",
         borderRadius: "12px",
         border: "1px solid var(--border)",
         display: "block",
