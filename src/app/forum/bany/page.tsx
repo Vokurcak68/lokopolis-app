@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/components/Auth/AuthProvider";
 import { timeAgo, formatCzechDate } from "@/lib/timeAgo";
@@ -212,7 +213,7 @@ export default function BansPage() {
               }}>
                 {/* Avatar */}
                 {ban.user?.avatar_url ? (
-                  <img src={ban.user.avatar_url} alt="" style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }} />
+                  <Image src={ban.user.avatar_url} alt="" width={40} height={40} style={{ borderRadius: "50%", objectFit: "cover" }} />
                 ) : (
                   <div style={{
                     width: 40, height: 40, borderRadius: "50%", background: "var(--border-hover)",

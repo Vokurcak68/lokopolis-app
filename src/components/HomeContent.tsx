@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import BadgeLogo from "@/components/BadgeLogo";
 import Link from "next/link";
 import type {
@@ -181,7 +182,7 @@ export default function HomeContent({ data }: { data: HomePageData }) {
             gap: "20px",
           }}
         >
-          {latestArticles.map((a: LatestArticle) => {
+          {latestArticles.map((a: LatestArticle, i: number) => {
             const authorName = a.author?.display_name || a.author?.username || "Anonym";
             const initials = authorName.charAt(0).toUpperCase();
             const date = a.published_at
@@ -192,7 +193,7 @@ export default function HomeContent({ data }: { data: HomePageData }) {
                 <div className="article-card">
                   <div className="article-img">
                     {a.cover_image_url ? (
-                      <img src={a.cover_image_url} alt={a.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      <Image src={a.cover_image_url} alt={a.title} fill style={{ objectFit: "cover" }} sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" priority={i < 3} />
                     ) : (
                       <div className="placeholder">{a.category?.icon || "📄"}</div>
                     )}
@@ -201,7 +202,7 @@ export default function HomeContent({ data }: { data: HomePageData }) {
                   <div style={{ padding: "16px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
                       {a.author?.avatar_url ? (
-                        <img src={a.author.avatar_url} alt="" style={{ width: 24, height: 24, borderRadius: "50%", objectFit: "cover" }} />
+                        <Image src={a.author.avatar_url} alt="" width={24} height={24} style={{ borderRadius: "50%", objectFit: "cover" }} />
                       ) : (
                         <div
                           style={{
@@ -298,7 +299,7 @@ export default function HomeContent({ data }: { data: HomePageData }) {
                   <div className="article-card">
                     <div className="article-img">
                       {a.cover_image_url ? (
-                        <img src={a.cover_image_url} alt={a.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        <Image src={a.cover_image_url} alt={a.title} fill style={{ objectFit: "cover" }} sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" />
                       ) : (
                         <div className="placeholder">{a.category?.icon || "📄"}</div>
                       )}

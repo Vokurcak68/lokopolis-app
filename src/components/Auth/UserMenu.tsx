@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useAuth } from "./AuthProvider";
 
 export default function UserMenu() {
@@ -47,10 +48,12 @@ export default function UserMenu() {
         className="flex items-center gap-2 group"
       >
         {profile?.avatar_url ? (
-          <img
+          <Image
             src={profile.avatar_url}
             alt={displayName}
-            className="w-8 h-8 rounded-full object-cover border border-border-subtle"
+            width={32}
+            height={32}
+            className="rounded-full object-cover border border-border-subtle"
           />
         ) : (
           <div className="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center text-sm font-bold">

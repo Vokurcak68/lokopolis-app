@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/components/Auth/AuthProvider";
 import { timeAgo, formatCzechDate } from "@/lib/timeAgo";
@@ -690,7 +691,7 @@ function PostCard(props: PostCardProps) {
         {/* Author sidebar */}
         <div className="hidden md:flex" style={{ flexDirection: "column", alignItems: "center", width: "120px", flexShrink: 0 }}>
           {props.authorAvatar ? (
-            <img src={props.authorAvatar} alt="" style={{ width: 48, height: 48, borderRadius: "50%", objectFit: "cover", marginBottom: "8px" }} />
+            <Image src={props.authorAvatar} alt="" width={48} height={48} style={{ borderRadius: "50%", objectFit: "cover", marginBottom: "8px" }} />
           ) : (
             <div style={{
               width: 48, height: 48, borderRadius: "50%", background: "var(--border-hover)",
@@ -714,7 +715,7 @@ function PostCard(props: PostCardProps) {
           {/* Mobile author info */}
           <div className="md:hidden" style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
             {props.authorAvatar ? (
-              <img src={props.authorAvatar} alt="" style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover" }} />
+              <Image src={props.authorAvatar} alt="" width={28} height={28} style={{ borderRadius: "50%", objectFit: "cover" }} />
             ) : (
               <div style={{
                 width: 28, height: 28, borderRadius: "50%", background: "var(--border-hover)",

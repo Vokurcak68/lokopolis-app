@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import { ArticleEditor } from "@/components/Editor";
 import type { Category, Tag } from "@/types/database";
@@ -406,10 +407,12 @@ export default function NewArticlePage() {
           <div className="flex items-center gap-3">
             {coverPreview ? (
               <div className="relative group">
-                <img
+                <Image
                   src={coverPreview}
                   alt="Cover"
-                  className="w-16 h-10 object-cover rounded-lg border border-white/10"
+                  width={64}
+                  height={40}
+                  className="object-cover rounded-lg border border-white/10"
                 />
                 <button
                   type="button"

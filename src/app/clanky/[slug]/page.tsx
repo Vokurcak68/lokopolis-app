@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/components/Auth/AuthProvider";
 import type {
@@ -200,10 +201,12 @@ export default function ArticleDetailPage() {
         {/* Autor */}
         <div className="flex items-center gap-2">
           {article.author?.avatar_url ? (
-            <img
+            <Image
               src={article.author.avatar_url}
               alt=""
-              className="w-8 h-8 rounded-full object-cover"
+              width={32}
+              height={32}
+              className="rounded-full object-cover"
             />
           ) : (
             <div className="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold">
@@ -254,11 +257,16 @@ export default function ArticleDetailPage() {
 
       {/* Cover image */}
       {article.cover_image_url && (
-        <div className="rounded-xl overflow-hidden mb-12">
-          <img
+        <div className="rounded-xl overflow-hidden mb-12 relative" style={{ maxHeight: "500px" }}>
+          <Image
             src={article.cover_image_url}
             alt={article.title}
-            className="w-full max-h-[500px] object-cover"
+            width={1200}
+            height={500}
+            className="w-full object-cover"
+            style={{ maxHeight: "500px" }}
+            sizes="(max-width: 1200px) 100vw, 1200px"
+            priority
           />
         </div>
       )}
@@ -316,10 +324,12 @@ export default function ArticleDetailPage() {
               >
                 <div className="flex items-center gap-2 mb-2">
                   {comment.author?.avatar_url ? (
-                    <img
+                    <Image
                       src={comment.author.avatar_url}
                       alt=""
-                      className="w-6 h-6 rounded-full object-cover"
+                      width={24}
+                      height={24}
+                      className="rounded-full object-cover"
                     />
                   ) : (
                     <div className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold">

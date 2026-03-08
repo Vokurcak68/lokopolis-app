@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 
 interface SearchResult {
@@ -307,12 +308,12 @@ function SearchContent() {
                   {/* Cover thumbnail */}
                   {r.cover_image_url && (
                     <div style={{ flexShrink: 0 }}>
-                      <img
+                      <Image
                         src={r.cover_image_url}
                         alt=""
+                        width={120}
+                        height={80}
                         style={{
-                          width: "120px",
-                          height: "80px",
                           objectFit: "cover",
                           borderRadius: "8px",
                         }}

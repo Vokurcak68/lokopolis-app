@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/components/Auth/AuthProvider";
 import type { GalleryItem, GalleryItemType, GalleryAccess, GalleryAlbum } from "@/types/database";
@@ -183,16 +184,20 @@ function Lightbox({
         }}
       >
         {item.type === "image" && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <Image
             src={item.media_url}
             alt={item.title}
+            width={1200}
+            height={800}
             style={{
               maxWidth: "90vw",
               maxHeight: "80vh",
+              width: "auto",
+              height: "auto",
               objectFit: "contain",
               borderRadius: "8px",
             }}
+            sizes="90vw"
           />
         )}
         {item.type === "video" && (
@@ -632,13 +637,15 @@ function UploadModal({
               />
               {youtubeUrl && isValidYouTubeUrl(youtubeUrl) && (
                 <div style={{ marginTop: "8px" }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                  <Image
                     src={`https://img.youtube.com/vi/${extractYouTubeId(youtubeUrl)}/hqdefault.jpg`}
                     alt="YouTube thumbnail"
+                    width={320}
+                    height={180}
                     style={{
                       width: "100%",
                       maxWidth: "320px",
+                      height: "auto",
                       borderRadius: "8px",
                       border: "1px solid var(--border)",
                     }}
@@ -875,18 +882,15 @@ function GalleryCard({
             }}
           >
             {thumbUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              <Image
                 src={thumbUrl}
                 alt=""
+                fill
                 style={{
-                  position: "absolute",
-                  inset: 0,
-                  width: "100%",
-                  height: "100%",
                   objectFit: "cover",
                   filter: "blur(20px) brightness(0.4)",
                 }}
+                sizes="(max-width: 768px) 50vw, 33vw"
               />
             )}
             <div
@@ -914,15 +918,12 @@ function GalleryCard({
           </div>
         ) : thumbUrl ? (
           <>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
               src={thumbUrl}
               alt={item.title}
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-              }}
+              fill
+              style={{ objectFit: "cover" }}
+              sizes="(max-width: 768px) 50vw, 33vw"
             />
             {item.type !== "image" && (
               <div

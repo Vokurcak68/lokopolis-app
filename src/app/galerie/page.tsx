@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/components/Auth/AuthProvider";
 import { timeAgo } from "@/lib/timeAgo";
@@ -480,18 +481,15 @@ function AlbumCard({
             }}
           >
             {album.cover_image_url && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              <Image
                 src={album.cover_image_url}
                 alt=""
+                fill
                 style={{
-                  position: "absolute",
-                  inset: 0,
-                  width: "100%",
-                  height: "100%",
                   objectFit: "cover",
                   filter: "blur(20px) brightness(0.4)",
                 }}
+                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
               />
             )}
             <div style={{ position: "relative", zIndex: 1, textAlign: "center", padding: "20px" }}>
@@ -506,15 +504,12 @@ function AlbumCard({
             </div>
           </div>
         ) : album.cover_image_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <Image
             src={album.cover_image_url}
             alt={album.title}
-            style={{
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-            }}
+            fill
+            style={{ objectFit: "cover" }}
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
           />
         ) : (
           <div

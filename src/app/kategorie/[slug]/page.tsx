@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import type { ArticleWithRelations, Category } from "@/types/database";
 
@@ -124,12 +125,14 @@ export default function CategoryPage() {
               href={`/clanky/${article.slug}`}
               className="group rounded-xl bg-bg-card border border-border-subtle hover:border-primary/50 overflow-hidden transition-all"
             >
-              <div className="h-48 bg-bg-card-hover overflow-hidden">
+              <div className="h-48 bg-bg-card-hover overflow-hidden relative">
                 {article.cover_image_url ? (
-                  <img
+                  <Image
                     src={article.cover_image_url}
                     alt={article.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    fill
+                    className="object-cover group-hover:scale-105 transition-transform duration-300"
+                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-4xl text-text-muted/30">
