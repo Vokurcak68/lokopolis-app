@@ -1,94 +1,51 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { supabase } from "@/lib/supabase";
+import { notFound } from "next/navigation";
+import { createServerSupabaseClient } from "@/lib/supabase-server";
 import type { ArticleWithRelations, Category } from "@/types/database";
 
-export default function CategoryPage() {
-  const params = useParams();
-  const slug = params.slug as string;
-  const [category, setCategory] = useState<Category | null>(null);
-  const [articles, setArticles] = useState<ArticleWithRelations[]>([]);
-  const [loading, setLoading] = useState(true);
+export const revalidate = 60;
 
-  useEffect(() => {
-    async function fetchData() {
-      setLoading(true);
+function formatDate(dateStr: string | null) {
+  if (!dateStr) return "";
+  return new Date(dateStr).toLocaleDateString("cs-CZ", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
 
-      // Fetch category
-      const { data: catData } = await supabase
-        .from("categories")
-        .select("*")
-        .eq("slug", slug)
-        .single();
+export default async function CategoryPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
 
-      if (catData) {
-        setCategory(catData);
+  const supabase = createServerSupabaseClient();
 
-        // Fetch articles in this category
-        const { data: artData } = await supabase
-          .from("articles")
-          .select("*, author:profiles(*), category:categories(*)")
-          .eq("status", "published")
-          .eq("category_id", catData.id)
-          .order("published_at", { ascending: false });
-
-        if (artData) {
-          setArticles(artData as unknown as ArticleWithRelations[]);
-        }
-      }
-
-      setLoading(false);
-    }
-    fetchData();
-  }, [slug]);
-
-  function formatDate(dateStr: string | null) {
-    if (!dateStr) return "";
-    return new Date(dateStr).toLocaleDateString("cs-CZ", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    });
+  if (!supabase) {
+    notFound();
   }
 
-  if (loading) {
-    return (
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-bg-card rounded w-1/3" />
-          <div className="h-4 bg-bg-card rounded w-1/2" />
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-10">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="rounded-xl bg-bg-card border border-border-subtle">
-                <div className="h-48 bg-bg-card-hover rounded-t-xl" />
-                <div className="p-5 space-y-3">
-                  <div className="h-4 bg-bg-card-hover rounded w-1/3" />
-                  <div className="h-6 bg-bg-card-hover rounded w-3/4" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Fetch category
+  const { data: category } = await supabase
+    .from("categories")
+    .select("*")
+    .eq("slug", slug)
+    .single();
 
   if (!category) {
-    return (
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16 text-center">
-        <div className="text-5xl mb-4">🔍</div>
-        <h1 className="text-2xl font-bold text-white mb-2">Kategorie nenalezena</h1>
-        <p className="text-text-muted mb-6">Tato kategorie neexistuje.</p>
-        <Link href="/clanky" className="text-primary hover:underline">
-          ← Zpět na články
-        </Link>
-      </div>
-    );
+    notFound();
   }
+
+  const cat = category as Category;
+
+  // Fetch articles in this category
+  const { data: articlesData } = await supabase
+    .from("articles")
+    .select("*, author:profiles(*), category:categories(*)")
+    .eq("status", "published")
+    .eq("category_id", cat.id)
+    .order("published_at", { ascending: false });
+
+  const articles = (articlesData || []) as unknown as ArticleWithRelations[];
 
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16">
@@ -98,23 +55,23 @@ export default function CategoryPage() {
           ← Všechny články
         </Link>
         <h1 className="text-3xl font-bold mb-2">
-          <span className="mr-3">{category.icon}</span>
-          <span className="text-white">{category.name}</span>
+          <span className="mr-3">{cat.icon}</span>
+          <span className="text-white">{cat.name}</span>
         </h1>
-        {category.description && (
-          <p className="text-text-muted text-lg">{category.description}</p>
+        {cat.description && (
+          <p className="text-text-muted text-lg">{cat.description}</p>
         )}
       </div>
 
       {/* Articles */}
       {articles.length === 0 ? (
         <div className="text-center py-20">
-          <div className="text-5xl mb-4">{category.icon}</div>
+          <div className="text-5xl mb-4">{cat.icon}</div>
           <h3 className="text-xl font-semibold text-white mb-2">
             Zatím žádné články
           </h3>
           <p className="text-text-muted">
-            V kategorii „{category.name}" zatím nejsou žádné články. Buďte první!
+            V kategorii „{cat.name}" zatím nejsou žádné články. Buďte první!
           </p>
         </div>
       ) : (
@@ -136,13 +93,13 @@ export default function CategoryPage() {
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-4xl text-text-muted/30">
-                    {category.icon}
+                    {cat.icon}
                   </div>
                 )}
               </div>
               <div className="p-5">
                 <span className="text-xs text-primary font-medium uppercase tracking-wider">
-                  {category.icon} {category.name}
+                  {cat.icon} {cat.name}
                 </span>
                 <h2 className="text-lg font-semibold text-white mt-2 mb-2 group-hover:text-primary transition-colors line-clamp-2">
                   {article.title}
