@@ -72,6 +72,7 @@ export interface HomeStats {
 export interface CategoryWithCount {
   title: string;
   icon: string;
+  iconUrl?: string;
   href: string;
   slug: string;
   count: number;
@@ -96,7 +97,7 @@ export interface HomePageData {
 
 const defaultCategories = [
   { title: "Stavba kolejiště", icon: "🏗️", href: "/kategorie/stavba-kolejiste", slug: "stavba-kolejiste" },
-  { title: "Recenze modelů", icon: "🔍", href: "/kategorie/recenze", slug: "recenze" },
+  { title: "Recenze modelů", icon: "🔍", iconUrl: "https://psbeoiaqoreergwqzqoz.supabase.co/storage/v1/object/public/images/icons/recenze-modelu.png", href: "/kategorie/recenze", slug: "recenze" },
   { title: "Návody & tipy", icon: "🔧", href: "/kategorie/navody-a-tipy", slug: "navody-a-tipy" },
   { title: "Krajina & scenérie", icon: "🎨", href: "/kategorie/krajina-a-zelen", slug: "krajina-a-zelen" },
   { title: "Digitalizace", icon: "⚡", href: "/kategorie/digitalni-rizeni", slug: "digitalni-rizeni" },

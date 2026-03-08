@@ -158,7 +158,13 @@ export default function HomeContent({ data }: { data: HomePageData }) {
           {categories.map((cat) => (
             <Link key={cat.href} href={cat.href} style={{ textDecoration: "none" }}>
               <div className="cat-card">
-                <div style={{ fontSize: "36px", marginBottom: "10px" }}>{cat.icon}</div>
+                <div style={{ fontSize: "36px", marginBottom: "10px", display: "flex", justifyContent: "center", alignItems: "center", height: "40px" }}>
+                  {cat.iconUrl ? (
+                    <img src={cat.iconUrl} alt={cat.title} style={{ width: "40px", height: "40px", objectFit: "contain" }} />
+                  ) : (
+                    cat.icon
+                  )}
+                </div>
                 <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-body)" }}>{cat.title}</div>
                 <div style={{ fontSize: "12px", color: "var(--text-dimmer)", marginTop: "4px" }}>{cat.count} článků</div>
               </div>
