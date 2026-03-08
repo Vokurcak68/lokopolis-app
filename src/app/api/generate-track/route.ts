@@ -97,110 +97,87 @@ export async function POST(request: NextRequest) {
     "prumyslova-vlecka": "Průmyslová vlečka (vlečky, rampy, posun, nákladní provoz)",
   };
 
-  const systemPrompt = `Jsi expert na návrh kolejišť pro modelovou železnici. Tvým úkolem je navrhnout kolejový plán jako strukturovaný popis TRAS (routes) — logických sekvencí úseků kolejí.
+  const systemPrompt = `You are an expert model railway track layout designer. You design track plans as a sequence of turtle-graphics commands.
 
-DŮLEŽITÉ: Nenavrhuj souřadnice! Popisuješ LOGICKOU STRUKTURU trati — sekvenci rovných úseků, oblouků, výhybek, tunelů atd. Deterministický renderer pak geometrii vykreslí.
-
-PRAVIDLA PRO NÁVRH:
-1. Hlavní trať (id "main") MUSÍ tvořit UZAVŘENOU SMYČKU — poslední segment se musí geometricky napojit na první.
-2. Pro uzavření smyčky: součet všech zatáček musí dát 360° (např. 4×90° nebo 6×60° apod.).
-3. Celkové rozměry trati musí přibližně odpovídat desce ${boardW_mm}×${boardH_mm} mm.
-4. Vedlejší trasy (sidings, station tracks) odbočují z hlavní přes "turnout" a buď se napojí zpět ("merge") nebo končí zarážkou ("buffer").
-5. Používej realistické rozměry: rovné úseky 100-600mm, poloměry oblouků ${catalog.curves.map(c => c.match(/(\d+(?:\.\d+)?)\s*mm/)?.[1]).filter(Boolean).join("/")}mm, úhly 15°/30°/45°/90°.
-6. Buď kreativní — ne jen oválky! Navrhuj S-křivky, osmičky, dog-bone, průjezdné stanice, nákladiště, tunely.
-7. Každá trasa má unikátní barvu.
-8. Navrhni 2-6 tras pro zajímavé kolejiště.
-
-KATALOG (${catalog.name}):
-Rovné: ${catalog.straights.join(", ")}
-Oblouky: ${catalog.curves.join(", ")}
-Výhybky: ${catalog.turnouts.join(", ")}
-
-ODPOVĚZ PŘESNĚ V TOMTO JSON FORMÁTU:
+OUTPUT FORMAT: Return a JSON object with this EXACT structure:
 {
-  "name": "Název kolejiště (česky, výstižný)",
+  "name": "Layout name in Czech",
   "routes": [
     {
       "id": "main",
       "name": "Hlavní trať",
-      "color": "#f0a030",
-      "segments": [
-        { "type": "straight", "length": 400 },
-        { "type": "curve", "direction": "right", "angle": 90, "radius": 380 },
-        { "type": "straight", "length": 600 },
-        { "type": "turnout", "direction": "left", "branch": "station-2" },
-        { "type": "straight", "length": 300 },
-        { "type": "curve", "direction": "right", "angle": 90, "radius": 380 },
-        { "type": "straight", "length": 400 },
-        { "type": "tunnel", "length": 350 },
-        { "type": "curve", "direction": "right", "angle": 90, "radius": 380 },
-        { "type": "straight", "length": 600 },
-        { "type": "curve", "direction": "right", "angle": 90, "radius": 380 }
+      "color": "#e8a030",
+      "commands": [
+        ["straight", 230],
+        ["curve", "right", 380, 30],
+        ["turnout", "left", "siding1"],
+        ["tunnel_start"],
+        ["straight", 230],
+        ["tunnel_end"]
       ]
     },
     {
-      "id": "station-2",
-      "name": "Stanice kolej 2",
-      "color": "#4a9eff",
-      "parentRoute": "main",
-      "branchFromSegment": 3,
-      "segments": [
-        { "type": "curve", "direction": "left", "angle": 10, "radius": 500 },
-        { "type": "straight", "length": 300, "station": "Hlavní nádraží" },
-        { "type": "curve", "direction": "right", "angle": 10, "radius": 500 },
-        { "type": "merge", "into": "main", "atSegment": 5 }
-      ]
-    },
-    {
-      "id": "siding",
+      "id": "siding1",
       "name": "Vlečka",
-      "color": "#66bb6a",
-      "parentRoute": "main",
-      "branchFromSegment": 7,
-      "segments": [
-        { "type": "curve", "direction": "right", "angle": 15, "radius": 400 },
-        { "type": "straight", "length": 200 },
-        { "type": "buffer" }
+      "color": "#4a9eff",
+      "commands": [
+        ["curve", "left", 380, 15],
+        ["straight", 200]
       ]
     }
   ],
-  "features": [
-    { "type": "station", "name": "Hlavní nádraží", "routeIds": ["main", "station-2"] },
-    { "type": "tunnel", "name": "Horský tunel", "routeId": "main" },
-    { "type": "depot", "name": "Depo", "routeId": "siding" }
-  ],
-  "bom_notes": "Odhad: 24 rovných 230mm, 12 oblouků R2, 4 výhybky"
+  "bom_notes": "Rough material estimate in Czech"
 }
 
-TYPY SEGMENTŮ:
-- "straight" — rovný úsek, povinně "length" (mm). Volitelně "station": "Název stanice" pro stanici na tomto úseku.
-- "curve" — oblouk, povinně "direction" ("left"/"right"), "angle" (stupně), "radius" (mm).
-- "turnout" — výhybka/odbočka, povinně "direction" ("left"/"right"), "branch" (id vedlejší trasy která zde začíná).
-- "tunnel" — tunel (rovný), povinně "length" (mm). Renderer ho vykreslí čárkovaně s portály.
-- "bridge" — most (rovný), povinně "length" (mm).
-- "merge" — napojení zpět na jinou trasu, povinně "into" (id trasy) a "atSegment" (index segmentu, kam se napojuje).
-- "buffer" — zarážka/konec trati (bez dalších parametrů).
+COMMAND TYPES:
+- ["straight", length_mm] — straight track piece
+- ["curve", "left"|"right", radius_mm, angle_degrees] — curved track arc
+- ["turnout", "left"|"right", "branch_route_id"] — a turnout/switch. Acts as a short straight (~100mm) on the main route; the branch route starts here with a diverging curve.
+- ["tunnel_start"] — marks start of tunnel section (subsequent track drawn dashed)
+- ["tunnel_end"] — marks end of tunnel section
 
-PRAVIDLA PRO UZAVŘENÉ SMYČKY:
-- Pro jednoduchý ovál: 4 rovné + 4 oblouky po 90° (všechny stejným směrem, např. "right")
-- Pro osmičku: 2 sady oblouků, střídavě "left" a "right"
-- Pro dog-bone: rovné s oblouky na obou koncích
-- Součet úhlů zatáček (ve stejném směru) minus součet protisměrných = 360° pro uzavření smyčky
+CRITICAL RULES FOR CLOSED LOOPS:
+1. The "main" route MUST form a closed loop. The total turning must equal exactly 360°.
+   - Simple oval: 12 curves of 30° all turning "right" (or all "left") = 360°
+   - Figure-8: NOT recommended (crossing issues)
+   - Dog-bone: curves at each end totaling 180° each side
+2. All curves in the same direction add up. For a simple oval with 30° curves, you need exactly 12 curves.
+3. Straights connect the curved sections.
 
-PRAVIDLA PRO ROZMĚRY:
-- Celková délka hlavní trati by měla zhruba odpovídat obvodu desky
-- Pro desku ${boardW_mm}×${boardH_mm}mm: obvod ≈ ${2 * (boardW_mm + boardH_mm)}mm
-- Poloměry oblouků musí být realistické (min. 300mm pro H0, 200mm pro TT/N)
-- Nechej okraj alespoň 50mm od kraje desky`;
+GEOMETRY GUIDANCE for board ${boardW_mm}×${boardH_mm}mm:
+- A simple oval: two straight sections along the length, connected by 180° of curves at each end
+- For 30° curves with radius R: a 180° turn uses 6 curves and the turn diameter is 2*R
+- The straight sections should be roughly: board_length - 2*R
+- Make sure the layout fits within the board dimensions!
 
-  const userMessage = `Navrhni kolejiště:
-- Deska: ${boardDesc}
-- Měřítko: ${scale} (1:${scale === "H0" ? 87 : scale === "TT" ? 120 : 160})
-- Systém kolejí: ${catalog.name}
-- Charakter: ${characterLabels[character] ?? character}
-${prompt ? `- Speciální požadavky uživatele: ${prompt}` : "- Žádné speciální požadavky, navrhni typické kolejiště pro zvolený charakter."}
+TRACK CATALOG (${catalog.name}):
+Straights: ${catalog.straights.join(", ")}
+Curves: ${catalog.curves.join(", ")}
+Turnouts: ${catalog.turnouts.join(", ")}
 
-Vrať POUZE platný JSON objekt.`;
+USE ONLY piece dimensions from this catalog! For example, if curves are 30° and radius 358mm, use those exact values.
+
+DESIGN PRINCIPLES:
+- Main route = closed loop (360° total turning)
+- Branch routes start from turnouts on the main route
+- Branch routes can be dead-end sidings (just end) or passing loops (rejoin main)
+- Be creative based on the requested character
+- Use tunnels for mountain themes
+- Use multiple turnouts/sidings for station/industrial themes
+- Keep realistic spacing between parallel tracks (at least 50mm)
+
+ROUTE COLORS: Use distinct, visible colors on dark background:
+- Main: #e8a030 (warm orange)
+- Branches: #4a9eff (blue), #66bb6a (green), #ef5350 (red), #ab47bc (purple), #26c6da (cyan)`;
+
+  const userMessage = `Design a model railway layout:
+- Board: ${boardDesc}
+- Scale: ${scale} (1:${scale === "H0" ? 87 : scale === "TT" ? 120 : 160})
+- Track system: ${catalog.name}
+- Character: ${characterLabels[character] ?? character}
+${prompt ? `- Special requirements: ${prompt}` : "- No special requirements, design a typical layout for the chosen character."}
+
+Return ONLY valid JSON. Use the EXACT piece dimensions from the catalog. The main route MUST close (360° total turning). Name everything in Czech.`;
 
   try {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -253,6 +230,16 @@ Vrať POUZE platný JSON objekt.`;
         { error: "AI vrátila neúplná data — chybí name nebo routes.", raw: parsed },
         { status: 502 }
       );
+    }
+
+    // Validate that routes have commands arrays
+    for (const route of parsed.routes) {
+      if (!route.commands || !Array.isArray(route.commands)) {
+        return NextResponse.json(
+          { error: `Trasa "${route.id || route.name}" nemá příkazy (commands).`, raw: parsed },
+          { status: 502 }
+        );
+      }
     }
 
     return NextResponse.json({ result: parsed });

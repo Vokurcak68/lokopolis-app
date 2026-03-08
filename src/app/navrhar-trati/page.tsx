@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 
 /* ===========================
    TYPES
@@ -42,40 +42,25 @@ interface FormData {
 }
 
 /* ===========================
-   AI LAYOUT TYPES
+   AI LAYOUT TYPES (Command-based)
    =========================== */
-interface AISegment {
-  type: "straight" | "curve" | "turnout" | "tunnel" | "bridge" | "merge" | "buffer";
-  length?: number;
-  direction?: "left" | "right";
-  angle?: number;
-  radius?: number;
-  branch?: string;
-  station?: string;
-  into?: string;
-  atSegment?: number;
-}
+type TrackCommand =
+  | ["straight", number]
+  | ["curve", "left" | "right", number, number]
+  | ["turnout", "left" | "right", string]
+  | ["tunnel_start"]
+  | ["tunnel_end"];
 
 interface AIRoute {
   id: string;
   name: string;
   color: string;
-  segments: AISegment[];
-  parentRoute?: string;
-  branchFromSegment?: number;
-}
-
-interface AIFeature {
-  type: string;
-  name: string;
-  routeId?: string;
-  routeIds?: string[];
+  commands: TrackCommand[];
 }
 
 interface AILayoutData {
   name: string;
   routes: AIRoute[];
-  features?: AIFeature[];
   bom_notes?: string;
 }
 
@@ -177,722 +162,472 @@ const L_CORNERS: { value: LCorner; label: string }[] = [
 ];
 
 /* ===========================
-   DETERMINISTIC SVG RENDERER
+   TURTLE GRAPHICS RENDERER
    =========================== */
 
-interface RenderedPoint {
+interface TurtleState {
   x: number;
   y: number;
+  heading: number; // radians, 0 = right (+x), PI/2 = down (+y)
 }
 
-interface RenderedSegment {
-  type: "line" | "arc";
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
-  // For arcs
-  cx?: number;
-  cy?: number;
-  radius?: number;
-  startAngle?: number;
-  endAngle?: number;
-  sweepCW?: boolean;
-  // Metadata
+interface DrawCommand {
+  type: "straight" | "curve" | "turnout_dot";
+  // straight
+  x1?: number; y1?: number; x2?: number; y2?: number;
+  heading?: number;
+  // curve
+  cx?: number; cy?: number; radius?: number;
+  startAngle?: number; endAngle?: number; counterclockwise?: boolean;
+  // common
   color: string;
-  dashed?: boolean; // tunnel
-  stationLabel?: string;
-  isBridge?: boolean;
-  isBuffer?: boolean;
-  routeName?: string;
+  dashed?: boolean;
+  // turnout marker
+  dotX?: number; dotY?: number;
 }
 
-interface RenderedTurnout {
-  x: number;
-  y: number;
-  color: string;
-}
-
-interface RenderedBuffer {
-  x: number;
-  y: number;
-  angle: number; // heading in radians at the buffer
-  color: string;
-}
-
-interface RenderedStation {
-  x: number;
-  y: number;
-  angle: number;
-  length: number;
-  label: string;
-  color: string;
-}
-
-interface RenderedTunnelPortal {
-  x: number;
-  y: number;
-  angle: number;
-}
-
-interface RenderedLayout {
-  segments: RenderedSegment[];
-  turnouts: RenderedTurnout[];
-  buffers: RenderedBuffer[];
-  stations: RenderedStation[];
-  tunnelPortals: RenderedTunnelPortal[];
+interface LayoutRenderData {
+  commands: DrawCommand[];
   bounds: { minX: number; minY: number; maxX: number; maxY: number };
+  routes: { id: string; name: string; color: string; commandCount: number }[];
 }
 
-/**
- * Process AI route data into rendered geometry.
- * Coordinate system: heading 0 = right (+x), angles increase clockwise.
- * 1mm = 0.5 SVG units (px).
- */
-function renderLayout(data: AILayoutData): RenderedLayout {
-  const S = 0.5; // mm to SVG scale
-  const segments: RenderedSegment[] = [];
-  const turnouts: RenderedTurnout[] = [];
-  const buffers: RenderedBuffer[] = [];
-  const stations: RenderedStation[] = [];
-  const tunnelPortals: RenderedTunnelPortal[] = [];
+function computeLayout(data: AILayoutData): LayoutRenderData {
+  const commands: DrawCommand[] = [];
+  const allPoints: { x: number; y: number }[] = [];
+  const routeSummary: { id: string; name: string; color: string; commandCount: number }[] = [];
 
-  // Track position/heading after each segment for each route
-  // Map: routeId -> array of { x, y, heading } after each segment
-  const routeStates: Map<string, { x: number; y: number; heading: number }[]> = new Map();
+  // Track turnout positions: routeId -> turtle state at turnout
+  const turnoutPositions: Map<string, { turtle: TurtleState; direction: "left" | "right" }> = new Map();
 
-  // First pass: render main route (no parentRoute), then branches
-  const mainRoutes = data.routes.filter((r) => !r.parentRoute);
-  const branchRoutes = data.routes.filter((r) => r.parentRoute);
+  function addPoint(x: number, y: number) {
+    allPoints.push({ x, y });
+  }
 
-  // Render a route starting from (startX, startY, startHeading)
-  function renderRoute(
-    route: AIRoute,
-    startX: number,
-    startY: number,
-    startHeading: number
-  ) {
-    let x = startX;
-    let y = startY;
-    let heading = startHeading; // radians, 0 = right
-    const stateHistory: { x: number; y: number; heading: number }[] = [{ x, y, heading }];
+  function processRoute(route: AIRoute, startTurtle: TurtleState) {
+    let turtle = { ...startTurtle };
+    let inTunnel = false;
 
-    for (const seg of route.segments) {
-      switch (seg.type) {
+    for (const cmd of route.commands) {
+      const cmdType = cmd[0];
+
+      switch (cmdType) {
         case "straight": {
-          const len = (seg.length ?? 200) * S;
-          const x2 = x + len * Math.cos(heading);
-          const y2 = y + len * Math.sin(heading);
-          segments.push({
-            type: "line",
-            x1: x,
-            y1: y,
-            x2,
-            y2,
+          const length = cmd[1] as number;
+          const endX = turtle.x + Math.cos(turtle.heading) * length;
+          const endY = turtle.y + Math.sin(turtle.heading) * length;
+          commands.push({
+            type: "straight",
+            x1: turtle.x, y1: turtle.y,
+            x2: endX, y2: endY,
+            heading: turtle.heading,
             color: route.color,
-            stationLabel: seg.station,
-            routeName: route.name,
+            dashed: inTunnel,
           });
-          if (seg.station) {
-            stations.push({
-              x: (x + x2) / 2,
-              y: (y + y2) / 2,
-              angle: heading,
-              length: len,
-              label: seg.station,
-              color: route.color,
-            });
-          }
-          x = x2;
-          y = y2;
-          break;
-        }
-
-        case "tunnel": {
-          const len = (seg.length ?? 300) * S;
-          const x2 = x + len * Math.cos(heading);
-          const y2 = y + len * Math.sin(heading);
-          // Entry portal
-          tunnelPortals.push({ x, y, angle: heading });
-          segments.push({
-            type: "line",
-            x1: x,
-            y1: y,
-            x2,
-            y2,
-            color: route.color,
-            dashed: true,
-            routeName: route.name,
-          });
-          // Exit portal
-          tunnelPortals.push({ x: x2, y: y2, angle: heading + Math.PI });
-          x = x2;
-          y = y2;
-          break;
-        }
-
-        case "bridge": {
-          const len = (seg.length ?? 200) * S;
-          const x2 = x + len * Math.cos(heading);
-          const y2 = y + len * Math.sin(heading);
-          segments.push({
-            type: "line",
-            x1: x,
-            y1: y,
-            x2,
-            y2,
-            color: route.color,
-            isBridge: true,
-            routeName: route.name,
-          });
-          x = x2;
-          y = y2;
+          addPoint(turtle.x, turtle.y);
+          addPoint(endX, endY);
+          turtle = { x: endX, y: endY, heading: turtle.heading };
           break;
         }
 
         case "curve": {
-          const radius = (seg.radius ?? 380) * S;
-          const angleDeg = seg.angle ?? 30;
+          const direction = cmd[1] as "left" | "right";
+          const radius = cmd[2] as number;
+          const angleDeg = cmd[3] as number;
           const angleRad = (angleDeg * Math.PI) / 180;
-          const dir = seg.direction ?? "right";
+          const sign = direction === "right" ? 1 : -1;
 
-          // Center of the arc is perpendicular to heading
-          // Right turn: center is to the right (+90° from heading)
-          // Left turn: center is to the left (-90° from heading)
-          const perpAngle = dir === "right" ? heading + Math.PI / 2 : heading - Math.PI / 2;
-          const cx = x + radius * Math.cos(perpAngle);
-          const cy = y + radius * Math.sin(perpAngle);
+          // Center of arc: perpendicular to heading direction
+          const centerX = turtle.x + Math.cos(turtle.heading + sign * Math.PI / 2) * radius;
+          const centerY = turtle.y + Math.sin(turtle.heading + sign * Math.PI / 2) * radius;
 
-          // Start angle (from center to start point)
-          const startAngle = Math.atan2(y - cy, x - cx);
+          // Start angle: from center back to current position
+          const startAngle = Math.atan2(turtle.y - centerY, turtle.x - centerX);
+          const endAngle = startAngle + sign * angleRad;
 
-          // End angle depends on direction
-          let endAngle: number;
-          if (dir === "right") {
-            // CW sweep
-            endAngle = startAngle + angleRad;
-          } else {
-            // CCW sweep
-            endAngle = startAngle - angleRad;
-          }
+          // New position: on the circle at the end angle
+          const newX = centerX + radius * Math.cos(endAngle);
+          const newY = centerY + radius * Math.sin(endAngle);
+          const newHeading = turtle.heading + sign * angleRad;
 
-          const x2 = cx + radius * Math.cos(endAngle);
-          const y2 = cy + radius * Math.sin(endAngle);
-
-          segments.push({
-            type: "arc",
-            x1: x,
-            y1: y,
-            x2,
-            y2,
-            cx,
-            cy,
-            radius,
-            startAngle,
-            endAngle,
-            sweepCW: dir === "right",
+          commands.push({
+            type: "curve",
+            cx: centerX, cy: centerY, radius,
+            startAngle, endAngle,
+            counterclockwise: direction === "left",
             color: route.color,
-            routeName: route.name,
+            dashed: inTunnel,
           });
 
-          // Update heading
-          if (dir === "right") {
-            heading += angleRad;
-          } else {
-            heading -= angleRad;
+          // Add bounding points for the arc
+          addPoint(turtle.x, turtle.y);
+          addPoint(newX, newY);
+          // Also add points along the arc for better bounding
+          const steps = Math.max(4, Math.ceil(angleDeg / 15));
+          for (let i = 0; i <= steps; i++) {
+            const t = i / steps;
+            const a = startAngle + sign * angleRad * t;
+            addPoint(centerX + radius * Math.cos(a), centerY + radius * Math.sin(a));
           }
-          // Normalize heading
-          heading = ((heading % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
 
-          x = x2;
-          y = y2;
+          turtle = { x: newX, y: newY, heading: newHeading };
           break;
         }
 
         case "turnout": {
-          // A turnout acts like a straight on the main route (the branch starts a separate route)
-          // Mark the junction point
-          turnouts.push({ x, y, color: route.color });
-          // The turnout itself is a short straight (approx 100mm)
-          const tLen = 100 * S;
-          const x2 = x + tLen * Math.cos(heading);
-          const y2 = y + tLen * Math.sin(heading);
-          segments.push({
-            type: "line",
-            x1: x,
-            y1: y,
-            x2,
-            y2,
+          const direction = cmd[1] as "left" | "right";
+          const branchId = cmd[2] as string;
+
+          // Mark the turnout point
+          commands.push({
+            type: "turnout_dot",
+            dotX: turtle.x, dotY: turtle.y,
             color: route.color,
-            routeName: route.name,
           });
-          x = x2;
-          y = y2;
+          addPoint(turtle.x, turtle.y);
+
+          // Save turtle state for branch route (before advancing)
+          turnoutPositions.set(branchId, { turtle: { ...turtle }, direction });
+
+          // Turnout acts as a short straight on the main route (~100mm)
+          const tLen = 100;
+          const endX = turtle.x + Math.cos(turtle.heading) * tLen;
+          const endY = turtle.y + Math.sin(turtle.heading) * tLen;
+          commands.push({
+            type: "straight",
+            x1: turtle.x, y1: turtle.y,
+            x2: endX, y2: endY,
+            heading: turtle.heading,
+            color: route.color,
+            dashed: inTunnel,
+          });
+          addPoint(endX, endY);
+          turtle = { x: endX, y: endY, heading: turtle.heading };
           break;
         }
 
-        case "buffer": {
-          buffers.push({ x, y, angle: heading, color: route.color });
+        case "tunnel_start": {
+          inTunnel = true;
           break;
         }
 
-        case "merge": {
-          // End of branch route — just stop here, the visual merging is implicit
+        case "tunnel_end": {
+          inTunnel = false;
           break;
         }
       }
-
-      stateHistory.push({ x, y, heading });
     }
 
-    routeStates.set(route.id, stateHistory);
+    routeSummary.push({
+      id: route.id,
+      name: route.name,
+      color: route.color,
+      commandCount: route.commands.length,
+    });
   }
 
-  // Render main routes starting from a sensible position
-  // Start in the upper-left area, heading right
-  for (const route of mainRoutes) {
-    const startX = 100;
-    const startY = 150;
-    renderRoute(route, startX, startY, 0);
+  // Process main route first
+  const mainRoute = data.routes.find(r => r.id === "main") || data.routes[0];
+  if (mainRoute) {
+    processRoute(mainRoute, { x: 0, y: 0, heading: 0 });
   }
 
-  // Render branch routes
-  for (const route of branchRoutes) {
-    const parentStates = routeStates.get(route.parentRoute ?? "");
-    if (!parentStates) continue;
-
-    const branchIdx = (route.branchFromSegment ?? 0) + 1; // +1 because state[0] = initial
-    const clampedIdx = Math.min(branchIdx, parentStates.length - 1);
-    const branchPoint = parentStates[clampedIdx];
-
-    // Branch starts at the turnout point with a slight divergence
-    // Find the turnout segment in the parent to get the direction
-    const parentRoute = data.routes.find((r) => r.id === route.parentRoute);
-    const turnoutSeg = parentRoute?.segments[route.branchFromSegment ?? 0];
-    let branchHeading = branchPoint.heading;
-    if (turnoutSeg?.type === "turnout") {
-      const divergeAngle = (15 * Math.PI) / 180; // standard 15° divergence
-      if (turnoutSeg.direction === "left") {
-        branchHeading -= divergeAngle;
-      } else {
-        branchHeading += divergeAngle;
-      }
+  // Process branch routes
+  for (const route of data.routes) {
+    if (route === mainRoute) continue;
+    const turnoutInfo = turnoutPositions.get(route.id);
+    if (turnoutInfo) {
+      // Branch starts at turnout position with a diverging angle
+      const divergeAngle = (15 * Math.PI) / 180;
+      const sign = turnoutInfo.direction === "left" ? -1 : 1;
+      const branchHeading = turnoutInfo.turtle.heading + sign * divergeAngle;
+      processRoute(route, { ...turnoutInfo.turtle, heading: branchHeading });
+    } else {
+      // No turnout found — start at origin with offset
+      processRoute(route, { x: 0, y: 200, heading: 0 });
     }
-
-    renderRoute(route, branchPoint.x, branchPoint.y, branchHeading);
   }
 
   // Compute bounds
-  let minX = Infinity,
-    minY = Infinity,
-    maxX = -Infinity,
-    maxY = -Infinity;
-  for (const seg of segments) {
-    minX = Math.min(minX, seg.x1, seg.x2);
-    minY = Math.min(minY, seg.y1, seg.y2);
-    maxX = Math.max(maxX, seg.x1, seg.x2);
-    maxY = Math.max(maxY, seg.y1, seg.y2);
-    if (seg.type === "arc" && seg.cx != null && seg.radius != null) {
-      // Arc bounds approximation — include the center ± radius
-      minX = Math.min(minX, seg.cx - seg.radius);
-      minY = Math.min(minY, seg.cy! - seg.radius);
-      maxX = Math.max(maxX, seg.cx + seg.radius);
-      maxY = Math.max(maxY, seg.cy! + seg.radius);
-    }
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const p of allPoints) {
+    if (p.x < minX) minX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y > maxY) maxY = p.y;
   }
-  for (const b of buffers) {
-    minX = Math.min(minX, b.x);
-    minY = Math.min(minY, b.y);
-    maxX = Math.max(maxX, b.x);
-    maxY = Math.max(maxY, b.y);
-  }
+  if (!isFinite(minX)) { minX = 0; minY = 0; maxX = 1000; maxY = 600; }
 
-  if (!isFinite(minX)) {
-    minX = 0;
-    minY = 0;
-    maxX = 400;
-    maxY = 300;
-  }
+  // Add some margin
+  const pad = 40;
+  minX -= pad; minY -= pad; maxX += pad; maxY += pad;
 
-  return { segments, turnouts, buffers, stations, tunnelPortals, bounds: { minX, minY, maxX, maxY } };
+  return { commands, bounds: { minX, minY, maxX, maxY }, routes: routeSummary };
 }
 
-/* ===========================
-   AI TRACK PLAN SVG COMPONENT
-   =========================== */
-function AITrackPlanSVG({
-  layout,
-  data,
-  form,
-}: {
-  layout: RenderedLayout;
-  data: AILayoutData;
-  form: FormData;
-}) {
-  const { segments, turnouts, buffers, stations, tunnelPortals, bounds } = layout;
+function drawTrackOnCanvas(
+  canvas: HTMLCanvasElement,
+  layoutData: LayoutRenderData,
+  form: FormData,
+  aiData: AILayoutData,
+) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
 
-  const margin = 80;
-  const legendHeight = 90;
+  const dpr = window.devicePixelRatio || 1;
+  const displayWidth = canvas.clientWidth;
+  const displayHeight = canvas.clientHeight;
+
+  canvas.width = displayWidth * dpr;
+  canvas.height = displayHeight * dpr;
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const { commands, bounds } = layoutData;
   const contentW = bounds.maxX - bounds.minX;
   const contentH = bounds.maxY - bounds.minY;
 
-  // SVG dimensions
-  const svgW = contentW + margin * 2;
-  const svgH = contentH + margin * 2 + legendHeight;
-  const offX = margin - bounds.minX;
-  const offY = margin - bounds.minY;
+  // Compute scale to fit canvas with padding
+  const canvasPad = 50;
+  const availW = displayWidth - canvasPad * 2;
+  const availH = displayHeight - canvasPad * 2 - 60; // leave space for legend
+  const scaleX = availW / contentW;
+  const scaleY = availH / contentH;
+  const scale = Math.min(scaleX, scaleY);
 
-  // Grid dots (every 50 SVG units = 100mm)
-  const gridStep = 50;
-  const gridDotsX = Math.floor(contentW / gridStep) + 2;
-  const gridDotsY = Math.floor(contentH / gridStep) + 2;
+  // Center offset
+  const offsetX = canvasPad + (availW - contentW * scale) / 2 - bounds.minX * scale;
+  const offsetY = canvasPad + (availH - contentH * scale) / 2 - bounds.minY * scale;
 
-  // Board rectangle dimensions in SVG units
-  const boardSvgW = form.width * 10 * 0.5;
-  const boardSvgH = form.height * 10 * 0.5;
+  // Transform: world coords -> canvas coords
+  function tx(x: number) { return x * scale + offsetX; }
+  function ty(y: number) { return y * scale + offsetY; }
 
-  // Sleeper marks along a line
-  const renderLineSleepers = (x1: number, y1: number, x2: number, y2: number, color: string) => {
+  // Clear with dark background
+  ctx.fillStyle = "#1a1b2e";
+  ctx.fillRect(0, 0, displayWidth, displayHeight);
+
+  // Draw grid dots
+  const gridStep = 100; // mm
+  const gridStartX = Math.floor(bounds.minX / gridStep) * gridStep;
+  const gridStartY = Math.floor(bounds.minY / gridStep) * gridStep;
+  ctx.fillStyle = "rgba(255, 255, 255, 0.06)";
+  for (let gx = gridStartX; gx <= bounds.maxX; gx += gridStep) {
+    for (let gy = gridStartY; gy <= bounds.maxY; gy += gridStep) {
+      ctx.beginPath();
+      ctx.arc(tx(gx), ty(gy), 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Helper: draw sleepers along a straight
+  function drawSleepers(c: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number, heading: number, color: string) {
     const dx = x2 - x1;
     const dy = y2 - y1;
     const len = Math.sqrt(dx * dx + dy * dy);
-    if (len < 5) return null;
-    const nx = -dy / len;
-    const ny = dx / len;
-    const spacing = 15;
-    const count = Math.max(1, Math.floor(len / spacing));
-    const halfW = 5;
-    const sleepers: React.ReactElement[] = [];
+    if (len < 5 * scale) return;
+    const perpX = -Math.sin(heading);
+    const perpY = Math.cos(heading);
+    const spacing = 15; // mm
+    const count = Math.max(1, Math.floor(len / (spacing * scale)));
+    const halfW = 5 * scale;
+
+    c.strokeStyle = color;
+    c.lineWidth = 0.8;
+    c.globalAlpha = 0.3;
     for (let i = 1; i < count; i++) {
       const t = i / count;
-      const px = x1 + dx * t;
-      const py = y1 + dy * t;
-      sleepers.push(
-        <line
-          key={`sl${i}`}
-          x1={px - nx * halfW}
-          y1={py - ny * halfW}
-          x2={px + nx * halfW}
-          y2={py + ny * halfW}
-          stroke={color}
-          strokeWidth={0.8}
-          opacity={0.3}
-        />
-      );
+      const px = x1 + (x2 - x1) * t;
+      const py = y1 + (y2 - y1) * t;
+      c.beginPath();
+      c.moveTo(px - perpX * halfW, py - perpY * halfW);
+      c.lineTo(px + perpX * halfW, py + perpY * halfW);
+      c.stroke();
     }
-    return sleepers;
-  };
+    c.globalAlpha = 1;
+  }
 
-  // Sleeper marks along an arc
-  const renderArcSleepers = (seg: RenderedSegment) => {
-    if (!seg.cx || !seg.cy || !seg.radius || seg.startAngle == null || seg.endAngle == null) return null;
-    const r = seg.radius;
-    let startA = seg.startAngle;
-    let endA = seg.endAngle;
-    let angleDiff = endA - startA;
-    if (seg.sweepCW && angleDiff < 0) angleDiff += Math.PI * 2;
-    if (!seg.sweepCW && angleDiff > 0) angleDiff -= Math.PI * 2;
-    const absAngleDiff = Math.abs(angleDiff);
-    const arcLen = r * absAngleDiff;
+  // Helper: draw sleepers along an arc
+  function drawArcSleepers(c: CanvasRenderingContext2D, cxW: number, cyW: number, radius: number, startAngle: number, endAngle: number, counterclockwise: boolean, color: string) {
+    let angleDiff = endAngle - startAngle;
+    if (!counterclockwise && angleDiff < 0) angleDiff += Math.PI * 2;
+    if (counterclockwise && angleDiff > 0) angleDiff -= Math.PI * 2;
+    const arcLen = Math.abs(angleDiff) * radius * scale;
     const spacing = 15;
     const count = Math.max(1, Math.floor(arcLen / spacing));
-    const halfW = 5;
-    const sleepers: React.ReactElement[] = [];
+    const halfW = 5 * scale;
+
+    c.strokeStyle = color;
+    c.lineWidth = 0.8;
+    c.globalAlpha = 0.3;
     for (let i = 1; i < count; i++) {
       const t = i / count;
-      const a = startA + angleDiff * t;
-      const px = seg.cx + r * Math.cos(a);
-      const py = seg.cy + r * Math.sin(a);
+      const a = startAngle + angleDiff * t;
+      const px = tx(cxW + radius * Math.cos(a));
+      const py = ty(cyW + radius * Math.sin(a));
       // Radial direction for sleeper
-      const nx = Math.cos(a);
-      const ny = Math.sin(a);
-      sleepers.push(
-        <line
-          key={`csl${i}`}
-          x1={px - nx * halfW}
-          y1={py - ny * halfW}
-          x2={px + nx * halfW}
-          y2={py + ny * halfW}
-          stroke={seg.color}
-          strokeWidth={0.8}
-          opacity={0.3}
-        />
-      );
+      const nx = Math.cos(a) * halfW;
+      const ny = Math.sin(a) * halfW;
+      c.beginPath();
+      c.moveTo(px - nx, py - ny);
+      c.lineTo(px + nx, py + ny);
+      c.stroke();
     }
-    return sleepers;
-  };
+    c.globalAlpha = 1;
+  }
 
-  // Render a segment
-  const renderSegment = (seg: RenderedSegment, i: number) => {
-    const strokeW = 3.5;
-    const dashArray = seg.dashed ? "8,5" : undefined;
-    const sx = seg.x1 + offX;
-    const sy = seg.y1 + offY;
-    const ex = seg.x2 + offX;
-    const ey = seg.y2 + offY;
+  // Draw all commands
+  for (const cmd of commands) {
+    switch (cmd.type) {
+      case "straight": {
+        const sx = tx(cmd.x1!);
+        const sy = ty(cmd.y1!);
+        const ex = tx(cmd.x2!);
+        const ey = ty(cmd.y2!);
 
-    if (seg.type === "line") {
-      return (
-        <g key={`seg${i}`}>
-          {renderLineSleepers(sx, sy, ex, ey, seg.color)}
-          <line
-            x1={sx}
-            y1={sy}
-            x2={ex}
-            y2={ey}
-            stroke={seg.color}
-            strokeWidth={strokeW}
-            strokeLinecap="round"
-            strokeDasharray={dashArray}
-          />
-          {/* Bridge pillars */}
-          {seg.isBridge && (
-            <>
-              <line
-                x1={sx + (ex - sx) * 0.25}
-                y1={sy + (ey - sy) * 0.25 - 6}
-                x2={sx + (ex - sx) * 0.25}
-                y2={sy + (ey - sy) * 0.25 + 6}
-                stroke={seg.color}
-                strokeWidth={2}
-                opacity={0.5}
-              />
-              <line
-                x1={sx + (ex - sx) * 0.75}
-                y1={sy + (ey - sy) * 0.75 - 6}
-                x2={sx + (ex - sx) * 0.75}
-                y2={sy + (ey - sy) * 0.75 + 6}
-                stroke={seg.color}
-                strokeWidth={2}
-                opacity={0.5}
-              />
-            </>
-          )}
-        </g>
-      );
+        // Sleepers
+        drawSleepers(ctx, sx, sy, ex, ey, cmd.heading!, cmd.color);
+
+        // Track line
+        ctx.strokeStyle = cmd.color;
+        ctx.lineWidth = 3;
+        ctx.lineCap = "round";
+        if (cmd.dashed) {
+          ctx.setLineDash([8, 5]);
+        } else {
+          ctx.setLineDash([]);
+        }
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(ex, ey);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        break;
+      }
+
+      case "curve": {
+        const cxCanvas = tx(cmd.cx!);
+        const cyCanvas = ty(cmd.cy!);
+        const rCanvas = cmd.radius! * scale;
+
+        // Sleepers
+        drawArcSleepers(ctx, cmd.cx!, cmd.cy!, cmd.radius!, cmd.startAngle!, cmd.endAngle!, !!cmd.counterclockwise, cmd.color);
+
+        // Arc
+        ctx.strokeStyle = cmd.color;
+        ctx.lineWidth = 3;
+        ctx.lineCap = "round";
+        if (cmd.dashed) {
+          ctx.setLineDash([8, 5]);
+        } else {
+          ctx.setLineDash([]);
+        }
+        ctx.beginPath();
+        ctx.arc(cxCanvas, cyCanvas, rCanvas, cmd.startAngle!, cmd.endAngle!, !!cmd.counterclockwise);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        break;
+      }
+
+      case "turnout_dot": {
+        const dx = tx(cmd.dotX!);
+        const dy = ty(cmd.dotY!);
+        // Outer ring
+        ctx.strokeStyle = cmd.color;
+        ctx.lineWidth = 1.5;
+        ctx.globalAlpha = 0.5;
+        ctx.beginPath();
+        ctx.arc(dx, dy, 6, 0, Math.PI * 2);
+        ctx.stroke();
+        // Inner dot
+        ctx.fillStyle = cmd.color;
+        ctx.globalAlpha = 0.8;
+        ctx.beginPath();
+        ctx.arc(dx, dy, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        break;
+      }
     }
+  }
 
-    if (seg.type === "arc" && seg.cx != null && seg.cy != null && seg.radius != null && seg.startAngle != null && seg.endAngle != null) {
-      const r = seg.radius;
-      const cxo = seg.cx + offX;
-      const cyo = seg.cy + offY;
+  // Draw legend at bottom
+  const legendY = displayHeight - 35;
+  const legendRoutes = aiData.routes;
 
-      // Compute start/end points on the arc
-      const ax1 = cxo + r * Math.cos(seg.startAngle);
-      const ay1 = cyo + r * Math.sin(seg.startAngle);
-      const ax2 = cxo + r * Math.cos(seg.endAngle);
-      const ay2 = cyo + r * Math.sin(seg.endAngle);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
+  ctx.font = "bold 10px system-ui, sans-serif";
+  ctx.fillText("LEGENDA", 20, legendY - 8);
 
-      let angleDiff = seg.endAngle - seg.startAngle;
-      if (seg.sweepCW && angleDiff < 0) angleDiff += Math.PI * 2;
-      if (!seg.sweepCW && angleDiff > 0) angleDiff -= Math.PI * 2;
-      const largeArc = Math.abs(angleDiff) > Math.PI ? 1 : 0;
-      const sweepFlag = seg.sweepCW ? 1 : 0;
+  let legendX = 20;
+  ctx.font = "11px system-ui, sans-serif";
+  for (const route of legendRoutes) {
+    // Color line
+    ctx.strokeStyle = route.color;
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(legendX, legendY + 5);
+    ctx.lineTo(legendX + 24, legendY + 5);
+    ctx.stroke();
+    // Label
+    ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+    ctx.fillText(route.name, legendX + 30, legendY + 9);
+    legendX += ctx.measureText(route.name).width + 50;
+  }
 
-      const pathD = `M ${ax1} ${ay1} A ${r} ${r} 0 ${largeArc} ${sweepFlag} ${ax2} ${ay2}`;
+  // Board dimensions + scale label at bottom right
+  const dimLabel = `${form.width} × ${form.height} cm`;
+  const scaleLabel = `${form.scale} (1:${SCALE_FACTOR[form.scale]}) · ${TRACK_CATALOGS[form.trackSystem].name}`;
 
-      // For sleepers, create an offset version of the segment
-      const offsetSeg = { ...seg, cx: cxo, cy: cyo };
+  ctx.font = "bold 12px system-ui, sans-serif";
+  ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
+  ctx.textAlign = "right";
+  ctx.fillText(dimLabel, displayWidth - 20, legendY);
+  ctx.font = "10px system-ui, sans-serif";
+  ctx.fillStyle = "rgba(255, 255, 255, 0.35)";
+  ctx.fillText(scaleLabel, displayWidth - 20, legendY + 16);
+  ctx.textAlign = "left";
+}
 
-      return (
-        <g key={`seg${i}`}>
-          {renderArcSleepers(offsetSeg)}
-          <path
-            d={pathD}
-            fill="none"
-            stroke={seg.color}
-            strokeWidth={strokeW}
-            strokeLinecap="round"
-            strokeDasharray={dashArray}
-          />
-        </g>
-      );
-    }
+/* ===========================
+   CANVAS COMPONENT
+   =========================== */
+function TrackCanvas({
+  layoutData,
+  aiData,
+  form,
+}: {
+  layoutData: LayoutRenderData;
+  aiData: AILayoutData;
+  form: FormData;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
-    return null;
-  };
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    drawTrackOnCanvas(canvas, layoutData, form, aiData);
 
-  // Unique route colors for legend
-  const routeColors = data.routes.map((r) => ({ id: r.id, name: r.name, color: r.color }));
+    // Redraw on resize
+    const handleResize = () => {
+      drawTrackOnCanvas(canvas, layoutData, form, aiData);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [layoutData, aiData, form]);
 
   return (
-    <svg
-      viewBox={`0 0 ${Math.max(svgW, 300)} ${Math.max(svgH, 250)}`}
+    <canvas
+      ref={canvasRef}
       style={{
         width: "100%",
-        maxWidth: "900px",
-        background: "var(--bg-card)",
+        height: "500px",
         borderRadius: "12px",
         border: "1px solid var(--border)",
+        display: "block",
       }}
-    >
-      {/* Board background */}
-      <rect
-        x={offX + (bounds.minX < 0 ? 0 : 0)}
-        y={offY + (bounds.minY < 0 ? 0 : 0)}
-        width={Math.max(boardSvgW, contentW + 40)}
-        height={Math.max(boardSvgH, contentH + 40)}
-        rx={4}
-        fill="var(--bg-input)"
-        stroke="var(--border-hover)"
-        strokeWidth={2}
-        opacity={0.5}
-      />
-
-      {/* Grid dots */}
-      {Array.from({ length: gridDotsX }, (_, xi) =>
-        Array.from({ length: gridDotsY }, (_, yi) => (
-          <circle
-            key={`gd${xi}-${yi}`}
-            cx={offX + bounds.minX + xi * gridStep}
-            cy={offY + bounds.minY + yi * gridStep}
-            r={1}
-            fill="var(--border)"
-            opacity={0.3}
-          />
-        ))
-      )}
-
-      {/* Track segments */}
-      {segments.map((seg, i) => renderSegment(seg, i))}
-
-      {/* Turnout markers */}
-      {turnouts.map((t, i) => (
-        <g key={`to${i}`}>
-          <circle
-            cx={t.x + offX}
-            cy={t.y + offY}
-            r={4}
-            fill={t.color}
-            opacity={0.8}
-          />
-          <circle
-            cx={t.x + offX}
-            cy={t.y + offY}
-            r={6}
-            fill="none"
-            stroke={t.color}
-            strokeWidth={1}
-            opacity={0.4}
-          />
-        </g>
-      ))}
-
-      {/* Buffer stops */}
-      {buffers.map((b, i) => {
-        const bx = b.x + offX;
-        const by = b.y + offY;
-        const perpAngle = b.angle + Math.PI / 2;
-        const halfLen = 6;
-        return (
-          <g key={`buf${i}`}>
-            <line
-              x1={bx + halfLen * Math.cos(perpAngle)}
-              y1={by + halfLen * Math.sin(perpAngle)}
-              x2={bx - halfLen * Math.cos(perpAngle)}
-              y2={by - halfLen * Math.sin(perpAngle)}
-              stroke={b.color}
-              strokeWidth={3}
-              strokeLinecap="round"
-            />
-            <circle cx={bx} cy={by} r={2.5} fill={b.color} />
-          </g>
-        );
-      })}
-
-      {/* Station labels & platforms */}
-      {stations.map((st, i) => {
-        const sx = st.x + offX;
-        const sy = st.y + offY;
-        const perpAngle = st.angle + Math.PI / 2;
-        const platformOffset = 10;
-        // Platform rectangle (parallel to track)
-        const pw = st.length * 0.7;
-        const ph = 6;
-        const pcx = sx + platformOffset * Math.cos(perpAngle);
-        const pcy = sy + platformOffset * Math.sin(perpAngle);
-        const angleDeg = (st.angle * 180) / Math.PI;
-
-        return (
-          <g key={`sta${i}`}>
-            <rect
-              x={pcx - pw / 2}
-              y={pcy - ph / 2}
-              width={pw}
-              height={ph}
-              rx={2}
-              fill="#8b7355"
-              opacity={0.5}
-              transform={`rotate(${angleDeg}, ${pcx}, ${pcy})`}
-            />
-            <text
-              x={pcx}
-              y={pcy - ph - 4}
-              fill="var(--text-muted)"
-              fontSize={10}
-              fontWeight={600}
-              textAnchor="middle"
-            >
-              🏛️ {st.label}
-            </text>
-          </g>
-        );
-      })}
-
-      {/* Tunnel portals */}
-      {tunnelPortals.map((tp, i) => {
-        const px = tp.x + offX;
-        const py = tp.y + offY;
-        return (
-          <g key={`tp${i}`}>
-            <path
-              d={`M ${px - 7} ${py + 3} Q ${px - 7} ${py - 7} ${px} ${py - 9} Q ${px + 7} ${py - 7} ${px + 7} ${py + 3} Z`}
-              fill="var(--text-dim)"
-              opacity={0.25}
-              stroke="var(--text-dim)"
-              strokeWidth={0.8}
-            />
-          </g>
-        );
-      })}
-
-      {/* Dimension labels */}
-      <text
-        x={offX + contentW / 2}
-        y={offY + bounds.minY - 10}
-        fill="var(--text-dim)"
-        fontSize={11}
-        textAnchor="middle"
-        fontWeight={600}
-      >
-        {form.width} × {form.height} cm
-      </text>
-
-      {/* Legend */}
-      <g transform={`translate(${margin}, ${offY + contentH + 30})`}>
-        <text fill="var(--text-dim)" fontSize={10} fontWeight={700} y={0}>
-          LEGENDA
-        </text>
-        {routeColors.map((rc, i) => (
-          <g key={rc.id} transform={`translate(${i * 150}, 14)`}>
-            <line x1={0} y1={0} x2={25} y2={0} stroke={rc.color} strokeWidth={3.5} strokeLinecap="round" />
-            <text x={30} y={4} fill="var(--text-dim)" fontSize={9}>
-              {rc.name}
-            </text>
-          </g>
-        ))}
-      </g>
-
-      {/* Scale indicator */}
-      <text
-        x={margin}
-        y={offY + contentH + 55}
-        fill="var(--text-faint)"
-        fontSize={9}
-      >
-        Měřítko {form.scale} (1:{SCALE_FACTOR[form.scale]}) · {TRACK_CATALOGS[form.trackSystem].name}
-      </text>
-    </svg>
+    />
   );
 }
 
@@ -914,7 +649,7 @@ export default function TrackDesignerPage() {
     prompt: "",
   });
   const [aiData, setAiData] = useState<AILayoutData | null>(null);
-  const [renderedLayout, setRenderedLayout] = useState<RenderedLayout | null>(null);
+  const [layoutData, setLayoutData] = useState<LayoutRenderData | null>(null);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const resultRef = useRef<HTMLDivElement>(null);
@@ -923,7 +658,7 @@ export default function TrackDesignerPage() {
     setGenerating(true);
     setError(null);
     setAiData(null);
-    setRenderedLayout(null);
+    setLayoutData(null);
 
     try {
       const res = await fetch("/api/generate-track", {
@@ -950,12 +685,12 @@ export default function TrackDesignerPage() {
         return;
       }
 
-      const layoutData: AILayoutData = json.result;
-      setAiData(layoutData);
+      const data: AILayoutData = json.result;
+      setAiData(data);
 
-      // Stage 2: deterministic render
-      const rendered = renderLayout(layoutData);
-      setRenderedLayout(rendered);
+      // Compute layout geometry
+      const rendered = computeLayout(data);
+      setLayoutData(rendered);
 
       setTimeout(() => resultRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     } catch (err) {
@@ -1269,49 +1004,21 @@ export default function TrackDesignerPage() {
           )}
 
           {/* Results */}
-          {aiData && renderedLayout && (
+          {aiData && layoutData && (
             <>
               {/* Layout name */}
               <div style={{ ...cardStyle, marginBottom: "20px", textAlign: "center" }}>
                 <h2 style={{ fontSize: "22px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "8px" }}>
                   🚂 {aiData.name}
                 </h2>
-                {aiData.features && aiData.features.length > 0 && (
-                  <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap", marginTop: "12px" }}>
-                    {aiData.features.map((f, i) => {
-                      const featureIcons: Record<string, string> = {
-                        station: "🏛️",
-                        tunnel: "🚇",
-                        bridge: "🌉",
-                        depot: "🏗️",
-                        yard: "📦",
-                      };
-                      return (
-                        <span
-                          key={i}
-                          style={{
-                            padding: "4px 12px",
-                            borderRadius: "20px",
-                            background: "var(--accent-bg)",
-                            border: "1px solid var(--border)",
-                            fontSize: "12px",
-                            color: "var(--text-muted)",
-                          }}
-                        >
-                          {featureIcons[f.type] || "📍"} {f.name}
-                        </span>
-                      );
-                    })}
-                  </div>
-                )}
               </div>
 
-              {/* SVG Track Plan */}
-              <div style={{ ...cardStyle, marginBottom: "20px", textAlign: "center" }}>
+              {/* Canvas Track Plan */}
+              <div style={{ ...cardStyle, marginBottom: "20px" }}>
                 <h2 style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px", textAlign: "left" }}>
                   📐 Kolejový plán
                 </h2>
-                <AITrackPlanSVG layout={renderedLayout} data={aiData} form={form} />
+                <TrackCanvas layoutData={layoutData} aiData={aiData} form={form} />
               </div>
 
               {/* BOM notes from AI */}
@@ -1335,7 +1042,7 @@ export default function TrackDesignerPage() {
                   <table style={{ width: "100%", borderCollapse: "collapse" }}>
                     <thead>
                       <tr>
-                        {["Barva", "Název", "Typ", "Segmenty"].map((header, hi) => (
+                        {["Barva", "Název", "Typ", "Příkazy"].map((header, hi) => (
                           <th key={hi} style={{
                             textAlign: hi === 3 ? "center" : "left",
                             padding: "10px 12px",
@@ -1352,7 +1059,7 @@ export default function TrackDesignerPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {aiData.routes.map((route, i) => (
+                      {layoutData.routes.map((route, i) => (
                         <tr key={i} style={{ borderBottom: "1px solid var(--border-light, var(--border))" }}>
                           <td style={{ padding: "10px 12px" }}>
                             <div style={{
@@ -1366,10 +1073,10 @@ export default function TrackDesignerPage() {
                             {route.name}
                           </td>
                           <td style={{ padding: "10px 12px", fontSize: "13px", color: "var(--text-dim)" }}>
-                            {route.parentRoute ? "Odbočka" : "Hlavní"}
+                            {route.id === "main" ? "Hlavní" : "Odbočka"}
                           </td>
                           <td style={{ padding: "10px 12px", fontSize: "16px", fontWeight: 700, color: "var(--accent)", textAlign: "center" }}>
-                            {route.segments.length}
+                            {route.commandCount}
                           </td>
                         </tr>
                       ))}
@@ -1383,7 +1090,7 @@ export default function TrackDesignerPage() {
                 }}>
                   <span style={{ fontSize: "14px", color: "var(--text-dim)" }}>Celkem tras</span>
                   <span style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-primary)" }}>
-                    {aiData.routes.length}
+                    {layoutData.routes.length}
                   </span>
                 </div>
               </div>
