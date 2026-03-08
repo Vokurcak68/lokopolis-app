@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
 
   const { prompt, boardShape, width, height, width2, height2, uArmDepth, lCorner, scale, trackSystem, character } = body;
 
-  if (!prompt || !trackSystem || !scale) {
+  if (!trackSystem || !scale) {
     return NextResponse.json({ error: "Chybí povinné parametry" }, { status: 400 });
   }
 
@@ -97,79 +97,108 @@ export async function POST(request: NextRequest) {
     "prumyslova-vlecka": "Průmyslová vlečka (vlečky, rampy, posun, nákladní provoz)",
   };
 
-  // Find the smallest curve radius from catalog for reference
-  const curveRadii = catalog.curves.map(c => {
-    const match = c.match(/(\d+(?:\.\d+)?)\s*mm/);
-    return match ? parseFloat(match[1]) : 300;
-  });
-  const minRadius = Math.min(...curveRadii);
+  const systemPrompt = `Jsi expert na návrh kolejišť pro modelovou železnici. Tvým úkolem je navrhnout kolejový plán jako strukturovaný popis TRAS (routes) — logických sekvencí úseků kolejí.
 
-  const systemPrompt = `Jsi expert na návrh kolejišť pro modelovou železnici. Navrhneš geometrický kolejový plán — přesné souřadnice tratí v milimetrech.
+DŮLEŽITÉ: Nenavrhuj souřadnice! Popisuješ LOGICKOU STRUKTURU trati — sekvenci rovných úseků, oblouků, výhybek, tunelů atd. Deterministický renderer pak geometrii vykreslí.
 
-PRAVIDLA:
-1. Souřadnicový systém: (0,0) = levý horní roh desky, (${boardW_mm}, ${boardH_mm}) = pravý dolní roh.
-2. Všechny souřadnice jsou v mm (reálné rozměry modelu).
-3. Trať MUSÍ tvořit uzavřené smyčky, NEBO mít zarážky (buffer) na koncových bodech.
-4. Používej REALISTICKÉ poloměry oblouků z katalogu: ${catalog.curves.join(", ")}. Minimální poloměr je ${minRadius}mm.
-5. Pro 180° zatáčku použij několik navazujících oblouků (ne jeden oblouk 180°).
-6. Pro dvoukolejku (koridor) kresli dvě rovnoběžné čáry ~30mm od sebe.
-7. Stanice = více rovnoběžných kolejí spojených výhybkami.
-8. Trať musí být UVNITŘ desky — nechej okraj alespoň 50mm od kraje.
-9. Přizpůsob složitost velikosti desky — malá deska = jednodušší plán.
-10. Výhybka má polohu (x,y), úhel odbočení a směr (left/right).
-11. Oblouky definuj středem (cx,cy), poloměrem r, a startAngle/endAngle ve stupních (0° = vpravo/east, 90° = dolů/south, 180° = vlevo/west, 270° = nahoru/north).
+PRAVIDLA PRO NÁVRH:
+1. Hlavní trať (id "main") MUSÍ tvořit UZAVŘENOU SMYČKU — poslední segment se musí geometricky napojit na první.
+2. Pro uzavření smyčky: součet všech zatáček musí dát 360° (např. 4×90° nebo 6×60° apod.).
+3. Celkové rozměry trati musí přibližně odpovídat desce ${boardW_mm}×${boardH_mm} mm.
+4. Vedlejší trasy (sidings, station tracks) odbočují z hlavní přes "turnout" a buď se napojí zpět ("merge") nebo končí zarážkou ("buffer").
+5. Používej realistické rozměry: rovné úseky 100-600mm, poloměry oblouků ${catalog.curves.map(c => c.match(/(\d+(?:\.\d+)?)\s*mm/)?.[1]).filter(Boolean).join("/")}mm, úhly 15°/30°/45°/90°.
+6. Buď kreativní — ne jen oválky! Navrhuj S-křivky, osmičky, dog-bone, průjezdné stanice, nákladiště, tunely.
+7. Každá trasa má unikátní barvu.
+8. Navrhni 2-6 tras pro zajímavé kolejiště.
 
 KATALOG (${catalog.name}):
 Rovné: ${catalog.straights.join(", ")}
 Oblouky: ${catalog.curves.join(", ")}
 Výhybky: ${catalog.turnouts.join(", ")}
 
-ODPOVĚZ PŘESNĚ V TOMTO JSON FORMÁTU (nic jiného):
+ODPOVĚZ PŘESNĚ V TOMTO JSON FORMÁTU:
 {
-  "description": "Český popis kolejiště (2-3 věty).",
-  "bom": [
-    {"name": "G230", "nameCz": "Rovná 230mm", "type": "straight", "count": 8},
-    {"name": "R3 (419mm)", "nameCz": "Oblouk R3 (30°)", "type": "curve", "count": 12},
-    {"name": "WL15", "nameCz": "Výhybka levá 15°", "type": "turnout-left", "count": 2}
+  "name": "Název kolejiště (česky, výstižný)",
+  "routes": [
+    {
+      "id": "main",
+      "name": "Hlavní trať",
+      "color": "#f0a030",
+      "segments": [
+        { "type": "straight", "length": 400 },
+        { "type": "curve", "direction": "right", "angle": 90, "radius": 380 },
+        { "type": "straight", "length": 600 },
+        { "type": "turnout", "direction": "left", "branch": "station-2" },
+        { "type": "straight", "length": 300 },
+        { "type": "curve", "direction": "right", "angle": 90, "radius": 380 },
+        { "type": "straight", "length": 400 },
+        { "type": "tunnel", "length": 350 },
+        { "type": "curve", "direction": "right", "angle": 90, "radius": 380 },
+        { "type": "straight", "length": 600 },
+        { "type": "curve", "direction": "right", "angle": 90, "radius": 380 }
+      ]
+    },
+    {
+      "id": "station-2",
+      "name": "Stanice kolej 2",
+      "color": "#4a9eff",
+      "parentRoute": "main",
+      "branchFromSegment": 3,
+      "segments": [
+        { "type": "curve", "direction": "left", "angle": 10, "radius": 500 },
+        { "type": "straight", "length": 300, "station": "Hlavní nádraží" },
+        { "type": "curve", "direction": "right", "angle": 10, "radius": 500 },
+        { "type": "merge", "into": "main", "atSegment": 5 }
+      ]
+    },
+    {
+      "id": "siding",
+      "name": "Vlečka",
+      "color": "#66bb6a",
+      "parentRoute": "main",
+      "branchFromSegment": 7,
+      "segments": [
+        { "type": "curve", "direction": "right", "angle": 15, "radius": 400 },
+        { "type": "straight", "length": 200 },
+        { "type": "buffer" }
+      ]
+    }
   ],
-  "warnings": ["Případná upozornění"],
-  "tracks": [
-    {"type": "straight", "x1": 100, "y1": 200, "x2": 900, "y2": 200, "label": "Hlavní trať"},
-    {"type": "straight", "x1": 100, "y1": 200, "x2": 900, "y2": 200},
-    {"type": "curve", "cx": 900, "cy": 350, "r": 150, "startAngle": 270, "endAngle": 360},
-    {"type": "turnout", "x": 400, "y": 200, "angle": 15, "direction": "left", "label": "Výhybka 1"},
-    {"type": "station", "x": 300, "y": 180, "width": 300, "tracks": 3, "label": "Stanice"},
-    {"type": "buffer", "x": 100, "y": 300, "angle": 180},
-    {"type": "tunnel", "x1": 200, "y1": 400, "x2": 500, "y2": 400},
-    {"type": "bridge", "x1": 600, "y1": 200, "x2": 800, "y2": 200}
+  "features": [
+    { "type": "station", "name": "Hlavní nádraží", "routeIds": ["main", "station-2"] },
+    { "type": "tunnel", "name": "Horský tunel", "routeId": "main" },
+    { "type": "depot", "name": "Depo", "routeId": "siding" }
   ],
-  "labels": [
-    {"x": 500, "y": 450, "text": "Popis oblasti", "fontSize": 12}
-  ],
-  "board": {"width": ${boardW_mm}, "height": ${boardH_mm}}
+  "bom_notes": "Odhad: 24 rovných 230mm, 12 oblouků R2, 4 výhybky"
 }
 
-TYPY tratí:
-- "straight" — rovný úsek: x1,y1 → x2,y2 (volitelně label, volitelně "secondary": true pro vedlejší kolej)
-- "curve" — oblouk: centrum cx,cy, poloměr r, startAngle a endAngle ve stupních (volitelně "secondary": true)
-- "turnout" — výhybka: pozice x,y, úhel odbočení angle, směr direction ("left"/"right")
-- "station" — stanice: pozice x,y (levý horní roh), šířka width, počet kolejí tracks, label
-- "buffer" — zarážka: pozice x,y, úhel angle (směr trati ke které patří, 0=doprava, 90=dolů, 180=doleva, 270=nahoru)
-- "tunnel" — tunel: x1,y1 → x2,y2 (kreslí se čárkovaně)
-- "bridge" — most: x1,y1 → x2,y2 (s pilíři pod tratí)
+TYPY SEGMENTŮ:
+- "straight" — rovný úsek, povinně "length" (mm). Volitelně "station": "Název stanice" pro stanici na tomto úseku.
+- "curve" — oblouk, povinně "direction" ("left"/"right"), "angle" (stupně), "radius" (mm).
+- "turnout" — výhybka/odbočka, povinně "direction" ("left"/"right"), "branch" (id vedlejší trasy která zde začíná).
+- "tunnel" — tunel (rovný), povinně "length" (mm). Renderer ho vykreslí čárkovaně s portály.
+- "bridge" — most (rovný), povinně "length" (mm).
+- "merge" — napojení zpět na jinou trasu, povinně "into" (id trasy) a "atSegment" (index segmentu, kam se napojuje).
+- "buffer" — zarážka/konec trati (bez dalších parametrů).
 
-DŮLEŽITÉ:
-- Hlavní trať kresli jako PŘÍMÉ LINIE + OBLOUKY, nikoliv elipsy
-- Pro ovál: dvě dlouhé rovné na horní a spodní straně + 4-6 oblouků na každém konci (tvořících 180° zatáčku)
-- Oblouky musí na sebe navazovat — konec jednoho oblouku = začátek dalšího
-- Nech board.width a board.height přesně ${boardW_mm} a ${boardH_mm}`;
+PRAVIDLA PRO UZAVŘENÉ SMYČKY:
+- Pro jednoduchý ovál: 4 rovné + 4 oblouky po 90° (všechny stejným směrem, např. "right")
+- Pro osmičku: 2 sady oblouků, střídavě "left" a "right"
+- Pro dog-bone: rovné s oblouky na obou koncích
+- Součet úhlů zatáček (ve stejném směru) minus součet protisměrných = 360° pro uzavření smyčky
+
+PRAVIDLA PRO ROZMĚRY:
+- Celková délka hlavní trati by měla zhruba odpovídat obvodu desky
+- Pro desku ${boardW_mm}×${boardH_mm}mm: obvod ≈ ${2 * (boardW_mm + boardH_mm)}mm
+- Poloměry oblouků musí být realistické (min. 300mm pro H0, 200mm pro TT/N)
+- Nechej okraj alespoň 50mm od kraje desky`;
 
   const userMessage = `Navrhni kolejiště:
 - Deska: ${boardDesc}
 - Měřítko: ${scale} (1:${scale === "H0" ? 87 : scale === "TT" ? 120 : 160})
 - Systém kolejí: ${catalog.name}
 - Charakter: ${characterLabels[character] ?? character}
-- Další požadavky: ${prompt}
+${prompt ? `- Speciální požadavky uživatele: ${prompt}` : "- Žádné speciální požadavky, navrhni typické kolejiště pro zvolený charakter."}
 
 Vrať POUZE platný JSON objekt.`;
 
@@ -178,7 +207,7 @@ Vrať POUZE platný JSON objekt.`;
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${OPENAI_API_KEY}`,
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
         model: "gpt-4o",
@@ -214,6 +243,14 @@ Vrať POUZE platný JSON objekt.`;
       console.error("Failed to parse AI response:", aiText);
       return NextResponse.json(
         { error: "AI vrátila neplatnou odpověď. Zkuste to znovu.", raw: aiText },
+        { status: 502 }
+      );
+    }
+
+    // Validate basic structure
+    if (!parsed.name || !parsed.routes || !Array.isArray(parsed.routes)) {
+      return NextResponse.json(
+        { error: "AI vrátila neúplná data — chybí name nebo routes.", raw: parsed },
         { status: 502 }
       );
     }
