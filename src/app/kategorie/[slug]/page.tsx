@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
@@ -5,6 +6,29 @@ import { createServerSupabaseClient } from "@/lib/supabase-server";
 import type { ArticleWithRelations, Category } from "@/types/database";
 
 export const revalidate = 60;
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const supabase = createServerSupabaseClient();
+  if (!supabase) return { title: "Kategorie" };
+
+  const { data: category } = await supabase
+    .from("categories")
+    .select("name, description, icon")
+    .eq("slug", slug)
+    .single();
+
+  if (!category) return { title: "Kategorie nenalezena" };
+
+  return {
+    title: `${category.icon} ${category.name}`,
+    description: category.description || `Články v kategorii ${category.name} na Lokopolis`,
+    openGraph: {
+      title: `${category.icon} ${category.name} — Lokopolis`,
+      description: category.description || `Články v kategorii ${category.name}`,
+    },
+  };
+}
 
 function formatDate(dateStr: string | null) {
   if (!dateStr) return "";

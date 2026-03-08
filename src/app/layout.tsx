@@ -6,7 +6,11 @@ import AuthProvider from "@/components/Auth/AuthProvider";
 import ThemeProvider from "@/components/ThemeProvider";
 
 export const metadata: Metadata = {
-  title: "Lokopolis — Svět modelové železnice",
+  metadataBase: new URL("https://lokopolis-app.vercel.app"),
+  title: {
+    default: "Lokopolis — Svět modelové železnice",
+    template: "%s | Lokopolis",
+  },
   description:
     "Lokopolis je komunita nadšenců do modelové železnice. Články, návody, recenze, galerie a vše pro vaše kolejiště.",
   keywords: [
@@ -19,6 +23,22 @@ export const metadata: Metadata = {
     "lokomotiva",
     "vlaky",
   ],
+  openGraph: {
+    type: "website",
+    locale: "cs_CZ",
+    siteName: "Lokopolis",
+    title: "Lokopolis — Svět modelové železnice",
+    description:
+      "Komunita nadšenců do modelové železnice. Články, návody, recenze, galerie.",
+    url: "https://lokopolis-app.vercel.app",
+  },
+  twitter: {
+    card: "summary_large_image",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 export default function RootLayout({
