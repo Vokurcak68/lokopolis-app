@@ -160,7 +160,7 @@ export default function HomeContent({ data }: { data: HomePageData }) {
               <div className="cat-card">
                 <div style={{ fontSize: "36px", marginBottom: "10px", display: "flex", justifyContent: "center", alignItems: "center", height: "40px" }}>
                   {cat.iconUrl ? (
-                    <img src={cat.iconUrl} alt={cat.title} style={{ width: "40px", height: "40px", objectFit: "contain" }} />
+                    <img src={cat.iconUrl} alt={cat.title} style={{ width: "52px", height: "52px", objectFit: "contain" }} />
                   ) : (
                     cat.icon
                   )}
