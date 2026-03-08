@@ -102,7 +102,7 @@ const defaultCategories = [
   { title: "Krajina & scenérie", icon: "🎨", iconUrl: "https://psbeoiaqoreergwqzqoz.supabase.co/storage/v1/object/public/images/icons/krajina-a-zelen.png", href: "/kategorie/krajina-a-zelen", slug: "krajina-a-zelen" },
   { title: "Digitalizace", icon: "⚡", iconUrl: "https://psbeoiaqoreergwqzqoz.supabase.co/storage/v1/object/public/images/icons/digitalni-rizeni.png?v=5", href: "/kategorie/digitalni-rizeni", slug: "digitalni-rizeni" },
   { title: "Přestavby", icon: "🚃", iconUrl: "https://psbeoiaqoreergwqzqoz.supabase.co/storage/v1/object/public/images/icons/prestavby.png", href: "/kategorie/prestavby", slug: "prestavby" },
-  { title: "Kolejové plány", icon: "📐", href: "/kategorie/kolejove-plany", slug: "kolejove-plany" },
+  { title: "Kolejové plány", icon: "📐", iconUrl: "https://psbeoiaqoreergwqzqoz.supabase.co/storage/v1/object/public/images/icons/kolejove-plany.png", href: "/kategorie/kolejove-plany", slug: "kolejove-plany" },
   { title: "Modelové domy", icon: "🏠", href: "/kategorie/modelove-domy", slug: "modelove-domy" },
   { title: "Nátěry & patina", icon: "🖌️", href: "/kategorie/natery-a-patina", slug: "natery-a-patina" },
   { title: "Osvětlení", icon: "💡", href: "/kategorie/osvetleni", slug: "osvetleni" },
