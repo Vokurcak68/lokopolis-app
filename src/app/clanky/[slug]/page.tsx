@@ -37,3 +37,4 @@ export default async function ArticleDetailPage({ params }: { params: Promise<{ 
 
   return <ArticleDetailContent article={article} initialComments={comments} tags={tags} />;
 }
+
