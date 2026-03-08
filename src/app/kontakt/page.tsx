@@ -3,9 +3,10 @@
 import { useState } from "react";
 
 export default function ContactPage() {
-  const [form, setForm] = useState({ name: "", email: "", subject: "", message: "" });
+  const [form, setForm] = useState({ name: "", email: "", subject: "", message: "", website: "" });
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const [loadedAt] = useState(() => Date.now());
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -16,7 +17,7 @@ export default function ContactPage() {
       const res = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, _ts: loadedAt }),
       });
 
       const data = await res.json();
@@ -28,7 +29,7 @@ export default function ContactPage() {
       }
 
       setStatus("success");
-      setForm({ name: "", email: "", subject: "", message: "" });
+      setForm({ name: "", email: "", subject: "", message: "", website: "" });
     } catch {
       setStatus("error");
       setErrorMsg("Nepodařilo se odeslat zprávu. Zkuste to znovu.");
@@ -136,6 +137,19 @@ export default function ContactPage() {
               )}
 
               <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                {/* Honeypot — invisible to humans, bots fill it */}
+                <div style={{ position: "absolute", left: "-9999px", opacity: 0, height: 0, overflow: "hidden" }} aria-hidden="true">
+                  <label htmlFor="website">Website</label>
+                  <input
+                    type="text"
+                    id="website"
+                    name="website"
+                    tabIndex={-1}
+                    autoComplete="off"
+                    value={form.website}
+                    onChange={(e) => setForm({ ...form, website: e.target.value })}
+                  />
+                </div>
                 <div>
                   <label style={labelStyle}>
                     Jméno <span style={{ color: "#ef4444" }}>*</span>
