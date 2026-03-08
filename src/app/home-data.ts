@@ -99,7 +99,7 @@ const defaultCategories = [
   { title: "Stavba kolejiště", icon: "🏗️", iconUrl: "https://psbeoiaqoreergwqzqoz.supabase.co/storage/v1/object/public/images/icons/stavba-kolejiste.png", href: "/kategorie/stavba-kolejiste", slug: "stavba-kolejiste" },
   { title: "Recenze modelů", icon: "🔍", iconUrl: "https://psbeoiaqoreergwqzqoz.supabase.co/storage/v1/object/public/images/icons/recenze-modelu.png", href: "/kategorie/recenze", slug: "recenze" },
   { title: "Návody & tipy", icon: "🔧", iconUrl: "https://psbeoiaqoreergwqzqoz.supabase.co/storage/v1/object/public/images/icons/navody-a-tipy.png", href: "/kategorie/navody-a-tipy", slug: "navody-a-tipy" },
-  { title: "Krajina & scenérie", icon: "🎨", href: "/kategorie/krajina-a-zelen", slug: "krajina-a-zelen" },
+  { title: "Krajina & scenérie", icon: "🎨", iconUrl: "https://psbeoiaqoreergwqzqoz.supabase.co/storage/v1/object/public/images/icons/krajina-a-zelen.png", href: "/kategorie/krajina-a-zelen", slug: "krajina-a-zelen" },
   { title: "Digitalizace", icon: "⚡", href: "/kategorie/digitalni-rizeni", slug: "digitalni-rizeni" },
   { title: "Přestavby", icon: "🚃", href: "/kategorie/prestavby", slug: "prestavby" },
   { title: "Kolejové plány", icon: "📐", href: "/kategorie/kolejove-plany", slug: "kolejove-plany" },
