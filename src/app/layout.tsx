@@ -1,9 +1,16 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import AuthProvider from "@/components/Auth/AuthProvider";
 import ThemeProvider from "@/components/ThemeProvider";
+
+const inter = Inter({
+  subsets: ["latin", "latin-ext"],
+  display: "swap",
+  variable: "--font-inter",
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://lokopolis-app.vercel.app"),
@@ -55,7 +62,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="antialiased flex flex-col min-h-screen">
+      <body className={`${inter.variable} antialiased flex flex-col min-h-screen`}>
         <ThemeProvider>
           <AuthProvider>
             <Header />

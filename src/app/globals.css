@@ -147,7 +147,7 @@
 body {
   background-color: var(--bg-page);
   color: var(--text-body);
-  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-inter), 'Segoe UI', system-ui, -apple-system, sans-serif;
   min-height: 100vh;
   line-height: 1.6;
   transition: background-color 0.2s ease, color 0.2s ease;
