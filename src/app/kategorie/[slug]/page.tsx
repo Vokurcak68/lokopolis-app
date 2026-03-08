@@ -80,7 +80,7 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
         </Link>
         <h1 className="text-3xl font-bold mb-2">
           <span className="mr-3">{cat.icon}</span>
-          <span className="text-white">{cat.name}</span>
+          <span className="text-[var(--text-primary)]">{cat.name}</span>
         </h1>
         {cat.description && (
           <p className="text-text-muted text-lg">{cat.description}</p>
@@ -91,7 +91,7 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
       {articles.length === 0 ? (
         <div className="text-center py-20">
           <div className="text-5xl mb-4">{cat.icon}</div>
-          <h3 className="text-xl font-semibold text-white mb-2">
+          <h3 className="text-xl font-semibold text-[var(--text-primary)] mb-2">
             Zatím žádné články
           </h3>
           <p className="text-text-muted">
@@ -125,7 +125,7 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
                 <span className="text-xs text-primary font-medium uppercase tracking-wider">
                   {cat.icon} {cat.name}
                 </span>
-                <h2 className="text-lg font-semibold text-white mt-2 mb-2 group-hover:text-primary transition-colors line-clamp-2">
+                <h2 className="text-lg font-semibold text-[var(--text-primary)] mt-2 mb-2 group-hover:text-primary transition-colors line-clamp-2">
                   {article.title}
                 </h2>
                 {article.excerpt && (

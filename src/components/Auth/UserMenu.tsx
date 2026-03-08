@@ -60,7 +60,7 @@ export default function UserMenu() {
             {initials}
           </div>
         )}
-        <span className="hidden sm:block text-sm text-text-muted group-hover:text-white transition-colors">
+        <span className="hidden sm:block text-sm text-text-muted group-hover:text-[var(--text-primary)] transition-colors">
           {displayName}
         </span>
         <svg
@@ -77,7 +77,7 @@ export default function UserMenu() {
       {open && (
         <div className="absolute right-0 top-full mt-2 w-48 rounded-xl bg-bg-card border border-border-subtle shadow-xl py-2 z-50">
           <div className="px-4 py-2 border-b border-border-subtle">
-            <p className="text-sm text-white font-medium truncate">{displayName}</p>
+            <p className="text-sm text-[var(--text-primary)] font-medium truncate">{displayName}</p>
             <p className="text-xs text-text-muted truncate">{user.email}</p>
           </div>
 

@@ -102,7 +102,7 @@ export default function ArticleDetailContent({
       </nav>
 
       {/* Article header */}
-      <h1 className="text-2xl md:text-3xl font-bold text-white mb-4 text-center">
+      <h1 className="text-2xl md:text-3xl font-bold text-[var(--text-primary)] mb-4 text-center">
         {article.title}
       </h1>
 
@@ -124,7 +124,7 @@ export default function ArticleDetailContent({
                 .toUpperCase()}
             </div>
           )}
-          <span className="text-white font-medium">
+          <span className="text-[var(--text-primary)] font-medium">
             {article.author?.display_name || article.author?.username || "Anonym"}
           </span>
         </div>
@@ -216,7 +216,7 @@ export default function ArticleDetailContent({
 
       {/* Komentáře */}
       <section className="border-t border-border-subtle pt-10">
-        <h2 className="text-xl font-bold text-white mb-6">
+        <h2 className="text-xl font-bold text-[var(--text-primary)] mb-6">
           Komentáře ({comments.length})
         </h2>
 
@@ -251,7 +251,7 @@ export default function ArticleDetailContent({
                         .toUpperCase()}
                     </div>
                   )}
-                  <span className="text-sm text-white font-medium">
+                  <span className="text-sm text-[var(--text-primary)] font-medium">
                     {comment.author?.display_name ||
                       comment.author?.username ||
                       "Anonym"}
@@ -276,7 +276,7 @@ export default function ArticleDetailContent({
               onChange={(e) => setNewComment(e.target.value)}
               placeholder="Napište komentář…"
               rows={3}
-              className="w-full px-4 py-3 rounded-xl bg-bg-card border border-border-subtle focus:border-primary focus:outline-none text-white placeholder:text-text-muted/50 resize-none"
+              className="w-full px-4 py-3 rounded-xl bg-bg-card border border-border-subtle focus:border-primary focus:outline-none text-[var(--text-body)] placeholder:text-text-muted/50 resize-none"
             />
             <button
               type="submit"

@@ -29,7 +29,7 @@ export default function ArticlesContent({ articles, categories }: ArticlesConten
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16">
       <h1 className="text-3xl font-bold mb-4">
-        <span className="text-white">Všechny </span>
+        <span className="text-[var(--text-primary)]">Všechny </span>
         <span className="text-primary">články</span>
       </h1>
       <p className="text-text-muted mb-8">
@@ -43,7 +43,7 @@ export default function ArticlesContent({ articles, categories }: ArticlesConten
           className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
             selectedCategory === null
               ? "bg-primary text-bg-dark"
-              : "bg-bg-card text-text-muted border border-border-subtle hover:border-primary/50 hover:text-white"
+              : "bg-bg-card text-text-muted border border-border-subtle hover:border-primary/50 hover:text-[var(--text-primary)]"
           }`}
         >
           Vše
@@ -55,7 +55,7 @@ export default function ArticlesContent({ articles, categories }: ArticlesConten
             className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
               selectedCategory === cat.id
                 ? "bg-primary text-bg-dark"
-                : "bg-bg-card text-text-muted border border-border-subtle hover:border-primary/50 hover:text-white"
+                : "bg-bg-card text-text-muted border border-border-subtle hover:border-primary/50 hover:text-[var(--text-primary)]"
             }`}
           >
             {cat.icon} {cat.name}
@@ -67,7 +67,7 @@ export default function ArticlesContent({ articles, categories }: ArticlesConten
       {filteredArticles.length === 0 ? (
         <div className="text-center py-20">
           <div className="text-5xl mb-4">📝</div>
-          <h3 className="text-xl font-semibold text-white mb-2">
+          <h3 className="text-xl font-semibold text-[var(--text-primary)] mb-2">
             Zatím žádné články
           </h3>
           <p className="text-text-muted">
@@ -110,7 +110,7 @@ export default function ArticlesContent({ articles, categories }: ArticlesConten
                 )}
 
                 {/* Název */}
-                <h2 className="text-lg font-semibold text-white mt-2 mb-2 group-hover:text-primary transition-colors line-clamp-2">
+                <h2 className="text-lg font-semibold text-[var(--text-primary)] mt-2 mb-2 group-hover:text-primary transition-colors line-clamp-2">
                   {article.title}
                 </h2>
 

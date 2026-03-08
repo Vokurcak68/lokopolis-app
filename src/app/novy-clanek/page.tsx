@@ -300,8 +300,8 @@ export default function NewArticlePage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
         <div className="text-5xl mb-4">✅</div>
-        <h2 className="text-2xl font-bold text-white mb-2">Článek odeslán!</h2>
-        <p className="text-gray-400 mb-6 max-w-md">
+        <h2 className="text-2xl font-bold text-[var(--text-primary)] mb-2">Článek odeslán!</h2>
+        <p className="text-[var(--text-muted)] mb-6 max-w-md">
           Váš článek čeká na schválení administrátorem. Jakmile bude ověřen, zobrazí se na webu.
         </p>
         <div className="flex gap-3">
@@ -316,7 +316,7 @@ export default function NewArticlePage() {
               setSelectedTags([]);
               setSuccess(false);
             }}
-            className="px-5 py-2.5 rounded-lg border border-white/10 text-gray-400 hover:text-white transition-all text-sm"
+            className="px-5 py-2.5 rounded-lg border border-white/10 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all text-sm"
           >
             Napsat další
           </button>
@@ -335,12 +335,12 @@ export default function NewArticlePage() {
     <div className="mx-auto max-w-4xl px-4 sm:px-6 py-10">
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-2xl font-bold text-white">Nový článek</h1>
+        <h1 className="text-2xl font-bold text-[var(--text-primary)]">Nový článek</h1>
         <div className="flex gap-3">
           <button
             onClick={() => handlePublish(true)}
             disabled={saving}
-            className="px-5 py-2.5 rounded-lg border border-white/10 text-gray-400 hover:text-white hover:border-white/20 transition-all text-sm font-medium disabled:opacity-50"
+            className="px-5 py-2.5 rounded-lg border border-white/10 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-white/20 transition-all text-sm font-medium disabled:opacity-50"
           >
             Uložit koncept
           </button>
@@ -366,7 +366,7 @@ export default function NewArticlePage() {
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         placeholder="Název článku…"
-        className="w-full text-3xl font-bold bg-transparent border-none outline-none text-white placeholder:text-white/15 mb-2"
+        className="w-full text-3xl font-bold bg-transparent border-none outline-none text-[var(--text-primary)] placeholder:text-[var(--text-faint)] mb-2"
       />
 
       {/* Excerpt */}
@@ -375,7 +375,7 @@ export default function NewArticlePage() {
         onChange={(e) => setExcerpt(e.target.value)}
         placeholder="Krátký popis článku (volitelné)…"
         rows={2}
-        className="w-full bg-transparent border-none outline-none text-gray-400 placeholder:text-white/10 resize-none mb-6 text-base leading-relaxed"
+        className="w-full bg-transparent border-none outline-none text-[var(--text-muted)] placeholder:text-[var(--text-faint)] resize-none mb-6 text-base leading-relaxed"
       />
 
       {/* Meta row */}
@@ -388,7 +388,7 @@ export default function NewArticlePage() {
           <select
             value={categoryId}
             onChange={(e) => setCategoryId(e.target.value)}
-            className="w-full px-4 py-2.5 rounded-lg bg-[var(--bg-input)] border border-white/10 text-white text-sm outline-none focus:border-primary/50 transition-colors appearance-none cursor-pointer"
+            className="w-full px-4 py-2.5 rounded-lg bg-[var(--bg-input)] border border-white/10 text-[var(--text-body)] text-sm outline-none focus:border-primary/50 transition-colors appearance-none cursor-pointer"
           >
             <option value="">Vyberte kategorii…</option>
             {categories.map((cat) => (
@@ -428,7 +428,7 @@ export default function NewArticlePage() {
             ) : null}
             <label
               className={`px-4 py-2.5 rounded-lg border border-white/10 text-sm cursor-pointer transition-all
-                ${coverUploading ? "opacity-50 pointer-events-none" : "hover:border-primary/50 text-gray-400 hover:text-white"}
+                ${coverUploading ? "opacity-50 pointer-events-none" : "hover:border-primary/50 text-[var(--text-muted)] hover:text-[var(--text-primary)]"}
               `}
             >
               {coverUploading ? "Nahrávám…" : coverPreview ? "Změnit" : "Nahrát obrázek"}
@@ -616,7 +616,7 @@ export default function NewArticlePage() {
         <button
           onClick={() => handlePublish(true)}
           disabled={saving}
-          className="flex-1 px-4 py-3 rounded-lg border border-white/10 text-gray-400 text-sm font-medium disabled:opacity-50"
+          className="flex-1 px-4 py-3 rounded-lg border border-white/10 text-[var(--text-muted)] text-sm font-medium disabled:opacity-50"
         >
           Koncept
         </button>

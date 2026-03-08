@@ -68,7 +68,7 @@ export default function RegisterForm({
     return (
       <div className="flex flex-col gap-4 w-full max-w-sm text-center">
         <div className="text-4xl">📧</div>
-        <h2 className="text-2xl font-bold text-white">Ověřte svůj e-mail</h2>
+        <h2 className="text-2xl font-bold text-[var(--text-primary)]">Ověřte svůj e-mail</h2>
         <p className="text-text-muted">
           Na adresu <span className="text-primary">{email}</span> jsme odeslali
           ověřovací odkaz. Klikněte na něj pro dokončení registrace.
@@ -88,7 +88,7 @@ export default function RegisterForm({
       onSubmit={handleSubmit}
       className="flex flex-col gap-4 w-full max-w-sm"
     >
-      <h2 className="text-2xl font-bold text-white">Registrace</h2>
+      <h2 className="text-2xl font-bold text-[var(--text-primary)]">Registrace</h2>
 
       {error && (
         <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-2 rounded-lg text-sm">
@@ -108,7 +108,7 @@ export default function RegisterForm({
           required
           minLength={3}
           maxLength={30}
-          className="px-4 py-2.5 rounded-lg bg-bg-card border border-border-subtle focus:border-primary focus:outline-none text-white placeholder:text-text-muted/50"
+          className="px-4 py-2.5 rounded-lg bg-bg-card border border-border-subtle focus:border-primary focus:outline-none text-[var(--text-body)] placeholder:text-text-muted/50"
           placeholder="jan_modelar"
         />
       </div>
@@ -123,7 +123,7 @@ export default function RegisterForm({
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
-          className="px-4 py-2.5 rounded-lg bg-bg-card border border-border-subtle focus:border-primary focus:outline-none text-white placeholder:text-text-muted/50"
+          className="px-4 py-2.5 rounded-lg bg-bg-card border border-border-subtle focus:border-primary focus:outline-none text-[var(--text-body)] placeholder:text-text-muted/50"
           placeholder="vas@email.cz"
         />
       </div>
@@ -139,7 +139,7 @@ export default function RegisterForm({
           onChange={(e) => setPassword(e.target.value)}
           required
           minLength={6}
-          className="px-4 py-2.5 rounded-lg bg-bg-card border border-border-subtle focus:border-primary focus:outline-none text-white placeholder:text-text-muted/50"
+          className="px-4 py-2.5 rounded-lg bg-bg-card border border-border-subtle focus:border-primary focus:outline-none text-[var(--text-body)] placeholder:text-text-muted/50"
           placeholder="Minimálně 6 znaků"
         />
       </div>
@@ -155,7 +155,7 @@ export default function RegisterForm({
           onChange={(e) => setPasswordConfirm(e.target.value)}
           required
           minLength={6}
-          className="px-4 py-2.5 rounded-lg bg-bg-card border border-border-subtle focus:border-primary focus:outline-none text-white placeholder:text-text-muted/50"
+          className="px-4 py-2.5 rounded-lg bg-bg-card border border-border-subtle focus:border-primary focus:outline-none text-[var(--text-body)] placeholder:text-text-muted/50"
           placeholder="Zopakujte heslo"
         />
       </div>

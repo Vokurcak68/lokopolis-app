@@ -113,8 +113,8 @@ export default function AdminArticlesPage() {
   return (
     <div className="mx-auto max-w-5xl px-4 sm:px-6 py-10">
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-2xl font-bold text-white">🛡️ Správa článků</h1>
-        <Link href="/" className="text-sm text-gray-400 hover:text-white transition-colors">
+        <h1 className="text-2xl font-bold text-[var(--text-primary)]">🛡️ Správa článků</h1>
+        <Link href="/" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
           ← Zpět na web
         </Link>
       </div>
@@ -132,7 +132,7 @@ export default function AdminArticlesPage() {
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
               filter === tab.key
                 ? "bg-primary/20 text-primary"
-                : "text-gray-400 hover:text-white hover:bg-white/5"
+                : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/5"
             }`}
           >
             {tab.icon} {tab.label}
@@ -151,7 +151,7 @@ export default function AdminArticlesPage() {
           <div className="text-4xl mb-3">
             {filter === "pending" ? "🎉" : "📭"}
           </div>
-          <p className="text-gray-400">
+          <p className="text-[var(--text-muted)]">
             {filter === "pending"
               ? "Žádné články nečekají na schválení"
               : "Žádné články k zobrazení"}
@@ -187,7 +187,7 @@ export default function AdminArticlesPage() {
                     {article.status === "published" ? "Publikováno" : "Koncept"}
                   </span>
                 </div>
-                <h3 className="text-white font-medium truncate">{article.title}</h3>
+                <h3 className="text-[var(--text-primary)] font-medium truncate">{article.title}</h3>
                 <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
                   <span>✍️ {article.author?.display_name || article.author?.username || "?"}</span>
                   <span>{formatDate(article.created_at)}</span>
@@ -208,7 +208,7 @@ export default function AdminArticlesPage() {
                 </button>
                 <Link
                   href={`/clanky/${article.slug}`}
-                  className="px-3 py-1.5 rounded-lg text-xs text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 transition-all"
+                  className="px-3 py-1.5 rounded-lg text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] bg-white/5 hover:bg-white/10 transition-all"
                 >
                   Zobrazit
                 </Link>

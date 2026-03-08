@@ -32,7 +32,7 @@ function MenuButton({
         flex items-center justify-center
         ${isActive
           ? "bg-primary/20 text-primary"
-          : "text-gray-400 hover:text-white hover:bg-white/5"
+          : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/5"
         }
         ${disabled ? "opacity-30 cursor-not-allowed" : "cursor-pointer"}
       `}
