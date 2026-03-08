@@ -105,7 +105,7 @@ const defaultCategories = [
   { title: "Kolejové plány", icon: "📐", iconUrl: "https://psbeoiaqoreergwqzqoz.supabase.co/storage/v1/object/public/images/icons/kolejove-plany.png", href: "/kategorie/kolejove-plany", slug: "kolejove-plany" },
   { title: "Modelové domy", icon: "🏠", iconUrl: "https://psbeoiaqoreergwqzqoz.supabase.co/storage/v1/object/public/images/icons/modelove-domy.png", href: "/kategorie/modelove-domy", slug: "modelove-domy" },
   { title: "Nátěry & patina", icon: "🖌️", iconUrl: "https://psbeoiaqoreergwqzqoz.supabase.co/storage/v1/object/public/images/icons/natery-a-patina.png", href: "/kategorie/natery-a-patina", slug: "natery-a-patina" },
-  { title: "Osvětlení", icon: "💡", href: "/kategorie/osvetleni", slug: "osvetleni" },
+  { title: "Osvětlení", icon: "💡", iconUrl: "https://psbeoiaqoreergwqzqoz.supabase.co/storage/v1/object/public/images/icons/osvetleni.png", href: "/kategorie/osvetleni", slug: "osvetleni" },
   { title: "3D tisk", icon: "🖨️", href: "/kategorie/3d-tisk", slug: "3d-tisk" },
   { title: "Ze světa", icon: "🌍", href: "/kategorie/ze-sveta", slug: "ze-sveta" },
 ];
