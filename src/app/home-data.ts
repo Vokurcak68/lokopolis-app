@@ -100,7 +100,7 @@ const defaultCategories = [
   { title: "Recenze modelů", icon: "🔍", iconUrl: "https://psbeoiaqoreergwqzqoz.supabase.co/storage/v1/object/public/images/icons/recenze-modelu.png", href: "/kategorie/recenze", slug: "recenze" },
   { title: "Návody & tipy", icon: "🔧", iconUrl: "https://psbeoiaqoreergwqzqoz.supabase.co/storage/v1/object/public/images/icons/navody-a-tipy.png", href: "/kategorie/navody-a-tipy", slug: "navody-a-tipy" },
   { title: "Krajina & scenérie", icon: "🎨", iconUrl: "https://psbeoiaqoreergwqzqoz.supabase.co/storage/v1/object/public/images/icons/krajina-a-zelen.png", href: "/kategorie/krajina-a-zelen", slug: "krajina-a-zelen" },
-  { title: "Digitalizace", icon: "⚡", iconUrl: "https://psbeoiaqoreergwqzqoz.supabase.co/storage/v1/object/public/images/icons/digitalni-rizeni.png?v=5", href: "/kategorie/digitalni-rizeni", slug: "digitalni-rizeni" },
+  { title: "Digitalizace", icon: "⚡", iconUrl: "https://psbeoiaqoreergwqzqoz.supabase.co/storage/v1/object/public/images/icons/digitalni-rizeni.png?v=6", href: "/kategorie/digitalni-rizeni", slug: "digitalni-rizeni" },
   { title: "Přestavby", icon: "🚃", iconUrl: "https://psbeoiaqoreergwqzqoz.supabase.co/storage/v1/object/public/images/icons/prestavby.png", href: "/kategorie/prestavby", slug: "prestavby" },
   { title: "Kolejové plány", icon: "📐", iconUrl: "https://psbeoiaqoreergwqzqoz.supabase.co/storage/v1/object/public/images/icons/kolejove-plany.png", href: "/kategorie/kolejove-plany", slug: "kolejove-plany" },
   { title: "Modelové domy", icon: "🏠", iconUrl: "https://psbeoiaqoreergwqzqoz.supabase.co/storage/v1/object/public/images/icons/modelove-domy.png", href: "/kategorie/modelove-domy", slug: "modelove-domy" },
