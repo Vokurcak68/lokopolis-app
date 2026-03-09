@@ -105,8 +105,8 @@ export default function InstagramPost({
     "",
     excerpt || "",
     "",
-    `👉 Odkaz na článek v biu`,
-    `🌐 www.lokopolis.cz`,
+    `👉 Celý článek:`,
+    articleUrl,
     "",
     hashtags,
   ]
