@@ -610,3 +610,12 @@ a:hover {
   color: var(--text-dim);
   display: inline-block;
 }
+
+/* Footer social links */
+.footer-social-link {
+  color: var(--text-dimmer);
+  transition: color 0.2s;
+}
+.footer-social-link:hover {
+  color: #E1306C;
+}

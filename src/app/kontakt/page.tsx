@@ -254,6 +254,20 @@ export default function ContactPage() {
                   </a>
                 </div>
               </div>
+              <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+                <span style={{ fontSize: "20px" }}>📸</span>
+                <div>
+                  <div style={{ fontSize: "12px", color: "var(--text-body)", opacity: 0.7 }}>Instagram</div>
+                  <a
+                    href="https://instagram.com/lokopolis"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ fontSize: "14px", color: "#f0a030", textDecoration: "none" }}
+                  >
+                    @lokopolis
+                  </a>
+                </div>
+              </div>
               <div
                 style={{
                   marginTop: "8px",
