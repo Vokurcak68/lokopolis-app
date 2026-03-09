@@ -105,8 +105,7 @@ export default function InstagramPost({
     "",
     excerpt || "",
     "",
-    `👉 Celý článek:`,
-    articleUrl,
+    `🔗 Odkaz na článek v biu 👆`,
     "",
     hashtags,
   ]
@@ -542,7 +541,11 @@ export default function InstagramPost({
                 <>
                   <strong>Krok 2:</strong> Zkopíruj text → otevři Instagram →<br />
                   Nový příspěvek → vyber obrázky z fotek →<br />
-                  vlož text ze schránky → Publikuj 🎉
+                  vlož text ze schránky → Publikuj 🎉<br /><br />
+                  💡 <strong>Tip:</strong> V IG profilu dej do pole Web:<br />
+                  <code style={{ fontSize: "12px", background: "rgba(240,160,48,0.15)", padding: "2px 6px", borderRadius: "4px" }}>
+                    lokopolis.cz/links
+                  </code>
                 </>
               )}
             </p>
