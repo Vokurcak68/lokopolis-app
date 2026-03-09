@@ -15,31 +15,42 @@ interface InstagramPostProps {
 }
 
 function generateHashtags(categoryName: string | null, tags: { name: string }[]): string {
-  const base = ["#lokopolis", "#modelováželeznice", "#modelářství", "#kolejiště"];
-  
-  const categoryMap: Record<string, string[]> = {
-    "Stavba kolejiště": ["#stavbakolejiste", "#modelovékolejiste"],
-    "Recenze modelů": ["#recenze", "#modelyvlaků"],
-    "Návody & tipy": ["#navody", "#tipy", "#diy"],
-    "Krajina & scenérie": ["#krajina", "#scenerie", "#diorama"],
-    "Digitální řízení": ["#dcc", "#digitalnirizeni"],
-    "Přestavby": ["#prestavby", "#kitbashing"],
-    "Kolejové plány": ["#kolejovéplány", "#trackplan"],
-    "Modelové domy": ["#modelovedomy", "#budovy"],
-    "Nátěry a patina": ["#weathering", "#patina", "#airbrush"],
-    "Osvětlení": ["#osvetleni", "#led", "#modeloveosvetleni"],
-    "3D tisk": ["#3dtisk", "#3dprint", "#stl"],
-    "Ze světa": ["#zesveta", "#modelrailway"],
+  const MAX_HASHTAGS = 5;
+
+  // Always include #lokopolis as the first one
+  const result = ["#lokopolis"];
+
+  // Add one category-specific hashtag
+  const categoryMap: Record<string, string> = {
+    "Stavba kolejiště": "#kolejiste",
+    "Recenze modelů": "#recenze",
+    "Návody & tipy": "#navody",
+    "Krajina & scenérie": "#scenerie",
+    "Digitální řízení": "#dcc",
+    "Přestavby": "#kitbashing",
+    "Kolejové plány": "#trackplan",
+    "Modelové domy": "#modelovedomy",
+    "Nátěry a patina": "#weathering",
+    "Osvětlení": "#osvetleni",
+    "3D tisk": "#3dtisk",
+    "Ze světa": "#modelrailway",
   };
 
-  const catTags = categoryName ? (categoryMap[categoryName] || []) : [];
-  
-  const tagHashtags = tags
-    .slice(0, 5)
-    .map((t) => "#" + t.name.toLowerCase().replace(/\s+/g, "").replace(/[^\wěščřžýáíéúůďťňó]/g, ""));
+  if (categoryName && categoryMap[categoryName]) {
+    result.push(categoryMap[categoryName]);
+  }
 
-  const all = [...new Set([...base, ...catTags, ...tagHashtags])];
-  return all.join(" ");
+  // Fill remaining slots with article tags
+  const tagHashtags = tags
+    .map((t) => "#" + t.name.toLowerCase().replace(/\s+/g, "").replace(/[^\wěščřžýáíéúůďťňó]/g, ""))
+    .filter((h) => !result.includes(h));
+
+  for (const h of tagHashtags) {
+    if (result.length >= MAX_HASHTAGS) break;
+    result.push(h);
+  }
+
+  return result.join(" ");
 }
 
 function extractImagesFromHtml(html: string | null): string[] {
@@ -94,8 +105,8 @@ export default function InstagramPost({
     "",
     excerpt || "",
     "",
-    `👉 Celý článek na lokopolis.cz`,
-    `🔗 ${articleUrl}`,
+    `👉 Odkaz na článek v biu`,
+    `🌐 www.lokopolis.cz`,
     "",
     hashtags,
   ]

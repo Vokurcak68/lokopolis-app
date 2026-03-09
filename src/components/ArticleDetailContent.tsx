@@ -326,7 +326,7 @@ export default function ArticleDetailContent({
           coverUrl={article.cover_image_url}
           categoryName={article.category?.name || null}
           tags={tags}
-          articleUrl={`https://lokopolis-app.vercel.app/clanky/${article.slug}`}
+          articleUrl={`https://www.lokopolis.cz/clanky/${article.slug}`}
           articleContent={article.content}
           onClose={() => setShowInstagram(false)}
         />
