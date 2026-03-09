@@ -28,17 +28,17 @@ export default function ArticlesContent({ articles, categories }: ArticlesConten
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16">
-      <h1 className="text-3xl font-bold mb-4">
-        <span className="text-[var(--text-primary)]">Všechny </span>
-        <span className="text-primary">články</span>
+    <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "48px 20px" }}>
+      <h1 style={{ fontSize: "32px", fontWeight: 700, marginBottom: "8px", textAlign: "center" }}>
+        <span style={{ color: "var(--text-primary)" }}>Všechny </span>
+        <span style={{ color: "#f0a030" }}>články</span>
       </h1>
-      <p className="text-text-muted mb-8">
+      <p style={{ textAlign: "center", color: "var(--text-body)", marginBottom: "32px", fontSize: "15px" }}>
         Prozkoumejte články od naší komunity modelářů.
       </p>
 
       {/* Filtr kategorií */}
-      <div className="flex flex-wrap gap-2 mb-10">
+      <div className="flex flex-wrap gap-2 mb-10 justify-center">
         <button
           onClick={() => setSelectedCategory(null)}
           className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
