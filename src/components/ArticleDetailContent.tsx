@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/components/Auth/AuthProvider";
 import type { ArticleWithRelations, CommentWithAuthor, Tag } from "@/types/database";
 import CategoryIcon from "@/components/CategoryIcon";
+import InstagramPost from "@/components/InstagramPost";
 
 interface ArticleDetailContentProps {
   article: ArticleWithRelations;
@@ -20,7 +21,7 @@ export default function ArticleDetailContent({
   initialComments,
   tags,
 }: ArticleDetailContentProps) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const router = useRouter();
   const slug = article.slug;
 
@@ -28,8 +29,10 @@ export default function ArticleDetailContent({
   const [newComment, setNewComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showInstagram, setShowInstagram] = useState(false);
 
   const isAuthor = user && user.id === article.author_id;
+  const isAdmin = profile?.role === "admin";
 
   // Increment view count on mount (fire & forget)
   useEffect(() => {
@@ -134,35 +137,57 @@ export default function ArticleDetailContent({
         <span>{formatDate(article.published_at)}</span>
       </div>
 
-      {/* Author actions */}
-      {isAuthor && (
-        <div className="flex items-center justify-center gap-3 mb-8">
-          <Link
-            href={`/clanky/${slug}/upravit`}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-bg-card border border-border-subtle text-text-nav hover:border-primary hover:text-primary transition-colors"
-          >
-            ✏️ Upravit článek
-          </Link>
-          <button
-            onClick={async () => {
-              if (!confirm("Opravdu chcete smazat tento článek? Tuto akci nelze vrátit zpět.")) return;
-              setDeleting(true);
-              const { error } = await supabase
-                .from("articles")
-                .delete()
-                .eq("id", article.id);
-              if (error) {
-                alert("Chyba při mazání: " + error.message);
-                setDeleting(false);
-              } else {
-                router.push("/clanky");
-              }
-            }}
-            disabled={deleting}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-bg-card border border-border-subtle text-red-400 hover:border-red-400 hover:bg-red-400/10 transition-colors disabled:opacity-50"
-          >
-            {deleting ? "Mazání…" : "🗑️ Smazat"}
-          </button>
+      {/* Author / Admin actions */}
+      {(isAuthor || isAdmin) && (
+        <div className="flex items-center justify-center gap-3 mb-8 flex-wrap">
+          {isAuthor && (
+            <Link
+              href={`/clanky/${slug}/upravit`}
+              className="px-4 py-2 rounded-lg text-sm font-medium bg-bg-card border border-border-subtle text-text-nav hover:border-primary hover:text-primary transition-colors"
+            >
+              ✏️ Upravit článek
+            </Link>
+          )}
+          {isAuthor && (
+            <button
+              onClick={async () => {
+                if (!confirm("Opravdu chcete smazat tento článek? Tuto akci nelze vrátit zpět.")) return;
+                setDeleting(true);
+                const { error } = await supabase
+                  .from("articles")
+                  .delete()
+                  .eq("id", article.id);
+                if (error) {
+                  alert("Chyba při mazání: " + error.message);
+                  setDeleting(false);
+                } else {
+                  router.push("/clanky");
+                }
+              }}
+              disabled={deleting}
+              className="px-4 py-2 rounded-lg text-sm font-medium bg-bg-card border border-border-subtle text-red-400 hover:border-red-400 hover:bg-red-400/10 transition-colors disabled:opacity-50"
+            >
+              {deleting ? "Mazání…" : "🗑️ Smazat"}
+            </button>
+          )}
+          {isAdmin && (
+            <button
+              onClick={() => setShowInstagram(true)}
+              style={{
+                padding: "8px 16px",
+                borderRadius: "8px",
+                fontSize: "14px",
+                fontWeight: 500,
+                border: "1px solid rgba(225, 48, 108, 0.3)",
+                background: "rgba(225, 48, 108, 0.08)",
+                color: "#E1306C",
+                cursor: "pointer",
+                transition: "all 0.2s",
+              }}
+            >
+              📸 Instagram
+            </button>
+          )}
         </div>
       )}
 
@@ -302,6 +327,19 @@ export default function ArticleDetailContent({
           </div>
         )}
       </section>
+
+      {/* Instagram Post Modal */}
+      {showInstagram && (
+        <InstagramPost
+          title={article.title}
+          excerpt={article.excerpt}
+          coverUrl={article.cover_image_url}
+          categoryName={article.category?.name || null}
+          tags={tags}
+          articleUrl={`https://lokopolis-app.vercel.app/clanky/${article.slug}`}
+          onClose={() => setShowInstagram(false)}
+        />
+      )}
     </div>
   );
 }
