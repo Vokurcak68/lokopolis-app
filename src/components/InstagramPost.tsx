@@ -151,6 +151,34 @@ export default function InstagramPost({
     setDownloading(false);
   }
 
+  async function handleShare() {
+    try {
+      // Fetch the current image as a File for sharing
+      const res = await fetch(currentImage.url);
+      const blob = await res.blob();
+      const ext = blob.type.includes("png") ? "png" : "jpg";
+      const file = new File([blob], `lokopolis-post.${ext}`, { type: blob.type });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          title,
+          text: postText,
+          files: [file],
+        });
+      } else {
+        // Fallback — share without image
+        await navigator.share({
+          title,
+          text: postText,
+        });
+      }
+    } catch {
+      // User cancelled or share failed — ignore
+    }
+  }
+
+  const canShare = typeof navigator !== "undefined" && !!navigator.share;
+
   const currentImage = allImages[selectedIdx];
 
   return (
@@ -424,24 +452,44 @@ export default function InstagramPost({
             </div>
           </div>
 
-          {/* Copy button */}
-          <button
-            onClick={handleCopy}
-            style={{
-              width: "100%",
-              padding: "12px",
-              borderRadius: "10px",
-              border: "none",
-              background: copied ? "#22c55e" : "#f0a030",
-              color: copied ? "#fff" : "#000",
-              fontSize: "14px",
-              fontWeight: 600,
-              cursor: "pointer",
-              transition: "background 0.2s",
-            }}
-          >
-            {copied ? "✅ Zkopírováno!" : "📋 Kopírovat text"}
-          </button>
+          {/* Action buttons */}
+          <div style={{ display: "flex", gap: "10px" }}>
+            <button
+              onClick={handleCopy}
+              style={{
+                flex: 1,
+                padding: "12px",
+                borderRadius: "10px",
+                border: "none",
+                background: copied ? "#22c55e" : "#f0a030",
+                color: copied ? "#fff" : "#000",
+                fontSize: "14px",
+                fontWeight: 600,
+                cursor: "pointer",
+                transition: "background 0.2s",
+              }}
+            >
+              {copied ? "✅ Zkopírováno!" : "📋 Kopírovat text"}
+            </button>
+            {canShare && (
+              <button
+                onClick={handleShare}
+                style={{
+                  padding: "12px 20px",
+                  borderRadius: "10px",
+                  border: "none",
+                  background: "linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888)",
+                  color: "#fff",
+                  fontSize: "14px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                📤 Sdílet
+              </button>
+            )}
+          </div>
 
           {/* Instructions */}
           <div
