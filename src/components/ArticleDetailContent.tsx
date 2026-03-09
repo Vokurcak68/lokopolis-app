@@ -173,17 +173,7 @@ export default function ArticleDetailContent({
           {isAdmin && (
             <button
               onClick={() => setShowInstagram(true)}
-              style={{
-                padding: "8px 16px",
-                borderRadius: "8px",
-                fontSize: "14px",
-                fontWeight: 500,
-                border: "1px solid rgba(225, 48, 108, 0.3)",
-                background: "rgba(225, 48, 108, 0.08)",
-                color: "#E1306C",
-                cursor: "pointer",
-                transition: "all 0.2s",
-              }}
+              className="px-4 py-2 rounded-lg text-sm font-medium bg-bg-card border border-border-subtle text-text-nav hover:border-primary hover:text-primary transition-colors"
             >
               📸 Instagram
             </button>
