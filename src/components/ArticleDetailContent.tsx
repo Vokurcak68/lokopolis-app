@@ -10,6 +10,24 @@ import type { ArticleWithRelations, CommentWithAuthor, Tag } from "@/types/datab
 import CategoryIcon from "@/components/CategoryIcon";
 import InstagramPost from "@/components/InstagramPost";
 
+const SUPABASE_PROJECT_ID = "psbeoiaqoreergwqzqoz";
+
+function optimizeContentImages(html: string): string {
+  // Replace Supabase storage <img> URLs with render/image (resized WebP)
+  return html.replace(
+    /(<img[^>]+src=["'])(https:\/\/psbeoiaqoreergwqzqoz\.supabase\.co\/storage\/v1\/object\/public\/)([^"']+)(["'][^>]*>)/gi,
+    (match, prefix, baseUrl, path, suffix) => {
+      const renderUrl = `https://${SUPABASE_PROJECT_ID}.supabase.co/storage/v1/render/image/public/${path}?width=800&quality=75`;
+      // Add loading=lazy if not already present
+      let tag = `${prefix}${renderUrl}${suffix}`;
+      if (!tag.includes("loading=")) {
+        tag = tag.replace(">", ' loading="lazy">');
+      }
+      return tag;
+    }
+  );
+}
+
 interface ArticleDetailContentProps {
   article: ArticleWithRelations;
   initialComments: CommentWithAuthor[];
@@ -200,7 +218,7 @@ export default function ArticleDetailContent({
       {/* Obsah */}
       <article
         className="article-content mb-16"
-        dangerouslySetInnerHTML={{ __html: article.content || "<p>Tento článek zatím nemá obsah.</p>" }}
+        dangerouslySetInnerHTML={{ __html: optimizeContentImages(article.content || "<p>Tento článek zatím nemá obsah.</p>") }}
       />
 
       {/* Tags */}
