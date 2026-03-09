@@ -64,6 +64,6 @@ export function getArticleDetailData(slug: string) {
   return unstable_cache(
     () => fetchArticleDetailInternal(slug),
     [`article-detail-${slug}`],
-    { revalidate: 60 }
+    { revalidate: 300 }
   )();
 }

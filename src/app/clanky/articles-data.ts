@@ -36,5 +36,5 @@ async function fetchArticlesDataInternal(): Promise<ArticlesPageData> {
 export const getArticlesPageData = unstable_cache(
   fetchArticlesDataInternal,
   ["articles-page-data"],
-  { revalidate: 60 }
+  { revalidate: 300 }
 );

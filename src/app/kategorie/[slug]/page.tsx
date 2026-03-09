@@ -6,7 +6,7 @@ import { createServerSupabaseClient } from "@/lib/supabase-server";
 import type { ArticleWithRelations, Category } from "@/types/database";
 import CategoryIcon from "@/components/CategoryIcon";
 
-export const revalidate = 60;
+export const revalidate = 300;
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;

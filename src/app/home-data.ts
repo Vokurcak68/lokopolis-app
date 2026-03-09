@@ -284,5 +284,5 @@ async function fetchHomeDataInternal(): Promise<HomePageData> {
 export const getHomePageData = unstable_cache(
   fetchHomeDataInternal,
   ["homepage-data"],
-  { revalidate: 60 }
+  { revalidate: 300 }
 );
