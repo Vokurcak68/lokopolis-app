@@ -119,34 +119,59 @@ export default function InstagramPost({
     }
   }
 
-  async function handleDownloadImage(url: string, index: number) {
+  async function fetchAsFile(url: string, index: number): Promise<File> {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const ext = blob.type.includes("png") ? "png" : "jpg";
+    return new File([blob], `lokopolis-${index + 1}.${ext}`, { type: blob.type });
+  }
+
+  // Share via Web Share API (saves to Photos on iOS) or fallback to download
+  async function handleSaveImage(url: string, index: number) {
     setDownloading(true);
     try {
-      const res = await fetch(url);
-      const blob = await res.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      const ext = blob.type.includes("png") ? "png" : "jpg";
-      a.download = `lokopolis-${title.toLowerCase().replace(/\s+/g, "-").slice(0, 30)}-${index + 1}.${ext}`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
+      const file = await fetchAsFile(url, index);
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file] });
+      } else {
+        // Fallback: classic download
+        const blobUrl = URL.createObjectURL(file);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = file.name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+      }
     } catch {
-      window.open(url, "_blank");
+      // User cancelled share — not an error
     }
     setDownloading(false);
   }
 
-  async function handleDownloadAll() {
+  async function handleSaveAll() {
     setDownloading(true);
-    for (let i = 0; i < allImages.length; i++) {
-      await handleDownloadImage(allImages[i].url, i);
-      // Small delay between downloads
-      if (i < allImages.length - 1) {
-        await new Promise((r) => setTimeout(r, 500));
+    try {
+      const files = await Promise.all(allImages.map((img, i) => fetchAsFile(img.url, i)));
+      if (navigator.canShare && navigator.canShare({ files })) {
+        await navigator.share({ files });
+      } else {
+        // Fallback: download one by one
+        for (const file of files) {
+          const blobUrl = URL.createObjectURL(file);
+          const a = document.createElement("a");
+          a.href = blobUrl;
+          a.download = file.name;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(blobUrl);
+          await new Promise((r) => setTimeout(r, 300));
+        }
       }
+    } catch {
+      // User cancelled
     }
     setDownloading(false);
   }
@@ -347,7 +372,7 @@ export default function InstagramPost({
               {/* Download buttons */}
               <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
                 <button
-                  onClick={() => handleDownloadImage(currentImage.url, selectedIdx)}
+                  onClick={() => handleSaveImage(currentImage.url, selectedIdx)}
                   disabled={downloading}
                   style={{
                     flex: 1,
@@ -361,11 +386,11 @@ export default function InstagramPost({
                     opacity: downloading ? 0.6 : 1,
                   }}
                 >
-                  ⬇️ Stáhnout tento ({currentImage.label})
+                  {downloading ? "⏳ Ukládám..." : `📤 Uložit tento (${currentImage.label})`}
                 </button>
                 {allImages.length > 1 && (
                   <button
-                    onClick={handleDownloadAll}
+                    onClick={handleSaveAll}
                     disabled={downloading}
                     style={{
                       padding: "8px 14px",
@@ -379,7 +404,7 @@ export default function InstagramPost({
                       opacity: downloading ? 0.6 : 1,
                     }}
                   >
-                    ⬇️ Všechny ({allImages.length})
+                    📤 Všechny ({allImages.length})
                   </button>
                 )}
               </div>
@@ -499,14 +524,14 @@ export default function InstagramPost({
             <p style={{ fontSize: "13px", color: "var(--text-body)", lineHeight: 1.6, margin: 0 }}>
               {step === 1 ? (
                 <>
-                  <strong>Krok 1:</strong> Stáhni obrázky (IG karusel = až 10 fotek)<br />
-                  Pak klikni na <strong>2️⃣ Text</strong>
+                  <strong>Krok 1:</strong> Ulož obrázky do fotek (📤 → „Uložit obrázek")<br />
+                  IG karusel = až 10 fotek. Pak klikni na <strong>2️⃣ Text</strong>
                 </>
               ) : (
                 <>
                   <strong>Krok 2:</strong> Zkopíruj text → otevři Instagram →<br />
-                  Nový příspěvek → vyber stažené obrázky →<br />
-                  vlož zkopírovaný text → Publikuj 🎉
+                  Nový příspěvek → vyber obrázky z fotek →<br />
+                  vlož text ze schránky → Publikuj 🎉
                 </>
               )}
             </p>
