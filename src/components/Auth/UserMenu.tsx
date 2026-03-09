@@ -81,6 +81,14 @@ export default function UserMenu() {
             <p className="text-xs text-text-muted truncate">{user.email}</p>
           </div>
 
+          <Link
+            href="/moje-clanky"
+            onClick={() => setOpen(false)}
+            className="block w-full text-left px-4 py-2 text-sm text-text-muted hover:text-[var(--text-primary)] hover:bg-bg-card-hover transition-colors"
+          >
+            📝 Moje články
+          </Link>
+
           {profile?.role === "admin" && (
             <Link
               href="/admin/clanky"
