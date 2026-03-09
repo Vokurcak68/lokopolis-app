@@ -151,33 +151,7 @@ export default function InstagramPost({
     setDownloading(false);
   }
 
-  async function handleShare() {
-    try {
-      // Fetch the current image as a File for sharing
-      const res = await fetch(currentImage.url);
-      const blob = await res.blob();
-      const ext = blob.type.includes("png") ? "png" : "jpg";
-      const file = new File([blob], `lokopolis-post.${ext}`, { type: blob.type });
-
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          title,
-          text: postText,
-          files: [file],
-        });
-      } else {
-        // Fallback — share without image
-        await navigator.share({
-          title,
-          text: postText,
-        });
-      }
-    } catch {
-      // User cancelled or share failed — ignore
-    }
-  }
-
-  const canShare = typeof navigator !== "undefined" && !!navigator.share;
+  const [step, setStep] = useState<1 | 2>(1);
 
   const currentImage = allImages[selectedIdx];
 
@@ -429,67 +403,88 @@ export default function InstagramPost({
             </div>
           )}
 
-          {/* Text preview */}
-          <div
-            style={{
-              background: "var(--bg-surface)",
-              border: "1px solid var(--border-color)",
-              borderRadius: "8px",
-              padding: "16px",
-              marginBottom: "16px",
-            }}
-          >
+          {/* Step indicator */}
+          <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
             <div
+              onClick={() => setStep(1)}
               style={{
+                flex: 1,
+                padding: "8px",
+                borderRadius: "8px",
+                textAlign: "center",
                 fontSize: "13px",
-                color: "var(--text-body)",
-                lineHeight: 1.6,
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
+                fontWeight: 600,
+                cursor: "pointer",
+                background: step === 1 ? "#f0a030" : "var(--bg-surface)",
+                color: step === 1 ? "#000" : "var(--text-body)",
+                border: step === 1 ? "1px solid #f0a030" : "1px solid var(--border-color)",
               }}
             >
-              {postText}
+              1️⃣ Obrázky
+            </div>
+            <div
+              onClick={() => setStep(2)}
+              style={{
+                flex: 1,
+                padding: "8px",
+                borderRadius: "8px",
+                textAlign: "center",
+                fontSize: "13px",
+                fontWeight: 600,
+                cursor: "pointer",
+                background: step === 2 ? "#f0a030" : "var(--bg-surface)",
+                color: step === 2 ? "#000" : "var(--text-body)",
+                border: step === 2 ? "1px solid #f0a030" : "1px solid var(--border-color)",
+              }}
+            >
+              2️⃣ Text
             </div>
           </div>
 
-          {/* Action buttons */}
-          <div style={{ display: "flex", gap: "10px" }}>
-            <button
-              onClick={handleCopy}
-              style={{
-                flex: 1,
-                padding: "12px",
-                borderRadius: "10px",
-                border: "none",
-                background: copied ? "#22c55e" : "#f0a030",
-                color: copied ? "#fff" : "#000",
-                fontSize: "14px",
-                fontWeight: 600,
-                cursor: "pointer",
-                transition: "background 0.2s",
-              }}
-            >
-              {copied ? "✅ Zkopírováno!" : "📋 Kopírovat text"}
-            </button>
-            {canShare && (
-              <button
-                onClick={handleShare}
+          {step === 2 && (
+            <>
+              {/* Text preview */}
+              <div
                 style={{
-                  padding: "12px 20px",
-                  borderRadius: "10px",
-                  border: "none",
-                  background: "linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888)",
-                  color: "#fff",
-                  fontSize: "14px",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  whiteSpace: "nowrap",
+                  background: "var(--bg-surface)",
+                  border: "1px solid var(--border-color)",
+                  borderRadius: "8px",
+                  padding: "16px",
+                  marginBottom: "16px",
                 }}
               >
-                📤 Sdílet
+                <div
+                  style={{
+                    fontSize: "13px",
+                    color: "var(--text-body)",
+                    lineHeight: 1.6,
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-word",
+                  }}
+                >
+                  {postText}
+                </div>
+              </div>
+
+              <button
+                onClick={handleCopy}
+                style={{
+                  width: "100%",
+                  padding: "14px",
+                  borderRadius: "10px",
+                  border: "none",
+                  background: copied ? "#22c55e" : "#f0a030",
+                  color: copied ? "#fff" : "#000",
+                  fontSize: "15px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "background 0.2s",
+                }}
+              >
+                {copied ? "✅ Zkopírováno! Vlož do Instagramu" : "📋 Kopírovat text do schránky"}
               </button>
-            )}
-          </div>
+            </>
+          )}
 
           {/* Instructions */}
           <div
@@ -502,12 +497,18 @@ export default function InstagramPost({
             }}
           >
             <p style={{ fontSize: "13px", color: "var(--text-body)", lineHeight: 1.6, margin: 0 }}>
-              <strong>Postup:</strong><br />
-              1. Stáhni obrázky (jeden nebo všechny — IG umí karusel)<br />
-              2. Zkopíruj text<br />
-              3. Otevři Instagram → Nový příspěvek<br />
-              4. Vyber obrázky, vlož text<br />
-              5. Publikuj 🎉
+              {step === 1 ? (
+                <>
+                  <strong>Krok 1:</strong> Stáhni obrázky (IG karusel = až 10 fotek)<br />
+                  Pak klikni na <strong>2️⃣ Text</strong>
+                </>
+              ) : (
+                <>
+                  <strong>Krok 2:</strong> Zkopíruj text → otevři Instagram →<br />
+                  Nový příspěvek → vyber stažené obrázky →<br />
+                  vlož zkopírovaný text → Publikuj 🎉
+                </>
+              )}
             </p>
           </div>
         </div>
