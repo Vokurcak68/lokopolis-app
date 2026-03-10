@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState, useRef, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
@@ -20,11 +20,26 @@ export default function NewThreadPage() {
   );
 }
 
+interface ImagePreview {
+  file: File;
+  preview: string;
+  uploading: boolean;
+  url: string | null;
+  error: string | null;
+}
+
+const MAX_IMAGES = 10;
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+
+const MERITKA = ["TT", "H0", "N", "Z", "G", "jiné"];
+const KRAJINY = ["horská", "městská", "průmyslová", "venkovská", "nádraží", "jiné"];
+
 function NewThreadContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialSlug = searchParams.get("section") || "";
-  const { user, profile, loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
 
   const [sections, setSections] = useState<ForumSection[]>([]);
   const [selectedSlug, setSelectedSlug] = useState(initialSlug);
@@ -33,6 +48,19 @@ function NewThreadContent() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [isBanned, setIsBanned] = useState(false);
+
+  // Image upload state
+  const [images, setImages] = useState<ImagePreview[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const dropRef = useRef<HTMLDivElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+
+  // Structured fields for moje-kolejiste
+  const [meritko, setMeritko] = useState("");
+  const [rozmer, setRozmer] = useState("");
+  const [krajina, setKrajina] = useState("");
+
+  const isMojeKolejiste = selectedSlug === "moje-kolejiste";
 
   useEffect(() => {
     supabase
@@ -51,6 +79,111 @@ function NewThreadContent() {
     });
   }, [user]);
 
+  const addFiles = useCallback((files: FileList | File[]) => {
+    const fileArray = Array.from(files);
+    const remaining = MAX_IMAGES - images.length;
+    if (remaining <= 0) {
+      setError(`Maximálně ${MAX_IMAGES} fotek`);
+      return;
+    }
+
+    const toAdd = fileArray.slice(0, remaining);
+    const newImages: ImagePreview[] = [];
+
+    for (const file of toAdd) {
+      if (!ALLOWED_TYPES.includes(file.type)) {
+        setError(`Nepodporovaný formát: ${file.name}. Povoleno: JPEG, PNG, WebP, GIF`);
+        continue;
+      }
+      if (file.size > MAX_FILE_SIZE) {
+        setError(`Soubor ${file.name} je příliš velký (max 5 MB)`);
+        continue;
+      }
+      newImages.push({
+        file,
+        preview: URL.createObjectURL(file),
+        uploading: false,
+        url: null,
+        error: null,
+      });
+    }
+
+    if (newImages.length > 0) {
+      setImages(prev => [...prev, ...newImages]);
+    }
+  }, [images.length]);
+
+  const removeImage = useCallback((index: number) => {
+    setImages(prev => {
+      const updated = [...prev];
+      URL.revokeObjectURL(updated[index].preview);
+      updated.splice(index, 1);
+      return updated;
+    });
+  }, []);
+
+  const uploadImages = useCallback(async (): Promise<string[]> => {
+    if (!user) return [];
+    const urls: string[] = [];
+
+    const updatedImages = [...images];
+
+    for (let i = 0; i < updatedImages.length; i++) {
+      const img = updatedImages[i];
+      if (img.url) {
+        urls.push(img.url);
+        continue;
+      }
+
+      updatedImages[i] = { ...img, uploading: true };
+      setImages([...updatedImages]);
+
+      const ext = img.file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const path = `forum/${user.id}/${Date.now()}_${i}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("images")
+        .upload(path, img.file, { contentType: img.file.type });
+
+      if (uploadError) {
+        updatedImages[i] = { ...img, uploading: false, error: uploadError.message };
+        setImages([...updatedImages]);
+        continue;
+      }
+
+      const { data: publicUrlData } = supabase.storage.from("images").getPublicUrl(path);
+      const publicUrl = publicUrlData.publicUrl;
+
+      updatedImages[i] = { ...img, uploading: false, url: publicUrl };
+      setImages([...updatedImages]);
+      urls.push(publicUrl);
+    }
+
+    return urls;
+  }, [images, user]);
+
+  // Drag & drop handlers
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+    if (e.dataTransfer.files.length > 0) {
+      addFiles(e.dataTransfer.files);
+    }
+  }, [addFiles]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
@@ -66,13 +199,37 @@ function NewThreadContent() {
 
     setSubmitting(true);
     try {
+      // Upload images first
+      const uploadedUrls = await uploadImages();
+
+      // Build content with structured header for moje-kolejiste
+      let finalContent = "";
+
+      if (isMojeKolejiste && (meritko || rozmer || krajina)) {
+        finalContent += '<div class="kolejiste-info">';
+        if (meritko) finalContent += `<span class="kolejiste-tag">📐 Měřítko: ${meritko}</span>`;
+        if (rozmer) finalContent += `<span class="kolejiste-tag">📏 Rozměr: ${rozmer}</span>`;
+        if (krajina) finalContent += `<span class="kolejiste-tag">🏔️ Krajina: ${krajina}</span>`;
+        finalContent += '</div>\n\n';
+      }
+
+      finalContent += content.trim();
+
+      // Append uploaded images
+      if (uploadedUrls.length > 0) {
+        finalContent += "\n\n";
+        for (const url of uploadedUrls) {
+          finalContent += `<img src="${url}" alt="Fotka" />\n`;
+        }
+      }
+
       const { data, error: err } = await supabase
         .from("forum_threads")
         .insert({
           section_id: section.id,
           author_id: user.id,
           title: title.trim(),
-          content: content.trim(),
+          content: finalContent,
         })
         .select("id")
         .single();
@@ -157,6 +314,88 @@ function NewThreadContent() {
           </select>
         </div>
 
+        {/* Structured fields for moje-kolejiste */}
+        {isMojeKolejiste && (
+          <div style={{
+            background: "rgba(240,160,48,0.05)",
+            border: "1px solid rgba(240,160,48,0.2)",
+            borderRadius: "12px",
+            padding: "20px",
+            marginBottom: "20px",
+          }}>
+            <h3 style={{ fontSize: "15px", fontWeight: 600, color: "var(--accent)", marginBottom: "16px" }}>
+              🏗️ Parametry kolejiště
+            </h3>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              <div>
+                <label style={{ display: "block", fontSize: "12px", color: "var(--text-muted)", marginBottom: "4px", fontWeight: 500 }}>
+                  Měřítko
+                </label>
+                <select
+                  value={meritko}
+                  onChange={(e) => setMeritko(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    background: "var(--bg-input)",
+                    border: "1px solid var(--border-input)",
+                    borderRadius: "8px",
+                    color: "var(--text-body)",
+                    fontSize: "14px",
+                    outline: "none",
+                  }}
+                >
+                  <option value="">— Vyberte —</option>
+                  {MERITKA.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: "12px", color: "var(--text-muted)", marginBottom: "4px", fontWeight: 500 }}>
+                  Typ krajiny
+                </label>
+                <select
+                  value={krajina}
+                  onChange={(e) => setKrajina(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    background: "var(--bg-input)",
+                    border: "1px solid var(--border-input)",
+                    borderRadius: "8px",
+                    color: "var(--text-body)",
+                    fontSize: "14px",
+                    outline: "none",
+                  }}
+                >
+                  <option value="">— Vyberte —</option>
+                  {KRAJINY.map(k => <option key={k} value={k}>{k}</option>)}
+                </select>
+              </div>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <label style={{ display: "block", fontSize: "12px", color: "var(--text-muted)", marginBottom: "4px", fontWeight: 500 }}>
+                  Rozměr kolejiště
+                </label>
+                <input
+                  type="text"
+                  value={rozmer}
+                  onChange={(e) => setRozmer(e.target.value)}
+                  placeholder="např. 3 × 2 m"
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    background: "var(--bg-input)",
+                    border: "1px solid var(--border-input)",
+                    borderRadius: "8px",
+                    color: "var(--text-body)",
+                    fontSize: "14px",
+                    outline: "none",
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Title */}
         <div style={{ marginBottom: "20px" }}>
           <label style={{ display: "block", fontSize: "13px", color: "var(--text-muted)", marginBottom: "6px", fontWeight: 500 }}>
@@ -208,6 +447,131 @@ function NewThreadContent() {
               fontFamily: "inherit",
             }}
           />
+        </div>
+
+        {/* Image Upload */}
+        <div style={{ marginBottom: "20px" }}>
+          <label style={{ display: "block", fontSize: "13px", color: "var(--text-muted)", marginBottom: "6px", fontWeight: 500 }}>
+            📷 Fotky <span style={{ color: "var(--text-faint)", fontWeight: 400 }}>(max {MAX_IMAGES}, do 5 MB)</span>
+          </label>
+
+          {/* Drop zone */}
+          <div
+            ref={dropRef}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+            style={{
+              border: `2px dashed ${dragOver ? "var(--accent)" : "var(--border)"}`,
+              borderRadius: "12px",
+              padding: "24px",
+              textAlign: "center",
+              cursor: "pointer",
+              background: dragOver ? "rgba(240,160,48,0.05)" : "transparent",
+              transition: "all 0.2s",
+            }}
+          >
+            <div style={{ fontSize: "32px", marginBottom: "8px" }}>📸</div>
+            <p style={{ fontSize: "14px", color: "var(--text-dim)", margin: 0 }}>
+              Přetáhněte fotky sem nebo klikněte pro výběr
+            </p>
+            <p style={{ fontSize: "12px", color: "var(--text-faint)", marginTop: "4px" }}>
+              JPEG, PNG, WebP, GIF · Max 5 MB
+            </p>
+          </div>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            multiple
+            onChange={(e) => {
+              if (e.target.files) addFiles(e.target.files);
+              e.target.value = "";
+            }}
+            style={{ display: "none" }}
+          />
+
+          {/* Preview grid */}
+          {images.length > 0 && (
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))",
+              gap: "8px",
+              marginTop: "12px",
+            }}>
+              {images.map((img, i) => (
+                <div key={i} style={{
+                  position: "relative",
+                  borderRadius: "8px",
+                  overflow: "hidden",
+                  aspectRatio: "1",
+                  background: "var(--bg-card)",
+                  border: `1px solid ${img.error ? "rgba(220,53,69,0.5)" : "var(--border)"}`,
+                }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={img.preview}
+                    alt=""
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  />
+                  {img.uploading && (
+                    <div style={{
+                      position: "absolute",
+                      inset: 0,
+                      background: "rgba(0,0,0,0.6)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#fff",
+                      fontSize: "20px",
+                    }}>
+                      ⏳
+                    </div>
+                  )}
+                  {img.error && (
+                    <div style={{
+                      position: "absolute",
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      background: "rgba(220,53,69,0.9)",
+                      color: "#fff",
+                      fontSize: "10px",
+                      padding: "2px 4px",
+                      textAlign: "center",
+                    }}>
+                      Chyba
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); removeImage(i); }}
+                    style={{
+                      position: "absolute",
+                      top: "4px",
+                      right: "4px",
+                      width: "24px",
+                      height: "24px",
+                      borderRadius: "50%",
+                      background: "rgba(0,0,0,0.7)",
+                      color: "#fff",
+                      border: "none",
+                      fontSize: "14px",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      lineHeight: 1,
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {error && (

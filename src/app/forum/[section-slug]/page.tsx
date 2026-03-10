@@ -12,6 +12,7 @@ import type { ForumSection, Profile } from "@/types/database";
 interface ThreadRow {
   id: string;
   title: string;
+  content?: string;
   is_pinned: boolean;
   is_locked: boolean;
   post_count: number;
@@ -23,6 +24,43 @@ interface ThreadRow {
 
 const THREADS_PER_PAGE = 20;
 
+/* ============================================================
+   Helper: extract first image URL from HTML content
+   ============================================================ */
+function extractFirstImage(content: string): string | null {
+  const match = content.match(/<img\s+[^>]*src=["']([^"']+)["'][^>]*\/?>/i);
+  return match ? match[1] : null;
+}
+
+/* ============================================================
+   Helper: optimize Supabase image URL
+   ============================================================ */
+function optimizeImageUrl(url: string, width: number = 400): string {
+  if (url.includes("supabase.co/storage/v1/object/public/")) {
+    return url.replace("/storage/v1/object/public/", "/storage/v1/render/image/public/") + `?width=${width}&quality=75`;
+  }
+  return url;
+}
+
+/* ============================================================
+   Helper: count total reactions from thread content (approx)
+   ============================================================ */
+function extractKolejisteInfo(content: string): { meritko?: string; rozmer?: string; krajina?: string } | null {
+  const infoMatch = content.match(/<div class="kolejiste-info">([\s\S]*?)<\/div>/);
+  if (!infoMatch) return null;
+
+  const info: { meritko?: string; rozmer?: string; krajina?: string } = {};
+  const tagRegex = /<span class="kolejiste-tag">(.*?)<\/span>/g;
+  let m;
+  while ((m = tagRegex.exec(infoMatch[1])) !== null) {
+    const text = m[1];
+    if (text.includes("Měřítko:")) info.meritko = text.replace("📐 Měřítko: ", "");
+    if (text.includes("Rozměr:")) info.rozmer = text.replace("📏 Rozměr: ", "");
+    if (text.includes("Krajina:")) info.krajina = text.replace("🏔️ Krajina: ", "");
+  }
+  return Object.keys(info).length > 0 ? info : null;
+}
+
 export default function SectionPage() {
   const params = useParams();
   const slug = params["section-slug"] as string;
@@ -33,8 +71,10 @@ export default function SectionPage() {
   const [page, setPage] = useState(1);
   const [totalThreads, setTotalThreads] = useState(0);
   const [isBanned, setIsBanned] = useState(false);
+  const [threadReactionCounts, setThreadReactionCounts] = useState<Record<string, number>>({});
 
   const isAdminOrMod = profile?.role === "admin" || profile?.role === "moderator";
+  const isMojeKolejiste = slug === "moje-kolejiste";
 
   const fetchSection = useCallback(async () => {
     const { data } = await supabase
@@ -52,7 +92,11 @@ export default function SectionPage() {
       const from = (p - 1) * THREADS_PER_PAGE;
       const to = from + THREADS_PER_PAGE - 1;
 
-      // Parallel: count + data
+      // For moje-kolejiste, also fetch content for cover images
+      const selectFields = isMojeKolejiste
+        ? "id, title, content, is_pinned, is_locked, post_count, last_post_at, created_at, author:profiles!forum_threads_author_id_fkey(id, display_name, username, avatar_url), last_poster:profiles!forum_threads_last_post_by_fkey(id, display_name, username)"
+        : "id, title, is_pinned, is_locked, post_count, last_post_at, created_at, author:profiles!forum_threads_author_id_fkey(id, display_name, username, avatar_url), last_poster:profiles!forum_threads_last_post_by_fkey(id, display_name, username)";
+
       const [countRes, dataRes] = await Promise.all([
         supabase
           .from("forum_threads")
@@ -60,7 +104,7 @@ export default function SectionPage() {
           .eq("section_id", sectionId),
         supabase
           .from("forum_threads")
-          .select("id, title, is_pinned, is_locked, post_count, last_post_at, created_at, author:profiles!forum_threads_author_id_fkey(id, display_name, username, avatar_url), last_poster:profiles!forum_threads_last_post_by_fkey(id, display_name, username)")
+          .select(selectFields)
           .eq("section_id", sectionId)
           .order("is_pinned", { ascending: false })
           .order("last_post_at", { ascending: false })
@@ -68,13 +112,32 @@ export default function SectionPage() {
       ]);
 
       setTotalThreads(countRes.count || 0);
-      setThreads((dataRes.data as unknown as ThreadRow[]) || []);
+      const threadData = (dataRes.data as unknown as ThreadRow[]) || [];
+      setThreads(threadData);
+
+      // Fetch reaction counts for card view
+      if (isMojeKolejiste && threadData.length > 0) {
+        const threadIds = threadData.map(t => t.id);
+        const { data: reactions } = await supabase
+          .from("forum_reactions")
+          .select("thread_id")
+          .in("thread_id", threadIds);
+        if (reactions) {
+          const counts: Record<string, number> = {};
+          for (const r of reactions) {
+            if (r.thread_id) {
+              counts[r.thread_id] = (counts[r.thread_id] || 0) + 1;
+            }
+          }
+          setThreadReactionCounts(counts);
+        }
+      }
     } catch {
       setThreads([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isMojeKolejiste]);
 
   useEffect(() => {
     async function init() {
@@ -175,7 +238,242 @@ export default function SectionPage() {
             </Link>
           )}
         </div>
+      ) : isMojeKolejiste ? (
+        /* ============================================================
+           Card Grid View for "Moje kolejiště"
+           ============================================================ */
+        <>
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+            gap: "16px",
+          }}>
+            {threads.map((t) => {
+              const authorName = t.author?.display_name || t.author?.username || "Anonym";
+              const coverImage = t.content ? extractFirstImage(t.content) : null;
+              const kolejisteInfo = t.content ? extractKolejisteInfo(t.content) : null;
+              const reactionCount = threadReactionCounts[t.id] || 0;
+              const initials = authorName.charAt(0).toUpperCase();
+
+              return (
+                <Link
+                  key={t.id}
+                  href={`/forum/${slug}/${t.id}`}
+                  style={{ textDecoration: "none" }}
+                >
+                  <div
+                    style={{
+                      background: "var(--bg-card)",
+                      border: "1px solid var(--border)",
+                      borderRadius: "12px",
+                      overflow: "hidden",
+                      transition: "border-color 0.2s, transform 0.2s",
+                      cursor: "pointer",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = "var(--accent)";
+                      e.currentTarget.style.transform = "translateY(-2px)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = "var(--border)";
+                      e.currentTarget.style.transform = "translateY(0)";
+                    }}
+                  >
+                    {/* Cover image */}
+                    <div style={{
+                      width: "100%",
+                      aspectRatio: "16/10",
+                      background: "var(--bg-page)",
+                      overflow: "hidden",
+                      position: "relative",
+                    }}>
+                      {coverImage ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={optimizeImageUrl(coverImage)}
+                          alt=""
+                          loading="lazy"
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                            display: "block",
+                          }}
+                        />
+                      ) : (
+                        <div style={{
+                          width: "100%",
+                          height: "100%",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: "48px",
+                          color: "var(--text-faint)",
+                        }}>
+                          🚂
+                        </div>
+                      )}
+                      {/* Pinned badge */}
+                      {t.is_pinned && (
+                        <div style={{
+                          position: "absolute",
+                          top: "8px",
+                          left: "8px",
+                          background: "rgba(0,0,0,0.7)",
+                          borderRadius: "6px",
+                          padding: "2px 8px",
+                          fontSize: "12px",
+                        }}>
+                          📌
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Card body */}
+                    <div style={{ padding: "14px 16px" }}>
+                      <h3 style={{
+                        fontSize: "15px",
+                        fontWeight: 600,
+                        color: "var(--text-body)",
+                        marginBottom: "8px",
+                        display: "-webkit-box",
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: "vertical",
+                        overflow: "hidden",
+                        lineHeight: 1.4,
+                      }}>
+                        {t.is_locked && <span>🔒 </span>}
+                        {t.title}
+                      </h3>
+
+                      {/* Kolejiste tags */}
+                      {kolejisteInfo && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginBottom: "8px" }}>
+                          {kolejisteInfo.meritko && (
+                            <span style={{
+                              padding: "2px 8px",
+                              background: "rgba(240,160,48,0.1)",
+                              border: "1px solid rgba(240,160,48,0.2)",
+                              borderRadius: "12px",
+                              fontSize: "11px",
+                              color: "var(--accent)",
+                            }}>
+                              📐 {kolejisteInfo.meritko}
+                            </span>
+                          )}
+                          {kolejisteInfo.rozmer && (
+                            <span style={{
+                              padding: "2px 8px",
+                              background: "rgba(240,160,48,0.1)",
+                              border: "1px solid rgba(240,160,48,0.2)",
+                              borderRadius: "12px",
+                              fontSize: "11px",
+                              color: "var(--accent)",
+                            }}>
+                              📏 {kolejisteInfo.rozmer}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Author + stats */}
+                      <div style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          {t.author?.avatar_url ? (
+                            <Image src={t.author.avatar_url} alt="" width={20} height={20} style={{ borderRadius: "50%", objectFit: "cover" }} />
+                          ) : (
+                            <div style={{
+                              width: 20, height: 20, borderRadius: "50%", background: "var(--border-hover)",
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              fontSize: "10px", color: "var(--text-muted)", fontWeight: 600,
+                            }}>
+                              {initials}
+                            </div>
+                          )}
+                          <span style={{ fontSize: "12px", color: "var(--text-dim)" }}>{authorName}</span>
+                        </div>
+                        <div style={{ display: "flex", gap: "10px", fontSize: "12px", color: "var(--text-faint)" }}>
+                          {reactionCount > 0 && (
+                            <span>❤️ {reactionCount}</span>
+                          )}
+                          <span>💬 {t.post_count}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Admin actions */}
+                    {isAdminOrMod && (
+                      <div style={{
+                        display: "flex",
+                        gap: "4px",
+                        padding: "0 16px 12px",
+                        borderTop: "1px solid var(--border)",
+                        paddingTop: "8px",
+                        marginTop: "0",
+                      }}
+                        onClick={(e) => e.preventDefault()}
+                      >
+                        <button
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); handlePin(t.id, t.is_pinned); }}
+                          title={t.is_pinned ? "Odepnout" : "Připnout"}
+                          style={adminBtnStyle}
+                        >
+                          {t.is_pinned ? "📌" : "📍"}
+                        </button>
+                        <button
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleLock(t.id, t.is_locked); }}
+                          title={t.is_locked ? "Odemknout" : "Zamknout"}
+                          style={adminBtnStyle}
+                        >
+                          {t.is_locked ? "🔓" : "🔒"}
+                        </button>
+                        <button
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(t.id, t.title); }}
+                          title="Smazat"
+                          style={{ ...adminBtnStyle, color: "#ff6b6b" }}
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div style={{ display: "flex", justifyContent: "center", gap: "8px", marginTop: "32px" }}>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setPage(p)}
+                  style={{
+                    padding: "8px 14px",
+                    background: p === page ? "var(--accent)" : "var(--bg-card)",
+                    color: p === page ? "var(--bg-page)" : "var(--text-muted)",
+                    border: `1px solid ${p === page ? "var(--accent)" : "var(--border)"}`,
+                    borderRadius: "8px",
+                    fontSize: "13px",
+                    fontWeight: p === page ? 700 : 400,
+                    cursor: "pointer",
+                  }}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+          )}
+        </>
       ) : (
+        /* ============================================================
+           Standard List View for other sections
+           ============================================================ */
         <>
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             {threads.map((t) => {

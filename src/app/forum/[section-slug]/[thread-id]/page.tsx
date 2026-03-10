@@ -23,6 +23,294 @@ interface PostRow {
 const POSTS_PER_PAGE = 25;
 const EMOJIS = ["👍", "❤️", "😂"];
 
+/* ============================================================
+   Helper: extract images from content and return image URLs + cleaned text
+   ============================================================ */
+function extractImages(content: string): { images: string[]; cleanContent: string } {
+  const imgRegex = /<img\s+[^>]*src=["']([^"']+)["'][^>]*\/?>/gi;
+  const images: string[] = [];
+  let match;
+  while ((match = imgRegex.exec(content)) !== null) {
+    images.push(match[1]);
+  }
+  const cleanContent = content.replace(imgRegex, "").trim();
+  return { images, cleanContent };
+}
+
+/* ============================================================
+   Helper: optimize Supabase image URL for display
+   ============================================================ */
+function optimizeImageUrl(url: string, width: number = 800): string {
+  if (url.includes("supabase.co/storage/v1/object/public/")) {
+    return url.replace("/storage/v1/object/public/", "/storage/v1/render/image/public/") + `?width=${width}&quality=75`;
+  }
+  return url;
+}
+
+/* ============================================================
+   Helper: extract kolejiste-info structured header
+   ============================================================ */
+function extractKolejisteInfo(content: string): { info: string | null; restContent: string } {
+  const infoRegex = /<div class="kolejiste-info">([\s\S]*?)<\/div>/;
+  const match = content.match(infoRegex);
+  if (match) {
+    return {
+      info: match[1],
+      restContent: content.replace(infoRegex, "").trim(),
+    };
+  }
+  return { info: null, restContent: content };
+}
+
+/* ============================================================
+   Lightbox Component
+   ============================================================ */
+function Lightbox({ images, currentIndex, onClose, onNavigate }: {
+  images: string[];
+  currentIndex: number;
+  onClose: () => void;
+  onNavigate: (index: number) => void;
+}) {
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+      if (e.key === "ArrowLeft" && currentIndex > 0) onNavigate(currentIndex - 1);
+      if (e.key === "ArrowRight" && currentIndex < images.length - 1) onNavigate(currentIndex + 1);
+    }
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKey);
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", handleKey);
+    };
+  }, [currentIndex, images.length, onClose, onNavigate]);
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 9999,
+        background: "rgba(0,0,0,0.92)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "20px",
+        cursor: "zoom-out",
+      }}
+    >
+      {/* Close button */}
+      <button
+        onClick={onClose}
+        style={{
+          position: "absolute",
+          top: "16px",
+          right: "16px",
+          width: "40px",
+          height: "40px",
+          borderRadius: "50%",
+          background: "rgba(255,255,255,0.15)",
+          color: "#fff",
+          border: "none",
+          fontSize: "24px",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 10,
+        }}
+      >
+        ×
+      </button>
+
+      {/* Nav arrows */}
+      {images.length > 1 && currentIndex > 0 && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onNavigate(currentIndex - 1); }}
+          style={{
+            position: "absolute",
+            left: "16px",
+            top: "50%",
+            transform: "translateY(-50%)",
+            width: "48px",
+            height: "48px",
+            borderRadius: "50%",
+            background: "rgba(255,255,255,0.15)",
+            color: "#fff",
+            border: "none",
+            fontSize: "24px",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 10,
+          }}
+        >
+          ‹
+        </button>
+      )}
+      {images.length > 1 && currentIndex < images.length - 1 && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onNavigate(currentIndex + 1); }}
+          style={{
+            position: "absolute",
+            right: "16px",
+            top: "50%",
+            transform: "translateY(-50%)",
+            width: "48px",
+            height: "48px",
+            borderRadius: "50%",
+            background: "rgba(255,255,255,0.15)",
+            color: "#fff",
+            border: "none",
+            fontSize: "24px",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 10,
+          }}
+        >
+          ›
+        </button>
+      )}
+
+      {/* Counter */}
+      {images.length > 1 && (
+        <div style={{
+          position: "absolute",
+          bottom: "20px",
+          left: "50%",
+          transform: "translateX(-50%)",
+          color: "rgba(255,255,255,0.7)",
+          fontSize: "14px",
+          zIndex: 10,
+        }}>
+          {currentIndex + 1} / {images.length}
+        </div>
+      )}
+
+      {/* Image */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={optimizeImageUrl(images[currentIndex], 1600)}
+        alt=""
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          maxWidth: "90vw",
+          maxHeight: "90vh",
+          objectFit: "contain",
+          borderRadius: "4px",
+          cursor: "default",
+        }}
+      />
+    </div>
+  );
+}
+
+/* ============================================================
+   ImageGallery Component - grid of images with lightbox
+   ============================================================ */
+function ImageGallery({ images }: { images: string[] }) {
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+
+  if (images.length === 0) return null;
+
+  const gridColumns = images.length === 1 ? "1fr"
+    : images.length === 2 ? "1fr 1fr"
+    : "1fr 1fr 1fr";
+
+  return (
+    <>
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: gridColumns,
+        gap: "8px",
+        marginTop: "16px",
+      }}>
+        {images.map((url, i) => (
+          <div
+            key={i}
+            onClick={() => setLightboxIndex(i)}
+            style={{
+              borderRadius: "8px",
+              overflow: "hidden",
+              cursor: "zoom-in",
+              aspectRatio: images.length === 1 ? "auto" : "4/3",
+              maxHeight: images.length === 1 ? "500px" : "250px",
+              background: "var(--bg-page)",
+              border: "1px solid var(--border)",
+            }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={optimizeImageUrl(url)}
+              alt=""
+              loading="lazy"
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                display: "block",
+                transition: "transform 0.2s",
+              }}
+              onMouseEnter={(e) => { (e.target as HTMLElement).style.transform = "scale(1.03)"; }}
+              onMouseLeave={(e) => { (e.target as HTMLElement).style.transform = "scale(1)"; }}
+            />
+          </div>
+        ))}
+      </div>
+
+      {lightboxIndex !== null && (
+        <Lightbox
+          images={images}
+          currentIndex={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+          onNavigate={(i) => setLightboxIndex(i)}
+        />
+      )}
+    </>
+  );
+}
+
+/* ============================================================
+   KolejisteInfoBar - displays structured metadata
+   ============================================================ */
+function KolejisteInfoBar({ infoHtml }: { infoHtml: string }) {
+  const tagRegex = /<span class="kolejiste-tag">(.*?)<\/span>/g;
+  const tags: string[] = [];
+  let m;
+  while ((m = tagRegex.exec(infoHtml)) !== null) {
+    tags.push(m[1]);
+  }
+
+  if (tags.length === 0) return null;
+
+  return (
+    <div style={{
+      display: "flex",
+      flexWrap: "wrap",
+      gap: "8px",
+      marginBottom: "16px",
+    }}>
+      {tags.map((tag, i) => (
+        <span key={i} style={{
+          padding: "4px 12px",
+          background: "rgba(240,160,48,0.1)",
+          border: "1px solid rgba(240,160,48,0.25)",
+          borderRadius: "20px",
+          fontSize: "13px",
+          color: "var(--accent)",
+          fontWeight: 500,
+        }}>
+          {tag}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export default function ThreadPage() {
   const params = useParams();
   const sectionSlug = params["section-slug"] as string;
@@ -99,7 +387,6 @@ export default function ThreadPage() {
   }, [threadId]);
 
   const fetchReactions = useCallback(async (postIds: string[]) => {
-    // Parallel: thread reactions + post reactions for visible posts only
     const threadReactionsPromise = supabase
       .from("forum_reactions")
       .select("*")
@@ -129,7 +416,6 @@ export default function ThreadPage() {
   }, [threadId]);
 
   const fetchAuthorPostCounts = useCallback(async (authorIds: string[]) => {
-    // Fetch all post counts in parallel instead of sequential loop
     const uncached = authorIds.filter(aid => authorPostCounts[aid] === undefined);
     if (uncached.length === 0) return;
 
@@ -151,25 +437,21 @@ export default function ThreadPage() {
   useEffect(() => {
     async function init() {
       setLoading(true);
-      // Parallel: thread + posts, then reactions (needs post IDs)
-      const [, postsData] = await Promise.all([
+      await Promise.all([
         fetchThread(),
         fetchPosts(page),
       ]);
-      // fetchReactions now called in a separate effect after posts are set
       setLoading(false);
     }
     init();
   }, [fetchThread, fetchPosts, page]);
 
-  // Fetch reactions when posts change (needs post IDs)
   useEffect(() => {
     if (loading) return;
     const postIds = posts.map(p => p.id);
     fetchReactions(postIds);
   }, [posts, loading, fetchReactions]);
 
-  // Fetch author post counts when posts change
   useEffect(() => {
     if (posts.length === 0 && !thread) return;
     const ids = new Set<string>();
@@ -179,7 +461,6 @@ export default function ThreadPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [posts, thread]);
 
-  // Check ban
   useEffect(() => {
     if (!user) return;
     supabase.rpc("is_forum_banned", { check_user_id: user.id }).then(({ data }) => {
@@ -198,7 +479,6 @@ export default function ThreadPage() {
       });
       if (error) throw error;
       setReplyContent("");
-      // Go to last page
       const newCount = totalPosts + 1;
       const lastPage = Math.ceil(newCount / POSTS_PER_PAGE);
       setPage(lastPage);
@@ -212,7 +492,8 @@ export default function ThreadPage() {
   }
 
   function handleQuote(authorName: string, content: string) {
-    const lines = content.split("\n").map(l => `> ${l}`).join("\n");
+    const cleaned = content.replace(/<[^>]*>/g, "");
+    const lines = cleaned.split("\n").map(l => `> ${l}`).join("\n");
     const quote = `> Citát od @${authorName}:\n${lines}\n\n`;
     setReplyContent(prev => prev + quote);
     replyRef.current?.focus();
@@ -275,10 +556,8 @@ export default function ThreadPage() {
     const existing = reactions.find(r => r.user_id === user.id);
 
     if (existing) {
-      // Remove
       await supabase.from("forum_reactions").delete().eq("id", existing.id);
     } else {
-      // Add
       const payload: Record<string, string> = {
         user_id: user.id,
         emoji,
@@ -672,6 +951,10 @@ function PostCard(props: PostCardProps) {
   const initials = props.authorName.charAt(0).toUpperCase();
   const wasEdited = props.createdAt !== props.updatedAt;
 
+  // Extract images and kolejiste info from content
+  const { info: kolejisteInfo, restContent: contentAfterInfo } = extractKolejisteInfo(props.content);
+  const { images: contentImages, cleanContent } = extractImages(contentAfterInfo);
+
   if (props.isHidden && !props.isAdminOrMod) return null;
 
   return (
@@ -765,18 +1048,29 @@ function PostCard(props: PostCardProps) {
               </div>
             </div>
           ) : (
-            <div style={{ fontSize: "14px", color: "var(--text-body)", lineHeight: 1.7, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-              {props.content.split("\n").map((line, i) => {
-                if (line.startsWith("> ")) {
-                  return (
-                    <div key={i} style={{ borderLeft: "3px solid var(--border-hover)", paddingLeft: "12px", color: "var(--text-dim)", fontStyle: "italic", margin: "4px 0" }}>
-                      {line.substring(2)}
-                    </div>
-                  );
-                }
-                return <div key={i}>{line || "\u00A0"}</div>;
-              })}
-            </div>
+            <>
+              {/* Kolejiste info bar */}
+              {kolejisteInfo && <KolejisteInfoBar infoHtml={kolejisteInfo} />}
+
+              {/* Text content */}
+              <div style={{ fontSize: "14px", color: "var(--text-body)", lineHeight: 1.7, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                {cleanContent.split("\n").map((line, i) => {
+                  if (line.startsWith("> ")) {
+                    return (
+                      <div key={i} style={{ borderLeft: "3px solid var(--border-hover)", paddingLeft: "12px", color: "var(--text-dim)", fontStyle: "italic", margin: "4px 0" }}>
+                        {line.substring(2)}
+                      </div>
+                    );
+                  }
+                  return <div key={i}>{line || "\u00A0"}</div>;
+                })}
+              </div>
+
+              {/* Image gallery */}
+              {contentImages.length > 0 && (
+                <ImageGallery images={contentImages} />
+              )}
+            </>
           )}
 
           {/* Reactions */}
