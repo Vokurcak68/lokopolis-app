@@ -78,6 +78,27 @@ export interface CategoryWithCount {
   count: number;
 }
 
+export interface CompetitionHomeData {
+  id: string;
+  title: string;
+  month: string;
+  status: string;
+  ends_at: string;
+  topEntries: {
+    id: string;
+    title: string;
+    images: string[];
+    vote_count: number;
+    author: { display_name: string | null; username: string | null } | null;
+  }[];
+  winner?: {
+    id: string;
+    title: string;
+    images: string[];
+    author: { display_name: string | null; username: string | null } | null;
+  } | null;
+}
+
 export interface HomePageData {
   stats: HomeStats;
   memberCount: number | null;
@@ -89,6 +110,7 @@ export interface HomePageData {
   popularTags: PopularTag[];
   forumStats: ForumStats;
   activeAuthors: ActiveAuthor[];
+  competition: CompetitionHomeData | null;
 }
 
 /* ============================================================
@@ -130,6 +152,7 @@ async function fetchHomeDataInternal(): Promise<HomePageData> {
       popularTags: [],
       forumStats: { thread_count: 0, post_count: 0, last_thread_title: null, last_thread_id: null, last_thread_section_slug: null },
       activeAuthors: [],
+      competition: null,
     };
   }
 
@@ -266,6 +289,63 @@ async function fetchHomeDataInternal(): Promise<HomePageData> {
       .slice(0, 5);
   }
 
+  // --- Competition (Kolejiště měsíce) ---
+  let competition: CompetitionHomeData | null = null;
+  try {
+    // Try active/voting first
+    const { data: activeComp } = await supabase
+      .from("competitions")
+      .select("id, title, month, status, ends_at")
+      .in("status", ["active", "voting"])
+      .order("starts_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (activeComp) {
+      const { data: topEntries } = await supabase
+        .from("competition_entries")
+        .select("id, title, images, vote_count, author:profiles!competition_entries_user_id_fkey(display_name, username)")
+        .eq("competition_id", activeComp.id)
+        .order("vote_count", { ascending: false })
+        .limit(3);
+
+      competition = {
+        ...activeComp,
+        topEntries: (topEntries || []) as unknown as CompetitionHomeData["topEntries"],
+      };
+    } else {
+      // Fall back to latest finished with a winner
+      const { data: finishedComp } = await supabase
+        .from("competitions")
+        .select("id, title, month, status, ends_at, winner_id")
+        .eq("status", "finished")
+        .not("winner_id", "is", null)
+        .order("ends_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (finishedComp && finishedComp.winner_id) {
+        const { data: winnerEntry } = await supabase
+          .from("competition_entries")
+          .select("id, title, images, author:profiles!competition_entries_user_id_fkey(display_name, username)")
+          .eq("id", finishedComp.winner_id)
+          .single();
+
+        competition = {
+          id: finishedComp.id,
+          title: finishedComp.title,
+          month: finishedComp.month,
+          status: finishedComp.status,
+          ends_at: finishedComp.ends_at,
+          topEntries: [],
+          winner: winnerEntry as unknown as CompetitionHomeData["winner"],
+        };
+      }
+    }
+  } catch {
+    // keep null
+  }
+
   return {
     stats,
     memberCount: memCount,
@@ -277,6 +357,7 @@ async function fetchHomeDataInternal(): Promise<HomePageData> {
     popularTags,
     forumStats,
     activeAuthors,
+    competition,
   };
 }
 

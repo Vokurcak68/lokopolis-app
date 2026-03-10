@@ -11,6 +11,7 @@ import type {
   LatestArticle,
   PopularArticle,
   PopularTag,
+  CompetitionHomeData,
 } from "@/app/home-data";
 
 /* ============================================================
@@ -39,6 +40,91 @@ const CZECH_MONTHS_SHORT = ["Led", "Úno", "Bře", "Dub", "Kvě", "Čvn", "Čvc"
 const defaultTags = ["Tillig", "DCC", "epocha IV", "3D tisk", "ČSD", "krajina", "patina", "ROCO", "výhybky", "LED osvětlení"];
 
 /* ============================================================
+   COMPETITION BANNER
+   ============================================================ */
+
+function optimizeImageUrl(url: string, width: number = 400): string {
+  if (!url) return "";
+  return url.replace("/object/public/", "/render/image/public/").concat(`?width=${width}&quality=75`);
+}
+
+function CompetitionBanner({ competition }: { competition: CompetitionHomeData }) {
+  const isActive = competition.status === "active" || competition.status === "voting";
+  const isFinished = competition.status === "finished";
+
+  if (isFinished && competition.winner) {
+    const winner = competition.winner;
+    const winnerImage = winner.images && winner.images.length > 0 ? winner.images[0] : null;
+    const winnerName = winner.author?.display_name || winner.author?.username || "Anonym";
+    return (
+      <div style={{ background: "var(--bg-card)", border: "1px solid var(--accent-border)", borderRadius: "16px", padding: "24px", display: "flex", gap: "20px", alignItems: "center", flexWrap: "wrap", position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "3px", background: "var(--accent)" }} />
+        {winnerImage && (
+          <div style={{ width: "120px", height: "90px", borderRadius: "10px", overflow: "hidden", flexShrink: 0, position: "relative" }}>
+            <Image src={optimizeImageUrl(winnerImage, 200)} alt={winner.title} fill style={{ objectFit: "cover" }} sizes="120px" />
+          </div>
+        )}
+        <div style={{ flex: 1, minWidth: "200px" }}>
+          <div style={{ fontSize: "12px", color: "var(--accent)", fontWeight: 600, marginBottom: "4px" }}>🏆 Vítěz minulé soutěže</div>
+          <h3 style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "4px" }}>{winner.title}</h3>
+          <p style={{ fontSize: "13px", color: "var(--text-dimmer)" }}>od {winnerName}</p>
+        </div>
+        <Link href="/soutez" style={{ padding: "10px 20px", background: "var(--accent)", color: "var(--accent-text-on)", borderRadius: "10px", fontSize: "14px", fontWeight: 600, textDecoration: "none", flexShrink: 0 }}>
+          Zobrazit soutěž →
+        </Link>
+      </div>
+    );
+  }
+
+  if (isActive) {
+    return (
+      <div style={{ background: "var(--bg-card)", border: "1px solid var(--accent-border)", borderRadius: "16px", padding: "24px", position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "3px", background: "var(--accent)" }} />
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px", marginBottom: "16px" }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+              <span style={{ padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 600, background: competition.status === "voting" ? "rgba(59,130,246,0.15)" : "rgba(34,197,94,0.15)", color: competition.status === "voting" ? "#3b82f6" : "#22c55e" }}>
+                {competition.status === "voting" ? "🗳️ Hlasování" : "🟢 Přihlašování"}
+              </span>
+            </div>
+            <h3 style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-primary)" }}>🏆 {competition.title}</h3>
+          </div>
+          <Link href="/soutez" style={{ padding: "10px 20px", background: "var(--accent)", color: "var(--accent-text-on)", borderRadius: "10px", fontSize: "14px", fontWeight: 600, textDecoration: "none", flexShrink: 0 }}>
+            Zobrazit soutěž →
+          </Link>
+        </div>
+        {competition.topEntries.length > 0 && (
+          <div style={{ display: "flex", gap: "12px", overflowX: "auto" }}>
+            {competition.topEntries.map((entry) => {
+              const entryImage = entry.images && entry.images.length > 0 ? entry.images[0] : null;
+              return (
+                <Link key={entry.id} href={`/soutez/${entry.id}`} style={{ textDecoration: "none", flexShrink: 0 }}>
+                  <div style={{ width: "180px", background: "var(--bg-page)", border: "1px solid var(--border)", borderRadius: "10px", overflow: "hidden" }}>
+                    <div style={{ width: "100%", height: "100px", position: "relative", background: "var(--bg-card)" }}>
+                      {entryImage ? (
+                        <Image src={optimizeImageUrl(entryImage, 200)} alt={entry.title} fill style={{ objectFit: "cover" }} sizes="180px" />
+                      ) : (
+                        <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "28px", color: "var(--border-hover)" }}>🚂</div>
+                      )}
+                    </div>
+                    <div style={{ padding: "8px 10px" }}>
+                      <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-body)", lineHeight: 1.3, marginBottom: "4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.title}</div>
+                      <div style={{ fontSize: "11px", color: "var(--accent)" }}>❤️ {entry.vote_count}</div>
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return null;
+}
+
+/* ============================================================
    COMPONENT
    ============================================================ */
 
@@ -63,6 +149,7 @@ export default function HomeContent({ data }: { data: HomePageData }) {
     popularTags,
     forumStats,
     activeAuthors,
+    competition,
   } = data;
 
   return (
@@ -288,6 +375,13 @@ export default function HomeContent({ data }: { data: HomePageData }) {
           </div>
         )}
       </section>
+
+      {/* ===================== COMPETITION ===================== */}
+      {competition && (
+        <section style={{ maxWidth: "1200px", margin: "48px auto 0", padding: "0 20px" }}>
+          <CompetitionBanner competition={competition} />
+        </section>
+      )}
 
       {/* ===================== MAIN + SIDEBAR ===================== */}
       <div

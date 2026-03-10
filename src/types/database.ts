@@ -227,6 +227,55 @@ export interface ForumSectionWithCounts extends ForumSection {
   last_thread: { title: string; id: string; last_post_at: string } | null;
 }
 
+// Competition types
+export type CompetitionStatus = 'upcoming' | 'active' | 'voting' | 'finished';
+
+export interface Competition {
+  id: string;
+  title: string;
+  description: string | null;
+  month: string;
+  starts_at: string;
+  ends_at: string;
+  status: CompetitionStatus;
+  prize: string | null;
+  winner_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CompetitionEntry {
+  id: string;
+  competition_id: string;
+  user_id: string;
+  title: string;
+  description: string | null;
+  images: string[];
+  scale: string | null;
+  dimensions: string | null;
+  landscape: string | null;
+  vote_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CompetitionVote {
+  id: string;
+  entry_id: string;
+  competition_id: string;
+  user_id: string;
+  created_at: string;
+}
+
+export interface CompetitionEntryWithAuthor extends CompetitionEntry {
+  author: Profile | null;
+}
+
+export interface CompetitionWithWinner extends Competition {
+  winner: CompetitionEntryWithAuthor | null;
+}
+
 // Supabase Database type pro type-safe klienta
 export interface Database {
   public: {
