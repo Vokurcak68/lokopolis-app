@@ -729,7 +729,12 @@ export default function CompetitionPage() {
             marginBottom: "8px",
           }}
         >
-          🏆 Kolejiště měsíce
+          <img
+            src="https://psbeoiaqoreergwqzqoz.supabase.co/storage/v1/render/image/public/images/icons/competition-trophy.jpg?width=48&quality=75"
+            alt="Soutěž"
+            style={{ width: "42px", height: "42px", borderRadius: "8px", objectFit: "cover", display: "inline-block", verticalAlign: "middle", marginRight: "12px" }}
+          />
+          Kolejiště měsíce
         </h1>
         <p
           style={{
