@@ -745,7 +745,6 @@ export default function CompetitionPage() {
           }}
         >
           Soutěž pro modeláře — přihlaste své kolejiště a získejte co nejvíce hlasů!
-          komunity!
         </p>
         {isAdmin && (
           <button
