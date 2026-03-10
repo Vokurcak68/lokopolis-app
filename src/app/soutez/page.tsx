@@ -730,7 +730,7 @@ export default function CompetitionPage() {
           }}
         >
           <img
-            src="https://psbeoiaqoreergwqzqoz.supabase.co/storage/v1/object/public/images/icons/competition-trophy.png"
+            src="https://psbeoiaqoreergwqzqoz.supabase.co/storage/v1/object/public/images/icons/competition-trophy.png?v=2"
             alt="Soutěž"
             style={{ width: "56px", height: "56px", objectFit: "contain", display: "inline-block", verticalAlign: "middle", marginRight: "12px" }}
           />
