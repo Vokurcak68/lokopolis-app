@@ -744,7 +744,7 @@ export default function CompetitionPage() {
             margin: "0 auto",
           }}
         >
-          Měsíční soutěž pro modeláře — přihlaste svůj kolejiště a získejte hlasy
+          Soutěž pro modeláře — přihlaste své kolejiště a získejte co nejvíce hlasů!
           komunity!
         </p>
         {isAdmin && (
