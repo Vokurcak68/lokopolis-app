@@ -473,7 +473,7 @@ function EntryCard({ entry }: { entry: EntryWithAuthor }) {
                 color: "var(--border-hover)",
               }}
             >
-              <img src="https://psbeoiaqoreergwqzqoz.supabase.co/storage/v1/object/public/images/icons/competition-entry.png" alt="" style={{ width: "48px", height: "48px", objectFit: "contain", opacity: 0.5 }} />
+              <img src="https://psbeoiaqoreergwqzqoz.supabase.co/storage/v1/object/public/images/icons/competition-entry.png" alt="" style={{ width: "96px", height: "96px", objectFit: "contain", opacity: 0.5 }} />
             </div>
           )}
           {entry.scale && (
@@ -1044,7 +1044,7 @@ export default function CompetitionPage() {
                 padding: "40px 0",
               }}
             >
-              <div style={{ marginBottom: "12px" }}><img src="https://psbeoiaqoreergwqzqoz.supabase.co/storage/v1/object/public/images/icons/competition-entry.png" alt="" style={{ width: "48px", height: "48px", objectFit: "contain", opacity: 0.5 }} /></div>
+              <div style={{ marginBottom: "12px", display: "flex", justifyContent: "center" }}><img src="https://psbeoiaqoreergwqzqoz.supabase.co/storage/v1/object/public/images/icons/competition-entry.png" alt="" style={{ width: "96px", height: "96px", objectFit: "contain", opacity: 0.5 }} /></div>
               <p
                 style={{
                   fontSize: "16px",
