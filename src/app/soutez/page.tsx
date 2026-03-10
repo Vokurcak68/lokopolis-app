@@ -473,7 +473,7 @@ function EntryCard({ entry }: { entry: EntryWithAuthor }) {
                 color: "var(--border-hover)",
               }}
             >
-              🚂
+              <img src="https://psbeoiaqoreergwqzqoz.supabase.co/storage/v1/object/public/images/icons/competition-entry.png" alt="" style={{ width: "48px", height: "48px", objectFit: "contain", opacity: 0.5 }} />
             </div>
           )}
           {entry.scale && (
@@ -904,7 +904,8 @@ export default function CompetitionPage() {
                     textDecoration: "none",
                   }}
                 >
-                  🚂 Přihlásit kolejiště
+                  <img src="https://psbeoiaqoreergwqzqoz.supabase.co/storage/v1/object/public/images/icons/competition-entry.png" alt="" style={{ width: "18px", height: "18px", objectFit: "contain", display: "inline-block", verticalAlign: "middle", marginRight: "6px" }} />
+                  Přihlásit kolejiště
                 </Link>
               )}
               {activeComp.status === "active" && !user && (
@@ -1043,7 +1044,7 @@ export default function CompetitionPage() {
                 padding: "40px 0",
               }}
             >
-              <div style={{ fontSize: "48px", marginBottom: "12px" }}>🚂</div>
+              <div style={{ marginBottom: "12px" }}><img src="https://psbeoiaqoreergwqzqoz.supabase.co/storage/v1/object/public/images/icons/competition-entry.png" alt="" style={{ width: "48px", height: "48px", objectFit: "contain", opacity: 0.5 }} /></div>
               <p
                 style={{
                   fontSize: "16px",
