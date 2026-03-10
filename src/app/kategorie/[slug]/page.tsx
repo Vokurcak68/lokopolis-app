@@ -73,18 +73,18 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
   const articles = (articlesData || []) as unknown as ArticleWithRelations[];
 
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16">
+    <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "48px 20px" }}>
       {/* Header */}
-      <div className="mb-10">
-        <Link href="/clanky" className="text-text-muted hover:text-primary text-sm mb-4 inline-block">
+      <div style={{ marginBottom: "40px", textAlign: "center" }}>
+        <Link href="/clanky" style={{ color: "var(--text-dim)", fontSize: "14px", textDecoration: "none", display: "inline-block", marginBottom: "16px" }}>
           ← Všechny články
         </Link>
-        <h1 className="text-3xl font-bold mb-2" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+        <h1 style={{ fontSize: "32px", fontWeight: 700, marginBottom: "8px", display: "flex", alignItems: "center", justifyContent: "center", gap: "12px" }}>
           <CategoryIcon slug={cat.slug} emoji={cat.icon || undefined} size={36} />
-          <span className="text-[var(--text-primary)]">{cat.name}</span>
+          <span style={{ color: "var(--text-primary)" }}>{cat.name}</span>
         </h1>
         {cat.description && (
-          <p className="text-text-muted text-lg">{cat.description}</p>
+          <p style={{ fontSize: "16px", color: "var(--text-dim)" }}>{cat.description}</p>
         )}
       </div>
 
