@@ -2,7 +2,7 @@
 
 import React, { useCallback, useMemo, useRef } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
-import { OrbitControls, PerspectiveCamera } from "@react-three/drei";
+import { OrbitControls, PerspectiveCamera, Environment } from "@react-three/drei";
 import * as THREE from "three";
 import BoardBase from "./BoardBase";
 import TrackMesh from "./TrackMesh";
@@ -120,6 +120,24 @@ function PlacementHandler({ boardWidth, boardDepth, activePiece, tracks, catalog
 }
 
 // ============================================================
+// Ground plane under the board (large dark surface)
+// ============================================================
+
+function GroundPlane({ boardWidth, boardDepth }: { boardWidth: number; boardDepth: number }) {
+  const size = Math.max(boardWidth, boardDepth) * 4;
+  return (
+    <mesh
+      position={[boardWidth / 2, -5, boardDepth / 2]}
+      rotation={[-Math.PI / 2, 0, 0]}
+      receiveShadow
+    >
+      <planeGeometry args={[size, size]} />
+      <meshStandardMaterial color="#1a1a20" roughness={1} />
+    </mesh>
+  );
+}
+
+// ============================================================
 // Main Scene Component
 // ============================================================
 
@@ -192,8 +210,12 @@ export default function Scene3D({
   return (
     <Canvas
       style={{ width: "100%", height: "100%", background: "#0a0b14" }}
-      shadows
-      gl={{ antialias: true }}
+      shadows="soft"
+      gl={{
+        antialias: true,
+        toneMapping: THREE.ACESFilmicToneMapping,
+        toneMappingExposure: 1.2,
+      }}
     >
       <PerspectiveCamera
         makeDefault
@@ -212,14 +234,17 @@ export default function Scene3D({
         dampingFactor={0.1}
       />
 
-      {/* === Enhanced Lighting === */}
-      {/* Ambient fill */}
-      <ambientLight intensity={0.3} color="#e8e0d8" />
+      {/* === Environment map for realistic metallic reflections === */}
+      <Environment preset="city" background={false} />
 
-      {/* Main sun light with shadows */}
+      {/* === Lighting === */}
+      {/* Ambient fill */}
+      <ambientLight intensity={0.2} color="#e8e0d8" />
+
+      {/* Main sun light with high-res shadows */}
       <directionalLight
         position={[boardWidth * 0.8, 600, boardDepth * 0.6]}
-        intensity={1.0}
+        intensity={1.2}
         color="#fff8e8"
         castShadow
         shadow-mapSize={[2048, 2048]}
@@ -229,31 +254,35 @@ export default function Scene3D({
         shadow-camera-right={boardWidth}
         shadow-camera-top={boardDepth}
         shadow-camera-bottom={-boardDepth}
-        shadow-bias={-0.001}
+        shadow-bias={-0.0005}
+        shadow-normalBias={0.02}
       />
 
       {/* Fill light from opposite side */}
       <directionalLight
         position={[-boardWidth * 0.3, 400, -boardDepth * 0.3]}
-        intensity={0.3}
+        intensity={0.25}
         color="#c0d0ff"
       />
 
-      {/* Sky/ground hemisphere light for ambient realism */}
+      {/* Sky/ground hemisphere light */}
       <hemisphereLight
         color="#87CEEB"
         groundColor="#3a5a3a"
-        intensity={0.4}
+        intensity={0.35}
       />
 
-      {/* Subtle point light for warmth */}
+      {/* Warm accent light */}
       <pointLight
         position={[boardWidth / 2, 300, boardDepth / 2]}
-        intensity={0.2}
+        intensity={0.15}
         color="#ffe0a0"
         distance={2000}
         decay={2}
       />
+
+      {/* Ground plane (dark surface under the board) */}
+      <GroundPlane boardWidth={boardWidth} boardDepth={boardDepth} />
 
       {/* Board */}
       <BoardBase

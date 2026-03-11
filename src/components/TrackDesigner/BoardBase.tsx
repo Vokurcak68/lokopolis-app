@@ -6,75 +6,90 @@ import * as THREE from "three";
 import type { BoardShape, LCorner } from "@/lib/track-designer-store";
 
 interface BoardBaseProps {
-  /** Width in mm */
   width: number;
-  /** Depth in mm */
   depth: number;
-  /** Board shape */
   shape?: BoardShape;
-  /** L-shape corner */
   lCorner?: LCorner;
-  /** L-shape arm width in mm */
   lArmWidth?: number;
-  /** L-shape arm depth in mm */
   lArmDepth?: number;
-  /** U-shape arm depth in mm */
   uArmDepth?: number;
 }
 
 // ============================================================
-// Procedural grass texture
+// Procedural grass texture (improved)
 // ============================================================
 
-function createGrassTexture(size: number = 256): THREE.CanvasTexture {
+function createGrassTexture(size: number = 512): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext("2d")!;
 
-  // Base green
-  ctx.fillStyle = "#3a5a3a";
+  // Rich base green
+  ctx.fillStyle = "#3a6a35";
   ctx.fillRect(0, 0, size, size);
 
-  // Add noise/variation for grass look
+  // Multiple layers of noise for realistic grass
   const imageData = ctx.getImageData(0, 0, size, size);
   const data = imageData.data;
 
+  // Simple value noise
   for (let i = 0; i < data.length; i += 4) {
-    const noise = (Math.random() - 0.5) * 30;
-    data[i] = Math.max(0, Math.min(255, data[i] + noise * 0.5));       // R
-    data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + noise));     // G (more variation)
-    data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + noise * 0.5)); // B
-  }
+    const px = (i / 4) % size;
+    const py = Math.floor(i / 4 / size);
 
+    // Multi-frequency noise
+    const n1 = (Math.random() - 0.5) * 20; // fine grain
+    const n2 = Math.sin(px * 0.05) * Math.cos(py * 0.07) * 15; // medium
+    const n3 = Math.sin(px * 0.01 + py * 0.012) * 10; // large
+
+    const noise = n1 + n2 + n3;
+
+    data[i] = Math.max(0, Math.min(255, data[i] + noise * 0.6));       // R
+    data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + noise));     // G
+    data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + noise * 0.3)); // B
+  }
   ctx.putImageData(imageData, 0, 0);
 
-  // Add some darker patches
+  // Dark patches (shadows / bare spots)
+  for (let p = 0; p < 60; p++) {
+    const px = Math.random() * size;
+    const py = Math.random() * size;
+    const pr = 2 + Math.random() * 8;
+    ctx.beginPath();
+    ctx.arc(px, py, pr, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(25, 50, 25, ${0.15 + Math.random() * 0.25})`;
+    ctx.fill();
+  }
+
+  // Light patches (sunlit spots)
   for (let p = 0; p < 40; p++) {
     const px = Math.random() * size;
     const py = Math.random() * size;
-    const pr = 2 + Math.random() * 6;
+    const pr = 1 + Math.random() * 5;
     ctx.beginPath();
     ctx.arc(px, py, pr, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(30, 60, 30, ${0.2 + Math.random() * 0.3})`;
+    ctx.fillStyle = `rgba(90, 140, 60, ${0.1 + Math.random() * 0.15})`;
     ctx.fill();
   }
 
-  // Add lighter spots
-  for (let p = 0; p < 30; p++) {
-    const px = Math.random() * size;
-    const py = Math.random() * size;
-    const pr = 1 + Math.random() * 4;
+  // Tiny grass blade strokes
+  ctx.strokeStyle = "rgba(50, 90, 40, 0.3)";
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i < 200; i++) {
+    const x = Math.random() * size;
+    const y = Math.random() * size;
     ctx.beginPath();
-    ctx.arc(px, py, pr, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(80, 120, 60, ${0.1 + Math.random() * 0.2})`;
-    ctx.fill();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + (Math.random() - 0.5) * 3, y - 2 - Math.random() * 4);
+    ctx.stroke();
   }
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(8, 8);
+  texture.repeat.set(10, 10);
+  texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
 }
 
@@ -208,11 +223,18 @@ function getBoardBounds(
 }
 
 // ============================================================
-// Wood frame edge material
+// Wood frame material (shared, darker & thicker)
 // ============================================================
 
-const FRAME_HEIGHT = 3; // mm tall frame edge
-const FRAME_INSET = 2; // mm padding
+const FRAME_HEIGHT = 5; // mm tall frame edge (thicker!)
+const FRAME_THICKNESS = 3; // mm thick frame
+const FRAME_INSET = 2;
+
+const frameMaterial = new THREE.MeshStandardMaterial({
+  color: 0x3d2815,
+  roughness: 0.75,
+  metalness: 0.05,
+});
 
 export default function BoardBase({
   width,
@@ -233,7 +255,7 @@ export default function BoardBase({
   // Procedural grass texture
   const grassTexture = useMemo(() => {
     if (typeof document === "undefined") return null;
-    return createGrassTexture(256);
+    return createGrassTexture(512);
   }, []);
 
   // Custom shape geometries
@@ -262,15 +284,16 @@ export default function BoardBase({
   if (isCustomShape) {
     return (
       <group>
-        {/* Board frame (wood) */}
+        {/* Board frame (dark wood) */}
         {frameGeometry && (
           <mesh
             geometry={frameGeometry}
             position={[-FRAME_INSET, -FRAME_HEIGHT + 0.5, -FRAME_INSET]}
             rotation={[-Math.PI / 2, 0, 0]}
             receiveShadow
+            castShadow
           >
-            <meshStandardMaterial color="#5a4030" roughness={0.8} />
+            <primitive object={frameMaterial} attach="material" />
           </mesh>
         )}
 
@@ -285,7 +308,7 @@ export default function BoardBase({
             {grassTexture ? (
               <meshStandardMaterial map={grassTexture} roughness={0.9} />
             ) : (
-              <meshStandardMaterial color="#3a5a3a" roughness={0.9} />
+              <meshStandardMaterial color="#3a6a35" roughness={0.9} />
             )}
           </mesh>
         )}
@@ -316,30 +339,30 @@ export default function BoardBase({
         {grassTexture ? (
           <meshStandardMaterial map={grassTexture} roughness={0.9} />
         ) : (
-          <meshStandardMaterial color="#3a5a3a" roughness={0.9} />
+          <meshStandardMaterial color="#3a6a35" roughness={0.9} />
         )}
       </mesh>
 
-      {/* Board edge frame (raised wooden edge) */}
+      {/* Board edge frame (raised dark wooden edge, thicker) */}
       {/* Bottom frame */}
       <mesh position={[width / 2, FRAME_HEIGHT / 2 - 0.5, -FRAME_INSET]} receiveShadow castShadow>
-        <boxGeometry args={[width + FRAME_INSET * 2 + 4, FRAME_HEIGHT, 4]} />
-        <meshStandardMaterial color="#5a4030" roughness={0.8} />
+        <boxGeometry args={[width + FRAME_INSET * 2 + FRAME_THICKNESS * 2, FRAME_HEIGHT, FRAME_THICKNESS]} />
+        <primitive object={frameMaterial} attach="material" />
       </mesh>
       {/* Top frame */}
       <mesh position={[width / 2, FRAME_HEIGHT / 2 - 0.5, depth + FRAME_INSET]} receiveShadow castShadow>
-        <boxGeometry args={[width + FRAME_INSET * 2 + 4, FRAME_HEIGHT, 4]} />
-        <meshStandardMaterial color="#5a4030" roughness={0.8} />
+        <boxGeometry args={[width + FRAME_INSET * 2 + FRAME_THICKNESS * 2, FRAME_HEIGHT, FRAME_THICKNESS]} />
+        <primitive object={frameMaterial} attach="material" />
       </mesh>
       {/* Left frame */}
       <mesh position={[-FRAME_INSET, FRAME_HEIGHT / 2 - 0.5, depth / 2]} receiveShadow castShadow>
-        <boxGeometry args={[4, FRAME_HEIGHT, depth + FRAME_INSET * 2 + 4]} />
-        <meshStandardMaterial color="#5a4030" roughness={0.8} />
+        <boxGeometry args={[FRAME_THICKNESS, FRAME_HEIGHT, depth + FRAME_INSET * 2 + FRAME_THICKNESS * 2]} />
+        <primitive object={frameMaterial} attach="material" />
       </mesh>
       {/* Right frame */}
       <mesh position={[width + FRAME_INSET, FRAME_HEIGHT / 2 - 0.5, depth / 2]} receiveShadow castShadow>
-        <boxGeometry args={[4, FRAME_HEIGHT, depth + FRAME_INSET * 2 + 4]} />
-        <meshStandardMaterial color="#5a4030" roughness={0.8} />
+        <boxGeometry args={[FRAME_THICKNESS, FRAME_HEIGHT, depth + FRAME_INSET * 2 + FRAME_THICKNESS * 2]} />
+        <primitive object={frameMaterial} attach="material" />
       </mesh>
 
       {/* Grid */}

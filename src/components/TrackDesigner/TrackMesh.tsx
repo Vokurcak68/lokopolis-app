@@ -8,63 +8,67 @@ import type { TrackPieceDefinition } from "@/lib/track-library";
 // Constants — realistic model railway dimensions
 // ============================================================
 
-// Rail gauge by scale (we use a visual gauge, slightly wider for visibility)
-const GAUGE_TT = 12; // 12mm TT gauge
-const GAUGE_H0 = 16.5; // 16.5mm H0 gauge
-const DEFAULT_GAUGE = 12; // fallback
+const GAUGE_TT = 12;
+const GAUGE_H0 = 16.5;
+const DEFAULT_GAUGE = 12;
 
-// Rail profile
-const RAIL_WIDTH = 1.0;
-const RAIL_HEIGHT = 1.5;
+// Rail T-profile dimensions (mm)
+const RAIL_FOOT_WIDTH = 1.5;
+const RAIL_FOOT_HEIGHT = 0.3;
+const RAIL_WEB_WIDTH = 0.5;
+const RAIL_WEB_HEIGHT = 0.8;
+const RAIL_HEAD_WIDTH = 1.0;
+const RAIL_HEAD_HEIGHT = 0.3;
+const RAIL_TOTAL_HEIGHT = RAIL_FOOT_HEIGHT + RAIL_WEB_HEIGHT + RAIL_HEAD_HEIGHT; // 1.4mm
 
-// Sleepers (ties)
-const SLEEPER_SPACING = 15; // mm between sleepers
-const SLEEPER_THICKNESS = 0.8; // height
-const SLEEPER_WIDTH_MM = 2.0; // width along track direction
+// Sleepers
+const SLEEPER_SPACING_TT = 10;
+const SLEEPER_SPACING_H0 = 13;
+const SLEEPER_HEIGHT = 1.0;
 
 // Ballast bed
-const BALLAST_HEIGHT = 0.5;
+const BALLAST_HEIGHT = 1.5;
+const BALLAST_EXTRA_WIDTH = 16; // total extra beyond gauge (8mm each side)
 
 // Bridge
-const BRIDGE_GIRDER_HEIGHT = 8;
-const BRIDGE_GIRDER_WIDTH = 1.5;
-const BRIDGE_PIER_SPACING = 80; // mm between piers
-const BRIDGE_PIER_WIDTH = 4;
-const BRIDGE_RAILING_HEIGHT = 6;
-const BRIDGE_RAILING_WIDTH = 0.5;
+const BRIDGE_GIRDER_HEIGHT = 10;
+const BRIDGE_TRUSS_BAR_RADIUS = 0.6;
+const BRIDGE_PIER_WIDTH = 5;
+const BRIDGE_PIER_SPACING = 80;
+const BRIDGE_RAILING_HEIGHT = 4;
 
 // Tunnel
-const TUNNEL_PORTAL_THICKNESS = 4;
-const TUNNEL_RADIUS = 14;
+const TUNNEL_PORTAL_THICKNESS = 5;
 
 // ============================================================
-// Shared materials (created once, reused)
+// Shared materials (module-level, created once)
 // ============================================================
 
 const railMaterial = new THREE.MeshStandardMaterial({
-  color: 0xaaaaaa,
-  metalness: 0.8,
-  roughness: 0.3,
+  color: 0x808080,
+  metalness: 0.85,
+  roughness: 0.25,
 });
 const railSelectedMaterial = new THREE.MeshStandardMaterial({
   color: 0xf0a030,
-  metalness: 0.8,
-  roughness: 0.3,
+  metalness: 0.85,
+  roughness: 0.25,
 });
 const railHoveredMaterial = new THREE.MeshStandardMaterial({
   color: 0x80a0ff,
-  metalness: 0.8,
-  roughness: 0.3,
+  metalness: 0.85,
+  roughness: 0.25,
 });
 const sleeperMaterial = new THREE.MeshStandardMaterial({
-  color: 0x4a3525,
+  color: 0x3a2a1a,
+  roughness: 0.8,
 });
 const ballastMaterial = new THREE.MeshStandardMaterial({
-  color: 0x707070,
+  color: 0x6a6060,
   roughness: 0.9,
 });
-const bridgeGirderMaterial = new THREE.MeshStandardMaterial({
-  color: 0x555555,
+const bridgeMaterial = new THREE.MeshStandardMaterial({
+  color: 0x505050,
   metalness: 0.6,
   roughness: 0.4,
 });
@@ -73,101 +77,230 @@ const bridgePierMaterial = new THREE.MeshStandardMaterial({
   roughness: 0.8,
 });
 const tunnelPortalMaterial = new THREE.MeshStandardMaterial({
-  color: 0x6a6a6a,
-  roughness: 0.9,
+  color: 0x5a5a5a,
+  roughness: 0.85,
 });
 const tunnelShellMaterial = new THREE.MeshStandardMaterial({
-  color: 0x3a3a3a,
+  color: 0x2a2a2a,
   transparent: true,
-  opacity: 0.4,
+  opacity: 0.5,
   side: THREE.DoubleSide,
 });
 const tunnelRailMaterial = new THREE.MeshStandardMaterial({
-  color: 0xaaaaaa,
-  metalness: 0.8,
-  roughness: 0.3,
+  color: 0x808080,
+  metalness: 0.85,
+  roughness: 0.25,
   transparent: true,
   opacity: 0.5,
 });
 const tunnelSleeperMaterial = new THREE.MeshStandardMaterial({
-  color: 0x4a3525,
+  color: 0x3a2a1a,
   transparent: true,
   opacity: 0.5,
 });
+const bridgeFloorMaterial = new THREE.MeshStandardMaterial({
+  color: 0x4a4a4a,
+  metalness: 0.3,
+  roughness: 0.6,
+  side: THREE.DoubleSide,
+});
 
 // ============================================================
-// Geometry builders — STRAIGHT tracks
+// Rail T-profile shape (2D cross-section)
+// ============================================================
+
+function createRailProfileShape(): THREE.Shape {
+  const shape = new THREE.Shape();
+  const fw = RAIL_FOOT_WIDTH / 2;
+  const ww = RAIL_WEB_WIDTH / 2;
+  const hw = RAIL_HEAD_WIDTH / 2;
+
+  // Start at bottom-left of foot
+  shape.moveTo(-fw, 0);
+  shape.lineTo(fw, 0);
+  shape.lineTo(fw, RAIL_FOOT_HEIGHT);
+  shape.lineTo(ww, RAIL_FOOT_HEIGHT);
+  shape.lineTo(ww, RAIL_FOOT_HEIGHT + RAIL_WEB_HEIGHT);
+  shape.lineTo(hw, RAIL_FOOT_HEIGHT + RAIL_WEB_HEIGHT);
+  shape.lineTo(hw, RAIL_FOOT_HEIGHT + RAIL_WEB_HEIGHT + RAIL_HEAD_HEIGHT);
+  shape.lineTo(-hw, RAIL_FOOT_HEIGHT + RAIL_WEB_HEIGHT + RAIL_HEAD_HEIGHT);
+  shape.lineTo(-hw, RAIL_FOOT_HEIGHT + RAIL_WEB_HEIGHT);
+  shape.lineTo(-ww, RAIL_FOOT_HEIGHT + RAIL_WEB_HEIGHT);
+  shape.lineTo(-ww, RAIL_FOOT_HEIGHT);
+  shape.lineTo(-fw, RAIL_FOOT_HEIGHT);
+  shape.closePath();
+
+  return shape;
+}
+
+// Cached rail profile shape
+const _railProfile = createRailProfileShape();
+
+// ============================================================
+// Straight rail geometry — extrude T-profile along X axis
 // ============================================================
 
 function buildStraightRailGeo(length: number, zOffset: number): THREE.BufferGeometry {
-  // T-shaped rail profile: patka (base) + stojina (web) + hlava (head)
-  // Simplified as a box for performance
-  const geo = new THREE.BoxGeometry(length, RAIL_HEIGHT, RAIL_WIDTH);
-  geo.translate(length / 2, SLEEPER_THICKNESS + RAIL_HEIGHT / 2, zOffset);
+  // Extrude the T-profile along the track direction (X axis)
+  // ExtrudeGeometry extrudes along Z, so we rotate after
+  const geo = new THREE.ExtrudeGeometry(_railProfile, {
+    depth: length,
+    bevelEnabled: false,
+    steps: 1,
+  });
+  // Rotate so extrusion goes along X: swap Z->X
+  // The extruded shape is in XY plane, extruded along Z
+  // We need it in ZY plane extruded along X
+  // Rotate -90° around Y
+  geo.rotateY(-Math.PI / 2);
+  // Now the rail runs from x=-length to x=0. Translate so it starts at x=0
+  geo.translate(length, SLEEPER_HEIGHT, zOffset);
+
   return geo;
 }
 
-function buildStraightSleepers(length: number, gauge: number): THREE.BufferGeometry {
-  const sleeperLength = gauge + 6; // sleeper extends beyond rails
-  const count = Math.max(1, Math.floor(length / SLEEPER_SPACING));
-  const positions: number[] = [];
-  const normals: number[] = [];
+// ============================================================
+// Straight sleeper geometry (merged into one BufferGeometry)
+// ============================================================
+
+function buildStraightSleepers(length: number, gauge: number, scale: string): THREE.BufferGeometry {
+  const spacing = scale === "H0" ? SLEEPER_SPACING_H0 : SLEEPER_SPACING_TT;
+  const sleeperLength = gauge + 8;
+  const sleeperWidth = scale === "H0" ? 2.5 : 2.0;
+  const count = Math.max(1, Math.floor(length / spacing));
+
+  const singleSleeper = new THREE.BoxGeometry(sleeperWidth, SLEEPER_HEIGHT, sleeperLength);
+  const basePos = singleSleeper.attributes.position.array as Float32Array;
+  const baseNorm = singleSleeper.attributes.normal.array as Float32Array;
+  const baseIdx = singleSleeper.index!.array;
+  const vertCount = basePos.length / 3;
+
+  const positions = new Float32Array(count * basePos.length);
+  const normals = new Float32Array(count * baseNorm.length);
   const indices: number[] = [];
 
-  const sleeperGeo = new THREE.BoxGeometry(SLEEPER_WIDTH_MM, SLEEPER_THICKNESS, sleeperLength);
-  const basePos = sleeperGeo.attributes.position.array;
-  const baseNorm = sleeperGeo.attributes.normal.array;
-  const baseIdx = sleeperGeo.index!.array;
-
   for (let i = 0; i < count; i++) {
-    const offset = (i * basePos.length) / 3;
     const x = ((i + 0.5) / count) * length;
-    const mat = new THREE.Matrix4().makeTranslation(x, SLEEPER_THICKNESS / 2, 0);
+    const vOff = i * vertCount;
 
     for (let j = 0; j < basePos.length; j += 3) {
-      const v = new THREE.Vector3(basePos[j], basePos[j + 1], basePos[j + 2]).applyMatrix4(mat);
-      positions.push(v.x, v.y, v.z);
+      positions[i * basePos.length + j] = basePos[j] + x;
+      positions[i * basePos.length + j + 1] = basePos[j + 1] + SLEEPER_HEIGHT / 2;
+      positions[i * basePos.length + j + 2] = basePos[j + 2];
     }
-    for (let j = 0; j < baseNorm.length; j++) normals.push(baseNorm[j]);
-    for (let j = 0; j < baseIdx.length; j++) indices.push(baseIdx[j] + offset);
+    normals.set(baseNorm, i * baseNorm.length);
+    for (let j = 0; j < baseIdx.length; j++) {
+      indices.push(baseIdx[j] + vOff);
+    }
   }
 
-  sleeperGeo.dispose();
+  singleSleeper.dispose();
   const merged = new THREE.BufferGeometry();
-  merged.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  merged.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
+  merged.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  merged.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
   merged.setIndex(indices);
   return merged;
 }
 
+// ============================================================
+// Straight ballast — trapezoidal profile (lichoběžník)
+// ============================================================
+
 function buildStraightBallast(length: number, gauge: number): THREE.BufferGeometry {
-  const ballastWidth = gauge + 12;
-  const geo = new THREE.BoxGeometry(length, BALLAST_HEIGHT, ballastWidth);
-  geo.translate(length / 2, BALLAST_HEIGHT / 2 - 0.01, 0);
+  const topWidth = gauge + BALLAST_EXTRA_WIDTH;
+  const bottomWidth = topWidth + 4; // wider at bottom
+  const halfTop = topWidth / 2;
+  const halfBot = bottomWidth / 2;
+  const h = BALLAST_HEIGHT;
+
+  // Trapezoidal cross-section extruded along X
+  // Cross-section in YZ plane: bottom wider, top narrower
+  const positions = new Float32Array([
+    // x=0 face
+    0, 0, -halfBot,
+    0, 0, halfBot,
+    0, h, halfTop,
+    0, h, -halfTop,
+    // x=length face
+    length, 0, -halfBot,
+    length, 0, halfBot,
+    length, h, halfTop,
+    length, h, -halfTop,
+  ]);
+
+  const indices = [
+    // front (x=0)
+    0, 3, 2, 0, 2, 1,
+    // back (x=length)
+    4, 6, 7, 4, 5, 6,
+    // top
+    3, 7, 6, 3, 6, 2,
+    // bottom
+    0, 1, 5, 0, 5, 4,
+    // left (z<0)
+    0, 4, 7, 0, 7, 3,
+    // right (z>0)
+    1, 2, 6, 1, 6, 5,
+  ];
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geo.setIndex(indices);
+  geo.translate(0, -0.01, 0);
+  geo.computeVertexNormals();
   return geo;
 }
 
-function buildStraightGeometry(length: number, gauge: number) {
+// ============================================================
+// Combine straight track
+// ============================================================
+
+function buildStraightGeometry(length: number, gauge: number, scale: string) {
   const halfGauge = gauge / 2;
   return {
     railLeft: buildStraightRailGeo(length, -halfGauge),
     railRight: buildStraightRailGeo(length, halfGauge),
-    sleepers: buildStraightSleepers(length, gauge),
+    sleepers: buildStraightSleepers(length, gauge, scale),
     ballast: buildStraightBallast(length, gauge),
   };
 }
 
 // ============================================================
-// Geometry builders — CURVED tracks
+// Curved rail — discrete segments along arc (NO ExtrudeGeometry with CurvePath!)
 // ============================================================
 
 function buildCurvedRailGeo(radius: number, angleDeg: number, rOffset: number): THREE.BufferGeometry {
   const angleRad = (angleDeg * Math.PI) / 180;
   const r = radius + rOffset;
-  const segments = Math.max(12, Math.ceil(angleDeg / 2));
-  const hw = RAIL_WIDTH / 2;
-  const yBase = SLEEPER_THICKNESS;
+  const segDeg = 2; // degrees per segment
+  const segments = Math.max(6, Math.ceil(angleDeg / segDeg));
 
+  // T-profile cross-section vertices (in local YZ space, centered at Z=0)
+  const fw = RAIL_FOOT_WIDTH / 2;
+  const ww = RAIL_WEB_WIDTH / 2;
+  const hw = RAIL_HEAD_WIDTH / 2;
+  const fh = RAIL_FOOT_HEIGHT;
+  const wh = RAIL_WEB_HEIGHT;
+  const hh = RAIL_HEAD_HEIGHT;
+
+  // Cross-section points (Y, Z_local) — forming the T shape
+  // Going clockwise from bottom-left
+  const profile: [number, number][] = [
+    [0, -fw],
+    [0, fw],
+    [fh, fw],
+    [fh, ww],
+    [fh + wh, ww],
+    [fh + wh, hw],
+    [fh + wh + hh, hw],
+    [fh + wh + hh, -hw],
+    [fh + wh, -hw],
+    [fh + wh, -ww],
+    [fh, -ww],
+    [fh, -fw],
+  ];
+
+  const profLen = profile.length;
   const positions: number[] = [];
   const indices: number[] = [];
 
@@ -175,22 +308,28 @@ function buildCurvedRailGeo(radius: number, angleDeg: number, rOffset: number): 
     const t = (i / segments) * angleRad;
     const cx = r * Math.sin(t);
     const cz = r - r * Math.cos(t);
-    const nx = Math.sin(t);
-    const nz = -Math.cos(t);
+    // Tangent direction (perpendicular to radius at this point)
+    const nx = Math.cos(t);  // normal in X
+    const nz = Math.sin(t);  // normal in Z
 
-    // 4 verts per cross-section
-    positions.push(cx - nx * hw, yBase, cz - nz * hw);
-    positions.push(cx + nx * hw, yBase, cz + nz * hw);
-    positions.push(cx + nx * hw, yBase + RAIL_HEIGHT, cz + nz * hw);
-    positions.push(cx - nx * hw, yBase + RAIL_HEIGHT, cz - nz * hw);
+    for (let p = 0; p < profLen; p++) {
+      const [py, pz] = profile[p];
+      // pz is the cross-rail offset, py is height
+      positions.push(
+        cx + nz * pz,
+        SLEEPER_HEIGHT + py,
+        cz - nx * pz,
+      );
+    }
 
     if (i < segments) {
-      const a = i * 4;
-      const b = (i + 1) * 4;
-      indices.push(a, b, b + 1, a, b + 1, a + 1);
-      indices.push(a + 3, a + 2, b + 2, a + 3, b + 2, b + 3);
-      indices.push(a + 1, b + 1, b + 2, a + 1, b + 2, a + 2);
-      indices.push(a, a + 3, b + 3, a, b + 3, b);
+      const a = i * profLen;
+      const b = (i + 1) * profLen;
+      for (let p = 0; p < profLen; p++) {
+        const p2 = (p + 1) % profLen;
+        indices.push(a + p, b + p, b + p2);
+        indices.push(a + p, b + p2, a + p2);
+      }
     }
   }
 
@@ -201,37 +340,57 @@ function buildCurvedRailGeo(radius: number, angleDeg: number, rOffset: number): 
   return geo;
 }
 
-function buildCurvedSleepers(radius: number, angleDeg: number, gauge: number): THREE.BufferGeometry {
+// ============================================================
+// Curved sleepers
+// ============================================================
+
+function buildCurvedSleepers(radius: number, angleDeg: number, gauge: number, scale: string): THREE.BufferGeometry {
   const angleRad = (angleDeg * Math.PI) / 180;
+  const spacing = scale === "H0" ? SLEEPER_SPACING_H0 : SLEEPER_SPACING_TT;
   const arcLength = radius * angleRad;
-  const count = Math.max(1, Math.floor(arcLength / SLEEPER_SPACING));
-  const sleeperLength = gauge + 6;
-  const sleeperGeo = new THREE.BoxGeometry(SLEEPER_WIDTH_MM, SLEEPER_THICKNESS, sleeperLength);
+  const count = Math.max(1, Math.floor(arcLength / spacing));
+  const sleeperLength = gauge + 8;
+  const sleeperWidth = scale === "H0" ? 2.5 : 2.0;
+
+  const singleSleeper = new THREE.BoxGeometry(sleeperWidth, SLEEPER_HEIGHT, sleeperLength);
+  const basePos = singleSleeper.attributes.position.array as Float32Array;
+  const baseNorm = singleSleeper.attributes.normal.array as Float32Array;
+  const baseIdx = singleSleeper.index!.array;
+  const vertCount = basePos.length / 3;
+
   const positions: number[] = [];
   const normals: number[] = [];
   const indices: number[] = [];
-  const basePos = sleeperGeo.attributes.position.array;
-  const baseNorm = sleeperGeo.attributes.normal.array;
-  const baseIdx = sleeperGeo.index!.array;
+
+  const mat4 = new THREE.Matrix4();
+  const nMat = new THREE.Matrix3();
 
   for (let i = 0; i < count; i++) {
     const t = ((i + 0.5) / count) * angleRad;
     const x = radius * Math.sin(t);
     const z = radius - radius * Math.cos(t);
-    const offset = (i * basePos.length) / 3;
+    const vOff = i * vertCount;
+
+    // Rotation: sleeper perpendicular to track tangent
     const rot = new THREE.Matrix4().makeRotationY(-t);
-    const trans = new THREE.Matrix4().makeTranslation(x, SLEEPER_THICKNESS / 2, z);
-    const mat = trans.multiply(rot);
+    const trans = new THREE.Matrix4().makeTranslation(x, SLEEPER_HEIGHT / 2, z);
+    mat4.copy(trans).multiply(rot);
+    nMat.setFromMatrix4(rot);
 
     for (let j = 0; j < basePos.length; j += 3) {
-      const v = new THREE.Vector3(basePos[j], basePos[j + 1], basePos[j + 2]).applyMatrix4(mat);
+      const v = new THREE.Vector3(basePos[j], basePos[j + 1], basePos[j + 2]).applyMatrix4(mat4);
       positions.push(v.x, v.y, v.z);
     }
-    for (let j = 0; j < baseNorm.length; j++) normals.push(baseNorm[j]);
-    for (let j = 0; j < baseIdx.length; j++) indices.push(baseIdx[j] + offset);
+    for (let j = 0; j < baseNorm.length; j += 3) {
+      const n = new THREE.Vector3(baseNorm[j], baseNorm[j + 1], baseNorm[j + 2]).applyMatrix3(nMat).normalize();
+      normals.push(n.x, n.y, n.z);
+    }
+    for (let j = 0; j < baseIdx.length; j++) {
+      indices.push(baseIdx[j] + vOff);
+    }
   }
 
-  sleeperGeo.dispose();
+  singleSleeper.dispose();
   const merged = new THREE.BufferGeometry();
   merged.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
   merged.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
@@ -239,31 +398,55 @@ function buildCurvedSleepers(radius: number, angleDeg: number, gauge: number): T
   return merged;
 }
 
+// ============================================================
+// Curved ballast — trapezoidal profile along arc
+// ============================================================
+
 function buildCurvedBallast(radius: number, angleDeg: number, gauge: number): THREE.BufferGeometry {
   const angleRad = (angleDeg * Math.PI) / 180;
-  const ballastWidth = gauge + 12;
-  const halfW = ballastWidth / 2;
+  const topWidth = gauge + BALLAST_EXTRA_WIDTH;
+  const bottomWidth = topWidth + 4;
+  const halfTop = topWidth / 2;
+  const halfBot = bottomWidth / 2;
+  const h = BALLAST_HEIGHT;
   const segments = Math.max(8, Math.ceil(angleDeg / 3));
+
   const positions: number[] = [];
   const indices: number[] = [];
 
+  // 4 verts per cross-section: bottom-left, bottom-right, top-right, top-left
   for (let i = 0; i <= segments; i++) {
     const t = (i / segments) * angleRad;
     const cx = radius * Math.sin(t);
     const cz = radius - radius * Math.cos(t);
-    const nx = Math.sin(t);
-    const nz = -Math.cos(t);
+    const nx = Math.cos(t);
+    const nz = Math.sin(t);
 
-    // 2 verts per cross-section (top of ballast, left and right)
-    positions.push(cx - nx * halfW, BALLAST_HEIGHT, cz - nz * halfW);
-    positions.push(cx + nx * halfW, BALLAST_HEIGHT, cz + nz * halfW);
+    // bottom-left, bottom-right, top-right, top-left
+    positions.push(cx + nz * (-halfBot), -0.01, cz - nx * (-halfBot));
+    positions.push(cx + nz * halfBot, -0.01, cz - nx * halfBot);
+    positions.push(cx + nz * halfTop, h - 0.01, cz - nx * halfTop);
+    positions.push(cx + nz * (-halfTop), h - 0.01, cz - nx * (-halfTop));
 
     if (i < segments) {
-      const a = i * 2;
-      const b = (i + 1) * 2;
-      indices.push(a, b, b + 1, a, b + 1, a + 1);
+      const a = i * 4;
+      const b = (i + 1) * 4;
+      // top face
+      indices.push(a + 3, b + 3, b + 2, a + 3, b + 2, a + 2);
+      // bottom face
+      indices.push(a, a + 1, b + 1, a, b + 1, b);
+      // left side
+      indices.push(a, b, b + 3, a, b + 3, a + 3);
+      // right side
+      indices.push(a + 1, a + 2, b + 2, a + 1, b + 2, b + 1);
     }
   }
+
+  // Cap at start (i=0)
+  indices.push(0, 3, 2, 0, 2, 1);
+  // Cap at end
+  const e = segments * 4;
+  indices.push(e, e + 1, e + 2, e, e + 2, e + 3);
 
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
@@ -272,83 +455,204 @@ function buildCurvedBallast(radius: number, angleDeg: number, gauge: number): TH
   return geo;
 }
 
-function buildCurveGeometry(radius: number, angleDeg: number, gauge: number) {
+// ============================================================
+// Combine curved track
+// ============================================================
+
+function buildCurveGeometry(radius: number, angleDeg: number, gauge: number, scale: string) {
   const halfGauge = gauge / 2;
   return {
     railLeft: buildCurvedRailGeo(radius, angleDeg, -halfGauge),
     railRight: buildCurvedRailGeo(radius, angleDeg, halfGauge),
-    sleepers: buildCurvedSleepers(radius, angleDeg, gauge),
+    sleepers: buildCurvedSleepers(radius, angleDeg, gauge, scale),
     ballast: buildCurvedBallast(radius, angleDeg, gauge),
   };
 }
 
 // ============================================================
-// Bridge geometry
+// Bridge geometry — truss bridge with diagonals
 // ============================================================
 
-function buildBridgeGirders(length: number, gauge: number, elevation: number): THREE.BufferGeometry {
-  const halfW = (gauge + 10) / 2;
-  const positions: number[] = [];
-  const normals: number[] = [];
-  const indices: number[] = [];
-  const girderGeo = new THREE.BoxGeometry(length, BRIDGE_GIRDER_HEIGHT, BRIDGE_GIRDER_WIDTH);
-  const basePos = girderGeo.attributes.position.array;
-  const baseNorm = girderGeo.attributes.normal.array;
-  const baseIdx = girderGeo.index!.array;
+function buildBridgeTruss(length: number, gauge: number): {
+  girders: THREE.BufferGeometry;
+  floor: THREE.BufferGeometry;
+  railings: THREE.BufferGeometry;
+} {
+  const halfW = (gauge + 12) / 2;
+  const barRadius = BRIDGE_TRUSS_BAR_RADIUS;
+  const height = BRIDGE_GIRDER_HEIGHT;
+  const panelCount = Math.max(2, Math.ceil(length / 20));
+  const panelLength = length / panelCount;
 
-  // Two girders, one on each side
+  // Build truss as merged cylinders
+  const geoArray: THREE.BufferGeometry[] = [];
+  const cylSegments = 6; // low-poly cylinders for performance
+
   for (const side of [-1, 1]) {
-    const offset = (positions.length / 3);
-    const mat = new THREE.Matrix4().makeTranslation(length / 2, BRIDGE_GIRDER_HEIGHT / 2 - 1, side * halfW);
-    for (let j = 0; j < basePos.length; j += 3) {
-      const v = new THREE.Vector3(basePos[j], basePos[j + 1], basePos[j + 2]).applyMatrix4(mat);
-      positions.push(v.x, v.y, v.z);
+    const z = side * halfW;
+
+    for (let i = 0; i <= panelCount; i++) {
+      const x = i * panelLength;
+      // Vertical post
+      const vert = new THREE.CylinderGeometry(barRadius, barRadius, height, cylSegments);
+      vert.translate(x, height / 2 - 1, z);
+      geoArray.push(vert);
     }
-    for (let j = 0; j < baseNorm.length; j++) normals.push(baseNorm[j]);
-    for (let j = 0; j < baseIdx.length; j++) indices.push(baseIdx[j] + offset);
+
+    // Top chord
+    const topBar = new THREE.CylinderGeometry(barRadius, barRadius, length, cylSegments);
+    topBar.rotateZ(Math.PI / 2);
+    topBar.translate(length / 2, height - 1, z);
+    geoArray.push(topBar);
+
+    // Bottom chord
+    const botBar = new THREE.CylinderGeometry(barRadius, barRadius, length, cylSegments);
+    botBar.rotateZ(Math.PI / 2);
+    botBar.translate(length / 2, -1, z);
+    geoArray.push(botBar);
+
+    // Diagonals (X-pattern in each panel)
+    for (let i = 0; i < panelCount; i++) {
+      const x0 = i * panelLength;
+      const x1 = (i + 1) * panelLength;
+      const diagLen = Math.sqrt(panelLength ** 2 + height ** 2);
+      const diagAngle = Math.atan2(height, panelLength);
+
+      const diag1 = new THREE.CylinderGeometry(barRadius * 0.7, barRadius * 0.7, diagLen, cylSegments);
+      diag1.rotateZ(Math.PI / 2 - diagAngle);
+      diag1.translate((x0 + x1) / 2, height / 2 - 1, z);
+      geoArray.push(diag1);
+
+      // Reverse diagonal
+      const diag2 = new THREE.CylinderGeometry(barRadius * 0.7, barRadius * 0.7, diagLen, cylSegments);
+      diag2.rotateZ(Math.PI / 2 + diagAngle);
+      diag2.translate((x0 + x1) / 2, height / 2 - 1, z);
+      geoArray.push(diag2);
+    }
   }
 
-  girderGeo.dispose();
-  const merged = new THREE.BufferGeometry();
-  merged.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  merged.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
-  merged.setIndex(indices);
-  return merged;
+  // Merge all girder geometries
+  const girders = mergeGeometries(geoArray);
+  geoArray.forEach(g => g.dispose());
+
+  // Bridge floor
+  const floor = new THREE.PlaneGeometry(length, gauge + 12);
+  floor.rotateX(-Math.PI / 2);
+  floor.translate(length / 2, -0.5, 0);
+
+  // Railings on top
+  const railingGeos: THREE.BufferGeometry[] = [];
+  for (const side of [-1, 1]) {
+    const z = side * halfW;
+    const rail = new THREE.CylinderGeometry(barRadius * 0.5, barRadius * 0.5, length, cylSegments);
+    rail.rotateZ(Math.PI / 2);
+    rail.translate(length / 2, height - 1 + BRIDGE_RAILING_HEIGHT, z);
+    railingGeos.push(rail);
+
+    // Railing posts
+    const postCount = Math.max(2, Math.ceil(length / 15));
+    for (let i = 0; i <= postCount; i++) {
+      const x = (i / postCount) * length;
+      const post = new THREE.CylinderGeometry(barRadius * 0.4, barRadius * 0.4, BRIDGE_RAILING_HEIGHT, cylSegments);
+      post.translate(x, height - 1 + BRIDGE_RAILING_HEIGHT / 2, z);
+      railingGeos.push(post);
+    }
+  }
+  const railings = mergeGeometries(railingGeos);
+  railingGeos.forEach(g => g.dispose());
+
+  return { girders, floor, railings };
 }
 
 // ============================================================
-// Tunnel portal geometry (arch shape)
+// Tunnel portal geometry — stone arch
 // ============================================================
 
-function buildTunnelPortalGeo(): THREE.BufferGeometry {
-  // Create an arch shape
-  const width = TUNNEL_RADIUS * 2 + 4;
-  const height = TUNNEL_RADIUS + 4;
-  const shape = new THREE.Shape();
+function buildTunnelPortalGeo(gauge: number, scale: string): THREE.BufferGeometry {
+  const portalWidth = gauge + 20;
+  const portalHeight = scale === "H0" ? 40 : 30;
+  const halfW = portalWidth / 2;
+  const archRadius = halfW;
+  const wallHeight = portalHeight - archRadius;
+  const thickness = TUNNEL_PORTAL_THICKNESS;
+  const stoneW = portalWidth + 10;
+  const stoneH = portalHeight + 4;
 
-  // Outer arch
-  shape.moveTo(-width / 2, 0);
-  shape.lineTo(-width / 2, height * 0.6);
-  shape.absarc(0, height * 0.6, width / 2, Math.PI, 0, false);
-  shape.lineTo(width / 2, 0);
-  shape.lineTo(-width / 2, 0);
+  // Build an arch shape with a hole
+  const outerShape = new THREE.Shape();
+  const halfStoneW = stoneW / 2;
 
-  // Inner hole (cut out)
+  // Outer contour
+  outerShape.moveTo(-halfStoneW, 0);
+  outerShape.lineTo(halfStoneW, 0);
+  outerShape.lineTo(halfStoneW, wallHeight);
+  outerShape.absarc(0, wallHeight, halfStoneW, 0, Math.PI, false);
+  outerShape.lineTo(-halfStoneW, 0);
+
+  // Inner hole (tunnel opening)
   const hole = new THREE.Path();
-  const innerW = TUNNEL_RADIUS;
-  hole.moveTo(-innerW, 0);
-  hole.lineTo(-innerW, height * 0.5);
-  hole.absarc(0, height * 0.5, innerW, Math.PI, 0, false);
-  hole.lineTo(innerW, 0);
-  hole.lineTo(-innerW, 0);
-  shape.holes.push(hole);
+  hole.moveTo(-halfW, 0);
+  hole.lineTo(halfW, 0);
+  hole.lineTo(halfW, wallHeight);
+  hole.absarc(0, wallHeight, archRadius, 0, Math.PI, false);
+  hole.lineTo(-halfW, 0);
+  outerShape.holes.push(hole);
 
-  const geo = new THREE.ExtrudeGeometry(shape, {
-    depth: TUNNEL_PORTAL_THICKNESS,
+  const geo = new THREE.ExtrudeGeometry(outerShape, {
+    depth: thickness,
     bevelEnabled: false,
   });
 
   return geo;
+}
+
+// ============================================================
+// Merge BufferGeometries helper
+// ============================================================
+
+function mergeGeometries(geometries: THREE.BufferGeometry[]): THREE.BufferGeometry {
+  let totalVerts = 0;
+  let totalIdx = 0;
+
+  for (const g of geometries) {
+    totalVerts += g.attributes.position.count;
+    totalIdx += g.index ? g.index.count : 0;
+  }
+
+  const positions = new Float32Array(totalVerts * 3);
+  const normals = new Float32Array(totalVerts * 3);
+  const indices: number[] = [];
+
+  let vertOffset = 0;
+
+  for (const g of geometries) {
+    // Ensure normals exist
+    if (!g.attributes.normal) {
+      g.computeVertexNormals();
+    }
+
+    const pos = g.attributes.position.array;
+    const norm = g.attributes.normal ? g.attributes.normal.array : new Float32Array(pos.length);
+    const idx = g.index ? g.index.array : null;
+    const vCount = g.attributes.position.count;
+
+    positions.set(pos, vertOffset * 3);
+    normals.set(norm, vertOffset * 3);
+
+    if (idx) {
+      for (let i = 0; i < idx.length; i++) {
+        indices.push(idx[i] + vertOffset);
+      }
+    }
+
+    vertOffset += vCount;
+  }
+
+  const merged = new THREE.BufferGeometry();
+  merged.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  merged.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
+  merged.setIndex(indices);
+  return merged;
 }
 
 // ============================================================
@@ -391,34 +695,38 @@ export default function TrackMesh({
   onPointerLeave,
 }: TrackMeshProps) {
   const gauge = getGauge(piece);
+  const scale = piece.scale || "TT";
 
+  // ===== Main track geometries =====
   const geometries = useMemo(() => {
     if (piece.type === "straight" || piece.type === "turnout") {
-      const mainGeo = buildStraightGeometry(piece.length || 100, gauge);
+      const mainGeo = buildStraightGeometry(piece.length || 100, gauge, scale);
       if (piece.type === "turnout" && piece.angle && piece.radius) {
-        const branchGeo = buildCurveGeometry(piece.radius, piece.angle, gauge);
+        const branchGeo = buildCurveGeometry(piece.radius, piece.angle, gauge, scale);
         return { main: mainGeo, branch: branchGeo };
       }
       return { main: mainGeo };
     }
     if (piece.type === "curve") {
-      return { main: buildCurveGeometry(piece.radius || 300, piece.angle || 30, gauge) };
+      return { main: buildCurveGeometry(piece.radius || 300, piece.angle || 30, gauge, scale) };
     }
     if (piece.type === "crossing") {
-      return { main: buildStraightGeometry(piece.length || 100, gauge) };
+      return { main: buildStraightGeometry(piece.length || 100, gauge, scale) };
     }
-    return { main: buildStraightGeometry(100, gauge) };
-  }, [piece, gauge]);
+    return { main: buildStraightGeometry(100, gauge, scale) };
+  }, [piece, gauge, scale]);
 
-  const bridgeGirders = useMemo(() => {
+  // ===== Bridge geometry =====
+  const bridgeGeo = useMemo(() => {
     if (!isBridge || !piece.length) return null;
-    return buildBridgeGirders(piece.length, gauge, elevation);
-  }, [isBridge, piece.length, gauge, elevation]);
+    return buildBridgeTruss(piece.length, gauge);
+  }, [isBridge, piece.length, gauge]);
 
+  // ===== Tunnel portal geometry =====
   const tunnelPortal = useMemo(() => {
     if (!isTunnel) return null;
-    return buildTunnelPortalGeo();
-  }, [isTunnel]);
+    return buildTunnelPortalGeo(gauge, scale);
+  }, [isTunnel, gauge, scale]);
 
   const currentRailMat = isTunnel
     ? tunnelRailMaterial
@@ -452,7 +760,7 @@ export default function TrackMesh({
       {/* ===== Sleepers ===== */}
       <mesh geometry={geometries.main.sleepers} material={currentSleeperMat} castShadow receiveShadow />
 
-      {/* ===== Rails ===== */}
+      {/* ===== Rails (T-profile) ===== */}
       <mesh geometry={geometries.main.railLeft} material={currentRailMat} castShadow />
       <mesh geometry={geometries.main.railRight} material={currentRailMat} castShadow />
 
@@ -466,32 +774,33 @@ export default function TrackMesh({
         </group>
       )}
 
-      {/* ===== Bridge girders ===== */}
-      {isBridge && bridgeGirders && (
-        <mesh geometry={bridgeGirders} material={bridgeGirderMaterial} castShadow />
+      {/* ===== Crossing second track ===== */}
+      {piece.type === "crossing" && (
+        <group rotation={[0, -(piece.angle || 30) * Math.PI / 180, 0]}
+               position={[trackLength / 2, 0, 0]}>
+          <group position={[-trackLength / 2, 0, 0]}>
+            <mesh geometry={geometries.main.railLeft} material={currentRailMat} castShadow />
+            <mesh geometry={geometries.main.railRight} material={currentRailMat} castShadow />
+          </group>
+        </group>
       )}
 
-      {/* ===== Bridge railings ===== */}
-      {isBridge && elevation > 5 && (
+      {/* ===== Bridge truss ===== */}
+      {isBridge && bridgeGeo && (
         <>
-          <mesh position={[trackLength / 2, BRIDGE_GIRDER_HEIGHT - 1 + BRIDGE_RAILING_HEIGHT / 2, -(gauge + 10) / 2]} castShadow>
-            <boxGeometry args={[trackLength, BRIDGE_RAILING_HEIGHT, BRIDGE_RAILING_WIDTH]} />
-            <meshStandardMaterial color="#555555" metalness={0.5} roughness={0.4} />
-          </mesh>
-          <mesh position={[trackLength / 2, BRIDGE_GIRDER_HEIGHT - 1 + BRIDGE_RAILING_HEIGHT / 2, (gauge + 10) / 2]} castShadow>
-            <boxGeometry args={[trackLength, BRIDGE_RAILING_HEIGHT, BRIDGE_RAILING_WIDTH]} />
-            <meshStandardMaterial color="#555555" metalness={0.5} roughness={0.4} />
-          </mesh>
+          <mesh geometry={bridgeGeo.girders} material={bridgeMaterial} castShadow />
+          <mesh geometry={bridgeGeo.floor} material={bridgeFloorMaterial} receiveShadow />
+          <mesh geometry={bridgeGeo.railings} material={bridgeMaterial} castShadow />
         </>
       )}
 
-      {/* ===== Bridge piers (pillars) ===== */}
+      {/* ===== Bridge piers ===== */}
       {pierCount > 0 && Array.from({ length: pierCount }, (_, i) => {
         const x = ((i + 0.5) / pierCount) * trackLength;
         return (
           <mesh key={`pier-${i}`} position={[x, -elevation / 2, 0]} castShadow>
             <boxGeometry args={[BRIDGE_PIER_WIDTH, elevation, BRIDGE_PIER_WIDTH]} />
-            <meshStandardMaterial color="#666666" roughness={0.8} />
+            <primitive object={bridgePierMaterial} attach="material" />
           </mesh>
         );
       })}
@@ -516,14 +825,18 @@ export default function TrackMesh({
             castShadow
           />
           {/* Tunnel shell (semi-transparent tube) */}
-          <mesh position={[trackLength / 2, TUNNEL_RADIUS * 0.6, 0]}>
-            <boxGeometry args={[trackLength - TUNNEL_PORTAL_THICKNESS * 2, TUNNEL_RADIUS * 1.5, TUNNEL_RADIUS * 2 + 4]} />
+          <mesh position={[trackLength / 2, (gauge + 20) * 0.4, 0]}>
+            <boxGeometry args={[
+              trackLength - TUNNEL_PORTAL_THICKNESS * 2,
+              (piece.scale === "H0" ? 40 : 30) * 0.8,
+              gauge + 22,
+            ]} />
             <primitive object={tunnelShellMaterial} attach="material" />
           </mesh>
         </>
       )}
 
-      {/* ===== Ramp embankment (nasypové těleso) ===== */}
+      {/* ===== Ramp embankment ===== */}
       {isRamp && elevation > 2 && (
         <mesh position={[trackLength / 2, -elevation / 4, 0]} receiveShadow>
           <boxGeometry args={[trackLength, elevation / 2, gauge + 20 + elevation * 0.4]} />
@@ -531,7 +844,7 @@ export default function TrackMesh({
         </mesh>
       )}
 
-      {/* ===== Selection highlight ring ===== */}
+      {/* ===== Selection highlight ===== */}
       {isSelected && (
         <mesh position={[trackLength / 2, 0.1, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[10, 12, 32]} />
