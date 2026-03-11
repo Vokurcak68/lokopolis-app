@@ -262,18 +262,20 @@ export default function AIDialog({
             Obdélník
           </button>
           <button
-            onClick={() => setBoardShape("l-shape")}
-            style={boardShape === "l-shape" ? activeShapeStyle : shapeButtonBase}
+            disabled
+            style={{ ...shapeButtonBase, opacity: 0.4, cursor: "not-allowed" }}
+            title="Připravujeme"
           >
             <div style={{ fontSize: "24px", marginBottom: "2px" }}>⌐</div>
-            L-tvar
+            L-tvar 🔒
           </button>
           <button
-            onClick={() => setBoardShape("u-shape")}
-            style={boardShape === "u-shape" ? activeShapeStyle : shapeButtonBase}
+            disabled
+            style={{ ...shapeButtonBase, opacity: 0.4, cursor: "not-allowed" }}
+            title="Připravujeme"
           >
             <div style={{ fontSize: "24px", marginBottom: "2px" }}>⊔</div>
-            U-tvar
+            U-tvar 🔒
           </button>
         </div>
 
