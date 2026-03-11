@@ -138,7 +138,7 @@ const curve2 = new THREE.Group();
 curve2.add(new THREE.Mesh(buildCurvedRail(310, 15, -GAUGE/2), railMat));
 curve2.add(new THREE.Mesh(buildCurvedRail(310, 15, GAUGE/2), railMat));
 curve2.position.set(c1endX, 0, c1endZ);
-curve2.rotation.y = 15 * Math.PI / 180; // 15° 
+curve2.rotation.y = -(15 * Math.PI / 180); // negated for Three.js Y-rotation convention 
 scene.add(curve2);
 
 // Curve 2 end point

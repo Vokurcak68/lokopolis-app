@@ -251,7 +251,7 @@ function renderTracks(tracks, source) {
     else if(t.type==="curve") addCurve(g, t.radius, t.angle);
     
     g.position.set(t.x, 0, t.z);
-    g.rotation.y = t.rotation;
+    g.rotation.y = -t.rotation;
     trackGroup.add(g);
     
     // Check gap to next track

@@ -233,7 +233,7 @@ export default function TrackMesh({
   return (
     <group
       position={[position[0], worldY + position[1], position[2]]}
-      rotation={[0, rotation, 0]}
+      rotation={[0, -rotation, 0]}
       onClick={(e) => { e.stopPropagation(); onClick?.(); }}
       onPointerEnter={(e) => { e.stopPropagation(); onPointerEnter?.(); }}
       onPointerLeave={(e) => { e.stopPropagation(); onPointerLeave?.(); }}
