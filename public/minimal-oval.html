@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Minimal Oval Test</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>body{margin:0;background:#000;font-family:sans-serif;}</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="info" style="position:fixed;top:10px;left:10px;color:white;z-index:999;font-size:12px;background:rgba(0,0,0,0.85);padding:12px;border-radius:8px;max-width:400px;line-height:1.5;"></div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ===== Scene setup =====
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0b14);
+const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 1, 5000);
+camera.position.set(300, 500, 500);
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(300, 0, 150);
+controls.update();
+scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+const dl = new THREE.DirectionalLight(0xffffff, 0.8);
+dl.position.set(500, 500, 500);
+scene.add(dl);
+
+// Green board
+const board = new THREE.Mesh(
+  new THREE.BoxGeometry(600, 4, 300),
+  new THREE.MeshStandardMaterial({color:0x2a5a2a})
+);
+board.position.set(300, -2, 150);
+scene.add(board);
+
+// ===== Materials =====
+const railMat = new THREE.MeshStandardMaterial({color:0xc0c0c0, metalness:0.7, roughness:0.3});
+const sleeperMat = new THREE.MeshStandardMaterial({color:0x6b4226});
+
+const GAUGE = 3, RH = 1.2, RW = 0.8;
+
+// ===== Geometry builders =====
+
+// Straight rail = box
+function straightRail(len, zOff) {
+  const g = new THREE.BoxGeometry(len, RH, RW);
+  g.translate(len/2, RH/2, zOff);
+  return g;
+}
+
+// Curved rail = manual sweep, Y-up
+function curvedRail(radius, angleDeg, rOffset) {
+  const ar = angleDeg * Math.PI / 180;
+  const r = radius + rOffset;
+  const segs = Math.max(16, Math.ceil(angleDeg));
+  const hw = RW / 2;
+  const pos = [], idx = [];
+  
+  for (let i = 0; i <= segs; i++) {
+    const t = (i / segs) * ar;
+    const cx = r * Math.sin(t);
+    const cz = r - r * Math.cos(t);
+    // Radial direction outward from curve center (0, 0, radius)
+    const nx = Math.sin(t);
+    const nz = -Math.cos(t);
+    // 4 vertices: bottom-in, bottom-out, top-out, top-in
+    pos.push(cx - nx*hw, 0,  cz - nz*hw);
+    pos.push(cx + nx*hw, 0,  cz + nz*hw);
+    pos.push(cx + nx*hw, RH, cz + nz*hw);
+    pos.push(cx - nx*hw, RH, cz - nz*hw);
+    if (i < segs) {
+      const a = i*4, b = (i+1)*4;
+      idx.push(a,b,b+1, a,b+1,a+1);       // bottom
+      idx.push(a+3,a+2,b+2, a+3,b+2,b+3); // top
+      idx.push(a+1,b+1,b+2, a+1,b+2,a+2); // outer
+      idx.push(a,a+3,b+3, a,b+3,b);       // inner
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
+function sleepers(len) {
+  const g = new THREE.BoxGeometry(1.5, 0.6, 8);
+  const cnt = Math.max(1, Math.floor(len / 12));
+  const grp = new THREE.Group();
+  for (let i = 0; i < cnt; i++) {
+    const m = new THREE.Mesh(g, sleeperMat);
+    m.position.set(((i+0.5)/cnt)*len, 0.3, 0);
+    grp.add(m);
+  }
+  return grp;
+}
+
+// ===== Build a simple oval manually =====
+// Layout: 2 straights (each 300mm) + 2 semicircles (R=100, 180°)
+// 
+// Straight 1: from (100, 0, 50) going in +X direction (rotation=0 in engine)
+// Semicircle 1: at (400, 0, 50) curving from +X to -X (180° turn, R=100)
+//   After semicircle: at (400, 0, 250) facing -X
+// Straight 2: from (400, 0, 250) going in -X direction (rotation=π in engine)
+// Semicircle 2: at (100, 0, 250) curving from -X to +X (180° turn, R=100)
+//   After semicircle: at (100, 0, 50) facing +X → loop closed!
+
+const R = 100; // semicircle radius
+
+// Piece 1: Straight, position (100, 0, 50), engine rotation = 0
+{
+  const g = new THREE.Group();
+  g.add(new THREE.Mesh(straightRail(300, -GAUGE/2), railMat));
+  g.add(new THREE.Mesh(straightRail(300, GAUGE/2), railMat));
+  g.add(sleepers(300));
+  // Engine rotation 0 → Three.js rotation.y = 0 (no rotation needed, +X is +X)
+  // WAIT: I need to figure out the correct convention.
+  // 
+  // Engine says: rotation=0 means piece goes along +X.
+  // In local space, straight goes from (0,0,0) to (length,0,0) = along +X.
+  // Curve goes from (0,0,0) curving into +X and +Z.
+  //
+  // Three.js rotation.y: positive = counterclockwise from above = +X → -Z
+  //
+  // For engine rotation=0: we want local +X to stay as world +X.
+  //   Three.js rotation.y = 0 works. ✓
+  //
+  // For engine rotation=π/2: we want local +X to become world +Z.
+  //   cos(π/2)=0, sin(π/2)=1 → direction (0, 1) in XZ = +Z
+  //   Three.js: rotation.y = -π/2 → local +X becomes +Z. ✓ (negated!)
+  //
+  // For engine rotation=π: we want local +X to become world -X.
+  //   Three.js: rotation.y = -π → local +X becomes -X. ✓ (same as +π)
+  
+  g.position.set(100, 0, 50);
+  g.rotation.y = 0; // engine rotation 0, negated = 0
+  scene.add(g);
+}
+
+// Piece 2: Semicircle (180°, R=100) at (400, 0, 50), engine rotation = 0
+{
+  const g = new THREE.Group();
+  g.add(new THREE.Mesh(curvedRail(R, 180, -GAUGE/2), railMat));
+  g.add(new THREE.Mesh(curvedRail(R, 180, GAUGE/2), railMat));
+  g.position.set(400, 0, 50);
+  g.rotation.y = 0; // engine rotation 0, negated = 0
+  // In local space, curve starts at (0,0,0) going +X, center at (0,0,R=100)
+  // After 180°: local position = (R*sin(π), R-R*cos(π)) = (0, 100+100) = (0, 200)
+  // World: (400 + 0, 0, 50 + 200) = (400, 0, 250) ✓
+  scene.add(g);
+}
+
+// Piece 3: Straight, position (400, 0, 250), engine rotation = π
+{
+  const g = new THREE.Group();
+  g.add(new THREE.Mesh(straightRail(300, -GAUGE/2), railMat));
+  g.add(new THREE.Mesh(straightRail(300, GAUGE/2), railMat));
+  g.add(sleepers(300));
+  g.position.set(400, 0, 250);
+  g.rotation.y = -Math.PI; // engine rotation π, negated = -π
+  // local +X → world -X (cos(π)=-1, sin(π)=0)
+  // End: (400 + 300*(-1), 0, 250 + 0) = (100, 0, 250) ✓
+  scene.add(g);
+}
+
+// Piece 4: Semicircle (180°, R=100) at (100, 0, 250), engine rotation = π
+{
+  const g = new THREE.Group();
+  g.add(new THREE.Mesh(curvedRail(R, 180, -GAUGE/2), railMat));
+  g.add(new THREE.Mesh(curvedRail(R, 180, GAUGE/2), railMat));
+  g.position.set(100, 0, 250);
+  g.rotation.y = -Math.PI; // engine rotation π, negated = -π
+  // In local space, curve end at (0, 200). Rotated by π:
+  // world = (100 + 0*cos(π) - 200*sin(π), 0, 250 + 0*sin(π) + 200*cos(π))
+  //       = (100 + 0 - 0, 0, 250 + 0 - 200) = (100, 0, 50) ✓ loop closed!
+  scene.add(g);
+}
+
+// Debug spheres at connection points
+function dot(x,z,color,y=5,r=4) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(r,12,12), new THREE.MeshBasicMaterial({color}));
+  m.position.set(x,y,z);
+  scene.add(m);
+}
+
+dot(100, 50, 0x00ff00); // Start of straight 1
+dot(400, 50, 0xff0000); // End of straight 1 / Start of semicircle 1
+dot(400, 250, 0x0088ff); // End of semicircle 1 / Start of straight 2
+dot(100, 250, 0xffff00); // End of straight 2 / Start of semicircle 2
+// End of semicircle 2 should be back at (100, 50) = green dot
+
+document.getElementById('info').innerHTML = `
+<b>Minimal Oval — 4 pieces</b><br><br>
+2 straights (300mm) + 2 semicircles (R=100, 180°)<br><br>
+<span style="color:#0f0">●</span> (100, 50) — straight 1 start<br>
+<span style="color:#f00">●</span> (400, 50) — straight 1 end / curve 1 start<br>
+<span style="color:#08f">●</span> (400, 250) — curve 1 end / straight 2 start<br>
+<span style="color:#ff0">●</span> (100, 250) — straight 2 end / curve 2 start<br>
+<span style="color:#0f0">●</span> (100, 50) — curve 2 end (= loop closed)<br><br>
+<b>Should form a perfect oval racetrack.</b><br>
+If it doesn't → geometry bug in curve builder.
+`;
+
+function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
+animate();
+window.addEventListener('resize', () => { camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
+</script>
+</body>
+</html>
