@@ -1,283 +1,168 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  computeLayout,
+  parseAILayoutResponse,
+  layoutResultToAPIResponse,
+  type LayoutDefinition,
+} from "@/lib/track-layout-engine";
+import { getTemplateLayout, TEMPLATES } from "@/lib/track-templates";
+import { getCatalogByScale, type TrackScale } from "@/lib/track-library";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 /**
- * 3D Track Generator API
+ * 3D Track Generator API — Deterministic Layout Engine
  *
- * Uses GPT-4o to generate a layout of positioned track pieces
- * from the Tillig TT / Roco H0 catalog, then validates geometry.
+ * AI generates ONLY topology (sequence of piece IDs + branching).
+ * The layout engine computes exact positions from catalog geometry.
+ *
+ * No more coordinate guessing by AI!
  */
 
-// Track catalog info for AI prompt
-const CATALOG_DESCRIPTIONS: Record<string, string> = {
-  TT: `Tillig TT (1:120) track catalog:
-STRAIGHTS:
-- tt-g1: 166mm straight
-- tt-g2: 83mm straight
-- tt-g3: 41.5mm straight
-- tt-g4: 332mm straight
-- tt-g5: 228mm straight
+// ============================================================
+// Catalog descriptions for AI prompt
+// ============================================================
 
-CURVES (all curve left in local space, mirror with rotation for right):
-- tt-r1-15: R310mm, 15° curve
-- tt-r1-30: R310mm, 30° curve
-- tt-r2-15: R353mm, 15° curve
-- tt-r2-30: R353mm, 30° curve
-- tt-r3-15: R396mm, 15° curve
-- tt-r3-30: R396mm, 30° curve
+function buildCatalogDescription(scale: TrackScale): string {
+  const catalog = getCatalogByScale(scale);
+  const lines: string[] = [];
 
-TURNOUTS:
-- tt-ewl: Left turnout 166mm, 15° diverge, R310
-- tt-ewr: Right turnout 166mm, 15° diverge, R310
+  const straights = catalog.filter((p) => p.type === "straight");
+  const curves = catalog.filter((p) => p.type === "curve");
+  const turnouts = catalog.filter((p) => p.type === "turnout");
+  const crossings = catalog.filter((p) => p.type === "crossing");
 
-CROSSING:
-- tt-dk: Crossing 166mm at 15°
-
-Connection geometry (in local space, piece faces +X):
-- Straight: A at (0,0,0) facing -X, B at (length,0,0) facing +X
-- Curve (left): A at (0,0,0), B at (R*sin(angle), 0, R-R*cos(angle)) — bends into +Z
-- Turnout: A at (0,0,0), B at (length,0,0) main through, C is diverge branch end
-
-To make a CLOSED OVAL with R310/15° curves:
-- You need 12 curves per 180° turn (12×15°=180°), so 24 curves total for a full oval
-- Each 180° turn spans ~2×310=620mm laterally
-- Straights connect the two turns`,
-
-  H0: `Roco H0 GeoLine (1:87) track catalog:
-STRAIGHTS:
-- h0-g230: 230mm straight
-- h0-g200: 200mm straight
-- h0-g100: 100mm straight
-- h0-g345: 345mm straight
-
-CURVES:
-- h0-r2-30: R358mm, 30° curve
-- h0-r2-15: R358mm, 15° curve
-- h0-r3-30: R419mm, 30° curve
-- h0-r4-30: R481mm, 30° curve
-
-TURNOUTS:
-- h0-wl15: Left turnout 230mm, 15° diverge, R502.7
-- h0-wr15: Right turnout 230mm, 15° diverge, R502.7
-
-CROSSING:
-- h0-dk: Crossing 230mm at 15°
-
-To make a CLOSED OVAL with R358/30° curves:
-- You need 6 curves per 180° turn (6×30°=180°), so 12 curves total
-- Each 180° turn spans ~2×358=716mm laterally`,
-};
-
-// Track geometry info for validation
-interface PieceGeometry {
-  type: "straight" | "curve" | "turnout" | "crossing";
-  length?: number;
-  radius?: number;
-  angle?: number;
-  direction?: "left" | "right";
-}
-
-const PIECE_GEOMETRIES: Record<string, PieceGeometry> = {
-  "tt-g1": { type: "straight", length: 166 },
-  "tt-g2": { type: "straight", length: 83 },
-  "tt-g3": { type: "straight", length: 41.5 },
-  "tt-g4": { type: "straight", length: 332 },
-  "tt-g5": { type: "straight", length: 228 },
-  "tt-r1-15": { type: "curve", radius: 310, angle: 15 },
-  "tt-r1-30": { type: "curve", radius: 310, angle: 30 },
-  "tt-r2-15": { type: "curve", radius: 353, angle: 15 },
-  "tt-r2-30": { type: "curve", radius: 353, angle: 30 },
-  "tt-r3-15": { type: "curve", radius: 396, angle: 15 },
-  "tt-r3-30": { type: "curve", radius: 396, angle: 30 },
-  "tt-ewl": { type: "turnout", length: 166, angle: 15, direction: "left", radius: 310 },
-  "tt-ewr": { type: "turnout", length: 166, angle: 15, direction: "right", radius: 310 },
-  "tt-dk": { type: "crossing", length: 166, angle: 15 },
-  "h0-g230": { type: "straight", length: 230 },
-  "h0-g200": { type: "straight", length: 200 },
-  "h0-g100": { type: "straight", length: 100 },
-  "h0-g345": { type: "straight", length: 345 },
-  "h0-r2-30": { type: "curve", radius: 358, angle: 30 },
-  "h0-r2-15": { type: "curve", radius: 358, angle: 15 },
-  "h0-r3-30": { type: "curve", radius: 419, angle: 30 },
-  "h0-r4-30": { type: "curve", radius: 481, angle: 30 },
-  "h0-wl15": { type: "turnout", length: 230, angle: 15, direction: "left", radius: 502.7 },
-  "h0-wr15": { type: "turnout", length: 230, angle: 15, direction: "right", radius: 502.7 },
-  "h0-dk": { type: "crossing", length: 230, angle: 15 },
-};
-
-interface AITrackPiece {
-  pieceId: string;
-  x: number;
-  z: number;
-  rotation: number;
-  elevation?: number;
-  isTunnel?: boolean;
-  isBridge?: boolean;
-  connectedTo?: Record<string, string>;
-}
-
-/** Compute the B-end position of a track piece given its placement */
-function computeEndPosition(
-  piece: PieceGeometry,
-  x: number,
-  z: number,
-  rotation: number,
-): { x: number; z: number; angle: number } {
-  const cos = Math.cos(rotation);
-  const sin = Math.sin(rotation);
-
-  if (piece.type === "straight" || piece.type === "turnout" || piece.type === "crossing") {
-    const len = piece.length || 100;
-    return {
-      x: x + len * cos,
-      z: z + len * sin,
-      angle: rotation,
-    };
+  lines.push(`STRAIGHT TRACKS:`);
+  for (const p of straights) {
+    lines.push(`  - ${p.id}: ${p.length}mm`);
   }
 
-  if (piece.type === "curve" && piece.radius && piece.angle) {
-    const angleRad = (piece.angle * Math.PI) / 180;
-    const endLocalX = piece.radius * Math.sin(angleRad);
-    const endLocalZ = piece.radius - piece.radius * Math.cos(angleRad);
-    return {
-      x: x + endLocalX * cos - endLocalZ * sin,
-      z: z + endLocalX * sin + endLocalZ * cos,
-      angle: rotation + angleRad,
-    };
+  lines.push(`\nCURVES (all bend left in local space):`);
+  for (const p of curves) {
+    lines.push(`  - ${p.id}: R${p.radius}mm, ${p.angle}°`);
   }
 
-  return { x, z, angle: rotation };
+  lines.push(`\nTURNOUTS (main line goes A→B straight, branch goes A→C diverge):`);
+  for (const p of turnouts) {
+    lines.push(`  - ${p.id}: ${p.direction} turnout, ${p.length}mm main, ${p.angle}° diverge, R${p.radius}`);
+  }
+
+  if (crossings.length > 0) {
+    lines.push(`\nCROSSINGS:`);
+    for (const p of crossings) {
+      lines.push(`  - ${p.id}: ${p.length}mm, ${p.angle}°`);
+    }
+  }
+
+  return lines.join("\n");
 }
 
-/** Build a deterministic base oval, then let AI enhance it */
-function buildBaseOval(
-  scale: string,
-  boardWmm: number,
-  boardHmm: number,
-): AITrackPiece[] {
+// ============================================================
+// AI System Prompt
+// ============================================================
+
+function buildSystemPrompt(scale: TrackScale, boardWidth: number, boardDepth: number): string {
+  const catalogDesc = buildCatalogDescription(scale);
   const isTT = scale === "TT";
 
-  // Pick curve and straight pieces
-  const curveId = isTT ? "tt-r1-15" : "h0-r2-30";
-  const curveGeo = PIECE_GEOMETRIES[curveId]!;
-  const curvesPerHalf = Math.round(180 / curveGeo.angle!);
-  const radius = curveGeo.radius!;
+  return `You are a model railway layout designer. Design track layouts by specifying SEQUENCES of track pieces.
 
-  const straightId = isTT ? "tt-g1" : "h0-g230";
-  const straightGeo = PIECE_GEOMETRIES[straightId]!;
-  const straightLen = straightGeo.length!;
+DO NOT calculate coordinates — the layout engine will compute exact positions from your sequence.
 
-  // Calculate how many straights fit
-  const turnDiameter = 2 * radius;
-  const padding = 100;
-  const availableLength = boardWmm - turnDiameter - padding;
-  const straightCount = Math.max(1, Math.floor(availableLength / straightLen));
+TRACK CATALOG (${scale} scale):
+${catalogDesc}
 
-  const tracks: AITrackPiece[] = [];
+You specify a JSON object with:
+1. "mainLoop": array of segments forming a closed loop. Each segment: {"pieceId": "<id>"}
+2. "branches": array of side tracks branching from turnouts in mainLoop
 
-  // Start position: centered on board
-  const totalStraightLength = straightCount * straightLen;
-  const totalWidth = totalStraightLength + turnDiameter;
-  const startX = (boardWmm - totalWidth) / 2 + radius;
-  const startZ = boardHmm / 2 - radius;
+CRITICAL RULES FOR CLOSED LOOPS:
+- The main loop MUST close — the last piece must connect back to the first
+- An oval = straights on one side + 180° of curves + straights on other side + 180° of curves
+- BOTH straight sections must have THE SAME total length in mm!
+- ${isTT
+    ? "For TT R1 15° curves: 12 curves = 180° half-circle, 24 = full circle"
+    : "For H0 R2 30° curves: 6 curves = 180° half-circle, 12 = full circle"}
+- ${isTT
+    ? "For TT R1 30° curves: 6 curves = 180°, 12 = full circle"
+    : "For H0 R3 30° curves: 6 curves = 180°, 12 = full circle"}
 
-  let cx = startX;
-  let cz = startZ;
-  let cAngle = 0; // current direction in radians
+CRITICAL: STRAIGHT LENGTHS MUST MATCH!
+When replacing a straight with turnouts, account for piece lengths:
+${isTT
+    ? `- TT turnout (ewl/ewr) = 166mm (same as G1)
+- TT G1 = 166mm, G2 = 83mm, G3 = 41.5mm, G4 = 332mm, G5 = 228mm
+- Example: replacing one G4(332mm) with ewl(166mm) + G1(166mm) keeps the same total`
+    : `- H0 turnout (wl15/wr15) = 230mm (same as G230)
+- H0 G230 = 230mm, G200 = 200mm, G100 = 100mm, G345 = 345mm
+- Example: replacing one G345(345mm) with wl15(230mm) + G100(100mm) + ... etc.`}
 
-  // Top straight section
-  for (let i = 0; i < straightCount; i++) {
-    tracks.push({ pieceId: straightId, x: cx, z: cz, rotation: cAngle });
-    const end = computeEndPosition(straightGeo, cx, cz, cAngle);
-    cx = end.x;
-    cz = end.z;
-    cAngle = end.angle;
-  }
+TURNOUT RULES:
+- When you place a turnout in mainLoop, the main line continues through connection B (straight through)
+- Branch from connection C starts a new branch
+- Reference the turnout by its INDEX in mainLoop (0-based)
+- Branch starts from the turnout's "c" connection
 
-  // Right turn (180° in positive direction = curving right visually)
-  // For left-bending curves, we need to flip: rotation includes PI offset for right turn
-  for (let i = 0; i < curvesPerHalf; i++) {
-    // Curves bend left in local space; to go right, we place them with adjusted rotation
-    const curveRotation = cAngle - Math.PI; // flip so they curve right
-    // Actually, simpler approach: use negative Z scaling concept
-    // Place curve normally (bends left = +Z in local space)
-    tracks.push({ pieceId: curveId, x: cx, z: cz, rotation: cAngle });
-    const angleRad = (curveGeo.angle! * Math.PI) / 180;
-    const endLocalX = radius * Math.sin(angleRad);
-    const endLocalZ = radius - radius * Math.cos(angleRad);
-    const cos = Math.cos(cAngle);
-    const sin = Math.sin(cAngle);
-    cx = cx + endLocalX * cos - endLocalZ * sin;
-    cz = cz + endLocalX * sin + endLocalZ * cos;
-    cAngle = cAngle + angleRad;
-  }
+Board size: ${boardWidth}×${boardDepth} cm (${boardWidth * 10}×${boardDepth * 10} mm)
+The layout engine will auto-center the layout on the board.
 
-  // Bottom straight section (going back)
-  for (let i = 0; i < straightCount; i++) {
-    tracks.push({ pieceId: straightId, x: cx, z: cz, rotation: cAngle });
-    const end = computeEndPosition(straightGeo, cx, cz, cAngle);
-    cx = end.x;
-    cz = end.z;
-    cAngle = end.angle;
-  }
-
-  // Left turn (another 180°)
-  for (let i = 0; i < curvesPerHalf; i++) {
-    tracks.push({ pieceId: curveId, x: cx, z: cz, rotation: cAngle });
-    const angleRad = (curveGeo.angle! * Math.PI) / 180;
-    const endLocalX = radius * Math.sin(angleRad);
-    const endLocalZ = radius - radius * Math.cos(angleRad);
-    const cos = Math.cos(cAngle);
-    const sin = Math.sin(cAngle);
-    cx = cx + endLocalX * cos - endLocalZ * sin;
-    cz = cz + endLocalX * sin + endLocalZ * cos;
-    cAngle = cAngle + angleRad;
-  }
-
-  return tracks;
+OUTPUT FORMAT — return ONLY this JSON:
+{
+  "mainLoop": [
+    {"pieceId": "..."},
+    {"pieceId": "...", "isTunnel": true},
+    ...
+  ],
+  "branches": [
+    {
+      "sourceSegmentIndex": 0,
+      "sourceConnection": "c",
+      "segments": [{"pieceId": "..."}, ...]
+    }
+  ],
+  "description": "Short description of the layout in Czech"
 }
 
-/** Validate that tracks are within board bounds */
-function validateBounds(tracks: AITrackPiece[], boardWmm: number, boardHmm: number): string[] {
-  const errors: string[] = [];
-  for (let i = 0; i < tracks.length; i++) {
-    const t = tracks[i];
-    if (t.x < -50 || t.x > boardWmm + 50 || t.z < -50 || t.z > boardHmm + 50) {
-      errors.push(`Track ${i} (${t.pieceId}) is outside board bounds at (${Math.round(t.x)}, ${Math.round(t.z)})`);
-    }
-    if (!PIECE_GEOMETRIES[t.pieceId]) {
-      errors.push(`Track ${i} has unknown pieceId "${t.pieceId}"`);
-    }
-  }
-  return errors;
+EXAMPLE — Simple TT oval:
+{
+  "mainLoop": [
+    ${isTT
+      ? `{"pieceId": "tt-g4"}, {"pieceId": "tt-g4"}, {"pieceId": "tt-g4"},
+    ${'{"pieceId": "tt-r1-15"}, '.repeat(11)}{"pieceId": "tt-r1-15"},
+    {"pieceId": "tt-g4"}, {"pieceId": "tt-g4"}, {"pieceId": "tt-g4"},
+    ${'{"pieceId": "tt-r1-15"}, '.repeat(11)}{"pieceId": "tt-r1-15"}`
+      : `{"pieceId": "h0-g345"}, {"pieceId": "h0-g345"}, {"pieceId": "h0-g345"},
+    ${'{"pieceId": "h0-r2-30"}, '.repeat(5)}{"pieceId": "h0-r2-30"},
+    {"pieceId": "h0-g345"}, {"pieceId": "h0-g345"}, {"pieceId": "h0-g345"},
+    ${'{"pieceId": "h0-r2-30"}, '.repeat(5)}{"pieceId": "h0-r2-30"}`}
+  ],
+  "branches": [],
+  "description": "Jednoduchý ovál"
 }
 
-/** Validate connection alignment between sequential tracks */
-function validateConnections(tracks: AITrackPiece[]): string[] {
-  const errors: string[] = [];
-  const TOLERANCE = 5; // mm
-
-  for (let i = 0; i < tracks.length - 1; i++) {
-    const t = tracks[i];
-    const next = tracks[i + 1];
-    const geo = PIECE_GEOMETRIES[t.pieceId];
-    if (!geo) continue;
-
-    const end = computeEndPosition(geo, t.x, t.z, t.rotation);
-    const dx = Math.abs(end.x - next.x);
-    const dz = Math.abs(end.z - next.z);
-    const dist = Math.sqrt(dx * dx + dz * dz);
-
-    if (dist > TOLERANCE) {
-      errors.push(
-        `Gap of ${Math.round(dist)}mm between track ${i} end (${Math.round(end.x)},${Math.round(end.z)}) and track ${i + 1} start (${Math.round(next.x)},${Math.round(next.z)})`
-      );
-    }
-  }
-
-  return errors;
+EXAMPLE — TT oval with passing siding:
+Top side total: ewl(166) + 2×G4(664) + ewr(166) = 996mm
+Bottom side: 3×G4(996) = 996mm ← MUST MATCH!
+{
+  "mainLoop": [
+    {"pieceId": "${isTT ? "tt-ewl" : "h0-wl15"}"},
+    {"pieceId": "${isTT ? "tt-g4" : "h0-g345"}"}, {"pieceId": "${isTT ? "tt-g4" : "h0-g345"}"},
+    {"pieceId": "${isTT ? "tt-ewr" : "h0-wr15"}"},
+    ... 180° curves ...,
+    ... straights matching top total ...,
+    ... 180° curves ...
+  ],
+  "branches": [
+    {"sourceSegmentIndex": 0, "sourceConnection": "c", "segments": [
+      {"pieceId": "${isTT ? "tt-g4" : "h0-g345"}"}, {"pieceId": "${isTT ? "tt-g4" : "h0-g345"}"}
+    ]}
+  ]
+}`;
 }
+
+// ============================================================
+// Request types
+// ============================================================
 
 interface RequestBody {
   scale: string;
@@ -292,7 +177,9 @@ interface RequestBody {
   complexity?: "simple" | "medium" | "complex";
   features?: string[];
   additionalPrompt?: string;
-  // Legacy support
+  /** Use a predefined template instead of AI */
+  templateId?: string;
+  /** Legacy support */
   prompt?: string;
 }
 
@@ -323,7 +210,6 @@ const FEATURE_LABELS: Record<string, string> = {
 function buildPromptFromForm(body: RequestBody): string {
   const parts: string[] = [];
 
-  // Board shape
   if (body.boardShape === "l-shape") {
     const cornerLabel: Record<string, string> = {
       "top-left": "levý horní",
@@ -340,27 +226,21 @@ function buildPromptFromForm(body: RequestBody): string {
     parts.push("Tvar desky: obdélník.");
   }
 
-  // Character
   if (body.character && CHARACTER_LABELS[body.character]) {
     parts.push(`Charakter: ${CHARACTER_LABELS[body.character]}.`);
   }
 
-  // Complexity
   if (body.complexity && COMPLEXITY_LABELS[body.complexity]) {
     parts.push(`Složitost: ${COMPLEXITY_LABELS[body.complexity]}.`);
   }
 
-  // Features
   if (body.features && body.features.length > 0) {
-    const labels = body.features
-      .map((f) => FEATURE_LABELS[f])
-      .filter(Boolean);
+    const labels = body.features.map((f) => FEATURE_LABELS[f]).filter(Boolean);
     if (labels.length > 0) {
       parts.push(`Speciální prvky: ${labels.join(", ")}.`);
     }
   }
 
-  // Additional user prompt
   if (body.additionalPrompt && body.additionalPrompt.trim()) {
     parts.push(`Další požadavky: ${body.additionalPrompt.trim()}`);
   }
@@ -368,11 +248,53 @@ function buildPromptFromForm(body: RequestBody): string {
   return parts.join("\n");
 }
 
-export async function POST(request: NextRequest) {
-  if (!OPENAI_API_KEY) {
-    return NextResponse.json({ error: "API klíč není nakonfigurován" }, { status: 500 });
+// ============================================================
+// Fallback template selection
+// ============================================================
+
+function selectFallbackTemplate(
+  scale: TrackScale,
+  character?: string,
+  complexity?: string,
+  features?: string[],
+): LayoutDefinition {
+  // Try to match character to a template
+  const charMap: Record<string, string> = {
+    mountain: "mountain-loop",
+    station: "station-with-yard",
+    "through-station": "oval-with-siding",
+    industrial: "industrial-spur",
+    diorama: "simple-oval",
+    corridor: "simple-oval",
+  };
+
+  let templateId = "simple-oval";
+
+  if (character && charMap[character]) {
+    templateId = charMap[character];
+  } else if (complexity === "medium") {
+    templateId = "oval-with-siding";
+  } else if (complexity === "complex") {
+    templateId = "station-with-yard";
   }
 
+  // Check features
+  if (features?.includes("tunnel")) {
+    templateId = "mountain-loop";
+  }
+  if (features?.includes("sidings") || features?.includes("station")) {
+    templateId = "station-with-yard";
+  }
+
+  const layout = getTemplateLayout(templateId, scale);
+  return layout || getTemplateLayout("simple-oval", scale)!;
+}
+
+// ============================================================
+// API Handler
+// ============================================================
+
+export async function POST(request: NextRequest) {
   let body: RequestBody;
   try {
     body = await request.json();
@@ -380,96 +302,83 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Neplatný požadavek" }, { status: 400 });
   }
 
-  const { scale, boardWidth, boardDepth } = body;
+  const { scale: scaleRaw, boardWidth, boardDepth } = body;
 
-  if (!scale || !boardWidth || !boardDepth) {
-    return NextResponse.json({ error: "Chybí povinné parametry (scale, boardWidth, boardDepth)" }, { status: 400 });
+  if (!scaleRaw || !boardWidth || !boardDepth) {
+    return NextResponse.json(
+      { error: "Chybí povinné parametry (scale, boardWidth, boardDepth)" },
+      { status: 400 },
+    );
   }
 
-  const boardWmm = boardWidth * 10;
-  const boardHmm = boardDepth * 10;
+  const scale = scaleRaw as TrackScale;
 
-  // Build the prompt from structured form data (or use legacy prompt field)
+  // --- Option 1: Use a predefined template ---
+  if (body.templateId) {
+    const templateLayout = getTemplateLayout(body.templateId, scale);
+    if (!templateLayout) {
+      return NextResponse.json(
+        { error: `Šablona "${body.templateId}" není dostupná pro měřítko ${scale}` },
+        { status: 400 },
+      );
+    }
+
+    const result = computeLayout(templateLayout, scale, boardWidth, boardDepth);
+    return NextResponse.json({
+      tracks: layoutResultToAPIResponse(result),
+      description: TEMPLATES.find((t) => t.id === body.templateId)?.descriptionCs,
+      loopClosed: result.loopClosed,
+      loopGapMm: result.loopGapMm,
+      warnings: result.warnings.length > 0 ? result.warnings : undefined,
+      source: "template",
+    });
+  }
+
+  // --- Option 2: No prompt → return simple oval ---
   const prompt = body.character ? buildPromptFromForm(body) : (body.prompt || "");
 
-  // Step 1: Build deterministic base oval
-  const baseTracks = buildBaseOval(scale, boardWmm, boardHmm);
-
-  // If no prompt, just return the base oval
   if (!prompt || prompt.trim() === "") {
-    // Add connection info
-    const tracksWithSnaps = addSnapConnections(baseTracks);
-    return NextResponse.json({ tracks: tracksWithSnaps });
+    const layout = getTemplateLayout("simple-oval", scale)!;
+    const result = computeLayout(layout, scale, boardWidth, boardDepth);
+    return NextResponse.json({
+      tracks: layoutResultToAPIResponse(result),
+      description: "Jednoduchý ovál",
+      loopClosed: result.loopClosed,
+      loopGapMm: result.loopGapMm,
+      source: "template",
+    });
   }
 
-  // Step 2: Ask AI to enhance the layout
-  const catalogDesc = CATALOG_DESCRIPTIONS[scale] || CATALOG_DESCRIPTIONS["TT"];
-
-  // Build board shape description for AI
-  let boardShapeDesc = `Rectangular board: ${boardWidth}×${boardDepth} cm`;
-  if (body.boardShape === "l-shape") {
-    boardShapeDesc = `L-shaped board: main ${boardWidth}×${boardDepth} cm, arm at ${body.lCorner || "top-right"} corner, arm width ${body.lArmWidth || 60} cm, arm depth ${body.lArmDepth || 40} cm. Only place tracks within the L-shape area!`;
-  } else if (body.boardShape === "u-shape") {
-    boardShapeDesc = `U-shaped board: main ${boardWidth}×${boardDepth} cm, arms depth ${body.uArmDepth || 40} cm on both sides. Only place tracks within the U-shape area!`;
+  // --- Option 3: AI-generated topology ---
+  if (!OPENAI_API_KEY) {
+    // No API key → use fallback template based on character/complexity
+    const fallbackLayout = selectFallbackTemplate(scale, body.character, body.complexity, body.features);
+    const result = computeLayout(fallbackLayout, scale, boardWidth, boardDepth);
+    return NextResponse.json({
+      tracks: layoutResultToAPIResponse(result),
+      description: "Kolejiště vygenerované ze šablony (AI klíč není nakonfigurován)",
+      loopClosed: result.loopClosed,
+      loopGapMm: result.loopGapMm,
+      source: "template-fallback",
+      warning: "API klíč není nakonfigurován, použita šablona.",
+    });
   }
 
-  const systemPrompt = `You are an expert model railway 3D layout designer. You'll receive a base oval loop as a JSON array of positioned track pieces, and you should enhance it based on the user's request.
+  const systemPrompt = buildSystemPrompt(scale, boardWidth, boardDepth);
 
-TRACK CATALOG:
-${catalogDesc}
+  const userMessage = `Design a track layout with these requirements:
 
-COORDINATE SYSTEM:
-- X axis = horizontal (along straights)
-- Z axis = depth (perpendicular to straights)
-- Y axis = up (elevation)
-- Rotation in radians around Y axis. 0 = facing +X direction.
-- Board dimensions are in mm.
-
-BOARD SHAPE: ${boardShapeDesc}
-
-YOUR TASK:
-1. Start with the provided base oval tracks
-2. Add turnouts, sidings, tunnels, bridges as requested
-3. For turnouts: replace a straight with a turnout at the same position
-4. For sidings: add new tracks branching from turnout's diverge point
-5. For tunnels: mark tracks with isTunnel: true
-6. For bridges: mark elevated tracks with isBridge: true, elevation > 0
-7. Match the requested character, complexity, and special features
-
-COMPLEXITY GUIDE:
-- Simple: basic oval with minimal additions (1-2 turnouts max)
-- Medium: add station area, sidings, passing loops
-- Complex: multiple routes, crossings, elevation changes, tunnels, bridges
-
-RULES:
-- Each track piece must have: pieceId, x, z, rotation
-- Optional: elevation (mm above board), isTunnel, isBridge
-- Pieces must connect: end of piece N = start of piece N+1 (for main loop)
-- Use ONLY piece IDs from the catalog
-- Keep the base oval intact unless replacing straights with turnouts
-- All coordinates in mm
-- Respect the board shape — don't place tracks outside the board area
-
-OUTPUT FORMAT: Return ONLY a JSON object:
-{
-  "tracks": [
-    { "pieceId": "tt-g1", "x": 100, "z": 500, "rotation": 0 },
-    { "pieceId": "tt-r1-15", "x": 266, "z": 500, "rotation": 0 },
-    ...
-  ],
-  "description": "Short description of the layout in Czech"
-}`;
-
-  const userMessage = `Board: ${boardWidth}×${boardDepth} cm (${boardWmm}×${boardHmm} mm)
-Scale: ${scale}
-
-BASE OVAL (${baseTracks.length} pieces):
-${JSON.stringify(baseTracks.map(t => ({ ...t, x: Math.round(t.x), z: Math.round(t.z), rotation: Math.round(t.rotation * 1000) / 1000 })), null, 2)}
-
-USER REQUEST:
 ${prompt}
 
-Enhance this layout. Return ONLY valid JSON with the "tracks" array containing ALL pieces (base + additions).`;
+Board: ${boardWidth}×${boardDepth} cm, Scale: ${scale}
+
+Remember:
+- mainLoop must form a CLOSED LOOP
+- Both straight sections of an oval must have EQUAL total length in mm
+- Use only piece IDs from the catalog
+- Count curves correctly: ${scale === "TT" ? "12×15° or 6×30° = 180°" : "6×30° = 180°"}
+
+Return ONLY the JSON object.`;
 
   try {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -480,8 +389,8 @@ Enhance this layout. Return ONLY valid JSON with the "tracks" array containing A
       },
       body: JSON.stringify({
         model: "gpt-4o",
-        max_tokens: 8000,
-        temperature: 0.7,
+        max_tokens: 4000,
+        temperature: 0.5,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userMessage },
@@ -493,136 +402,103 @@ Enhance this layout. Return ONLY valid JSON with the "tracks" array containing A
     if (!response.ok) {
       const errText = await response.text();
       console.error("OpenAI API error:", response.status, errText);
-      return NextResponse.json(
-        { error: `AI chyba (${response.status}): ${response.statusText}` },
-        { status: 502 }
-      );
+      // Fallback to template
+      const fallbackLayout = selectFallbackTemplate(scale, body.character, body.complexity, body.features);
+      const result = computeLayout(fallbackLayout, scale, boardWidth, boardDepth);
+      return NextResponse.json({
+        tracks: layoutResultToAPIResponse(result),
+        description: "Kolejiště ze šablony (chyba AI)",
+        loopClosed: result.loopClosed,
+        loopGapMm: result.loopGapMm,
+        source: "template-fallback",
+        warning: `AI chyba (${response.status}), použita šablona.`,
+      });
     }
 
     const data = await response.json();
     const aiText = data.choices?.[0]?.message?.content ?? "";
 
-    let parsed: { tracks?: AITrackPiece[]; description?: string };
+    // Parse the AI response
+    let aiResponse: Record<string, unknown>;
     try {
       const jsonMatch = aiText.match(/\{[\s\S]*\}/);
       if (!jsonMatch) throw new Error("No JSON found");
-      parsed = JSON.parse(jsonMatch[0]);
+      aiResponse = JSON.parse(jsonMatch[0]);
     } catch {
       console.error("Failed to parse AI response:", aiText);
-      // Fall back to base oval
-      const tracksWithSnaps = addSnapConnections(baseTracks);
+      const fallbackLayout = selectFallbackTemplate(scale, body.character, body.complexity, body.features);
+      const result = computeLayout(fallbackLayout, scale, boardWidth, boardDepth);
       return NextResponse.json({
-        tracks: tracksWithSnaps,
-        warning: "AI vrátila neplatnou odpověď, zobrazuji základní ovál.",
+        tracks: layoutResultToAPIResponse(result),
+        description: "Kolejiště ze šablony (AI vrátila neplatný JSON)",
+        loopClosed: result.loopClosed,
+        loopGapMm: result.loopGapMm,
+        source: "template-fallback",
+        warning: "AI vrátila neplatnou odpověď, použita šablona.",
       });
     }
 
-    let aiTracks = parsed.tracks || baseTracks;
-
-    // Validate piece IDs
-    aiTracks = aiTracks.filter(t => PIECE_GEOMETRIES[t.pieceId]);
-
-    if (aiTracks.length === 0) {
-      const tracksWithSnaps = addSnapConnections(baseTracks);
+    // Parse into LayoutDefinition
+    const layoutDef = parseAILayoutResponse(aiResponse);
+    if (!layoutDef) {
+      console.error("Failed to parse layout definition from AI response:", aiResponse);
+      const fallbackLayout = selectFallbackTemplate(scale, body.character, body.complexity, body.features);
+      const result = computeLayout(fallbackLayout, scale, boardWidth, boardDepth);
       return NextResponse.json({
-        tracks: tracksWithSnaps,
-        warning: "AI nevygenerovala žádné platné koleje, zobrazuji základní ovál.",
+        tracks: layoutResultToAPIResponse(result),
+        description: "Kolejiště ze šablony (AI layout neplatný)",
+        loopClosed: result.loopClosed,
+        loopGapMm: result.loopGapMm,
+        source: "template-fallback",
+        warning: "AI vygenerovala neplatný layout, použita šablona.",
       });
     }
 
-    // Validate bounds
-    const boundErrors = validateBounds(aiTracks, boardWmm, boardHmm);
-    if (boundErrors.length > 0) {
-      console.warn("Track bounds issues:", boundErrors);
-    }
+    // Compute deterministic layout!
+    const result = computeLayout(layoutDef, scale, boardWidth, boardDepth);
+    const description = typeof aiResponse.description === "string"
+      ? aiResponse.description
+      : "AI vygenerované kolejiště";
 
-    // Validate connections
-    const connErrors = validateConnections(aiTracks);
-    if (connErrors.length > 0) {
-      console.warn("Track connection issues:", connErrors);
+    // If loop didn't close, try fallback
+    if (!result.loopClosed && result.loopGapMm > 10) {
+      console.warn(`AI layout loop gap too large: ${result.loopGapMm.toFixed(1)}mm, falling back`);
+      const fallbackLayout = selectFallbackTemplate(scale, body.character, body.complexity, body.features);
+      const fallbackResult = computeLayout(fallbackLayout, scale, boardWidth, boardDepth);
+      return NextResponse.json({
+        tracks: layoutResultToAPIResponse(fallbackResult),
+        description: "Kolejiště ze šablony (AI layout se neuzavřel)",
+        loopClosed: fallbackResult.loopClosed,
+        loopGapMm: fallbackResult.loopGapMm,
+        source: "template-fallback",
+        warning: `AI layout se neuzavřel (mezera ${result.loopGapMm.toFixed(1)}mm), použita šablona.`,
+        aiAttempt: {
+          loopGapMm: result.loopGapMm,
+          trackCount: result.tracks.length,
+          warnings: result.warnings,
+        },
+      });
     }
-
-    const tracksWithSnaps = addSnapConnections(aiTracks);
 
     return NextResponse.json({
-      tracks: tracksWithSnaps,
-      description: parsed.description,
-      validation: {
-        boundErrors: boundErrors.length,
-        connectionErrors: connErrors.length,
-      },
+      tracks: layoutResultToAPIResponse(result),
+      description,
+      loopClosed: result.loopClosed,
+      loopGapMm: result.loopGapMm,
+      warnings: result.warnings.length > 0 ? result.warnings : undefined,
+      source: "ai",
     });
   } catch (err) {
     console.error("Generate track 3D error:", err);
-    // Fall back to base oval
-    const tracksWithSnaps = addSnapConnections(baseTracks);
+    const fallbackLayout = selectFallbackTemplate(scale, body.character, body.complexity, body.features);
+    const result = computeLayout(fallbackLayout, scale, boardWidth, boardDepth);
     return NextResponse.json({
-      tracks: tracksWithSnaps,
-      warning: "Chyba při komunikaci s AI, zobrazuji základní ovál.",
+      tracks: layoutResultToAPIResponse(result),
+      description: "Kolejiště ze šablony (chyba komunikace s AI)",
+      loopClosed: result.loopClosed,
+      loopGapMm: result.loopGapMm,
+      source: "template-fallback",
+      warning: "Chyba při komunikaci s AI, použita šablona.",
     });
   }
-}
-
-/** Add snap connection info between sequential tracks */
-function addSnapConnections(tracks: AITrackPiece[]): AITrackPiece[] {
-  const result: AITrackPiece[] = [];
-  for (let i = 0; i < tracks.length; i++) {
-    const snapped: Record<string, string> = {};
-
-    // Check if this track's start connects to previous track's end
-    if (i > 0) {
-      const prev = tracks[i - 1];
-      const prevGeo = PIECE_GEOMETRIES[prev.pieceId];
-      if (prevGeo) {
-        const end = computeEndPosition(prevGeo, prev.x, prev.z, prev.rotation);
-        const dist = Math.sqrt((end.x - tracks[i].x) ** 2 + (end.z - tracks[i].z) ** 2);
-        if (dist < 10) {
-          snapped["a"] = `track-seq-${i - 1}:b`;
-        }
-      }
-    }
-
-    // Check if this track's end connects to next track's start
-    if (i < tracks.length - 1) {
-      const geo = PIECE_GEOMETRIES[tracks[i].pieceId];
-      if (geo) {
-        const end = computeEndPosition(geo, tracks[i].x, tracks[i].z, tracks[i].rotation);
-        const next = tracks[i + 1];
-        const dist = Math.sqrt((end.x - next.x) ** 2 + (end.z - next.z) ** 2);
-        if (dist < 10) {
-          snapped["b"] = `track-seq-${i + 1}:a`;
-        }
-      }
-    }
-
-    // Check if last track connects back to first (closed loop)
-    if (i === tracks.length - 1) {
-      const geo = PIECE_GEOMETRIES[tracks[i].pieceId];
-      if (geo) {
-        const end = computeEndPosition(geo, tracks[i].x, tracks[i].z, tracks[i].rotation);
-        const first = tracks[0];
-        const dist = Math.sqrt((end.x - first.x) ** 2 + (end.z - first.z) ** 2);
-        if (dist < 15) {
-          snapped["b"] = `track-seq-0:a`;
-        }
-      }
-    }
-    if (i === 0 && tracks.length > 1) {
-      const last = tracks[tracks.length - 1];
-      const lastGeo = PIECE_GEOMETRIES[last.pieceId];
-      if (lastGeo) {
-        const end = computeEndPosition(lastGeo, last.x, last.z, last.rotation);
-        const dist = Math.sqrt((end.x - tracks[0].x) ** 2 + (end.z - tracks[0].z) ** 2);
-        if (dist < 15) {
-          snapped["a"] = `track-seq-${tracks.length - 1}:b`;
-        }
-      }
-    }
-
-    result.push({
-      ...tracks[i],
-      connectedTo: Object.keys(snapped).length > 0 ? snapped : undefined,
-    });
-  }
-  return result;
 }
