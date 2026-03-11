@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Track Debug</title>
+<style>body{margin:0;background:#000;overflow:hidden;font-family:sans-serif;}</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="info" style="position:fixed;top:10px;left:10px;color:white;z-index:999;font-size:14px;background:rgba(0,0,0,0.7);padding:10px;border-radius:8px;">Loading...</div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// Exact data from engine output (simple-oval TT)
+const tracks = [
+  {id:"tt-g4",x:336,z:190,rot:0,type:"straight",len:332},
+  {id:"tt-g4",x:668,z:190,rot:0,type:"straight",len:332},
+  {id:"tt-g4",x:1000,z:190,rot:0,type:"straight",len:332},
+  {id:"tt-g4",x:1332,z:190,rot:0,type:"straight",len:332},
+  {id:"tt-r1-15",x:1664,z:190,rot:0,type:"curve",radius:310,angle:15},
+  {id:"tt-r1-15",x:1744.2,z:200.6,rot:15,type:"curve",radius:310,angle:15},
+  {id:"tt-r1-15",x:1819,z:231.5,rot:30,type:"curve",radius:310,angle:15},
+  {id:"tt-r1-15",x:1883.2,z:280.8,rot:45,type:"curve",radius:310,angle:15},
+  {id:"tt-r1-15",x:1932.5,z:345,rot:60,type:"curve",radius:310,angle:15},
+  {id:"tt-r1-15",x:1963.4,z:419.8,rot:75,type:"curve",radius:310,angle:15},
+  {id:"tt-r1-15",x:1974,z:500,rot:90,type:"curve",radius:310,angle:15},
+  {id:"tt-r1-15",x:1963.4,z:580.2,rot:105,type:"curve",radius:310,angle:15},
+  {id:"tt-r1-15",x:1932.5,z:655,rot:120,type:"curve",radius:310,angle:15},
+  {id:"tt-r1-15",x:1883.2,z:719.2,rot:135,type:"curve",radius:310,angle:15},
+  {id:"tt-r1-15",x:1819,z:768.5,rot:150,type:"curve",radius:310,angle:15},
+  {id:"tt-r1-15",x:1744.2,z:799.4,rot:165,type:"curve",radius:310,angle:15},
+  {id:"tt-g4",x:1664,z:810,rot:180,type:"straight",len:332},
+  {id:"tt-g4",x:1332,z:810,rot:180,type:"straight",len:332},
+  {id:"tt-g4",x:1000,z:810,rot:180,type:"straight",len:332},
+  {id:"tt-g4",x:668,z:810,rot:180,type:"straight",len:332},
+  {id:"tt-r1-15",x:336,z:810,rot:180,type:"curve",radius:310,angle:15},
+  {id:"tt-r1-15",x:255.8,z:799.4,rot:195,type:"curve",radius:310,angle:15},
+  {id:"tt-r1-15",x:181,z:768.5,rot:210,type:"curve",radius:310,angle:15},
+  {id:"tt-r1-15",x:116.8,z:719.2,rot:225,type:"curve",radius:310,angle:15},
+  {id:"tt-r1-15",x:67.5,z:655,rot:240,type:"curve",radius:310,angle:15},
+  {id:"tt-r1-15",x:36.6,z:580.2,rot:255,type:"curve",radius:310,angle:15},
+  {id:"tt-r1-15",x:26,z:500,rot:270,type:"curve",radius:310,angle:15},
+  {id:"tt-r1-15",x:36.6,z:419.8,rot:285,type:"curve",radius:310,angle:15},
+  {id:"tt-r1-15",x:67.5,z:345,rot:300,type:"curve",radius:310,angle:15},
+  {id:"tt-r1-15",x:116.8,z:280.8,rot:315,type:"curve",radius:310,angle:15},
+  {id:"tt-r1-15",x:181,z:231.5,rot:330,type:"curve",radius:310,angle:15},
+  {id:"tt-r1-15",x:255.8,z:200.6,rot:345,type:"curve",radius:310,angle:15},
+];
+
+const boardW = 2000, boardD = 1000;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0b14);
+
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 1, 10000);
+camera.position.set(boardW/2, Math.max(boardW,boardD)*0.8, boardD*1.5);
+
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(boardW/2, 0, boardD/2);
+controls.update();
+
+// Lights
+scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+const dl = new THREE.DirectionalLight(0xffffff, 0.8);
+dl.position.set(boardW, 500, boardD);
+scene.add(dl);
+
+// Green board
+const boardGeo = new THREE.BoxGeometry(boardW, 5, boardD);
+const boardMat = new THREE.MeshStandardMaterial({color:0x2a5a2a});
+const board = new THREE.Mesh(boardGeo, boardMat);
+board.position.set(boardW/2, -2.5, boardD/2);
+scene.add(board);
+
+const railMat = new THREE.MeshStandardMaterial({color:0xc0c0c0, metalness:0.7, roughness:0.3});
+const sleeperMat = new THREE.MeshStandardMaterial({color:0x6b4226});
+const GAUGE = 3, RW = 0.8, RH = 1.2, SW = 8, SH = 0.6, SD = 1.5, SS = 12;
+
+function railProfile() {
+  const s = new THREE.Shape();
+  const hw = RW/2, hh = RH/2;
+  s.moveTo(-hw,-hh); s.lineTo(hw,-hh); s.lineTo(hw,hh); s.lineTo(-hw,hh); s.closePath();
+  return s;
+}
+
+function addStraight(group, length) {
+  const hg = GAUGE/2;
+  const prof = railProfile();
+  const lp = new THREE.LineCurve3(new THREE.Vector3(0,RH/2,-hg), new THREE.Vector3(length,RH/2,-hg));
+  const rp = new THREE.LineCurve3(new THREE.Vector3(0,RH/2,hg), new THREE.Vector3(length,RH/2,hg));
+  group.add(new THREE.Mesh(new THREE.ExtrudeGeometry(prof,{steps:2,bevelEnabled:false,extrudePath:lp}), railMat));
+  group.add(new THREE.Mesh(new THREE.ExtrudeGeometry(prof,{steps:2,bevelEnabled:false,extrudePath:rp}), railMat));
+  // Sleepers
+  const cnt = Math.max(1, Math.floor(length/SS));
+  const sg = new THREE.BoxGeometry(SD, SH, SW);
+  for (let i=0;i<cnt;i++) {
+    const m = new THREE.Mesh(sg, sleeperMat);
+    m.position.set(((i+0.5)/cnt)*length, SH/2, 0);
+    group.add(m);
+  }
+}
+
+function addCurve(group, radius, angleDeg) {
+  const angleRad = angleDeg*Math.PI/180;
+  const hg = GAUGE/2;
+  const segs = Math.max(8, Math.ceil(angleDeg/3));
+  const prof = railProfile();
+
+  function makePath(r, yOff) {
+    const pts = [];
+    for (let i=0;i<=segs;i++) {
+      const t = (i/segs)*angleRad;
+      pts.push(new THREE.Vector3(r*Math.sin(t), yOff, r - r*Math.cos(t)));
+    }
+    const cp = new THREE.CurvePath();
+    for (let i=0;i<pts.length-1;i++) cp.add(new THREE.LineCurve3(pts[i], pts[i+1]));
+    return cp;
+  }
+
+  const inner = makePath(radius-hg, RH/2);
+  const outer = makePath(radius+hg, RH/2);
+  group.add(new THREE.Mesh(new THREE.ExtrudeGeometry(prof,{steps:segs,bevelEnabled:false,extrudePath:inner}), railMat));
+  group.add(new THREE.Mesh(new THREE.ExtrudeGeometry(prof,{steps:segs,bevelEnabled:false,extrudePath:outer}), railMat));
+  
+  // Sleepers
+  const arcLen = radius*angleRad;
+  const cnt = Math.max(1, Math.floor(arcLen/SS));
+  const sg = new THREE.BoxGeometry(SD, SH, SW);
+  for (let i=0;i<cnt;i++) {
+    const t = ((i+0.5)/cnt)*angleRad;
+    const m = new THREE.Mesh(sg, sleeperMat);
+    m.position.set(radius*Math.sin(t), SH/2, radius-radius*Math.cos(t));
+    m.rotation.y = -t;
+    group.add(m);
+  }
+}
+
+// Place all tracks
+let gapCount = 0;
+for (let i=0; i<tracks.length; i++) {
+  const t = tracks[i];
+  const g = new THREE.Group();
+  
+  if (t.type === "straight") addStraight(g, t.len);
+  else if (t.type === "curve") addCurve(g, t.radius, t.angle);
+  
+  g.position.set(t.x, 0, t.z);
+  g.rotation.y = t.rot * Math.PI / 180;
+  scene.add(g);
+  
+  // Debug: add sphere at connection A position (group origin)
+  const sA = new THREE.Mesh(new THREE.SphereGeometry(3,8,8), new THREE.MeshBasicMaterial({color:0x00ff00}));
+  sA.position.set(t.x, 5, t.z);
+  scene.add(sA);
+}
+
+// Connection debug: draw lines between consecutive track connection points
+const lineMat = new THREE.LineBasicMaterial({color:0xff0000});
+for (let i=0; i<tracks.length; i++) {
+  const t = tracks[i];
+  const next = tracks[(i+1)%tracks.length];
+  
+  // End of current track
+  const rotR = t.rot * Math.PI / 180;
+  const cos = Math.cos(rotR), sin = Math.sin(rotR);
+  let endX, endZ;
+  if (t.type === "straight") {
+    endX = t.x + t.len * cos;
+    endZ = t.z + t.len * sin;
+  } else {
+    const ar = t.angle * Math.PI / 180;
+    const lx = t.radius * Math.sin(ar);
+    const lz = t.radius - t.radius * Math.cos(ar);
+    endX = t.x + lx * cos - lz * sin;
+    endZ = t.z + lx * sin + lz * cos;
+  }
+  
+  const gap = Math.sqrt((next.x-endX)**2 + (next.z-endZ)**2);
+  if (gap > 0.1) {
+    gapCount++;
+    // Draw red line for gaps
+    const geo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(endX, 10, endZ),
+      new THREE.Vector3(next.x, 10, next.z)
+    ]);
+    scene.add(new THREE.Line(geo, lineMat));
+  }
+}
+
+document.getElementById('info').innerHTML = `
+  <b>Track Debug (raw Three.js)</b><br>
+  Tracks: ${tracks.length}<br>
+  Gaps > 0.1mm: ${gapCount}<br>
+  Board: ${boardW}×${boardD}mm<br>
+  <small>Green spheres = track origins</small>
+`;
+
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>
