@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Curve Geometry Test</title>
+<style>body{margin:0;background:#111;}</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="info" style="position:fixed;top:10px;left:10px;color:white;z-index:999;font-size:13px;background:rgba(0,0,0,0.8);padding:10px;border-radius:8px;max-width:400px;"></div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x111122);
+const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.1, 5000);
+camera.position.set(0, 400, 600);
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(200, 0, 200);
+controls.update();
+scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+scene.add(new THREE.DirectionalLight(0xffffff, 0.8).translateTo = null || (() => { const l = new THREE.DirectionalLight(0xffffff, 0.8); l.position.set(500,500,500); return l; })());
+scene.add(new THREE.DirectionalLight(0xffffff, 0.8));
+scene.children[scene.children.length-1].position.set(500,500,500);
+
+const railMat = new THREE.MeshStandardMaterial({color:0xc0c0c0, metalness:0.7, roughness:0.3});
+const greenMat = new THREE.MeshBasicMaterial({color:0x00ff00});
+const redMat = new THREE.MeshBasicMaterial({color:0xff0000});
+const blueMat = new THREE.MeshBasicMaterial({color:0x0088ff});
+const yellowMat = new THREE.MeshBasicMaterial({color:0xffff00});
+
+function railProfile() {
+  const s = new THREE.Shape();
+  s.moveTo(-0.4,-0.6); s.lineTo(0.4,-0.6); s.lineTo(0.4,0.6); s.lineTo(-0.4,0.6); s.closePath();
+  return s;
+}
+
+function addSphere(x, y, z, mat, r=4) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(r,8,8), mat);
+  m.position.set(x, y, z);
+  scene.add(m);
+}
+
+// Test 1: Single straight G4 (332mm) at origin, rotation=0
+{
+  const g = new THREE.Group();
+  const prof = railProfile();
+  const hg = 1.5;
+  const lp = new THREE.LineCurve3(new THREE.Vector3(0,0.6,-hg), new THREE.Vector3(332,0.6,-hg));
+  const rp = new THREE.LineCurve3(new THREE.Vector3(0,0.6,hg), new THREE.Vector3(332,0.6,hg));
+  g.add(new THREE.Mesh(new THREE.ExtrudeGeometry(prof,{steps:2,bevelEnabled:false,extrudePath:lp}), railMat));
+  g.add(new THREE.Mesh(new THREE.ExtrudeGeometry(prof,{steps:2,bevelEnabled:false,extrudePath:rp}), railMat));
+  g.position.set(0, 0, 0);
+  g.rotation.y = 0;
+  scene.add(g);
+  addSphere(0, 5, 0, greenMat); // start
+  addSphere(332, 5, 0, redMat); // end
+}
+
+// Test 2: Curve R1-15° at end of straight (x=332, z=0, rot=0)
+{
+  const g = new THREE.Group();
+  const prof = railProfile();
+  const R = 310, A = 15, hg = 1.5;
+  const ar = A*Math.PI/180;
+  const segs = 8;
+  function makePath(r, y) {
+    const pts = [];
+    for (let i=0;i<=segs;i++) {
+      const t = (i/segs)*ar;
+      pts.push(new THREE.Vector3(r*Math.sin(t), y, r-r*Math.cos(t)));
+    }
+    const cp = new THREE.CurvePath();
+    for (let i=0;i<pts.length-1;i++) cp.add(new THREE.LineCurve3(pts[i],pts[i+1]));
+    return cp;
+  }
+  g.add(new THREE.Mesh(new THREE.ExtrudeGeometry(prof,{steps:segs,bevelEnabled:false,extrudePath:makePath(R-hg,0.6)}), railMat));
+  g.add(new THREE.Mesh(new THREE.ExtrudeGeometry(prof,{steps:segs,bevelEnabled:false,extrudePath:makePath(R+hg,0.6)}), railMat));
+  g.position.set(332, 0, 0); // at end of straight
+  g.rotation.y = 0; // same rotation
+  scene.add(g);
+  addSphere(332, 5, 0, blueMat, 3); // curve start (should overlap with straight end)
+  
+  // Curve end = local (R*sin(A), 0, R-R*cos(A)) rotated by 0
+  const endX = 332 + R*Math.sin(ar);
+  const endZ = 0 + (R - R*Math.cos(ar));
+  addSphere(endX, 5, endZ, yellowMat, 3); // curve end
+}
+
+// Test 3: Next curve at rot=15° — placed at end of previous curve
+{
+  const g = new THREE.Group();
+  const prof = railProfile();
+  const R = 310, A = 15, hg = 1.5;
+  const ar = A*Math.PI/180;
+  const segs = 8;
+  function makePath(r, y) {
+    const pts = [];
+    for (let i=0;i<=segs;i++) {
+      const t = (i/segs)*ar;
+      pts.push(new THREE.Vector3(r*Math.sin(t), y, r-r*Math.cos(t)));
+    }
+    const cp = new THREE.CurvePath();
+    for (let i=0;i<pts.length-1;i++) cp.add(new THREE.LineCurve3(pts[i],pts[i+1]));
+    return cp;
+  }
+  g.add(new THREE.Mesh(new THREE.ExtrudeGeometry(prof,{steps:segs,bevelEnabled:false,extrudePath:makePath(R-hg,0.6)}), railMat));
+  g.add(new THREE.Mesh(new THREE.ExtrudeGeometry(prof,{steps:segs,bevelEnabled:false,extrudePath:makePath(R+hg,0.6)}), railMat));
+  
+  // Position = end of previous curve
+  const prevEndLocalX = R*Math.sin(ar);
+  const prevEndLocalZ = R - R*Math.cos(ar);
+  const prevRot = 0; // previous curve rotation
+  const cos0 = Math.cos(prevRot);
+  const sin0 = Math.sin(prevRot);
+  const worldX = 332 + prevEndLocalX * cos0 - prevEndLocalZ * sin0;
+  const worldZ = 0 + prevEndLocalX * sin0 + prevEndLocalZ * cos0;
+  
+  g.position.set(worldX, 0, worldZ);
+  g.rotation.y = 15 * Math.PI / 180; // 15° rotation
+  scene.add(g);
+  addSphere(worldX, 8, worldZ, greenMat, 2); // this curve start
+}
+
+// Grid for reference
+const gridHelper = new THREE.GridHelper(1000, 20, 0x444444, 0x222222);
+scene.add(gridHelper);
+
+// Axis helper
+scene.add(new THREE.AxesHelper(100));
+
+document.getElementById('info').innerHTML = `
+<b>Curve Geometry Test</b><br>
+<span style="color:#0f0">Green</span> = Straight start (0,0,0)<br>
+<span style="color:#f00">Red</span> = Straight end (332,0,0)<br>
+<span style="color:#08f">Blue</span> = 1st curve start (332,0,0) — should overlap red<br>
+<span style="color:#ff0">Yellow</span> = 1st curve end<br>
+<span style="color:#0f0">Small green</span> = 2nd curve start — should be at yellow<br>
+<br>
+If spheres overlap correctly → geometry is good.<br>
+If not → ExtrudeGeometry has wrong orientation.
+`;
+
+function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
+animate();
+window.addEventListener('resize', () => { camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
+</script>
+</body>
+</html>
