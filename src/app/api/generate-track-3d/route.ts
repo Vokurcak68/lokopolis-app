@@ -319,14 +319,12 @@ export async function POST(request: NextRequest) {
 
   const scale = scaleRaw as TrackScale;
 
-  // For L/U shapes, compute effective bounding box dimensions for centering
-  let effectiveWidth = boardWidth;
-  let effectiveDepth = boardDepth;
-  if (body.boardShape === "l-shape" && body.lArmDepth) {
-    effectiveDepth = boardDepth + (body.lArmDepth || 0);
-  } else if (body.boardShape === "u-shape" && body.uArmDepth) {
-    effectiveDepth = boardDepth + (body.uArmDepth || 0);
-  }
+  // For L/U shapes: center tracks on the MAIN rectangle only.
+  // The arm(s) provide extra space but templates are designed for rectangular boards.
+  // Using the main rectangle dimensions ensures tracks stay centered on the
+  // visible main area, not offset into the bounding box center.
+  const effectiveWidth = boardWidth;
+  const effectiveDepth = boardDepth;
 
   // --- Option 1: Use a predefined template ---
   if (body.templateId) {
