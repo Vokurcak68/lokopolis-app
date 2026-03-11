@@ -476,8 +476,9 @@ export function parseAILayoutResponse(raw: unknown): LayoutDefinition | null {
       pieceId: seg.pieceId,
       branch: seg.branch === "diverge" ? "diverge" : seg.branch === "straight" ? "straight" : undefined,
       isTunnel: seg.isTunnel === true,
-      isBridge: seg.isBridge === true,
-      elevation: typeof seg.elevation === "number" ? seg.elevation : undefined,
+      // Bridge/elevation: zatím vypnuto — elevation systém se dodělá později
+      isBridge: false,
+      elevation: 0,
     });
   }
 
@@ -500,8 +501,8 @@ export function parseAILayoutResponse(raw: unknown): LayoutDefinition | null {
           pieceId: seg.pieceId,
           branch: seg.branch === "diverge" ? "diverge" : seg.branch === "straight" ? "straight" : undefined,
           isTunnel: seg.isTunnel === true,
-          isBridge: seg.isBridge === true,
-          elevation: typeof seg.elevation === "number" ? seg.elevation : undefined,
+          isBridge: false,
+          elevation: 0,
         });
       }
 

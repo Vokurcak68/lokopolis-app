@@ -252,38 +252,44 @@ function buildPromptFromForm(body: RequestBody): string {
 // Fallback template selection
 // ============================================================
 
+/**
+ * Přímé mapování charakter → šablona.
+ * Každý charakter má jednoznačně přiřazenou šablonu.
+ */
 function selectFallbackTemplate(
   scale: TrackScale,
   character?: string,
   complexity?: string,
   features?: string[],
 ): LayoutDefinition {
-  // Try to match character to a template
+  // Přímé mapování charakter → template ID
   const charMap: Record<string, string> = {
-    mountain: "mountain-loop",
     station: "station-with-yard",
-    "through-station": "oval-with-siding",
+    mountain: "mountain-loop",
+    corridor: "oval-with-siding",
     industrial: "industrial-spur",
     diorama: "simple-oval",
-    corridor: "simple-oval",
+    "through-station": "figure-eight",
   };
 
   let templateId = "simple-oval";
 
   if (character && charMap[character]) {
     templateId = charMap[character];
-  } else if (complexity === "medium") {
-    templateId = "oval-with-siding";
   } else if (complexity === "complex") {
     templateId = "station-with-yard";
+  } else if (complexity === "medium") {
+    templateId = "oval-with-siding";
   }
 
-  // Check features
-  if (features?.includes("tunnel")) {
-    templateId = "mountain-loop";
-  }
-  if (features?.includes("sidings") || features?.includes("station")) {
-    templateId = "station-with-yard";
+  // Feature overrides — pouze pokud nebylo mapováno z charakteru
+  if (!character || !charMap[character]) {
+    if (features?.includes("tunnel")) {
+      templateId = "mountain-loop";
+    }
+    if (features?.includes("sidings") || features?.includes("station")) {
+      templateId = "station-with-yard";
+    }
   }
 
   const layout = getTemplateLayout(templateId, scale);

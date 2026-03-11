@@ -164,23 +164,24 @@ const TT_STATION_WITH_YARD: LayoutDefinition = {
 
 /**
  * Mountain loop — TT
- * Oval with tunnel sections and elevation changes
+ * Ovál s tunely — zatím bez výškových změn (elevation systém se dodělá později).
+ * Koleje v tunelové sekci mají isTunnel pro vizuální označení.
  */
 const TT_MOUNTAIN_LOOP: LayoutDefinition = {
   mainLoop: [
-    // Valley section
+    // Valley section (3× G4)
     ...repeat(s("tt-g4"), 3),
-    // Approach to tunnel (rising)
-    s("tt-g4", { elevation: 5 }),
-    // Right turn (entering mountain — tunnel)
-    ...repeat(s("tt-r1-15", { isTunnel: true, elevation: 10 }), 12),
-    // Top of mountain (bridge + tunnel)
-    s("tt-g4", { isBridge: true, elevation: 10 }),
-    s("tt-g4", { isTunnel: true, elevation: 10 }),
-    s("tt-g4", { isTunnel: true, elevation: 8 }),
+    // Approach
+    s("tt-g4"),
+    // Right turn (tunnel section)
+    ...repeat(s("tt-r1-15", { isTunnel: true }), 12),
+    // Mountain top (tunely, bez elevation)
+    s("tt-g4", { isTunnel: true }),
+    s("tt-g4", { isTunnel: true }),
+    s("tt-g4", { isTunnel: true }),
     // Descending
-    s("tt-g4", { elevation: 5 }),
-    // Left turn (descending)
+    s("tt-g4"),
+    // Left turn
     ...repeat(s("tt-r1-15"), 12),
   ],
   branches: [],
@@ -352,15 +353,15 @@ const H0_STATION_WITH_YARD: LayoutDefinition = {
 
 /**
  * Mountain loop — H0
+ * Ovál s tunely — bez elevation (dodělá se později).
  */
 const H0_MOUNTAIN_LOOP: LayoutDefinition = {
   mainLoop: [
-    ...repeat(s("h0-g345"), 2),
-    s("h0-g345", { elevation: 5 }),
-    ...repeat(s("h0-r2-30", { isTunnel: true, elevation: 10 }), 6),
-    s("h0-g345", { isBridge: true, elevation: 10 }),
-    s("h0-g345", { isTunnel: true, elevation: 8 }),
-    s("h0-g345", { elevation: 5 }),
+    ...repeat(s("h0-g345"), 3),
+    ...repeat(s("h0-r2-30", { isTunnel: true }), 6),
+    s("h0-g345", { isTunnel: true }),
+    s("h0-g345", { isTunnel: true }),
+    s("h0-g345"),
     ...repeat(s("h0-r2-30"), 6),
   ],
   branches: [],

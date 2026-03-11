@@ -4,12 +4,19 @@ import React, { useMemo } from "react";
 import type { PlacedTrack } from "@/lib/track-designer-store";
 import type { TrackPieceDefinition } from "@/lib/track-library";
 
+/** Zdroj layoutu — AI / template / fallback */
+export type LayoutSource = "ai" | "template" | "template-fallback" | "manual" | null;
+
 interface StatsBarProps {
   tracks: PlacedTrack[];
   catalog: Record<string, TrackPieceDefinition>;
+  /** Zdroj posledního vygenerovaného layoutu */
+  layoutSource?: LayoutSource;
+  /** Varování z generátoru */
+  layoutWarning?: string | null;
 }
 
-export default function StatsBar({ tracks, catalog }: StatsBarProps) {
+export default function StatsBar({ tracks, catalog, layoutSource, layoutWarning }: StatsBarProps) {
   const stats = useMemo(() => {
     let totalLength = 0;
     let freeEnds = 0;
@@ -59,6 +66,17 @@ export default function StatsBar({ tracks, catalog }: StatsBarProps) {
     ...(stats.typeCounts["turnout"] ? [{ label: "Výhybky", value: stats.typeCounts["turnout"], icon: "⑂" }] : []),
   ];
 
+  // Zdroj layoutu — badge
+  const sourceLabel = layoutSource === "ai" ? "🤖 AI"
+    : layoutSource === "template" ? "📋 Šablona"
+    : layoutSource === "template-fallback" ? "📋 Fallback"
+    : layoutSource === "manual" ? "✋ Ruční"
+    : null;
+
+  const sourceColor = layoutSource === "ai" ? "#667eea"
+    : layoutSource === "template-fallback" ? "#ff9800"
+    : "var(--text-dim)";
+
   return (
     <div
       style={{
@@ -72,6 +90,39 @@ export default function StatsBar({ tracks, catalog }: StatsBarProps) {
         fontSize: "12px",
       }}
     >
+      {/* Zdroj layoutu */}
+      {sourceLabel && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "4px",
+            padding: "2px 8px",
+            borderRadius: "4px",
+            background: `${sourceColor}22`,
+            color: sourceColor,
+            fontWeight: 700,
+            fontSize: "11px",
+          }}
+        >
+          {sourceLabel}
+        </div>
+      )}
+      {/* Varování */}
+      {layoutWarning && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "4px",
+            color: "#ff9800",
+            fontSize: "11px",
+          }}
+          title={layoutWarning}
+        >
+          ⚠️ <span style={{ maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{layoutWarning}</span>
+        </div>
+      )}
       {statItems.map((item, i) => (
         <div
           key={i}

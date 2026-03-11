@@ -4,7 +4,7 @@ import React, { useReducer, useCallback, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import TopBar from "./TopBar";
 import CatalogPanel from "./CatalogPanel";
-import StatsBar from "./StatsBar";
+import StatsBar, { type LayoutSource } from "./StatsBar";
 import AIDialog, { type AIFormData } from "./AIDialog";
 import {
   designerReducer,
@@ -26,6 +26,8 @@ const Scene3D = dynamic(() => import("./Scene3D"), { ssr: false });
 export default function TrackDesigner() {
   const [state, dispatch] = useReducer(designerReducer, undefined, createInitialState);
   const [aiDialogOpen, setAiDialogOpen] = useState(false);
+  const [layoutSource, setLayoutSource] = useState<LayoutSource>(null);
+  const [layoutWarning, setLayoutWarning] = useState<string | null>(null);
 
   // Build catalog lookup
   const catalog = useMemo(() => {
@@ -70,6 +72,8 @@ export default function TrackDesigner() {
   const handleClear = useCallback(() => {
     dispatch({ type: "CLEAR_TRACKS" });
     dispatch({ type: "SET_ACTIVE_PIECE", pieceId: null });
+    setLayoutSource(null);
+    setLayoutWarning(null);
   }, []);
 
   // AI Generation
@@ -112,6 +116,8 @@ export default function TrackDesigner() {
         }
 
         dispatch({ type: "AI_SUCCESS", tracks });
+        setLayoutSource((json.source as LayoutSource) || "ai");
+        setLayoutWarning(json.warning || null);
         setAiDialogOpen(false);
       } catch (err) {
         dispatch({
@@ -346,7 +352,7 @@ export default function TrackDesigner() {
       </div>
 
       {/* Bottom stats bar */}
-      <StatsBar tracks={state.tracks} catalog={catalog} />
+      <StatsBar tracks={state.tracks} catalog={catalog} layoutSource={layoutSource} layoutWarning={layoutWarning} />
 
       {/* AI Dialog */}
       <AIDialog
