@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Single Curve Test</title>
+<style>body{margin:0;background:#111;}</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="info" style="position:fixed;top:10px;left:10px;color:white;z-index:999;font-size:13px;background:rgba(0,0,0,0.8);padding:12px;border-radius:8px;max-width:500px;line-height:1.5;"></div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x111122);
+const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.1, 5000);
+camera.position.set(200, 300, 400);
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(200, 0, 100);
+controls.update();
+scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+const dl = new THREE.DirectionalLight(0xffffff, 0.8);
+dl.position.set(300, 300, 300);
+scene.add(dl);
+scene.add(new THREE.GridHelper(600, 30, 0x444444, 0x222222));
+scene.add(new THREE.AxesHelper(50)); // Red=X, Green=Y, Blue=Z
+
+const GAUGE = 3, RH = 1.2, RW = 0.8;
+const railMat = new THREE.MeshStandardMaterial({color:0xc0c0c0, metalness:0.7, roughness:0.3});
+const sleeperMat = new THREE.MeshStandardMaterial({color:0x6b4226});
+
+function addSphere(x,y,z,color,r=3) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(r,12,12), new THREE.MeshBasicMaterial({color}));
+  m.position.set(x,y,z);
+  scene.add(m);
+  return m;
+}
+
+function addLabel(x,y,z,text) {
+  // Simple sprite label
+  const canvas = document.createElement('canvas');
+  canvas.width = 256; canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = 'white';
+  ctx.font = 'bold 24px sans-serif';
+  ctx.fillText(text, 4, 40);
+  const tex = new THREE.CanvasTexture(canvas);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({map:tex}));
+  sp.position.set(x, y, z);
+  sp.scale.set(60, 15, 1);
+  scene.add(sp);
+}
+
+// ===== Test: Straight (332mm) → Curve (R310, 15°) → Curve (R310, 15°) =====
+// All at rotation=0 (curve should bend left/+Z)
+
+// Straight: from (0,0,0) to (332,0,0)
+function buildStraightRail(length, zOff) {
+  const geo = new THREE.BoxGeometry(length, RH, RW);
+  geo.translate(length/2, RH/2, zOff);
+  return geo;
+}
+
+const straightGroup = new THREE.Group();
+straightGroup.add(new THREE.Mesh(buildStraightRail(332, -GAUGE/2), railMat));
+straightGroup.add(new THREE.Mesh(buildStraightRail(332, GAUGE/2), railMat));
+straightGroup.position.set(0, 0, 0);
+straightGroup.rotation.y = 0;
+scene.add(straightGroup);
+
+addSphere(0, 5, 0, 0x00ff00); addLabel(0, 15, 0, "Straight A (0,0)");
+addSphere(332, 5, 0, 0xff0000); addLabel(332, 15, 0, "Straight B (332,0)");
+
+// ===== Manual sweep curve =====
+function buildCurvedRail(radius, angleDeg, rOffset) {
+  const ar = angleDeg * Math.PI / 180;
+  const r = radius + rOffset;
+  const segs = 16;
+  const hw = RW / 2;
+  const positions = [], indices = [];
+  
+  for (let i = 0; i <= segs; i++) {
+    const t = (i / segs) * ar;
+    const cx = r * Math.sin(t);
+    const cz = r - r * Math.cos(t);
+    // Radial normal (outward from center at 0,0,R)
+    const nx = Math.sin(t);
+    const nz = -Math.cos(t);
+    positions.push(cx - nx*hw, 0,  cz - nz*hw);
+    positions.push(cx + nx*hw, 0,  cz + nz*hw);
+    positions.push(cx + nx*hw, RH, cz + nz*hw);
+    positions.push(cx - nx*hw, RH, cz - nz*hw);
+    if (i < segs) {
+      const a = i*4, b = (i+1)*4;
+      indices.push(a,b,b+1, a,b+1,a+1); // bottom
+      indices.push(a+3,a+2,b+2, a+3,b+2,b+3); // top
+      indices.push(a+1,b+1,b+2, a+1,b+2,a+2); // outer
+      indices.push(a,a+3,b+3, a,b+3,b); // inner
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+// Curve 1: placed at (332, 0, 0) rotation=0
+const curve1 = new THREE.Group();
+curve1.add(new THREE.Mesh(buildCurvedRail(310, 15, -GAUGE/2), railMat));
+curve1.add(new THREE.Mesh(buildCurvedRail(310, 15, GAUGE/2), railMat));
+curve1.position.set(332, 0, 0);
+curve1.rotation.y = 0;
+scene.add(curve1);
+
+// Curve 1 end point (local): R*sin(15°), 0, R-R*cos(15°)
+const R = 310, A = 15 * Math.PI / 180;
+const c1endLocalX = R * Math.sin(A);
+const c1endLocalZ = R - R * Math.cos(A);
+// World (rotation=0): just add position offset
+const c1endX = 332 + c1endLocalX;
+const c1endZ = 0 + c1endLocalZ;
+addSphere(332, 8, 0, 0x0088ff, 2); addLabel(332, 20, 0, "Curve1 start");
+addSphere(c1endX, 8, c1endZ, 0xffff00, 2); addLabel(c1endX, 20, c1endZ, "Curve1 end");
+
+// Curve 2: placed at curve1 end, rotation=15°
+const curve2 = new THREE.Group();
+curve2.add(new THREE.Mesh(buildCurvedRail(310, 15, -GAUGE/2), railMat));
+curve2.add(new THREE.Mesh(buildCurvedRail(310, 15, GAUGE/2), railMat));
+curve2.position.set(c1endX, 0, c1endZ);
+curve2.rotation.y = 15 * Math.PI / 180; // 15° 
+scene.add(curve2);
+
+// Curve 2 end point
+const rot2 = 15 * Math.PI / 180;
+const c2endX = c1endX + c1endLocalX * Math.cos(rot2) - c1endLocalZ * Math.sin(rot2);
+const c2endZ = c1endZ + c1endLocalX * Math.sin(rot2) + c1endLocalZ * Math.cos(rot2);
+addSphere(c1endX, 12, c1endZ, 0x00ff88, 2); addLabel(c1endX, 25, c1endZ, "Curve2 start");
+addSphere(c2endX, 12, c2endZ, 0xff8800, 2); addLabel(c2endX, 25, c2endZ, "Curve2 end");
+
+// ===== Also show where the curve geometry ACTUALLY starts and ends =====
+// Curve start in local space: (0, 0, 0) → world = group.position
+// Curve end in local space: (r*sin(a), 0, r-r*cos(a))
+// With inner/outer rail offset...
+
+// Draw red line from curve1 end to curve2 start to see if they match
+const debugLine = new THREE.Line(
+  new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(c1endX, 10, c1endZ),
+    new THREE.Vector3(c1endX, 10, c1endZ), // same point - they should match
+  ]),
+  new THREE.LineBasicMaterial({color:0xff0000})
+);
+scene.add(debugLine);
+
+document.getElementById('info').innerHTML = `
+<b>Single Curve Test — Manual Sweep</b><br><br>
+<span style="color:#0f0">●</span> Straight start (0, 0, 0)<br>
+<span style="color:#f00">●</span> Straight end (332, 0, 0)<br>
+<span style="color:#08f">●</span> Curve1 start (332, 0, 0)<br>
+<span style="color:#ff0">●</span> Curve1 end (${c1endX.toFixed(1)}, 0, ${c1endZ.toFixed(1)})<br>
+<span style="color:#0f8">●</span> Curve2 start (same as Curve1 end)<br>
+<span style="color:#f80">●</span> Curve2 end (${c2endX.toFixed(1)}, 0, ${c2endZ.toFixed(1)})<br><br>
+<b>Questions:</b><br>
+1. Does the straight's red end touch curve1's blue start?<br>
+2. Does curve1 bend into +Z (toward you)?<br>
+3. Does curve1's yellow end touch curve2's green start?<br>
+4. Does curve2 continue the bend smoothly?
+`;
+
+function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
+animate();
+window.addEventListener('resize', () => { camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
+</script>
+</body>
+</html>
