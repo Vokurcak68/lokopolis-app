@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import TopBar from "./TopBar";
 import CatalogPanel from "./CatalogPanel";
 import StatsBar from "./StatsBar";
-import AIDialog from "./AIDialog";
+import AIDialog, { type AIFormData } from "./AIDialog";
 import {
   designerReducer,
   createInitialState,
@@ -74,19 +74,14 @@ export default function TrackDesigner() {
 
   // AI Generation
   const handleAIGenerate = useCallback(
-    async (prompt: string) => {
+    async (formData: AIFormData) => {
       dispatch({ type: "AI_START" });
 
       try {
         const res = await fetch("/api/generate-track-3d", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            prompt,
-            scale: state.board.scale,
-            boardWidth: state.board.width,
-            boardDepth: state.board.depth,
-          }),
+          body: JSON.stringify(formData),
         });
 
         const json = await res.json();

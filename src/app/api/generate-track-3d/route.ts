@@ -280,10 +280,92 @@ function validateConnections(tracks: AITrackPiece[]): string[] {
 }
 
 interface RequestBody {
-  prompt: string;
   scale: string;
   boardWidth: number;
   boardDepth: number;
+  boardShape?: "rectangle" | "l-shape" | "u-shape";
+  lCorner?: "top-left" | "top-right" | "bottom-left" | "bottom-right";
+  lArmWidth?: number;
+  lArmDepth?: number;
+  uArmDepth?: number;
+  character?: string;
+  complexity?: "simple" | "medium" | "complex";
+  features?: string[];
+  additionalPrompt?: string;
+  // Legacy support
+  prompt?: string;
+}
+
+const CHARACTER_LABELS: Record<string, string> = {
+  mountain: "Horská trať — jednokolejka, tunely, stoupání, úzké údolí",
+  corridor: "Hlavní koridor — dvoukolejná trať, rychlé vlaky, dlouhé rovné úseky",
+  station: "Stanice + vlečky — nádraží s více kolejemi, vlečky, posun",
+  diorama: "Malá dioráma — kompaktní scéna, jednoduchý ovál, málo výhybek",
+  "through-station": "Průjezdná stanice — ovál s výhybnou stanicí uprostřed",
+  industrial: "Průmyslová vlečka — vlečky k rampám, posunování, kusé koleje",
+};
+
+const COMPLEXITY_LABELS: Record<string, string> = {
+  simple: "Jednoduchá — základní ovál, pár výhybek",
+  medium: "Střední — nádraží, vlečky, výhybny",
+  complex: "Složitá — křížení v úrovních, mosty, tunely, více různých tras",
+};
+
+const FEATURE_LABELS: Record<string, string> = {
+  bridge: "mosty / trať ve výšce",
+  tunnel: "tunely",
+  turntable: "točna",
+  station: "nádraží (více kolejí vedle sebe)",
+  sidings: "odstavné koleje",
+  parallel: "souběžné tratě",
+};
+
+function buildPromptFromForm(body: RequestBody): string {
+  const parts: string[] = [];
+
+  // Board shape
+  if (body.boardShape === "l-shape") {
+    const cornerLabel: Record<string, string> = {
+      "top-left": "levý horní",
+      "top-right": "pravý horní",
+      "bottom-left": "levý dolní",
+      "bottom-right": "pravý dolní",
+    };
+    parts.push(
+      `Tvar desky: L-tvar, roh ${cornerLabel[body.lCorner || "top-right"]}, šířka ramene ${body.lArmWidth || 60} cm, hloubka ramene ${body.lArmDepth || 40} cm.`
+    );
+  } else if (body.boardShape === "u-shape") {
+    parts.push(`Tvar desky: U-tvar, hloubka ramen ${body.uArmDepth || 40} cm.`);
+  } else {
+    parts.push("Tvar desky: obdélník.");
+  }
+
+  // Character
+  if (body.character && CHARACTER_LABELS[body.character]) {
+    parts.push(`Charakter: ${CHARACTER_LABELS[body.character]}.`);
+  }
+
+  // Complexity
+  if (body.complexity && COMPLEXITY_LABELS[body.complexity]) {
+    parts.push(`Složitost: ${COMPLEXITY_LABELS[body.complexity]}.`);
+  }
+
+  // Features
+  if (body.features && body.features.length > 0) {
+    const labels = body.features
+      .map((f) => FEATURE_LABELS[f])
+      .filter(Boolean);
+    if (labels.length > 0) {
+      parts.push(`Speciální prvky: ${labels.join(", ")}.`);
+    }
+  }
+
+  // Additional user prompt
+  if (body.additionalPrompt && body.additionalPrompt.trim()) {
+    parts.push(`Další požadavky: ${body.additionalPrompt.trim()}`);
+  }
+
+  return parts.join("\n");
 }
 
 export async function POST(request: NextRequest) {
@@ -298,7 +380,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Neplatný požadavek" }, { status: 400 });
   }
 
-  const { prompt, scale, boardWidth, boardDepth } = body;
+  const { scale, boardWidth, boardDepth } = body;
 
   if (!scale || !boardWidth || !boardDepth) {
     return NextResponse.json({ error: "Chybí povinné parametry (scale, boardWidth, boardDepth)" }, { status: 400 });
@@ -306,6 +388,9 @@ export async function POST(request: NextRequest) {
 
   const boardWmm = boardWidth * 10;
   const boardHmm = boardDepth * 10;
+
+  // Build the prompt from structured form data (or use legacy prompt field)
+  const prompt = body.character ? buildPromptFromForm(body) : (body.prompt || "");
 
   // Step 1: Build deterministic base oval
   const baseTracks = buildBaseOval(scale, boardWmm, boardHmm);
@@ -320,6 +405,14 @@ export async function POST(request: NextRequest) {
   // Step 2: Ask AI to enhance the layout
   const catalogDesc = CATALOG_DESCRIPTIONS[scale] || CATALOG_DESCRIPTIONS["TT"];
 
+  // Build board shape description for AI
+  let boardShapeDesc = `Rectangular board: ${boardWidth}×${boardDepth} cm`;
+  if (body.boardShape === "l-shape") {
+    boardShapeDesc = `L-shaped board: main ${boardWidth}×${boardDepth} cm, arm at ${body.lCorner || "top-right"} corner, arm width ${body.lArmWidth || 60} cm, arm depth ${body.lArmDepth || 40} cm. Only place tracks within the L-shape area!`;
+  } else if (body.boardShape === "u-shape") {
+    boardShapeDesc = `U-shaped board: main ${boardWidth}×${boardDepth} cm, arms depth ${body.uArmDepth || 40} cm on both sides. Only place tracks within the U-shape area!`;
+  }
+
   const systemPrompt = `You are an expert model railway 3D layout designer. You'll receive a base oval loop as a JSON array of positioned track pieces, and you should enhance it based on the user's request.
 
 TRACK CATALOG:
@@ -332,6 +425,8 @@ COORDINATE SYSTEM:
 - Rotation in radians around Y axis. 0 = facing +X direction.
 - Board dimensions are in mm.
 
+BOARD SHAPE: ${boardShapeDesc}
+
 YOUR TASK:
 1. Start with the provided base oval tracks
 2. Add turnouts, sidings, tunnels, bridges as requested
@@ -339,6 +434,12 @@ YOUR TASK:
 4. For sidings: add new tracks branching from turnout's diverge point
 5. For tunnels: mark tracks with isTunnel: true
 6. For bridges: mark elevated tracks with isBridge: true, elevation > 0
+7. Match the requested character, complexity, and special features
+
+COMPLEXITY GUIDE:
+- Simple: basic oval with minimal additions (1-2 turnouts max)
+- Medium: add station area, sidings, passing loops
+- Complex: multiple routes, crossings, elevation changes, tunnels, bridges
 
 RULES:
 - Each track piece must have: pieceId, x, z, rotation
@@ -347,6 +448,7 @@ RULES:
 - Use ONLY piece IDs from the catalog
 - Keep the base oval intact unless replacing straights with turnouts
 - All coordinates in mm
+- Respect the board shape — don't place tracks outside the board area
 
 OUTPUT FORMAT: Return ONLY a JSON object:
 {
@@ -364,7 +466,8 @@ Scale: ${scale}
 BASE OVAL (${baseTracks.length} pieces):
 ${JSON.stringify(baseTracks.map(t => ({ ...t, x: Math.round(t.x), z: Math.round(t.z), rotation: Math.round(t.rotation * 1000) / 1000 })), null, 2)}
 
-USER REQUEST: ${prompt}
+USER REQUEST:
+${prompt}
 
 Enhance this layout. Return ONLY valid JSON with the "tracks" array containing ALL pieces (base + additions).`;
 
