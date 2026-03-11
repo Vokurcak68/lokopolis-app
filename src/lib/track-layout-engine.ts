@@ -275,6 +275,43 @@ export function computeLayout(
     allTracks.push(...branchTracks);
   }
 
+  // --- Phase 5b: Re-center including branches ---
+  // Branches may extend beyond the main loop bounds, so recalculate
+  {
+    let allMinX = Infinity, allMaxX = -Infinity, allMinZ = Infinity, allMaxZ = -Infinity;
+    for (const t of allTracks) {
+      const piece = getTrackPiece(t.pieceId);
+      if (!piece) continue;
+      for (const conn of piece.connections) {
+        const w = connectionToWorld(conn, t.position, t.rotation);
+        allMinX = Math.min(allMinX, w.position.x);
+        allMaxX = Math.max(allMaxX, w.position.x);
+        allMinZ = Math.min(allMinZ, w.position.z);
+        allMaxZ = Math.max(allMaxZ, w.position.z);
+      }
+    }
+    const totalW = allMaxX - allMinX;
+    const totalD = allMaxZ - allMinZ;
+    const newCenterX = (allMinX + allMaxX) / 2;
+    const newCenterZ = (allMinZ + allMaxZ) / 2;
+    const targetCenterX = boardWmm / 2;
+    const targetCenterZ = boardDmm / 2;
+    const shiftX = targetCenterX - newCenterX;
+    const shiftZ = targetCenterZ - newCenterZ;
+
+    // Only shift if branches actually moved the center
+    if (Math.abs(shiftX) > 0.1 || Math.abs(shiftZ) > 0.1) {
+      for (const t of allTracks) {
+        t.position = {
+          x: t.position.x + shiftX,
+          y: t.position.y,
+          z: t.position.z + shiftZ,
+        };
+      }
+      debugInfo.push(`Re-centered with branches: shift (${shiftX.toFixed(1)}, ${shiftZ.toFixed(1)})mm, total ${totalW.toFixed(0)}×${totalD.toFixed(0)}mm`);
+    }
+  }
+
   // --- Phase 6: Set up snap connections for main loop ---
   for (let i = 0; i < rawMainTracks.length; i++) {
     const curr = rawMainTracks[i];
