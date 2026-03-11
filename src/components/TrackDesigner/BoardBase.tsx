@@ -22,14 +22,66 @@ interface BoardBaseProps {
   uArmDepth?: number;
 }
 
-/**
- * Build a THREE.Shape for the board outline.
- * Coordinates are in the XY plane (will be extruded along Z, then rotated to lie flat).
- *
- * Convention: the main rectangle spans (0,0) to (width, depth).
- * L-shape adds an arm in the chosen corner.
- * U-shape adds two symmetric arms on top.
- */
+// ============================================================
+// Procedural grass texture
+// ============================================================
+
+function createGrassTexture(size: number = 256): THREE.CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+
+  // Base green
+  ctx.fillStyle = "#3a5a3a";
+  ctx.fillRect(0, 0, size, size);
+
+  // Add noise/variation for grass look
+  const imageData = ctx.getImageData(0, 0, size, size);
+  const data = imageData.data;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const noise = (Math.random() - 0.5) * 30;
+    data[i] = Math.max(0, Math.min(255, data[i] + noise * 0.5));       // R
+    data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + noise));     // G (more variation)
+    data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + noise * 0.5)); // B
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+
+  // Add some darker patches
+  for (let p = 0; p < 40; p++) {
+    const px = Math.random() * size;
+    const py = Math.random() * size;
+    const pr = 2 + Math.random() * 6;
+    ctx.beginPath();
+    ctx.arc(px, py, pr, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(30, 60, 30, ${0.2 + Math.random() * 0.3})`;
+    ctx.fill();
+  }
+
+  // Add lighter spots
+  for (let p = 0; p < 30; p++) {
+    const px = Math.random() * size;
+    const py = Math.random() * size;
+    const pr = 1 + Math.random() * 4;
+    ctx.beginPath();
+    ctx.arc(px, py, pr, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(80, 120, 60, ${0.1 + Math.random() * 0.2})`;
+    ctx.fill();
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(8, 8);
+  return texture;
+}
+
+// ============================================================
+// Board shape builder
+// ============================================================
+
 function buildBoardShape(
   width: number,
   depth: number,
@@ -42,17 +94,11 @@ function buildBoardShape(
   const s = new THREE.Shape();
 
   if (shape === "l-shape" && lArmWidth && lArmDepth) {
-    // L-shape: main rectangle + one arm
-    // The arm extends outward from the chosen corner.
-    // We define the polygon so the bounding box origin is at (0, 0).
     const aw = lArmWidth;
     const ad = lArmDepth;
 
     switch (lCorner) {
       case "top-right":
-        // Arm extends from top-right corner upward
-        // Shape (CCW from bottom-left):
-        // (0,0) -> (w,0) -> (w, d) -> (w, d+ad) -> (w-aw, d+ad) -> (w-aw, d) -> (0, d) -> close
         s.moveTo(0, 0);
         s.lineTo(width, 0);
         s.lineTo(width, depth);
@@ -62,10 +108,7 @@ function buildBoardShape(
         s.lineTo(0, depth);
         s.closePath();
         break;
-
       case "top-left":
-        // Arm extends from top-left corner upward
-        // (0,0) -> (w,0) -> (w,d) -> (aw,d) -> (aw, d+ad) -> (0, d+ad) -> close
         s.moveTo(0, 0);
         s.lineTo(width, 0);
         s.lineTo(width, depth);
@@ -74,10 +117,7 @@ function buildBoardShape(
         s.lineTo(0, depth + ad);
         s.closePath();
         break;
-
       case "bottom-right":
-        // Arm extends from bottom-right corner downward
-        // (0,0) -> (w-aw, 0) -> (w-aw, -ad) -> (w, -ad) -> (w, d) -> (0, d) -> close
         s.moveTo(0, 0);
         s.lineTo(width - aw, 0);
         s.lineTo(width - aw, -ad);
@@ -86,10 +126,7 @@ function buildBoardShape(
         s.lineTo(0, depth);
         s.closePath();
         break;
-
       case "bottom-left":
-        // Arm extends from bottom-left corner downward
-        // (0, -ad) -> (aw, -ad) -> (aw, 0) -> (w, 0) -> (w, d) -> (0, d) -> close
         s.moveTo(0, -ad);
         s.lineTo(aw, -ad);
         s.lineTo(aw, 0);
@@ -98,9 +135,7 @@ function buildBoardShape(
         s.lineTo(0, depth);
         s.closePath();
         break;
-
       default:
-        // Default to top-right
         s.moveTo(0, 0);
         s.lineTo(width, 0);
         s.lineTo(width, depth + ad);
@@ -111,14 +146,9 @@ function buildBoardShape(
         break;
     }
   } else if (shape === "u-shape" && uArmDepth) {
-    // U-shape: main rectangle + two arms extending upward from both top corners
-    // The arm width is fixed to 1/3 of the main width (reasonable default)
     const armWidth = Math.round(width / 3);
     const ad = uArmDepth;
 
-    // Shape (CCW from bottom-left):
-    // (0,0) -> (w,0) -> (w, d) -> (w, d+ad) -> (w-armW, d+ad) -> (w-armW, d)
-    //       -> (armW, d) -> (armW, d+ad) -> (0, d+ad) -> (0, d) -> close
     s.moveTo(0, 0);
     s.lineTo(width, 0);
     s.lineTo(width, depth + ad);
@@ -129,7 +159,6 @@ function buildBoardShape(
     s.lineTo(0, depth + ad);
     s.closePath();
   } else {
-    // Rectangle
     s.moveTo(0, 0);
     s.lineTo(width, 0);
     s.lineTo(width, depth);
@@ -140,23 +169,18 @@ function buildBoardShape(
   return s;
 }
 
-/**
- * Compute bounding box of the board shape in mm.
- * Returns { minX, minY, maxX, maxY, centerX, centerZ, bbWidth, bbDepth }.
- * Note: Y in shape space = Z in 3D space.
- */
 function getBoardBounds(
   width: number,
   depth: number,
   shape: BoardShape,
   lCorner?: LCorner,
-  lArmWidth?: number,
+  _lArmWidth?: number,
   lArmDepth?: number,
   uArmDepth?: number,
 ) {
   let minX = 0, minY = 0, maxX = width, maxY = depth;
 
-  if (shape === "l-shape" && lArmWidth && lArmDepth) {
+  if (shape === "l-shape" && lArmDepth) {
     switch (lCorner) {
       case "top-right":
       case "top-left":
@@ -183,6 +207,13 @@ function getBoardBounds(
   };
 }
 
+// ============================================================
+// Wood frame edge material
+// ============================================================
+
+const FRAME_HEIGHT = 3; // mm tall frame edge
+const FRAME_INSET = 2; // mm padding
+
 export default function BoardBase({
   width,
   depth,
@@ -199,25 +230,23 @@ export default function BoardBase({
     [width, depth, shape, lCorner, lArmWidth, lArmDepth, uArmDepth],
   );
 
-  // Build Three.js shapes for custom board shapes
+  // Procedural grass texture
+  const grassTexture = useMemo(() => {
+    if (typeof document === "undefined") return null;
+    return createGrassTexture(256);
+  }, []);
+
+  // Custom shape geometries
   const boardGeometry = useMemo(() => {
     if (!isCustomShape) return null;
-
     const boardShape = buildBoardShape(width, depth, shape, lCorner, lArmWidth, lArmDepth, uArmDepth);
-
-    const extrudeSettings: THREE.ExtrudeGeometryOptions = {
-      depth: 1, // 1mm thick
-      bevelEnabled: false,
-    };
-
-    return new THREE.ExtrudeGeometry(boardShape, extrudeSettings);
+    return new THREE.ExtrudeGeometry(boardShape, { depth: 1, bevelEnabled: false });
   }, [width, depth, shape, lCorner, lArmWidth, lArmDepth, uArmDepth, isCustomShape]);
 
-  // Frame geometry (slightly larger outline)
+  // Frame geometry for custom shapes
   const frameGeometry = useMemo(() => {
     if (!isCustomShape) return null;
-
-    const pad = 2; // 2mm padding for frame
+    const pad = FRAME_INSET;
     const frameShape = buildBoardShape(
       width + pad * 2,
       depth + (shape === "u-shape" ? 0 : pad * 2),
@@ -227,43 +256,41 @@ export default function BoardBase({
       lArmDepth ? lArmDepth + pad : undefined,
       uArmDepth ? uArmDepth + pad : undefined,
     );
-
-    // Offset the frame shape to account for padding
-    const extrudeSettings: THREE.ExtrudeGeometryOptions = {
-      depth: 1,
-      bevelEnabled: false,
-    };
-
-    return new THREE.ExtrudeGeometry(frameShape, extrudeSettings);
+    return new THREE.ExtrudeGeometry(frameShape, { depth: FRAME_HEIGHT, bevelEnabled: false });
   }, [width, depth, shape, lCorner, lArmWidth, lArmDepth, uArmDepth, isCustomShape]);
 
   if (isCustomShape) {
-    // Custom shape rendering: extruded polygon
     return (
       <group>
-        {/* Board frame (wood) — slightly larger, below the green surface */}
+        {/* Board frame (wood) */}
         {frameGeometry && (
           <mesh
             geometry={frameGeometry}
-            position={[-2, -0.5, -2]}
+            position={[-FRAME_INSET, -FRAME_HEIGHT + 0.5, -FRAME_INSET]}
             rotation={[-Math.PI / 2, 0, 0]}
+            receiveShadow
           >
-            <meshStandardMaterial color="#5a4030" />
+            <meshStandardMaterial color="#5a4030" roughness={0.8} />
           </mesh>
         )}
 
-        {/* Green surface */}
+        {/* Green grass surface */}
         {boardGeometry && (
           <mesh
             geometry={boardGeometry}
             position={[0, 0, 0]}
             rotation={[-Math.PI / 2, 0, 0]}
+            receiveShadow
           >
-            <meshStandardMaterial color="#3a5a3a" />
+            {grassTexture ? (
+              <meshStandardMaterial map={grassTexture} roughness={0.9} />
+            ) : (
+              <meshStandardMaterial color="#3a5a3a" roughness={0.9} />
+            )}
           </mesh>
         )}
 
-        {/* Grid — rectangular, covering the bounding box */}
+        {/* Grid */}
         <Grid
           position={[bounds.centerX, 0.05, bounds.centerZ]}
           args={[bounds.bbWidth, bounds.bbDepth]}
@@ -280,19 +307,39 @@ export default function BoardBase({
     );
   }
 
-  // Default rectangle rendering (unchanged)
+  // Default rectangle rendering
   return (
     <group>
-      {/* Ground plane */}
-      <mesh position={[width / 2, -0.5, depth / 2]} rotation={[-Math.PI / 2, 0, 0]}>
+      {/* Ground plane with grass */}
+      <mesh position={[width / 2, -0.5, depth / 2]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[width, depth]} />
-        <meshStandardMaterial color="#3a5a3a" />
+        {grassTexture ? (
+          <meshStandardMaterial map={grassTexture} roughness={0.9} />
+        ) : (
+          <meshStandardMaterial color="#3a5a3a" roughness={0.9} />
+        )}
       </mesh>
 
-      {/* Board edge frame */}
-      <mesh position={[width / 2, 0, depth / 2]}>
-        <boxGeometry args={[width + 4, 1, depth + 4]} />
-        <meshStandardMaterial color="#5a4030" />
+      {/* Board edge frame (raised wooden edge) */}
+      {/* Bottom frame */}
+      <mesh position={[width / 2, FRAME_HEIGHT / 2 - 0.5, -FRAME_INSET]} receiveShadow castShadow>
+        <boxGeometry args={[width + FRAME_INSET * 2 + 4, FRAME_HEIGHT, 4]} />
+        <meshStandardMaterial color="#5a4030" roughness={0.8} />
+      </mesh>
+      {/* Top frame */}
+      <mesh position={[width / 2, FRAME_HEIGHT / 2 - 0.5, depth + FRAME_INSET]} receiveShadow castShadow>
+        <boxGeometry args={[width + FRAME_INSET * 2 + 4, FRAME_HEIGHT, 4]} />
+        <meshStandardMaterial color="#5a4030" roughness={0.8} />
+      </mesh>
+      {/* Left frame */}
+      <mesh position={[-FRAME_INSET, FRAME_HEIGHT / 2 - 0.5, depth / 2]} receiveShadow castShadow>
+        <boxGeometry args={[4, FRAME_HEIGHT, depth + FRAME_INSET * 2 + 4]} />
+        <meshStandardMaterial color="#5a4030" roughness={0.8} />
+      </mesh>
+      {/* Right frame */}
+      <mesh position={[width + FRAME_INSET, FRAME_HEIGHT / 2 - 0.5, depth / 2]} receiveShadow castShadow>
+        <boxGeometry args={[4, FRAME_HEIGHT, depth + FRAME_INSET * 2 + 4]} />
+        <meshStandardMaterial color="#5a4030" roughness={0.8} />
       </mesh>
 
       {/* Grid */}

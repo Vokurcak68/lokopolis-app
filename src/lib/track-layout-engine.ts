@@ -33,6 +33,8 @@ export interface LayoutSegment {
   isTunnel?: boolean;
   /** Mark as bridge */
   isBridge?: boolean;
+  /** Mark as ramp (ascending/descending) */
+  isRamp?: boolean;
   /** Elevation in mm */
   elevation?: number;
 }
@@ -483,6 +485,7 @@ function placeSequence(
       rotation: placement.rotation,
       elevation: seg.elevation ?? 0,
       snappedConnections: {},
+      isRamp: seg.isRamp,
       isTunnel: seg.isTunnel,
       isBridge: seg.isBridge,
     };
@@ -554,6 +557,7 @@ export interface TrackAPIResponse {
   z: number;
   rotation: number;
   elevation?: number;
+  isRamp?: boolean;
   isTunnel?: boolean;
   isBridge?: boolean;
   connectedTo?: Record<string, string>;
@@ -566,6 +570,7 @@ export function layoutResultToAPIResponse(result: LayoutResult): TrackAPIRespons
     z: t.position.z,
     rotation: t.rotation,
     elevation: t.elevation || undefined,
+    isRamp: t.isRamp || undefined,
     isTunnel: t.isTunnel || undefined,
     isBridge: t.isBridge || undefined,
     connectedTo: Object.keys(t.snappedConnections).length > 0
@@ -595,9 +600,9 @@ export function parseAILayoutResponse(raw: unknown): LayoutDefinition | null {
       pieceId: seg.pieceId,
       branch: seg.branch === "diverge" ? "diverge" : seg.branch === "straight" ? "straight" : undefined,
       isTunnel: seg.isTunnel === true,
-      // Bridge/elevation: zatím vypnuto — elevation systém se dodělá později
-      isBridge: false,
-      elevation: 0,
+      isBridge: seg.isBridge === true,
+      isRamp: seg.isRamp === true,
+      elevation: typeof seg.elevation === "number" ? seg.elevation : 0,
     });
   }
 
@@ -620,8 +625,9 @@ export function parseAILayoutResponse(raw: unknown): LayoutDefinition | null {
           pieceId: seg.pieceId,
           branch: seg.branch === "diverge" ? "diverge" : seg.branch === "straight" ? "straight" : undefined,
           isTunnel: seg.isTunnel === true,
-          isBridge: false,
-          elevation: 0,
+          isBridge: seg.isBridge === true,
+          isRamp: seg.isRamp === true,
+          elevation: typeof seg.elevation === "number" ? seg.elevation : 0,
         });
       }
 

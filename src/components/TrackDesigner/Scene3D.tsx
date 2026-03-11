@@ -53,7 +53,6 @@ function PlacementHandler({ boardWidth, boardDepth, activePiece, tracks, catalog
           (clickPos.x - free.worldPos.x) ** 2 + (clickPos.z - free.worldPos.z) ** 2
         );
         if (dist < bestDist) {
-          // Try snapping the new piece's "a" connection to this free connection
           const snap = computeSnapPlacement(free.worldPos, free.worldAngle, activePiece, "a");
           if (snap) {
             bestDist = dist;
@@ -90,7 +89,6 @@ function PlacementHandler({ boardWidth, boardDepth, activePiece, tracks, catalog
           toConnId: bestSnap.toConn,
         });
       } else {
-        // Place freely on the board
         dispatch({
           type: "ADD_TRACK",
           track: {
@@ -214,19 +212,47 @@ export default function Scene3D({
         dampingFactor={0.1}
       />
 
-      {/* Lighting */}
-      <ambientLight intensity={0.4} />
+      {/* === Enhanced Lighting === */}
+      {/* Ambient fill */}
+      <ambientLight intensity={0.3} color="#e8e0d8" />
+
+      {/* Main sun light with shadows */}
       <directionalLight
-        position={[boardWidth, 500, boardDepth]}
-        intensity={0.8}
+        position={[boardWidth * 0.8, 600, boardDepth * 0.6]}
+        intensity={1.0}
+        color="#fff8e8"
         castShadow
-        shadow-mapSize={[1024, 1024]}
+        shadow-mapSize={[2048, 2048]}
+        shadow-camera-near={10}
+        shadow-camera-far={2000}
+        shadow-camera-left={-boardWidth}
+        shadow-camera-right={boardWidth}
+        shadow-camera-top={boardDepth}
+        shadow-camera-bottom={-boardDepth}
+        shadow-bias={-0.001}
       />
-      <directionalLight position={[-200, 300, -200]} intensity={0.3} />
-      <hemisphereLight
-        color="#b0c0ff"
-        groundColor="#303020"
+
+      {/* Fill light from opposite side */}
+      <directionalLight
+        position={[-boardWidth * 0.3, 400, -boardDepth * 0.3]}
         intensity={0.3}
+        color="#c0d0ff"
+      />
+
+      {/* Sky/ground hemisphere light for ambient realism */}
+      <hemisphereLight
+        color="#87CEEB"
+        groundColor="#3a5a3a"
+        intensity={0.4}
+      />
+
+      {/* Subtle point light for warmth */}
+      <pointLight
+        position={[boardWidth / 2, 300, boardDepth / 2]}
+        intensity={0.2}
+        color="#ffe0a0"
+        distance={2000}
+        decay={2}
       />
 
       {/* Board */}
@@ -263,6 +289,7 @@ export default function Scene3D({
             elevation={track.elevation}
             isSelected={selectedTrackId === track.instanceId}
             isHovered={hoveredTrackId === track.instanceId}
+            isRamp={track.isRamp}
             isTunnel={track.isTunnel}
             isBridge={track.isBridge}
             onClick={() => dispatch({ type: "SELECT_TRACK", instanceId: track.instanceId })}
@@ -292,8 +319,8 @@ export default function Scene3D({
           />
         ))}
 
-      {/* Background fog for depth */}
-      <fog attach="fog" args={["#0a0b14", 1000, 5000]} />
+      {/* Soft atmospheric fog */}
+      <fog attach="fog" args={["#1a1b24", 1500, 6000]} />
     </Canvas>
   );
 }

@@ -164,25 +164,51 @@ const TT_STATION_WITH_YARD: LayoutDefinition = {
 
 /**
  * Mountain loop — TT
- * Ovál s tunely — zatím bez výškových změn (elevation systém se dodělá později).
- * Koleje v tunelové sekci mají isTunnel pro vizuální označení.
+ * Ovál s tunely a výškovými změnami.
+ * Horní trať jede přes most (elevation 50mm), spodní trať je na úrovni 0.
+ * Rampy: 332mm kusy, max 3% stoupání (332mm × 3% ≈ 10mm na kus).
+ * 5 kusů rampy = 50mm výšky.
+ *
+ * Piece count must match original: 4×G4 top + 12×R1 right + 4×G4 bottom + 12×R1 left
  */
 const TT_MOUNTAIN_LOOP: LayoutDefinition = {
   mainLoop: [
-    // Valley section (3× G4)
+    // Valley section at ground level (3× G4)
     ...repeat(s("tt-g4"), 3),
-    // Approach
-    s("tt-g4"),
-    // Right turn (tunnel section)
-    ...repeat(s("tt-r1-15", { isTunnel: true }), 12),
-    // Mountain top (tunely, bez elevation)
-    s("tt-g4", { isTunnel: true }),
-    s("tt-g4", { isTunnel: true }),
-    s("tt-g4", { isTunnel: true }),
-    // Descending
-    s("tt-g4"),
-    // Left turn
-    ...repeat(s("tt-r1-15"), 12),
+    // Ramp up start
+    s("tt-g4", { elevation: 10, isRamp: true }),
+    // Right turn — continue climbing through the curve
+    s("tt-r1-15", { elevation: 14, isRamp: true }),
+    s("tt-r1-15", { elevation: 18, isRamp: true }),
+    s("tt-r1-15", { elevation: 22, isRamp: true }),
+    s("tt-r1-15", { elevation: 26, isRamp: true }),
+    s("tt-r1-15", { elevation: 30, isRamp: true }),
+    s("tt-r1-15", { elevation: 34, isRamp: true }),
+    s("tt-r1-15", { elevation: 38, isRamp: true }),
+    s("tt-r1-15", { elevation: 42, isRamp: true }),
+    s("tt-r1-15", { elevation: 46, isRamp: true }),
+    s("tt-r1-15", { elevation: 50, isBridge: true }),
+    s("tt-r1-15", { elevation: 50, isBridge: true }),
+    s("tt-r1-15", { elevation: 50, isBridge: true }),
+    // Mountain top — bridge at full height (3×G4 + 1×G4 tunnel)
+    s("tt-g4", { elevation: 50, isBridge: true }),
+    s("tt-g4", { elevation: 50, isBridge: true }),
+    s("tt-g4", { elevation: 50, isBridge: true, isTunnel: true }),
+    // Ramp down start
+    s("tt-g4", { elevation: 40, isRamp: true }),
+    // Left turn — continue descending
+    s("tt-r1-15", { elevation: 36, isRamp: true }),
+    s("tt-r1-15", { elevation: 32, isRamp: true }),
+    s("tt-r1-15", { elevation: 28, isRamp: true }),
+    s("tt-r1-15", { elevation: 24, isRamp: true }),
+    s("tt-r1-15", { elevation: 20, isRamp: true }),
+    s("tt-r1-15", { elevation: 16, isRamp: true }),
+    s("tt-r1-15", { elevation: 12, isRamp: true }),
+    s("tt-r1-15", { elevation: 8, isRamp: true }),
+    s("tt-r1-15", { elevation: 4, isRamp: true }),
+    s("tt-r1-15", { elevation: 2, isRamp: true }),
+    s("tt-r1-15"),
+    s("tt-r1-15"),
   ],
   branches: [],
 };
@@ -353,16 +379,35 @@ const H0_STATION_WITH_YARD: LayoutDefinition = {
 
 /**
  * Mountain loop — H0
- * Ovál s tunely — bez elevation (dodělá se později).
+ * Ovál s výškovými změnami — mosty a tunely.
+ * Max 3%: 345mm × 3% ≈ 10mm na kus, R2-30° arc ~187mm × 3% ≈ 5.6mm.
+ * Piece count: 3×G345 top + 6×R2 right + 3×G345 bottom + 6×R2 left
  */
 const H0_MOUNTAIN_LOOP: LayoutDefinition = {
   mainLoop: [
-    ...repeat(s("h0-g345"), 3),
-    ...repeat(s("h0-r2-30", { isTunnel: true }), 6),
-    s("h0-g345", { isTunnel: true }),
-    s("h0-g345", { isTunnel: true }),
-    s("h0-g345"),
-    ...repeat(s("h0-r2-30"), 6),
+    // Ground level
+    ...repeat(s("h0-g345"), 2),
+    // Ramp up
+    s("h0-g345", { elevation: 10, isRamp: true }),
+    // Right turn — climbing
+    s("h0-r2-30", { elevation: 16, isRamp: true }),
+    s("h0-r2-30", { elevation: 22, isRamp: true }),
+    s("h0-r2-30", { elevation: 28, isRamp: true }),
+    s("h0-r2-30", { elevation: 34, isRamp: true }),
+    s("h0-r2-30", { elevation: 40, isRamp: true }),
+    s("h0-r2-30", { elevation: 50, isBridge: true }),
+    // Mountain top — bridge + tunnel
+    s("h0-g345", { elevation: 50, isBridge: true }),
+    s("h0-g345", { elevation: 50, isBridge: true, isTunnel: true }),
+    // Ramp down
+    s("h0-g345", { elevation: 40, isRamp: true }),
+    // Left turn — descending
+    s("h0-r2-30", { elevation: 34, isRamp: true }),
+    s("h0-r2-30", { elevation: 28, isRamp: true }),
+    s("h0-r2-30", { elevation: 22, isRamp: true }),
+    s("h0-r2-30", { elevation: 16, isRamp: true }),
+    s("h0-r2-30", { elevation: 8, isRamp: true }),
+    s("h0-r2-30"),
   ],
   branches: [],
 };
@@ -561,12 +606,12 @@ const TT_CROSSING_LOOPS: LayoutDefinition = {
   ],
   branches: [
     {
-      // Siding through crossing area
+      // Siding through crossing area — elevated to pass over main line
       sourceSegmentIndex: 1,
       sourceConnection: "c",
       segments: [
-        s("tt-g4"),
-        s("tt-g4"),
+        s("tt-g4", { elevation: 25, isRamp: true }),
+        s("tt-g4", { elevation: 50, isBridge: true }),
       ],
     },
   ],
@@ -718,11 +763,12 @@ const H0_CROSSING_LOOPS: LayoutDefinition = {
   ],
   branches: [
     {
+      // Elevated siding passing over the crossing
       sourceSegmentIndex: 1,
       sourceConnection: "c",
       segments: [
-        s("h0-g345"),
-        s("h0-g345"),
+        s("h0-g345", { elevation: 25, isRamp: true }),
+        s("h0-g345", { elevation: 50, isBridge: true }),
       ],
     },
   ],
