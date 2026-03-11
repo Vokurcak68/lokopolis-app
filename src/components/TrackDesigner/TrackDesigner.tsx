@@ -45,7 +45,7 @@ export default function TrackDesigner() {
 
   const handleScaleChange = useCallback(
     (scale: TrackScale) => {
-      dispatch({ type: "SET_BOARD", board: { ...state.board, scale } });
+      dispatch({ type: "SET_BOARD", board: { ...state.board, scale, shape: "rectangle" } });
       dispatch({ type: "CLEAR_TRACKS" });
       dispatch({ type: "SET_ACTIVE_PIECE", pieceId: null });
     },
@@ -115,6 +115,18 @@ export default function TrackDesigner() {
           }
         }
 
+        // Update board config with shape from formData (all dimensions in cm)
+        dispatch({
+          type: "SET_BOARD",
+          board: {
+            ...state.board,
+            shape: formData.boardShape,
+            lCorner: formData.lCorner,
+            lArmWidth: formData.lArmWidth,
+            lArmDepth: formData.lArmDepth,
+            uArmDepth: formData.uArmDepth,
+          },
+        });
         dispatch({ type: "AI_SUCCESS", tracks });
         setLayoutSource((json.source as LayoutSource) || "ai");
         setLayoutWarning(json.warning || null);
@@ -148,6 +160,7 @@ export default function TrackDesigner() {
         scale={state.board.scale}
         boardWidth={state.board.width}
         boardDepth={state.board.depth}
+        boardShape={state.board.shape}
         onScaleChange={handleScaleChange}
         onBoardWidthChange={handleBoardWidthChange}
         onBoardDepthChange={handleBoardDepthChange}
@@ -170,6 +183,11 @@ export default function TrackDesigner() {
           <Scene3D
             boardWidth={boardWidthMm}
             boardDepth={boardDepthMm}
+            boardShape={state.board.shape}
+            lCorner={state.board.lCorner}
+            lArmWidth={state.board.lArmWidth ? state.board.lArmWidth * 10 : undefined}
+            lArmDepth={state.board.lArmDepth ? state.board.lArmDepth * 10 : undefined}
+            uArmDepth={state.board.uArmDepth ? state.board.uArmDepth * 10 : undefined}
             tracks={state.tracks}
             catalog={catalog}
             selectedTrackId={state.selectedTrackId}

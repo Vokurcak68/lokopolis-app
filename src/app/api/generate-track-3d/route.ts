@@ -319,6 +319,15 @@ export async function POST(request: NextRequest) {
 
   const scale = scaleRaw as TrackScale;
 
+  // For L/U shapes, compute effective bounding box dimensions for centering
+  let effectiveWidth = boardWidth;
+  let effectiveDepth = boardDepth;
+  if (body.boardShape === "l-shape" && body.lArmDepth) {
+    effectiveDepth = boardDepth + (body.lArmDepth || 0);
+  } else if (body.boardShape === "u-shape" && body.uArmDepth) {
+    effectiveDepth = boardDepth + (body.uArmDepth || 0);
+  }
+
   // --- Option 1: Use a predefined template ---
   if (body.templateId) {
     const templateLayout = getTemplateLayout(body.templateId, scale);
@@ -329,7 +338,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = computeLayout(templateLayout, scale, boardWidth, boardDepth);
+    const result = computeLayout(templateLayout, scale, effectiveWidth, effectiveDepth);
     return NextResponse.json({
       tracks: layoutResultToAPIResponse(result),
       description: TEMPLATES.find((t) => t.id === body.templateId)?.descriptionCs,
@@ -345,7 +354,7 @@ export async function POST(request: NextRequest) {
 
   if (!prompt || prompt.trim() === "") {
     const layout = getTemplateLayout("simple-oval", scale)!;
-    const result = computeLayout(layout, scale, boardWidth, boardDepth);
+    const result = computeLayout(layout, scale, effectiveWidth, effectiveDepth);
     return NextResponse.json({
       tracks: layoutResultToAPIResponse(result),
       description: "Jednoduchý ovál",
@@ -359,7 +368,7 @@ export async function POST(request: NextRequest) {
   if (!OPENAI_API_KEY) {
     // No API key → use fallback template based on character/complexity
     const fallbackLayout = selectFallbackTemplate(scale, body.character, body.complexity, body.features);
-    const result = computeLayout(fallbackLayout, scale, boardWidth, boardDepth);
+    const result = computeLayout(fallbackLayout, scale, effectiveWidth, effectiveDepth);
     return NextResponse.json({
       tracks: layoutResultToAPIResponse(result),
       description: "Kolejiště vygenerované ze šablony (AI klíč není nakonfigurován)",
@@ -410,7 +419,7 @@ Return ONLY the JSON object.`;
       console.error("OpenAI API error:", response.status, errText);
       // Fallback to template
       const fallbackLayout = selectFallbackTemplate(scale, body.character, body.complexity, body.features);
-      const result = computeLayout(fallbackLayout, scale, boardWidth, boardDepth);
+      const result = computeLayout(fallbackLayout, scale, effectiveWidth, effectiveDepth);
       return NextResponse.json({
         tracks: layoutResultToAPIResponse(result),
         description: "Kolejiště ze šablony (chyba AI)",
@@ -433,7 +442,7 @@ Return ONLY the JSON object.`;
     } catch {
       console.error("Failed to parse AI response:", aiText);
       const fallbackLayout = selectFallbackTemplate(scale, body.character, body.complexity, body.features);
-      const result = computeLayout(fallbackLayout, scale, boardWidth, boardDepth);
+      const result = computeLayout(fallbackLayout, scale, effectiveWidth, effectiveDepth);
       return NextResponse.json({
         tracks: layoutResultToAPIResponse(result),
         description: "Kolejiště ze šablony (AI vrátila neplatný JSON)",
@@ -449,7 +458,7 @@ Return ONLY the JSON object.`;
     if (!layoutDef) {
       console.error("Failed to parse layout definition from AI response:", aiResponse);
       const fallbackLayout = selectFallbackTemplate(scale, body.character, body.complexity, body.features);
-      const result = computeLayout(fallbackLayout, scale, boardWidth, boardDepth);
+      const result = computeLayout(fallbackLayout, scale, effectiveWidth, effectiveDepth);
       return NextResponse.json({
         tracks: layoutResultToAPIResponse(result),
         description: "Kolejiště ze šablony (AI layout neplatný)",
@@ -461,7 +470,7 @@ Return ONLY the JSON object.`;
     }
 
     // Compute deterministic layout!
-    const result = computeLayout(layoutDef, scale, boardWidth, boardDepth);
+    const result = computeLayout(layoutDef, scale, effectiveWidth, effectiveDepth);
     const description = typeof aiResponse.description === "string"
       ? aiResponse.description
       : "AI vygenerované kolejiště";
@@ -470,7 +479,7 @@ Return ONLY the JSON object.`;
     if (!result.loopClosed && result.loopGapMm > 10) {
       console.warn(`AI layout loop gap too large: ${result.loopGapMm.toFixed(1)}mm, falling back`);
       const fallbackLayout = selectFallbackTemplate(scale, body.character, body.complexity, body.features);
-      const fallbackResult = computeLayout(fallbackLayout, scale, boardWidth, boardDepth);
+      const fallbackResult = computeLayout(fallbackLayout, scale, effectiveWidth, effectiveDepth);
       return NextResponse.json({
         tracks: layoutResultToAPIResponse(fallbackResult),
         description: "Kolejiště ze šablony (AI layout se neuzavřel)",
@@ -497,7 +506,7 @@ Return ONLY the JSON object.`;
   } catch (err) {
     console.error("Generate track 3D error:", err);
     const fallbackLayout = selectFallbackTemplate(scale, body.character, body.complexity, body.features);
-    const result = computeLayout(fallbackLayout, scale, boardWidth, boardDepth);
+    const result = computeLayout(fallbackLayout, scale, effectiveWidth, effectiveDepth);
     return NextResponse.json({
       tracks: layoutResultToAPIResponse(result),
       description: "Kolejiště ze šablony (chyba komunikace s AI)",

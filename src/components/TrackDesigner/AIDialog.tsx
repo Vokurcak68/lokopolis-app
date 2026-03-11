@@ -2,10 +2,9 @@
 
 import React, { useState } from "react";
 import type { TrackScale } from "@/lib/track-library";
+import type { BoardShape, LCorner } from "@/lib/track-designer-store";
 
-// Types for structured form data
-export type BoardShape = "rectangle" | "l-shape" | "u-shape";
-export type LCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
+export type { BoardShape, LCorner };
 export type Complexity = "simple" | "medium" | "complex";
 export type FeatureKey = "bridge" | "tunnel" | "turntable" | "station" | "sidings" | "parallel";
 
@@ -262,20 +261,18 @@ export default function AIDialog({
             Obdélník
           </button>
           <button
-            disabled
-            style={{ ...shapeButtonBase, opacity: 0.4, cursor: "not-allowed" }}
-            title="Připravujeme"
+            onClick={() => setBoardShape("l-shape")}
+            style={boardShape === "l-shape" ? activeShapeStyle : shapeButtonBase}
           >
             <div style={{ fontSize: "24px", marginBottom: "2px" }}>⌐</div>
-            L-tvar 🔒
+            L-tvar
           </button>
           <button
-            disabled
-            style={{ ...shapeButtonBase, opacity: 0.4, cursor: "not-allowed" }}
-            title="Připravujeme"
+            onClick={() => setBoardShape("u-shape")}
+            style={boardShape === "u-shape" ? activeShapeStyle : shapeButtonBase}
           >
             <div style={{ fontSize: "24px", marginBottom: "2px" }}>⊔</div>
-            U-tvar 🔒
+            U-tvar
           </button>
         </div>
 

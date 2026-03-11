@@ -29,12 +29,25 @@ export interface PlacedTrack {
   isTunnel?: boolean;
 }
 
+export type BoardShape = "rectangle" | "l-shape" | "u-shape";
+export type LCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
+
 export interface BoardConfig {
   /** Width in cm */
   width: number;
   /** Depth in cm */
   depth: number;
   scale: TrackScale;
+  /** Board shape (default: "rectangle") */
+  shape: BoardShape;
+  /** L-shape: which corner has the arm */
+  lCorner?: LCorner;
+  /** L-shape: arm width in cm (same unit as width/depth) */
+  lArmWidth?: number;
+  /** L-shape: arm depth in cm (same unit as width/depth) */
+  lArmDepth?: number;
+  /** U-shape: arm depth in cm (same unit as width/depth) */
+  uArmDepth?: number;
 }
 
 export interface DesignerState {
@@ -71,7 +84,7 @@ export type DesignerAction =
 
 export function createInitialState(): DesignerState {
   return {
-    board: { width: 200, depth: 100, scale: "TT" },
+    board: { width: 200, depth: 100, scale: "TT", shape: "rectangle" },
     tracks: [],
     selectedTrackId: null,
     hoveredTrackId: null,

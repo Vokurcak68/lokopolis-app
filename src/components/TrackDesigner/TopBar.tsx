@@ -2,11 +2,13 @@
 
 import React from "react";
 import type { TrackScale } from "@/lib/track-library";
+import type { BoardShape } from "@/lib/track-designer-store";
 
 interface TopBarProps {
   scale: TrackScale;
   boardWidth: number;
   boardDepth: number;
+  boardShape?: BoardShape;
   onScaleChange: (scale: TrackScale) => void;
   onBoardWidthChange: (w: number) => void;
   onBoardDepthChange: (d: number) => void;
@@ -15,10 +17,17 @@ interface TopBarProps {
   aiGenerating: boolean;
 }
 
+const SHAPE_LABELS: Record<BoardShape, string> = {
+  rectangle: "▬",
+  "l-shape": "⌐ L",
+  "u-shape": "⊔ U",
+};
+
 export default function TopBar({
   scale,
   boardWidth,
   boardDepth,
+  boardShape,
   onScaleChange,
   onBoardWidthChange,
   onBoardDepthChange,
@@ -105,6 +114,21 @@ export default function TopBar({
           style={inputStyle}
         />
         <span style={{ color: "var(--text-dim)", fontSize: "11px" }}>cm</span>
+        {boardShape && boardShape !== "rectangle" && (
+          <span
+            style={{
+              padding: "4px 10px",
+              background: "rgba(240, 160, 48, 0.1)",
+              borderRadius: "4px",
+              color: "var(--accent, #f0a030)",
+              fontWeight: 600,
+              fontSize: "12px",
+              marginLeft: "4px",
+            }}
+          >
+            {SHAPE_LABELS[boardShape]}
+          </span>
+        )}
       </div>
 
       <div style={{ flex: 1 }} />

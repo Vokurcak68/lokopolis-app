@@ -8,7 +8,7 @@ import BoardBase from "./BoardBase";
 import TrackMesh from "./TrackMesh";
 import ConnectionIndicator from "./ConnectionIndicator";
 import type { TrackPieceDefinition } from "@/lib/track-library";
-import type { PlacedTrack, DesignerAction } from "@/lib/track-designer-store";
+import type { PlacedTrack, DesignerAction, BoardShape, LCorner } from "@/lib/track-designer-store";
 import {
   connectionToWorld,
   findFreeConnections,
@@ -128,6 +128,11 @@ function PlacementHandler({ boardWidth, boardDepth, activePiece, tracks, catalog
 interface Scene3DProps {
   boardWidth: number;
   boardDepth: number;
+  boardShape?: BoardShape;
+  lCorner?: LCorner;
+  lArmWidth?: number;
+  lArmDepth?: number;
+  uArmDepth?: number;
   tracks: PlacedTrack[];
   catalog: Record<string, TrackPieceDefinition>;
   selectedTrackId: string | null;
@@ -139,6 +144,11 @@ interface Scene3DProps {
 export default function Scene3D({
   boardWidth,
   boardDepth,
+  boardShape,
+  lCorner,
+  lArmWidth,
+  lArmDepth,
+  uArmDepth,
   tracks,
   catalog,
   selectedTrackId,
@@ -220,7 +230,15 @@ export default function Scene3D({
       />
 
       {/* Board */}
-      <BoardBase width={boardWidth} depth={boardDepth} />
+      <BoardBase
+        width={boardWidth}
+        depth={boardDepth}
+        shape={boardShape}
+        lCorner={lCorner}
+        lArmWidth={lArmWidth}
+        lArmDepth={lArmDepth}
+        uArmDepth={uArmDepth}
+      />
 
       {/* Placement handler (invisible click plane) */}
       <PlacementHandler
