@@ -117,23 +117,25 @@ const TT_FIGURE_EIGHT: LayoutDefinition = {
  * Oval with a station area (multiple parallel tracks)
  *
  * Geometry: Turnout ewl/ewr = 166mm each.
- * Top: ewl(166) + G4(332) + ewl(166) + G4(332) + ewr(166) + G4(332) + ewr(166) = 1660mm
- * Bottom: 5×G4(1660) = 1660mm ← must match!
+ * Top: ewl(166) + G1(166) + ewl(166) + G1(166) + ewr(166) + G1(166) + ewr(166) = 1162mm
+ * Bottom: 3×G4(996) + G1(166) = 1162mm ← must match!
+ * Total width: ~1162 + 620 = ~1782mm — fits 200cm board
  */
 const TT_STATION_WITH_YARD: LayoutDefinition = {
   mainLoop: [
-    // Station area — top straight
+    // Station area — top straight (compact version)
     s("tt-ewl"),   // index 0: first turnout for platform siding (166mm)
-    s("tt-g4"),    // 332mm
+    s("tt-g1"),    // 166mm
     s("tt-ewl"),   // index 2: second turnout for yard (166mm)
-    s("tt-g4"),    // 332mm
+    s("tt-g1"),    // 166mm
     s("tt-ewr"),   // index 4: yard rejoin (166mm)
-    s("tt-g4"),    // 332mm
+    s("tt-g1"),    // 166mm
     s("tt-ewr"),   // index 6: siding rejoin (166mm)
     // Right turn
     ...repeat(s("tt-r1-15"), 12),
-    // Bottom straight — 5×G4 = 1660mm (matches top)
-    ...repeat(s("tt-g4"), 5),
+    // Bottom straight — 3×G4 + G1 = 996 + 166 = 1162mm (matches top)
+    ...repeat(s("tt-g4"), 3),
+    s("tt-g1"),
     // Left turn
     ...repeat(s("tt-r1-15"), 12),
   ],
@@ -143,10 +145,9 @@ const TT_STATION_WITH_YARD: LayoutDefinition = {
       sourceSegmentIndex: 0,
       sourceConnection: "c",
       segments: [
-        s("tt-g4"),
-        s("tt-g4"),
-        s("tt-g4"),
-        s("tt-g4"),
+        s("tt-g1"),
+        s("tt-g1"),
+        s("tt-g1"),
       ],
     },
     {
@@ -154,8 +155,8 @@ const TT_STATION_WITH_YARD: LayoutDefinition = {
       sourceSegmentIndex: 2,
       sourceConnection: "c",
       segments: [
-        s("tt-g4"),
         s("tt-g1"),
+        s("tt-g2"),
       ],
     },
   ],
