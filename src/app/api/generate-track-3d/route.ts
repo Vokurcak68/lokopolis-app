@@ -65,98 +65,62 @@ function buildSystemPrompt(scale: TrackScale, boardWidth: number, boardDepth: nu
   const catalogDesc = buildCatalogDescription(scale);
   const isTT = scale === "TT";
 
-  return `You are a model railway layout designer. Design track layouts by specifying SEQUENCES of track pieces.
+  // Piece length cheat-sheet
+  const pieceLengths = isTT
+    ? `G1=166mm, G2=83mm, G3=41.5mm, G4=332mm, G5=228mm, G6=55mm, EWL/EWR=166mm, DK=166mm`
+    : `G230=230mm, G200=200mm, G100=100mm, G345=345mm, WL15/WR15=230mm, DK=230mm`;
 
-DO NOT calculate coordinates — the layout engine will compute exact positions from your sequence.
+  const curveFormula = isTT
+    ? `R1-15° ×12 = 180° (half-circle), R1-30° ×6 = 180°, R2/R3/R4 same angles but wider radius`
+    : `R2-30° ×6 = 180° (half-circle), R3-30° ×6 = 180°, R4-30° ×6 = 180°`;
 
-TRACK CATALOG (${scale} scale):
+  return `You are an expert model railway layout designer. You design TOPOLOGY — the layout engine computes geometry.
+
+## TRACK CATALOG (${scale})
 ${catalogDesc}
 
-You specify a JSON object with:
-1. "mainLoop": array of segments forming a closed loop. Each segment: {"pieceId": "<id>"}
-2. "branches": array of side tracks branching from turnouts in mainLoop
+## PIECE LENGTHS
+${pieceLengths}
 
-CRITICAL RULES FOR CLOSED LOOPS:
-- The main loop MUST close — the last piece must connect back to the first
-- An oval = straights on one side + 180° of curves + straights on other side + 180° of curves
-- BOTH straight sections must have THE SAME total length in mm!
-- ${isTT
-    ? "For TT R1 15° curves: 12 curves = 180° half-circle, 24 = full circle"
-    : "For H0 R2 30° curves: 6 curves = 180° half-circle, 12 = full circle"}
-- ${isTT
-    ? "For TT R1 30° curves: 6 curves = 180°, 12 = full circle"
-    : "For H0 R3 30° curves: 6 curves = 180°, 12 = full circle"}
+## CURVE MATH
+${curveFormula}
+All curves bend LEFT in local space. For right-bending, the engine handles track direction.
 
-CRITICAL: STRAIGHT LENGTHS MUST MATCH!
-When replacing a straight with turnouts, account for piece lengths:
-${isTT
-    ? `- TT turnout (ewl/ewr) = 166mm (same as G1)
-- TT G1 = 166mm, G2 = 83mm, G3 = 41.5mm, G4 = 332mm, G5 = 228mm
-- Example: replacing one G4(332mm) with ewl(166mm) + G1(166mm) keeps the same total`
-    : `- H0 turnout (wl15/wr15) = 230mm (same as G230)
-- H0 G230 = 230mm, G200 = 200mm, G100 = 100mm, G345 = 345mm
-- Example: replacing one G345(345mm) with wl15(230mm) + G100(100mm) + ... etc.`}
+## TOPOLOGY FORMAT
+You output a JSON graph:
+- "mainLoop": ordered array of pieces forming ONE closed loop (the train's main route)
+- "branches": side tracks branching from turnouts in mainLoop
 
-TURNOUT RULES:
-- When you place a turnout in mainLoop, the main line continues through connection B (straight through)
-- Branch from connection C starts a new branch
-- Reference the turnout by its INDEX in mainLoop (0-based)
-- Branch starts from the turnout's "c" connection
+Each mainLoop segment: {"pieceId": "ID"} or {"pieceId": "ID", "isTunnel": true}
+Each branch: {"sourceSegmentIndex": N, "sourceConnection": "c", "segments": [...]}
 
-Board size: ${boardWidth}×${boardDepth} cm (${boardWidth * 10}×${boardDepth * 10} mm)
-The layout engine will auto-center the layout on the board.
+## DESIGN PRINCIPLES
+1. **CLOSED LOOP is mandatory** — both straight sides of an oval MUST have equal total mm length
+2. **Turnouts** have 3 connections: A(entry), B(straight through), C(diverge at angle)
+   - In mainLoop the main line goes A→B (straight). Branch starts a separate "branches" entry from C.
+   - Left turnout: C diverges left. Right turnout: C diverges right.
+   - To make a passing siding: use LEFT turnout at entry, RIGHT turnout at exit, branch between their C ports.
+3. **Crossings** have 4 connections: A↔B (straight through), C↔D (crossing angle).
+   - Only A→B is used in mainLoop sequence. C and D are for crossing tracks.
+4. **Parallel tracks (double track)**: inner oval R1/R2, outer oval R2/R3 or wider. Connect via turnouts.
+5. **Station layout**: multiple turnouts in sequence, each branching to a parallel platform track.
 
-OUTPUT FORMAT — return ONLY this JSON:
+## STRICT RULES
+- Use ONLY piece IDs from the catalog above
+- BOTH straight sections of an oval MUST have IDENTICAL total length in mm
+- When inserting a turnout (${isTT ? "166mm" : "230mm"}) into a straight section, adjust other pieces so total length stays the same
+- Branches are dead-end spurs unless they reconnect (currently branches don't loop back)
+- Maximize use of board space: ${boardWidth}×${boardDepth}cm = ${boardWidth * 10}×${boardDepth * 10}mm
+- For stations: use ewl/ewr (TT) or wl15/wr15 (H0) pairs — left at entry, right at exit
+- Design creative, unique layouts — not just simple ovals!
+
+## BOARD: ${boardWidth}×${boardDepth}cm (${boardWidth * 10}×${boardDepth * 10}mm)
+
+## OUTPUT — return ONLY this JSON:
 {
-  "mainLoop": [
-    {"pieceId": "..."},
-    {"pieceId": "...", "isTunnel": true},
-    ...
-  ],
-  "branches": [
-    {
-      "sourceSegmentIndex": 0,
-      "sourceConnection": "c",
-      "segments": [{"pieceId": "..."}, ...]
-    }
-  ],
-  "description": "Short description of the layout in Czech"
-}
-
-EXAMPLE — Simple TT oval:
-{
-  "mainLoop": [
-    ${isTT
-      ? `{"pieceId": "tt-g4"}, {"pieceId": "tt-g4"}, {"pieceId": "tt-g4"},
-    ${'{"pieceId": "tt-r1-15"}, '.repeat(11)}{"pieceId": "tt-r1-15"},
-    {"pieceId": "tt-g4"}, {"pieceId": "tt-g4"}, {"pieceId": "tt-g4"},
-    ${'{"pieceId": "tt-r1-15"}, '.repeat(11)}{"pieceId": "tt-r1-15"}`
-      : `{"pieceId": "h0-g345"}, {"pieceId": "h0-g345"}, {"pieceId": "h0-g345"},
-    ${'{"pieceId": "h0-r2-30"}, '.repeat(5)}{"pieceId": "h0-r2-30"},
-    {"pieceId": "h0-g345"}, {"pieceId": "h0-g345"}, {"pieceId": "h0-g345"},
-    ${'{"pieceId": "h0-r2-30"}, '.repeat(5)}{"pieceId": "h0-r2-30"}`}
-  ],
-  "branches": [],
-  "description": "Jednoduchý ovál"
-}
-
-EXAMPLE — TT oval with passing siding:
-Top side total: ewl(166) + 2×G4(664) + ewr(166) = 996mm
-Bottom side: 3×G4(996) = 996mm ← MUST MATCH!
-{
-  "mainLoop": [
-    {"pieceId": "${isTT ? "tt-ewl" : "h0-wl15"}"},
-    {"pieceId": "${isTT ? "tt-g4" : "h0-g345"}"}, {"pieceId": "${isTT ? "tt-g4" : "h0-g345"}"},
-    {"pieceId": "${isTT ? "tt-ewr" : "h0-wr15"}"},
-    ... 180° curves ...,
-    ... straights matching top total ...,
-    ... 180° curves ...
-  ],
-  "branches": [
-    {"sourceSegmentIndex": 0, "sourceConnection": "c", "segments": [
-      {"pieceId": "${isTT ? "tt-g4" : "h0-g345"}"}, {"pieceId": "${isTT ? "tt-g4" : "h0-g345"}"}
-    ]}
-  ]
+  "mainLoop": [{"pieceId": "..."}, ...],
+  "branches": [{"sourceSegmentIndex": 0, "sourceConnection": "c", "segments": [...]}],
+  "description": "Krátký popis česky"
 }`;
 }
 
@@ -264,12 +228,12 @@ function selectFallbackTemplate(
 ): LayoutDefinition {
   // Přímé mapování charakter → template ID
   const charMap: Record<string, string> = {
-    station: "station-with-yard",
+    station: "station-3-tracks",
     mountain: "mountain-loop",
-    corridor: "oval-with-siding",
+    corridor: "double-track",
     industrial: "industrial-spur",
     diorama: "simple-oval",
-    "through-station": "figure-eight",
+    "through-station": "loop-with-station",
   };
 
   let templateId = "simple-oval";
@@ -277,9 +241,9 @@ function selectFallbackTemplate(
   if (character && charMap[character]) {
     templateId = charMap[character];
   } else if (complexity === "complex") {
-    templateId = "station-with-yard";
+    templateId = "station-3-tracks";
   } else if (complexity === "medium") {
-    templateId = "oval-with-siding";
+    templateId = "crossing-loops";
   }
 
   // Feature overrides — pouze pokud nebylo mapováno z charakteru
@@ -288,7 +252,10 @@ function selectFallbackTemplate(
       templateId = "mountain-loop";
     }
     if (features?.includes("sidings") || features?.includes("station")) {
-      templateId = "station-with-yard";
+      templateId = "station-3-tracks";
+    }
+    if (features?.includes("parallel")) {
+      templateId = "double-track";
     }
   }
 
@@ -341,6 +308,7 @@ export async function POST(request: NextRequest) {
       tracks: layoutResultToAPIResponse(result),
       description: TEMPLATES.find((t) => t.id === body.templateId)?.descriptionCs,
       loopClosed: result.loopClosed,
+        hasClosedLoop: result.hasClosedLoop,
       loopGapMm: result.loopGapMm,
       warnings: result.warnings.length > 0 ? result.warnings : undefined,
       source: "template",
@@ -357,6 +325,7 @@ export async function POST(request: NextRequest) {
       tracks: layoutResultToAPIResponse(result),
       description: "Jednoduchý ovál",
       loopClosed: result.loopClosed,
+        hasClosedLoop: result.hasClosedLoop,
       loopGapMm: result.loopGapMm,
       source: "template",
     });
@@ -371,6 +340,7 @@ export async function POST(request: NextRequest) {
       tracks: layoutResultToAPIResponse(result),
       description: "Kolejiště vygenerované ze šablony (AI klíč není nakonfigurován)",
       loopClosed: result.loopClosed,
+        hasClosedLoop: result.hasClosedLoop,
       loopGapMm: result.loopGapMm,
       source: "template-fallback",
       warning: "API klíč není nakonfigurován, použita šablona.",
@@ -379,19 +349,21 @@ export async function POST(request: NextRequest) {
 
   const systemPrompt = buildSystemPrompt(scale, boardWidth, boardDepth);
 
-  const userMessage = `Design a track layout with these requirements:
+  const userMessage = `Design a unique track layout:
 
 ${prompt}
 
-Board: ${boardWidth}×${boardDepth} cm, Scale: ${scale}
+Board: ${boardWidth}×${boardDepth}cm, Scale: ${scale}
 
-Remember:
-- mainLoop must form a CLOSED LOOP
-- Both straight sections of an oval must have EQUAL total length in mm
-- Use only piece IDs from the catalog
-- Count curves correctly: ${scale === "TT" ? "12×15° or 6×30° = 180°" : "6×30° = 180°"}
+CHECKLIST before responding:
+1. ✅ mainLoop forms a CLOSED LOOP (both straight sides = equal mm)
+2. ✅ Only valid piece IDs from catalog
+3. ✅ Curves total exactly 180° per half-turn (${scale === "TT" ? "12×15° or 6×30°" : "6×30°"})
+4. ✅ Turnout lengths counted in straight totals
+5. ✅ Creative design — not a basic oval unless specifically requested
+6. ✅ Branch sourceSegmentIndex matches the turnout's position in mainLoop (0-based)
 
-Return ONLY the JSON object.`;
+Return ONLY the JSON.`;
 
   try {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -422,6 +394,7 @@ Return ONLY the JSON object.`;
         tracks: layoutResultToAPIResponse(result),
         description: "Kolejiště ze šablony (chyba AI)",
         loopClosed: result.loopClosed,
+        hasClosedLoop: result.hasClosedLoop,
         loopGapMm: result.loopGapMm,
         source: "template-fallback",
         warning: `AI chyba (${response.status}), použita šablona.`,
@@ -445,6 +418,7 @@ Return ONLY the JSON object.`;
         tracks: layoutResultToAPIResponse(result),
         description: "Kolejiště ze šablony (AI vrátila neplatný JSON)",
         loopClosed: result.loopClosed,
+        hasClosedLoop: result.hasClosedLoop,
         loopGapMm: result.loopGapMm,
         source: "template-fallback",
         warning: "AI vrátila neplatnou odpověď, použita šablona.",
@@ -461,6 +435,7 @@ Return ONLY the JSON object.`;
         tracks: layoutResultToAPIResponse(result),
         description: "Kolejiště ze šablony (AI layout neplatný)",
         loopClosed: result.loopClosed,
+        hasClosedLoop: result.hasClosedLoop,
         loopGapMm: result.loopGapMm,
         source: "template-fallback",
         warning: "AI vygenerovala neplatný layout, použita šablona.",
@@ -482,6 +457,7 @@ Return ONLY the JSON object.`;
         tracks: layoutResultToAPIResponse(fallbackResult),
         description: "Kolejiště ze šablony (AI layout se neuzavřel)",
         loopClosed: fallbackResult.loopClosed,
+        hasClosedLoop: fallbackResult.hasClosedLoop,
         loopGapMm: fallbackResult.loopGapMm,
         source: "template-fallback",
         warning: `AI layout se neuzavřel (mezera ${result.loopGapMm.toFixed(1)}mm), použita šablona.`,
@@ -497,6 +473,7 @@ Return ONLY the JSON object.`;
       tracks: layoutResultToAPIResponse(result),
       description,
       loopClosed: result.loopClosed,
+        hasClosedLoop: result.hasClosedLoop,
       loopGapMm: result.loopGapMm,
       warnings: result.warnings.length > 0 ? result.warnings : undefined,
       source: "ai",
@@ -509,6 +486,7 @@ Return ONLY the JSON object.`;
       tracks: layoutResultToAPIResponse(result),
       description: "Kolejiště ze šablony (chyba komunikace s AI)",
       loopClosed: result.loopClosed,
+        hasClosedLoop: result.hasClosedLoop,
       loopGapMm: result.loopGapMm,
       source: "template-fallback",
       warning: "Chyba při komunikaci s AI, použita šablona.",

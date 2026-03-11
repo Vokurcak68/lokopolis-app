@@ -168,6 +168,7 @@ export const TILLIG_TT: TrackPieceDefinition[] = [
   straight("tt-g3", "G3 přímá 41.5mm", "TT", 41.5, "83103"),
   straight("tt-g4", "G4 přímá 332mm", "TT", 332, "83104"),
   straight("tt-g5", "G5 přímá 228mm", "TT", 228, "83142"),
+  straight("tt-g6", "G6 přímá 55mm", "TT", 55, "83106"),
 
   // Curves R1 (310mm)
   curve("tt-r1-15", "R1 oblouk 15°", "TT", 310, 15, "83110"),
@@ -180,6 +181,10 @@ export const TILLIG_TT: TrackPieceDefinition[] = [
   // Curves R3 (396mm)
   curve("tt-r3-15", "R3 oblouk 15°", "TT", 396, 15, "83114"),
   curve("tt-r3-30", "R3 oblouk 30°", "TT", 396, 30, "83115"),
+
+  // Curves R4 (439mm) — for double track outer curve
+  curve("tt-r4-15", "R4 oblouk 15°", "TT", 439, 15, "83116"),
+  curve("tt-r4-30", "R4 oblouk 30°", "TT", 439, 30, "83117"),
 
   // Turnouts
   turnout("tt-ewl", "Výhybka levá EWL", "TT", 166, 15, "left", 310, "83320"),
@@ -209,6 +214,10 @@ export const ROCO_H0: TrackPieceDefinition[] = [
 
   // Curves R4 (481mm, 30°)
   curve("h0-r4-30", "R4 oblouk 30°", "H0", 481, 30, "61140"),
+  curve("h0-r4-15", "R4 oblouk 15°", "H0", 481, 15, "61141b"),
+
+  // Curves R5 (542mm) — for double track outer curve
+  curve("h0-r5-30", "R5 oblouk 30°", "H0", 542, 30, "61150"),
 
   // Turnouts
   turnout("h0-wl15", "Výhybka levá WL15", "H0", 230, 15, "left", 502.7, "61140"),

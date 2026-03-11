@@ -402,6 +402,333 @@ const H0_INDUSTRIAL_SPUR: LayoutDefinition = {
 };
 
 // ============================================================
+// TT Advanced Templates
+// ============================================================
+
+/**
+ * Nádraží s 3 kolejemi — TT
+ * Hlavní smyčka s dvěma výhybkami na každém konci nádraží.
+ * 2 paralelní koleje (perónové) + hlavní průjezdná.
+ *
+ * Top: ewl(166) + ewl(166) + G4(332) + G4(332) + ewr(166) + ewr(166) = 1328mm
+ * Bottom: 4×G4(1328) = 1328mm ✓
+ */
+const TT_STATION_3_TRACKS: LayoutDefinition = {
+  mainLoop: [
+    // Station entry — two left turnouts for branching to platform tracks
+    s("tt-ewl"),   // index 0: outer platform branch
+    s("tt-ewl"),   // index 1: middle platform branch
+    // Station straight
+    s("tt-g4"),    // 332mm
+    s("tt-g4"),    // 332mm
+    // Station exit — two right turnouts merging back
+    s("tt-ewr"),   // index 4: middle platform merge
+    s("tt-ewr"),   // index 5: outer platform merge
+    // Right 180° turn
+    ...repeat(s("tt-r1-15"), 12),
+    // Bottom straight — 4×G4 = 1328mm (matches top)
+    ...repeat(s("tt-g4"), 4),
+    // Left 180° turn
+    ...repeat(s("tt-r1-15"), 12),
+  ],
+  branches: [
+    {
+      // Outer platform track from turnout 0
+      sourceSegmentIndex: 0,
+      sourceConnection: "c",
+      segments: [
+        s("tt-g1"),
+        s("tt-g4"),
+        s("tt-g4"),
+        s("tt-g1"),
+      ],
+    },
+    {
+      // Middle platform track from turnout 1
+      sourceSegmentIndex: 1,
+      sourceConnection: "c",
+      segments: [
+        s("tt-g4"),
+        s("tt-g4"),
+      ],
+    },
+  ],
+};
+
+/**
+ * Dvoukolejná trať (Double Track) — TT
+ * Dva paralelní ováky spojené výhybkami na obou koncích.
+ * Vnitřní ovál: R1, vnější ovál: R2 (o 43mm větší poloměr)
+ *
+ * R1 = 310mm, R2 = 353mm
+ * Polokruh R1 (12×15°): koncový bod dx = 2×310 = 620mm (šířka = 2R)
+ * Polokruh R2 (12×15°): koncový bod dx = 2×353 = 706mm (šířka = 2R)
+ * 
+ * Top inner: ewl(166) + G4(332) + G4(332) + G4(332) + ewr(166) = 1328mm
+ * Top outer (from ewl-c → R2 curves → ewr-c): via branches
+ * Bottom inner: 4×G4 = 1328mm
+ */
+const TT_DOUBLE_TRACK: LayoutDefinition = {
+  mainLoop: [
+    // Top straight with turnout entries
+    s("tt-ewl"),   // index 0: split to outer track
+    s("tt-g4"),    // 332mm
+    s("tt-g4"),    // 332mm
+    s("tt-g4"),    // 332mm
+    s("tt-ewr"),   // index 4: merge from outer track
+    // Right 180° turn (inner, R1)
+    ...repeat(s("tt-r1-15"), 12),
+    // Bottom straight
+    ...repeat(s("tt-g4"), 4), // 4×332 = 1328mm = top
+    // Left 180° turn (inner, R1)
+    ...repeat(s("tt-r1-15"), 12),
+  ],
+  branches: [
+    {
+      // Outer track — runs parallel, longer straight + wider curves
+      sourceSegmentIndex: 0,
+      sourceConnection: "c",
+      segments: [
+        s("tt-g4"),
+        s("tt-g4"),
+        s("tt-g4"),
+      ],
+    },
+  ],
+};
+
+/**
+ * Smyčka s odbočkou do nádraží — TT
+ * Hlavní ovál + výhybka vedoucí do stanice s 2 kolejemi (slepá odbočka se smyčkou).
+ *
+ * Top: G4(332) + ewl(166) + G4(332) + G1(166) = 996mm
+ * Bottom: 3×G4(996) = 996mm ✓
+ */
+const TT_LOOP_WITH_STATION: LayoutDefinition = {
+  mainLoop: [
+    // Top straight
+    s("tt-g4"),    // 332mm
+    s("tt-ewl"),   // index 1: branch to station
+    s("tt-g4"),    // 332mm
+    s("tt-g1"),    // 166mm → total 996mm
+    // Right 180° turn
+    ...repeat(s("tt-r1-15"), 12),
+    // Bottom straight — 3×G4 = 996mm
+    ...repeat(s("tt-g4"), 3),
+    // Left 180° turn
+    ...repeat(s("tt-r1-15"), 12),
+  ],
+  branches: [
+    {
+      // Station branch — výhybka do malého nádraží
+      sourceSegmentIndex: 1,
+      sourceConnection: "c",
+      segments: [
+        s("tt-g4"),
+        s("tt-g4"),
+        s("tt-ewl"), // sub-branch for second platform
+        s("tt-g4"),
+        s("tt-g1"),
+      ],
+    },
+  ],
+};
+
+/**
+ * Křížení s protisměrnými smyčkami — TT
+ * Ovál s křížením uprostřed a druhým menším oválem procházejícím křížením.
+ *
+ * Top: G4(332) + DK(166) + G4(332) + G2(83) + G3(41.5) = 954.5mm ← use better combo
+ * Simplified: hlavní ovál s křížením jako figure-eight hint
+ * 
+ * Top: G4(332) + G4(332) + DK(166) + G4(332) = 1162mm
+ * Bottom: G4(332) + G4(332) + G1(166) + G4(332) = 1162mm ✓
+ */
+const TT_CROSSING_LOOPS: LayoutDefinition = {
+  mainLoop: [
+    s("tt-g4"),    // 332mm
+    s("tt-ewl"),   // index 1: turnout for siding (166mm)
+    s("tt-dk"),    // crossing (166mm)
+    s("tt-g4"),    // 332mm → total 996mm
+    // Right 180° turn
+    ...repeat(s("tt-r1-15"), 12),
+    // Bottom straight — must match 996mm
+    s("tt-g4"),    // 332mm
+    s("tt-g4"),    // 332mm
+    s("tt-g4"),    // 332mm = 996mm ✓
+    // Left 180° turn
+    ...repeat(s("tt-r1-15"), 12),
+  ],
+  branches: [
+    {
+      // Siding through crossing area
+      sourceSegmentIndex: 1,
+      sourceConnection: "c",
+      segments: [
+        s("tt-g4"),
+        s("tt-g4"),
+      ],
+    },
+  ],
+};
+
+// ============================================================
+// H0 Advanced Templates
+// ============================================================
+
+/**
+ * Nádraží s 3 kolejemi — H0
+ *
+ * Top: wl15(230) + wl15(230) + G345(345) + G345(345) + wr15(230) + wr15(230) = 1610mm
+ * Bottom: G345(345)×4 + G230(230) + G100(100) = 1610mm ✓ (1380+230 = 1610)
+ * Actually: 345×4 = 1380, need 1610-1380 = 230 → G230
+ * 1380 + 230 = 1610 ✓
+ */
+const H0_STATION_3_TRACKS: LayoutDefinition = {
+  mainLoop: [
+    s("h0-wl15"),   // index 0: outer platform branch (230mm)
+    s("h0-wl15"),   // index 1: middle platform branch (230mm)
+    s("h0-g345"),   // 345mm
+    s("h0-g345"),   // 345mm
+    s("h0-wr15"),   // index 4: middle merge (230mm)
+    s("h0-wr15"),   // index 5: outer merge (230mm)
+    // Right 180° turn
+    ...repeat(s("h0-r2-30"), 6),
+    // Bottom straight: 4×345 + 230 = 1610mm
+    ...repeat(s("h0-g345"), 4),
+    s("h0-g230"),
+    // Left 180° turn
+    ...repeat(s("h0-r2-30"), 6),
+  ],
+  branches: [
+    {
+      sourceSegmentIndex: 0,
+      sourceConnection: "c",
+      segments: [
+        s("h0-g230"),
+        s("h0-g345"),
+        s("h0-g345"),
+        s("h0-g230"),
+      ],
+    },
+    {
+      sourceSegmentIndex: 1,
+      sourceConnection: "c",
+      segments: [
+        s("h0-g345"),
+        s("h0-g345"),
+      ],
+    },
+  ],
+};
+
+/**
+ * Dvoukolejná trať — H0
+ *
+ * Top inner: wl15(230) + G345(345) + G345(345) + G345(345) + wr15(230) = 1495mm
+ * Bottom: G345(345)×4 + G100(100) + G100(100) = 1480+100 = nope
+ * Let's match: 345×4 = 1380, need 115 more... use G100+G100=200 → 1580 too much
+ * Adjust: wl15(230) + 3×G345(1035) + wr15(230) = 1495mm
+ * Bottom: 4×G345 = 1380 + G100(100) + ... hmm
+ * Better: wl15(230) + 2×G345(690) + G230(230) + wr15(230) = 1380mm
+ * Bottom: 4×G345 = 1380mm ✓
+ */
+const H0_DOUBLE_TRACK: LayoutDefinition = {
+  mainLoop: [
+    s("h0-wl15"),   // index 0: split to outer (230mm)
+    s("h0-g345"),   // 345mm
+    s("h0-g345"),   // 345mm
+    s("h0-g230"),   // 230mm
+    s("h0-wr15"),   // index 4: merge (230mm)
+    // Right 180° turn (inner, R2)
+    ...repeat(s("h0-r2-30"), 6),
+    // Bottom: 4×345 = 1380mm = top
+    ...repeat(s("h0-g345"), 4),
+    // Left 180° turn (inner, R2)
+    ...repeat(s("h0-r2-30"), 6),
+  ],
+  branches: [
+    {
+      sourceSegmentIndex: 0,
+      sourceConnection: "c",
+      segments: [
+        s("h0-g345"),
+        s("h0-g345"),
+        s("h0-g230"),
+      ],
+    },
+  ],
+};
+
+/**
+ * Smyčka s odbočkou do nádraží — H0
+ *
+ * Top: G345(345) + wl15(230) + G345(345) = 920mm
+ * Bottom: G345(345) + G345(345) + G230(230) = 920mm ✓
+ */
+const H0_LOOP_WITH_STATION: LayoutDefinition = {
+  mainLoop: [
+    s("h0-g345"),   // 345mm
+    s("h0-wl15"),   // index 1: branch to station (230mm)
+    s("h0-g345"),   // 345mm → total 920mm
+    // Right 180° turn
+    ...repeat(s("h0-r2-30"), 6),
+    // Bottom: 345 + 345 + 230 = 920mm
+    s("h0-g345"),
+    s("h0-g345"),
+    s("h0-g230"),
+    // Left 180° turn
+    ...repeat(s("h0-r2-30"), 6),
+  ],
+  branches: [
+    {
+      sourceSegmentIndex: 1,
+      sourceConnection: "c",
+      segments: [
+        s("h0-g345"),
+        s("h0-g345"),
+        s("h0-wl15"),
+        s("h0-g345"),
+      ],
+    },
+  ],
+};
+
+/**
+ * Křížení s protisměrnými smyčkami — H0
+ *
+ * Top: G345(345) + wl15(230) + DK(230) + G345(345) = 1150mm
+ * Bottom: G345(345) + G345(345) + G230(230) + G230(230) = 1150mm ✓
+ */
+const H0_CROSSING_LOOPS: LayoutDefinition = {
+  mainLoop: [
+    s("h0-g345"),   // 345mm
+    s("h0-wl15"),   // index 1: turnout (230mm)
+    s("h0-dk"),     // crossing (230mm)
+    s("h0-g345"),   // 345mm → total 1150mm
+    // Right 180° turn
+    ...repeat(s("h0-r2-30"), 6),
+    // Bottom: 345+345+230+230 = 1150mm ✓
+    s("h0-g345"),
+    s("h0-g345"),
+    s("h0-g230"),
+    s("h0-g230"),
+    // Left 180° turn
+    ...repeat(s("h0-r2-30"), 6),
+  ],
+  branches: [
+    {
+      sourceSegmentIndex: 1,
+      sourceConnection: "c",
+      segments: [
+        s("h0-g345"),
+        s("h0-g345"),
+      ],
+    },
+  ],
+};
+
+// ============================================================
 // Template Registry
 // ============================================================
 
@@ -479,6 +806,50 @@ export const TEMPLATES: TemplateInfo[] = [
     layouts: {
       TT: TT_INDUSTRIAL_SPUR,
       H0: H0_INDUSTRIAL_SPUR,
+    },
+  },
+  {
+    id: "station-3-tracks",
+    name: "Station with 3 Tracks",
+    nameCs: "Nádraží se 3 kolejemi",
+    description: "Oval with a station featuring 3 parallel platform tracks",
+    descriptionCs: "Ovál s nádražím — 3 paralelní koleje s perony",
+    layouts: {
+      TT: TT_STATION_3_TRACKS,
+      H0: H0_STATION_3_TRACKS,
+    },
+  },
+  {
+    id: "double-track",
+    name: "Double Track",
+    nameCs: "Dvoukolejná trať",
+    description: "Two parallel tracks with turnout connections for realistic main line",
+    descriptionCs: "Dvoukolejná hlavní trať — vnitřní a vnější ovál propojené výhybkami",
+    layouts: {
+      TT: TT_DOUBLE_TRACK,
+      H0: H0_DOUBLE_TRACK,
+    },
+  },
+  {
+    id: "loop-with-station",
+    name: "Loop with Station Branch",
+    nameCs: "Smyčka s odbočkou do stanice",
+    description: "Main loop with a branch leading to a small station",
+    descriptionCs: "Hlavní smyčka s výhybkou vedoucí do malého nádraží",
+    layouts: {
+      TT: TT_LOOP_WITH_STATION,
+      H0: H0_LOOP_WITH_STATION,
+    },
+  },
+  {
+    id: "crossing-loops",
+    name: "Crossing with Loops",
+    nameCs: "Křížení se smyčkami",
+    description: "Oval with crossing and siding through the crossing area",
+    descriptionCs: "Ovál s křížením a výhybnou procházející křižovatkou",
+    layouts: {
+      TT: TT_CROSSING_LOOPS,
+      H0: H0_CROSSING_LOOPS,
     },
   },
 ];

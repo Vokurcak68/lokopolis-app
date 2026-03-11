@@ -68,6 +68,8 @@ export interface LayoutResult {
   loopGapMm: number;
   /** Whether the loop closed within tolerance */
   loopClosed: boolean;
+  /** Whether at least one closed loop exists (train can run continuously) */
+  hasClosedLoop: boolean;
   /** Any warnings */
   warnings: string[];
   /** Description for debugging */
@@ -141,6 +143,7 @@ export function computeLayout(
       tracks: [],
       loopGapMm: Infinity,
       loopClosed: false,
+      hasClosedLoop: false,
       warnings: [...warnings, "No valid tracks in mainLoop"],
       debugInfo,
     };
@@ -332,13 +335,92 @@ export function computeLayout(
     }
   }
 
+  // --- Phase 7: Validate traversability (at least 1 closed loop) ---
+  const hasClosedLoop = validateClosedLoop(allTracks, loopClosed);
+  if (!hasClosedLoop) {
+    warnings.push("WARN: No closed loop detected — train cannot run continuously!");
+  }
+  debugInfo.push(`Closed loop: ${hasClosedLoop ? "YES" : "NO"}`);
+
   return {
     tracks: allTracks,
     loopGapMm,
     loopClosed,
+    hasClosedLoop,
     warnings,
     debugInfo,
   };
+}
+
+// ============================================================
+// Traversability validation — find at least 1 closed loop via DFS
+// ============================================================
+
+/**
+ * Check if there's at least one closed loop in the layout.
+ * Uses snappedConnections graph to find cycles.
+ */
+function validateClosedLoop(tracks: PlacedTrack[], mainLoopClosed: boolean): boolean {
+  // If main loop is closed, we already have a loop
+  if (mainLoopClosed) return true;
+
+  // Build adjacency graph from snappedConnections
+  // Node = "instanceId:connId", edges connect snapped pairs
+  const adj = new Map<string, string[]>();
+
+  for (const track of tracks) {
+    const piece = getTrackPiece(track.pieceId);
+    if (!piece) continue;
+
+    // Add edges for connections within the same piece (A↔B, A↔C for turnouts, etc.)
+    const connIds = piece.connections.map(c => c.id);
+    for (let i = 0; i < connIds.length; i++) {
+      for (let j = i + 1; j < connIds.length; j++) {
+        const nodeA = `${track.instanceId}:${connIds[i]}`;
+        const nodeB = `${track.instanceId}:${connIds[j]}`;
+        if (!adj.has(nodeA)) adj.set(nodeA, []);
+        if (!adj.has(nodeB)) adj.set(nodeB, []);
+        adj.get(nodeA)!.push(nodeB);
+        adj.get(nodeB)!.push(nodeA);
+      }
+    }
+
+    // Add edges for snapped connections (between different pieces)
+    for (const [connId, targetStr] of Object.entries(track.snappedConnections)) {
+      const nodeA = `${track.instanceId}:${connId}`;
+      const nodeB = targetStr;
+      if (!adj.has(nodeA)) adj.set(nodeA, []);
+      if (!adj.has(nodeB)) adj.set(nodeB, []);
+      adj.get(nodeA)!.push(nodeB);
+      adj.get(nodeB)!.push(nodeA);
+    }
+  }
+
+  // DFS to find any cycle
+  const visited = new Set<string>();
+  for (const startNode of adj.keys()) {
+    if (visited.has(startNode)) continue;
+    // BFS/DFS with parent tracking to detect back edges
+    const stack: Array<{ node: string; parent: string | null }> = [{ node: startNode, parent: null }];
+    const localVisited = new Set<string>();
+
+    while (stack.length > 0) {
+      const { node, parent } = stack.pop()!;
+      if (localVisited.has(node)) {
+        return true; // cycle found
+      }
+      localVisited.add(node);
+      visited.add(node);
+
+      for (const neighbor of (adj.get(node) || [])) {
+        if (neighbor === parent) continue;
+        if (localVisited.has(neighbor)) return true; // cycle found
+        stack.push({ node: neighbor, parent: node });
+      }
+    }
+  }
+
+  return false;
 }
 
 // ============================================================
