@@ -60,7 +60,7 @@ for (const template of TEMPLATES) {
     );
     
     // Test 4: All sequential main loop connections are tight
-    const mainLoopCount = layout.mainLoop.filter(s => getTrackPiece(s.pieceId)).length;
+    const mainLoopCount = (layout.mainLoop || []).filter(s => getTrackPiece(s.pieceId)).length;
     let maxGapBetweenPieces = 0;
     let gapCount = 0;
     
@@ -73,7 +73,7 @@ for (const template of TEMPLATES) {
       if (!currPiece) continue;
       
       // Get exit connection (b for most, c for diverge)
-      const seg = layout.mainLoop[i];
+      const seg = (layout.mainLoop || [])[i];
       const exitConnId = (currPiece.type === "turnout" && seg?.branch === "diverge") ? "c" : "b";
       const exitConn = currPiece.connections.find(c => c.id === exitConnId);
       if (!exitConn) continue;
@@ -129,9 +129,9 @@ for (const template of TEMPLATES) {
     );
     
     // Test 6: Check branch connections (if any)
-    if (layout.branches.length > 0) {
-      for (let bi = 0; bi < layout.branches.length; bi++) {
-        const branch = layout.branches[bi];
+    if ((layout.branches || []).length > 0) {
+      for (let bi = 0; bi < (layout.branches || []).length; bi++) {
+        const branch = (layout.branches || [])[bi];
         const srcTrack = result.tracks[branch.sourceSegmentIndex];
         if (!srcTrack) continue;
         

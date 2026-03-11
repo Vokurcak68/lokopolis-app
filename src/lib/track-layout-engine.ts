@@ -1,8 +1,9 @@
 /**
- * Deterministic Track Layout Engine
+ * Deterministic Track Layout Engine v2
  *
- * Takes a topology definition (sequence of piece IDs + branching info)
- * and computes exact world-space positions using geometry from track-library.
+ * Supports multi-loop topologies: multiple interconnected loops
+ * connected via turnout connections. Backward compatible with
+ * the old mainLoop/branches format.
  *
  * AI generates ONLY the topology. This engine does ALL the math.
  */
@@ -21,12 +22,12 @@ import {
 } from "./track-designer-store";
 
 // ============================================================
-// Layout Definition Types
+// Layout Definition Types (v2 — multi-loop)
 // ============================================================
 
 export interface LayoutSegment {
   pieceId: string;
-  /** For turnouts: which branch continues the main line
+  /** For turnouts: which branch continues the loop
    *  "straight" = connection b (default), "diverge" = connection c */
   branch?: "straight" | "diverge";
   /** Mark as tunnel */
@@ -39,20 +40,44 @@ export interface LayoutSegment {
   elevation?: number;
 }
 
+/** A single loop (closed or open) of track segments */
+export interface LayoutLoop {
+  id: string; // "main", "inner", "outer", "station-track-1" etc.
+  segments: LayoutSegment[];
+  /** If true, this is a dead-end spur (not a closed loop) */
+  isOpenEnded?: boolean;
+}
+
+/** Connection between two loops via turnout "c" port */
+export interface LoopConnection {
+  fromLoop: string;
+  fromSegmentIndex: number;
+  fromConnection: "c";
+  toLoop: string;
+  toSegmentIndex: number;
+  toConnection: "a";
+}
+
+/** Legacy branch format (v1 compat) */
 export interface LayoutBranch {
-  /** Index of the turnout in mainLoop that this branch starts from */
   sourceSegmentIndex: number;
-  /** Which connection of the turnout starts this branch (always "c") */
   sourceConnection: "c";
-  /** Sequence of track pieces in this branch */
   segments: LayoutSegment[];
 }
 
 export interface LayoutDefinition {
+  // === v2 format ===
+  /** Multiple loops */
+  loops?: LayoutLoop[];
+  /** Connections between loops */
+  connections?: LoopConnection[];
+
+  // === v1 format (backward compat) ===
   /** Main loop — must form a closed loop */
-  mainLoop: LayoutSegment[];
+  mainLoop?: LayoutSegment[];
   /** Side branches from turnouts */
-  branches: LayoutBranch[];
+  branches?: LayoutBranch[];
+
   /** Starting position (in mm) — defaults to auto-center */
   startX?: number;
   startZ?: number;
@@ -66,9 +91,9 @@ export interface LayoutDefinition {
 
 export interface LayoutResult {
   tracks: PlacedTrack[];
-  /** Distance between last track's exit and first track's entry (mm) */
+  /** Distance between last track's exit and first track's entry (mm) — for primary loop */
   loopGapMm: number;
-  /** Whether the loop closed within tolerance */
+  /** Whether the primary loop closed within tolerance */
   loopClosed: boolean;
   /** Whether at least one closed loop exists (train can run continuously) */
   hasClosedLoop: boolean;
@@ -79,18 +104,64 @@ export interface LayoutResult {
 }
 
 // ============================================================
-// Core Layout Engine
+// Internal: Normalize v1 → v2 format
 // ============================================================
 
-/**
- * Compute exact positions for all tracks in a layout definition.
- *
- * @param definition - The topology (piece sequences + branches)
- * @param scale - Track scale (TT or H0)
- * @param boardWidth - Board width in cm
- * @param boardDepth - Board depth in cm
- * @returns LayoutResult with positioned tracks
- */
+function normalizeDefinition(def: LayoutDefinition): {
+  loops: LayoutLoop[];
+  connections: LoopConnection[];
+  startRotation: number;
+  startX?: number;
+  startZ?: number;
+} {
+  // Already v2 format
+  if (def.loops && def.loops.length > 0) {
+    return {
+      loops: def.loops,
+      connections: def.connections || [],
+      startRotation: def.startRotation || 0,
+      startX: def.startX,
+      startZ: def.startZ,
+    };
+  }
+
+  // v1 format → convert
+  if (!def.mainLoop || def.mainLoop.length === 0) {
+    return { loops: [], connections: [], startRotation: 0 };
+  }
+
+  const loops: LayoutLoop[] = [{ id: "main", segments: def.mainLoop }];
+  const connections: LoopConnection[] = [];
+
+  if (def.branches) {
+    for (let i = 0; i < def.branches.length; i++) {
+      const br = def.branches[i];
+      const loopId = `branch-${i}`;
+      loops.push({ id: loopId, segments: br.segments, isOpenEnded: true });
+      connections.push({
+        fromLoop: "main",
+        fromSegmentIndex: br.sourceSegmentIndex,
+        fromConnection: "c",
+        toLoop: loopId,
+        toSegmentIndex: 0,
+        toConnection: "a",
+      });
+    }
+  }
+
+  return {
+    loops,
+    connections,
+    startRotation: def.startRotation || 0,
+    startX: def.startX,
+    startZ: def.startZ,
+  };
+}
+
+// ============================================================
+// Core Layout Engine (v2)
+// ============================================================
+
 export function computeLayout(
   definition: LayoutDefinition,
   scale: TrackScale,
@@ -104,89 +175,286 @@ export function computeLayout(
   const boardWmm = boardWidth * 10;
   const boardDmm = boardDepth * 10;
 
-  // --- Phase 1: Validate all piece IDs ---
-  for (let i = 0; i < definition.mainLoop.length; i++) {
-    const seg = definition.mainLoop[i];
-    const piece = getTrackPiece(seg.pieceId);
-    if (!piece) {
-      warnings.push(`mainLoop[${i}]: unknown pieceId "${seg.pieceId}"`);
-    } else if (piece.scale !== scale) {
-      warnings.push(`mainLoop[${i}]: piece "${seg.pieceId}" is ${piece.scale}, expected ${scale}`);
-    }
-  }
+  const norm = normalizeDefinition(definition);
 
-  for (let bi = 0; bi < definition.branches.length; bi++) {
-    const branch = definition.branches[bi];
-    for (let si = 0; si < branch.segments.length; si++) {
-      const seg = branch.segments[si];
-      const piece = getTrackPiece(seg.pieceId);
-      if (!piece) {
-        warnings.push(`branch[${bi}].segments[${si}]: unknown pieceId "${seg.pieceId}"`);
-      } else if (piece.scale !== scale) {
-        warnings.push(`branch[${bi}].segments[${si}]: piece "${seg.pieceId}" is ${piece.scale}, expected ${scale}`);
-      }
-    }
-  }
-
-  // --- Phase 2: Place main loop ---
-  // First pass: compute raw positions starting from origin
-  const rawMainTracks = placeSequence(
-    definition.mainLoop,
-    { x: 0, y: 0, z: 0 },
-    definition.startRotation ? (definition.startRotation * Math.PI) / 180 : 0,
-    "main",
-    0,
-    debugInfo,
-    warnings,
-  );
-
-  if (rawMainTracks.length === 0) {
+  if (norm.loops.length === 0) {
     return {
       tracks: [],
       loopGapMm: Infinity,
       loopClosed: false,
       hasClosedLoop: false,
-      warnings: [...warnings, "No valid tracks in mainLoop"],
+      warnings: ["No loops defined"],
       debugInfo,
     };
   }
 
-  // --- Phase 3: Check loop closure ---
-  const lastTrack = rawMainTracks[rawMainTracks.length - 1];
-  const lastPiece = getTrackPiece(lastTrack.pieceId);
-  let loopGapMm = Infinity;
-
-  if (lastPiece) {
-    // Find the exit connection of the last piece (connection "b" for most pieces)
-    const exitConn = lastPiece.connections.find((c) => c.id === "b");
-    if (exitConn) {
-      const exitWorld = connectionToWorld(exitConn, lastTrack.position, lastTrack.rotation);
-      // First track's entry point is its position (connection "a" is at origin)
-      const firstTrack = rawMainTracks[0];
-      const firstPiece = getTrackPiece(firstTrack.pieceId);
-      if (firstPiece) {
-        const entryConn = firstPiece.connections.find((c) => c.id === "a");
-        if (entryConn) {
-          const entryWorld = connectionToWorld(entryConn, firstTrack.position, firstTrack.rotation);
-          const dx = exitWorld.position.x - entryWorld.position.x;
-          const dz = exitWorld.position.z - entryWorld.position.z;
-          loopGapMm = Math.sqrt(dx * dx + dz * dz);
-        }
+  // --- Phase 1: Validate all piece IDs ---
+  for (const loop of norm.loops) {
+    for (let i = 0; i < loop.segments.length; i++) {
+      const seg = loop.segments[i];
+      const piece = getTrackPiece(seg.pieceId);
+      if (!piece) {
+        warnings.push(`${loop.id}[${i}]: unknown pieceId "${seg.pieceId}"`);
+      } else if (piece.scale !== scale) {
+        warnings.push(`${loop.id}[${i}]: piece "${seg.pieceId}" is ${piece.scale}, expected ${scale}`);
       }
     }
   }
 
-  const loopClosed = loopGapMm < 2.0; // 2mm tolerance
+  // --- Phase 2: Place loops ---
+  // Map of loopId → placed tracks array
+  const placedLoops = new Map<string, PlacedTrack[]>();
+  // Track which loops have been placed
+  const placedSet = new Set<string>();
 
-  debugInfo.push(`Loop gap: ${loopGapMm.toFixed(2)}mm (${loopClosed ? "CLOSED" : "OPEN"})`);
+  // Place first loop from origin
+  const firstLoop = norm.loops[0];
+  const startRad = (norm.startRotation * Math.PI) / 180;
+  const firstTracks = placeSequence(
+    firstLoop.segments,
+    { x: 0, y: 0, z: 0 },
+    startRad,
+    firstLoop.id,
+    0,
+    debugInfo,
+    warnings,
+  );
+  placedLoops.set(firstLoop.id, firstTracks);
+  placedSet.add(firstLoop.id);
+  allTracks.push(...firstTracks);
 
-  // --- Phase 4: Center on board ---
-  // Find bounding box of all raw tracks
+  // --- Phase 3: Place connected loops ---
+  // Process connections — BFS style: as we place loops, check for more connections
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const conn of norm.connections) {
+      // Need source loop placed, target not yet placed
+      if (!placedSet.has(conn.fromLoop) || placedSet.has(conn.toLoop)) continue;
+
+      const srcTracks = placedLoops.get(conn.fromLoop)!;
+      if (conn.fromSegmentIndex < 0 || conn.fromSegmentIndex >= srcTracks.length) {
+        warnings.push(`connection ${conn.fromLoop}→${conn.toLoop}: fromSegmentIndex ${conn.fromSegmentIndex} out of range (0..${srcTracks.length - 1})`);
+        continue;
+      }
+
+      const srcTrack = srcTracks[conn.fromSegmentIndex];
+      const srcPiece = getTrackPiece(srcTrack.pieceId);
+      if (!srcPiece) {
+        warnings.push(`connection ${conn.fromLoop}→${conn.toLoop}: source piece unknown`);
+        continue;
+      }
+
+      // Find the "c" connection on the source turnout
+      const connC = srcPiece.connections.find((c) => c.id === conn.fromConnection);
+      if (!connC) {
+        warnings.push(`connection ${conn.fromLoop}→${conn.toLoop}: source piece "${srcTrack.pieceId}" has no connection "${conn.fromConnection}"`);
+        continue;
+      }
+
+      const connCWorld = connectionToWorld(connC, srcTrack.position, srcTrack.rotation);
+
+      // Find the target loop
+      const targetLoop = norm.loops.find((l) => l.id === conn.toLoop);
+      if (!targetLoop) {
+        warnings.push(`connection ${conn.fromLoop}→${conn.toLoop}: target loop "${conn.toLoop}" not found`);
+        continue;
+      }
+
+      // Place target loop so that segment[toSegmentIndex] connection "a" aligns
+      // with the source's "c" world position.
+      //
+      // Strategy: place the full loop from origin, then compute offset/rotation
+      // so that the target segment's "a" connection matches connCWorld.
+      const targetTracks = placeSequenceWithAlignment(
+        targetLoop.segments,
+        conn.toSegmentIndex,
+        conn.toConnection,
+        connCWorld.position,
+        connCWorld.angle,
+        targetLoop.id,
+        allTracks.length,
+        debugInfo,
+        warnings,
+      );
+
+      if (targetTracks.length > 0) {
+        placedLoops.set(conn.toLoop, targetTracks);
+        placedSet.add(conn.toLoop);
+        allTracks.push(...targetTracks);
+
+        // Set up snap connections
+        const targetTrack = targetTracks[conn.toSegmentIndex];
+        if (targetTrack) {
+          srcTrack.snappedConnections[conn.fromConnection] = `${targetTrack.instanceId}:${conn.toConnection}`;
+          targetTrack.snappedConnections[conn.toConnection] = `${srcTrack.instanceId}:${conn.fromConnection}`;
+        }
+
+        changed = true;
+      }
+    }
+  }
+
+  // Warn about unplaced loops
+  for (const loop of norm.loops) {
+    if (!placedSet.has(loop.id)) {
+      warnings.push(`loop "${loop.id}" could not be placed (no connection to placed loops)`);
+    }
+  }
+
+  // --- Phase 4: Check loop closure for each closed loop ---
+  let primaryGap = Infinity;
+  let primaryClosed = false;
+  let anyLoopClosed = false;
+
+  for (const loop of norm.loops) {
+    if (loop.isOpenEnded) continue;
+    const loopTracks = placedLoops.get(loop.id);
+    if (!loopTracks || loopTracks.length === 0) continue;
+
+    const gap = measureLoopGap(loopTracks, loop.segments);
+    const closed = gap < 2.0;
+
+    if (loop.id === firstLoop.id) {
+      primaryGap = gap;
+      primaryClosed = closed;
+    }
+
+    if (closed) anyLoopClosed = true;
+
+    debugInfo.push(`Loop "${loop.id}": gap=${gap.toFixed(2)}mm (${closed ? "CLOSED" : "OPEN"}), tracks=${loopTracks.length}`);
+
+    // Set up snap connections within loop
+    if (closed) {
+      setupLoopSnaps(loopTracks, loop.segments);
+    } else {
+      // Still set up sequential snaps for open loops
+      setupSequentialSnaps(loopTracks, loop.segments);
+    }
+  }
+
+  // Also set up snaps for open-ended loops
+  for (const loop of norm.loops) {
+    if (!loop.isOpenEnded) continue;
+    const loopTracks = placedLoops.get(loop.id);
+    if (!loopTracks || loopTracks.length === 0) continue;
+    setupSequentialSnaps(loopTracks, loop.segments);
+  }
+
+  // --- Phase 5: Center on board ---
+  centerOnBoard(allTracks, boardWmm, boardDmm, norm.startX, norm.startZ, debugInfo);
+
+  // --- Phase 6: Validate traversability ---
+  const hasClosedLoop = anyLoopClosed || validateClosedLoop(allTracks, primaryClosed);
+  if (!hasClosedLoop) {
+    warnings.push("WARN: No closed loop detected — train cannot run continuously!");
+  }
+  debugInfo.push(`Closed loop: ${hasClosedLoop ? "YES" : "NO"}`);
+
+  return {
+    tracks: allTracks,
+    loopGapMm: primaryGap,
+    loopClosed: primaryClosed,
+    hasClosedLoop,
+    warnings,
+    debugInfo,
+  };
+}
+
+// ============================================================
+// Measure loop gap
+// ============================================================
+
+function measureLoopGap(tracks: PlacedTrack[], segments: LayoutSegment[]): number {
+  if (tracks.length === 0) return Infinity;
+
+  const lastTrack = tracks[tracks.length - 1];
+  const lastPiece = getTrackPiece(lastTrack.pieceId);
+  if (!lastPiece) return Infinity;
+
+  // Find exit connection of last piece
+  const lastSeg = segments[segments.length - 1];
+  let exitConnId = "b";
+  if (lastPiece.type === "turnout" && lastSeg?.branch === "diverge") {
+    exitConnId = "c";
+  }
+
+  const exitConn = lastPiece.connections.find((c) => c.id === exitConnId);
+  if (!exitConn) return Infinity;
+
+  const exitWorld = connectionToWorld(exitConn, lastTrack.position, lastTrack.rotation);
+
+  // First track's entry
+  const firstTrack = tracks[0];
+  const firstPiece = getTrackPiece(firstTrack.pieceId);
+  if (!firstPiece) return Infinity;
+
+  const entryConn = firstPiece.connections.find((c) => c.id === "a");
+  if (!entryConn) return Infinity;
+
+  const entryWorld = connectionToWorld(entryConn, firstTrack.position, firstTrack.rotation);
+
+  const dx = exitWorld.position.x - entryWorld.position.x;
+  const dz = exitWorld.position.z - entryWorld.position.z;
+  return Math.sqrt(dx * dx + dz * dz);
+}
+
+// ============================================================
+// Set up snap connections
+// ============================================================
+
+function setupLoopSnaps(tracks: PlacedTrack[], segments: LayoutSegment[]): void {
+  for (let i = 0; i < tracks.length; i++) {
+    const curr = tracks[i];
+    const next = tracks[(i + 1) % tracks.length];
+    const currPiece = getTrackPiece(curr.pieceId);
+    const currSeg = segments[i];
+
+    let exitConnId = "b";
+    if (currPiece?.type === "turnout" && currSeg?.branch === "diverge") {
+      exitConnId = "c";
+    }
+
+    curr.snappedConnections[exitConnId] = `${next.instanceId}:a`;
+    next.snappedConnections["a"] = `${curr.instanceId}:${exitConnId}`;
+  }
+}
+
+function setupSequentialSnaps(tracks: PlacedTrack[], segments: LayoutSegment[]): void {
+  for (let i = 0; i < tracks.length - 1; i++) {
+    const curr = tracks[i];
+    const next = tracks[i + 1];
+    const currPiece = getTrackPiece(curr.pieceId);
+    const currSeg = segments[i];
+
+    let exitConnId = "b";
+    if (currPiece?.type === "turnout" && currSeg?.branch === "diverge") {
+      exitConnId = "c";
+    }
+
+    curr.snappedConnections[exitConnId] = `${next.instanceId}:a`;
+    next.snappedConnections["a"] = `${curr.instanceId}:${exitConnId}`;
+  }
+}
+
+// ============================================================
+// Center layout on board
+// ============================================================
+
+function centerOnBoard(
+  tracks: PlacedTrack[],
+  boardWmm: number,
+  boardDmm: number,
+  explicitX: number | undefined,
+  explicitZ: number | undefined,
+  debugInfo: string[],
+): void {
+  if (tracks.length === 0) return;
+
   let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-  for (const t of rawMainTracks) {
+  for (const t of tracks) {
     const piece = getTrackPiece(t.pieceId);
     if (!piece) continue;
-    // Check all connection points to find true bounds
     for (const conn of piece.connections) {
       const w = connectionToWorld(conn, t.position, t.rotation);
       minX = Math.min(minX, w.position.x);
@@ -200,181 +468,40 @@ export function computeLayout(
   const layoutD = maxZ - minZ;
   debugInfo.push(`Layout bounds: ${layoutW.toFixed(1)}mm × ${layoutD.toFixed(1)}mm`);
 
-  // Compute offset to center on board (or use explicit start position)
   let offsetX: number;
   let offsetZ: number;
-  if (definition.startX !== undefined && definition.startZ !== undefined) {
-    // Use explicit start — the raw tracks already start from origin,
-    // so offset = explicit start
-    offsetX = definition.startX;
-    offsetZ = definition.startZ;
+  if (explicitX !== undefined && explicitZ !== undefined) {
+    offsetX = explicitX;
+    offsetZ = explicitZ;
   } else {
-    // Auto-center
     const centerX = (minX + maxX) / 2;
     const centerZ = (minZ + maxZ) / 2;
     offsetX = boardWmm / 2 - centerX;
     offsetZ = boardDmm / 2 - centerZ;
   }
 
-  // Apply offset to all main tracks
-  for (const t of rawMainTracks) {
+  for (const t of tracks) {
     t.position = {
       x: t.position.x + offsetX,
       y: t.position.y,
       z: t.position.z + offsetZ,
     };
   }
-  allTracks.push(...rawMainTracks);
-
-  // --- Phase 5: Place branches ---
-  for (let bi = 0; bi < definition.branches.length; bi++) {
-    const branch = definition.branches[bi];
-    const srcIdx = branch.sourceSegmentIndex;
-
-    if (srcIdx < 0 || srcIdx >= rawMainTracks.length) {
-      warnings.push(`branch[${bi}]: sourceSegmentIndex ${srcIdx} out of range`);
-      continue;
-    }
-
-    const srcTrack = rawMainTracks[srcIdx];
-    const srcPiece = getTrackPiece(srcTrack.pieceId);
-    if (!srcPiece) {
-      warnings.push(`branch[${bi}]: source track has unknown piece`);
-      continue;
-    }
-
-    if (srcPiece.type !== "turnout") {
-      warnings.push(`branch[${bi}]: source track "${srcTrack.pieceId}" is not a turnout`);
-      continue;
-    }
-
-    // Find connection "c" on the turnout
-    const connC = srcPiece.connections.find((c) => c.id === "c");
-    if (!connC) {
-      warnings.push(`branch[${bi}]: turnout "${srcTrack.pieceId}" has no connection "c"`);
-      continue;
-    }
-
-    // Get world position of connection "c"
-    const connCWorld = connectionToWorld(connC, srcTrack.position, srcTrack.rotation);
-
-    // Place branch sequence starting from connection "c"
-    // The first piece of the branch connects its "a" end to the turnout's "c"
-    const branchTracks = placeSequenceFromConnection(
-      branch.segments,
-      connCWorld.position,
-      connCWorld.angle,
-      `branch-${bi}`,
-      allTracks.length,
-      debugInfo,
-      warnings,
-    );
-
-    // Set up snap connections between turnout and first branch piece
-    if (branchTracks.length > 0) {
-      const firstBranch = branchTracks[0];
-      srcTrack.snappedConnections["c"] = `${firstBranch.instanceId}:a`;
-      firstBranch.snappedConnections["a"] = `${srcTrack.instanceId}:c`;
-    }
-
-    allTracks.push(...branchTracks);
-  }
-
-  // --- Phase 5b: Re-center including branches ---
-  // Branches may extend beyond the main loop bounds, so recalculate
-  {
-    let allMinX = Infinity, allMaxX = -Infinity, allMinZ = Infinity, allMaxZ = -Infinity;
-    for (const t of allTracks) {
-      const piece = getTrackPiece(t.pieceId);
-      if (!piece) continue;
-      for (const conn of piece.connections) {
-        const w = connectionToWorld(conn, t.position, t.rotation);
-        allMinX = Math.min(allMinX, w.position.x);
-        allMaxX = Math.max(allMaxX, w.position.x);
-        allMinZ = Math.min(allMinZ, w.position.z);
-        allMaxZ = Math.max(allMaxZ, w.position.z);
-      }
-    }
-    const totalW = allMaxX - allMinX;
-    const totalD = allMaxZ - allMinZ;
-    const newCenterX = (allMinX + allMaxX) / 2;
-    const newCenterZ = (allMinZ + allMaxZ) / 2;
-    const targetCenterX = boardWmm / 2;
-    const targetCenterZ = boardDmm / 2;
-    const shiftX = targetCenterX - newCenterX;
-    const shiftZ = targetCenterZ - newCenterZ;
-
-    // Only shift if branches actually moved the center
-    if (Math.abs(shiftX) > 0.1 || Math.abs(shiftZ) > 0.1) {
-      for (const t of allTracks) {
-        t.position = {
-          x: t.position.x + shiftX,
-          y: t.position.y,
-          z: t.position.z + shiftZ,
-        };
-      }
-      debugInfo.push(`Re-centered with branches: shift (${shiftX.toFixed(1)}, ${shiftZ.toFixed(1)})mm, total ${totalW.toFixed(0)}×${totalD.toFixed(0)}mm`);
-    }
-  }
-
-  // --- Phase 6: Set up snap connections for main loop ---
-  for (let i = 0; i < rawMainTracks.length; i++) {
-    const curr = rawMainTracks[i];
-    const next = rawMainTracks[(i + 1) % rawMainTracks.length];
-
-    // Determine which connection the main line uses as exit
-    const currPiece = getTrackPiece(curr.pieceId);
-    const currSeg = definition.mainLoop[i];
-    let exitConnId = "b"; // default
-    if (currPiece?.type === "turnout" && currSeg?.branch === "diverge") {
-      exitConnId = "c";
-    }
-
-    // Set snapped connections
-    if (i < rawMainTracks.length - 1 || loopClosed) {
-      curr.snappedConnections[exitConnId] = `${next.instanceId}:a`;
-      next.snappedConnections["a"] = `${curr.instanceId}:${exitConnId}`;
-    }
-  }
-
-  // --- Phase 7: Validate traversability (at least 1 closed loop) ---
-  const hasClosedLoop = validateClosedLoop(allTracks, loopClosed);
-  if (!hasClosedLoop) {
-    warnings.push("WARN: No closed loop detected — train cannot run continuously!");
-  }
-  debugInfo.push(`Closed loop: ${hasClosedLoop ? "YES" : "NO"}`);
-
-  return {
-    tracks: allTracks,
-    loopGapMm,
-    loopClosed,
-    hasClosedLoop,
-    warnings,
-    debugInfo,
-  };
 }
 
 // ============================================================
 // Traversability validation — find at least 1 closed loop via DFS
 // ============================================================
 
-/**
- * Check if there's at least one closed loop in the layout.
- * Uses snappedConnections graph to find cycles.
- */
 function validateClosedLoop(tracks: PlacedTrack[], mainLoopClosed: boolean): boolean {
-  // If main loop is closed, we already have a loop
   if (mainLoopClosed) return true;
 
-  // Build adjacency graph from snappedConnections
-  // Node = "instanceId:connId", edges connect snapped pairs
   const adj = new Map<string, string[]>();
 
   for (const track of tracks) {
     const piece = getTrackPiece(track.pieceId);
     if (!piece) continue;
 
-    // Add edges for connections within the same piece (A↔B, A↔C for turnouts, etc.)
     const connIds = piece.connections.map(c => c.id);
     for (let i = 0; i < connIds.length; i++) {
       for (let j = i + 1; j < connIds.length; j++) {
@@ -387,7 +514,6 @@ function validateClosedLoop(tracks: PlacedTrack[], mainLoopClosed: boolean): boo
       }
     }
 
-    // Add edges for snapped connections (between different pieces)
     for (const [connId, targetStr] of Object.entries(track.snappedConnections)) {
       const nodeA = `${track.instanceId}:${connId}`;
       const nodeB = targetStr;
@@ -398,25 +524,21 @@ function validateClosedLoop(tracks: PlacedTrack[], mainLoopClosed: boolean): boo
     }
   }
 
-  // DFS to find any cycle
   const visited = new Set<string>();
   for (const startNode of adj.keys()) {
     if (visited.has(startNode)) continue;
-    // BFS/DFS with parent tracking to detect back edges
     const stack: Array<{ node: string; parent: string | null }> = [{ node: startNode, parent: null }];
     const localVisited = new Set<string>();
 
     while (stack.length > 0) {
       const { node, parent } = stack.pop()!;
-      if (localVisited.has(node)) {
-        return true; // cycle found
-      }
+      if (localVisited.has(node)) return true;
       localVisited.add(node);
       visited.add(node);
 
       for (const neighbor of (adj.get(node) || [])) {
         if (neighbor === parent) continue;
-        if (localVisited.has(neighbor)) return true; // cycle found
+        if (localVisited.has(neighbor)) return true;
         stack.push({ node: neighbor, parent: node });
       }
     }
@@ -429,10 +551,6 @@ function validateClosedLoop(tracks: PlacedTrack[], mainLoopClosed: boolean): boo
 // Internal: Place a sequence of track pieces
 // ============================================================
 
-/**
- * Place a sequence starting from a given position and rotation.
- * The rotation is the DIRECTION of travel (not a connection angle).
- */
 function placeSequence(
   segments: LayoutSegment[],
   startPos: Vec3,
@@ -444,13 +562,9 @@ function placeSequence(
 ): PlacedTrack[] {
   const tracks: PlacedTrack[] = [];
 
-  // Current "cursor" — the world-space exit point of the previous piece
-  // For the first piece, we treat this as the entry point (connection "a" faces backward)
   let cursorX = startPos.x;
   let cursorZ = startPos.z;
   let cursorY = startPos.y;
-  // The cursor angle is the OUTWARD direction from the previous piece's exit connection.
-  // For the first piece, we pretend there's a virtual connection pointing in startRotation direction.
   let cursorAngle = startRotation;
 
   for (let i = 0; i < segments.length; i++) {
@@ -461,10 +575,6 @@ function placeSequence(
       continue;
     }
 
-    // We want to connect the new piece's "a" connection to the cursor.
-    // The cursor represents the outward direction of the PREVIOUS piece's exit.
-    // Connection "a" on the new piece faces OUTWARD from the piece (toward -X in local space).
-    // To snap, the new piece's "a" world angle must face OPPOSITE to the cursor.
     const placement = computeSnapPlacement(
       { x: cursorX, y: cursorY, z: cursorZ },
       cursorAngle,
@@ -491,8 +601,7 @@ function placeSequence(
     };
     tracks.push(placedTrack);
 
-    // Advance cursor to this piece's exit connection
-    // For turnouts: main line continues through "b" (straight) or "c" (diverge)
+    // Advance cursor to exit
     let exitConnId = "b";
     if (piece.type === "turnout" && seg.branch === "diverge") {
       exitConnId = "c";
@@ -520,31 +629,97 @@ function placeSequence(
   return tracks;
 }
 
+// ============================================================
+// Internal: Place sequence with alignment to a specific segment
+// ============================================================
+
 /**
- * Place a sequence starting from a connection point (used for branches).
- * The connection angle is the OUTWARD angle of the source connection.
+ * Place a loop so that segment[alignIndex] connection alignConnId
+ * aligns with the given world position and angle.
+ *
+ * Strategy:
+ * 1. Place the full sequence from origin
+ * 2. Find where segment[alignIndex] "a" ended up
+ * 3. Compute transform to move it to target
+ * 4. Apply transform to all tracks
  */
-function placeSequenceFromConnection(
+function placeSequenceWithAlignment(
   segments: LayoutSegment[],
-  connPos: Vec3,
-  connAngle: number,
+  alignIndex: number,
+  alignConnId: string,
+  targetPos: Vec3,
+  targetAngle: number,
   label: string,
   instanceOffset: number,
   debugInfo: string[],
   warnings: string[],
 ): PlacedTrack[] {
-  // The connAngle is the outward angle of the source connection (e.g., turnout's "c").
-  // The first piece's "a" should face opposite to this.
-  // computeSnapPlacement already handles this correctly — it expects the target's outward angle.
-  return placeSequence(
+  // Place from origin first
+  const rawTracks = placeSequence(
     segments,
-    connPos,
-    connAngle, // This is the outward angle — placeSequence's cursor will use it to snap "a"
+    { x: 0, y: 0, z: 0 },
+    0,
     label,
     instanceOffset,
     debugInfo,
     warnings,
   );
+
+  if (rawTracks.length === 0 || alignIndex >= rawTracks.length) {
+    if (alignIndex >= rawTracks.length) {
+      warnings.push(`${label}: alignIndex ${alignIndex} >= track count ${rawTracks.length}`);
+    }
+    return rawTracks;
+  }
+
+  // Find where the target segment's "a" connection ended up
+  const alignTrack = rawTracks[alignIndex];
+  const alignPiece = getTrackPiece(alignTrack.pieceId);
+  if (!alignPiece) return rawTracks;
+
+  const alignConn = alignPiece.connections.find((c) => c.id === alignConnId);
+  if (!alignConn) return rawTracks;
+
+  const currentWorld = connectionToWorld(alignConn, alignTrack.position, alignTrack.rotation);
+
+  // We need to transform all tracks so that currentWorld matches target
+  // The target angle (outward from source "c") should meet the aligned "a" (outward).
+  // They should face each other: aligned "a" world angle = targetAngle + PI
+  const desiredAngle = targetAngle + Math.PI;
+  const rotationDelta = desiredAngle - currentWorld.angle;
+
+  // Apply rotation around origin first, then translate
+  const cosR = Math.cos(rotationDelta);
+  const sinR = Math.sin(rotationDelta);
+
+  for (const t of rawTracks) {
+    // Rotate position around origin
+    const rx = t.position.x * cosR - t.position.z * sinR;
+    const rz = t.position.x * sinR + t.position.z * cosR;
+    t.position = {
+      x: rx,
+      y: t.position.y,
+      z: rz,
+    };
+    t.rotation = t.rotation + rotationDelta;
+  }
+
+  // Now find where the aligned connection ended up after rotation
+  const afterRotWorld = connectionToWorld(alignConn, rawTracks[alignIndex].position, rawTracks[alignIndex].rotation);
+
+  // Translate so it matches target
+  const dx = targetPos.x - afterRotWorld.position.x;
+  const dz = targetPos.z - afterRotWorld.position.z;
+
+  for (const t of rawTracks) {
+    t.position = {
+      x: t.position.x + dx,
+      y: t.position.y,
+      z: t.position.z + dz,
+    };
+  }
+
+  return rawTracks;
 }
 
 // ============================================================
@@ -588,24 +763,52 @@ export function parseAILayoutResponse(raw: unknown): LayoutDefinition | null {
 
   const obj = raw as Record<string, unknown>;
 
-  // Must have mainLoop array
-  if (!Array.isArray(obj.mainLoop)) return null;
+  // Try v2 format first (loops + connections)
+  if (Array.isArray(obj.loops)) {
+    const loops: LayoutLoop[] = [];
+    for (const item of obj.loops) {
+      if (!item || typeof item !== "object") continue;
+      const loopObj = item as Record<string, unknown>;
+      if (typeof loopObj.id !== "string" || !Array.isArray(loopObj.segments)) continue;
+      const segments = parseSegments(loopObj.segments);
+      if (segments.length === 0) continue;
+      loops.push({
+        id: loopObj.id,
+        segments,
+        isOpenEnded: loopObj.isOpenEnded === true,
+      });
+    }
 
-  const mainLoop: LayoutSegment[] = [];
-  for (const item of obj.mainLoop) {
-    if (!item || typeof item !== "object") continue;
-    const seg = item as Record<string, unknown>;
-    if (typeof seg.pieceId !== "string") continue;
-    mainLoop.push({
-      pieceId: seg.pieceId,
-      branch: seg.branch === "diverge" ? "diverge" : seg.branch === "straight" ? "straight" : undefined,
-      isTunnel: seg.isTunnel === true,
-      isBridge: seg.isBridge === true,
-      isRamp: seg.isRamp === true,
-      elevation: typeof seg.elevation === "number" ? seg.elevation : 0,
-    });
+    if (loops.length === 0) return null;
+
+    const connections: LoopConnection[] = [];
+    if (Array.isArray(obj.connections)) {
+      for (const item of obj.connections) {
+        if (!item || typeof item !== "object") continue;
+        const c = item as Record<string, unknown>;
+        if (typeof c.fromLoop !== "string" || typeof c.toLoop !== "string") continue;
+        connections.push({
+          fromLoop: c.fromLoop,
+          fromSegmentIndex: typeof c.fromSegmentIndex === "number" ? c.fromSegmentIndex : 0,
+          fromConnection: "c",
+          toLoop: c.toLoop,
+          toSegmentIndex: typeof c.toSegmentIndex === "number" ? c.toSegmentIndex : 0,
+          toConnection: "a",
+        });
+      }
+    }
+
+    return {
+      loops,
+      connections,
+      startRotation: typeof obj.startRotation === "number" ? obj.startRotation : undefined,
+    };
   }
 
+  // v1 format (mainLoop + branches)
+  if (!Array.isArray(obj.mainLoop)) return null;
+
+  const mainLoop = parseSegments(obj.mainLoop);
   if (mainLoop.length === 0) return null;
 
   const branches: LayoutBranch[] = [];
@@ -615,22 +818,7 @@ export function parseAILayoutResponse(raw: unknown): LayoutDefinition | null {
       const br = item as Record<string, unknown>;
       if (typeof br.sourceSegmentIndex !== "number") continue;
       if (!Array.isArray(br.segments)) continue;
-
-      const segs: LayoutSegment[] = [];
-      for (const s of br.segments) {
-        if (!s || typeof s !== "object") continue;
-        const seg = s as Record<string, unknown>;
-        if (typeof seg.pieceId !== "string") continue;
-        segs.push({
-          pieceId: seg.pieceId,
-          branch: seg.branch === "diverge" ? "diverge" : seg.branch === "straight" ? "straight" : undefined,
-          isTunnel: seg.isTunnel === true,
-          isBridge: seg.isBridge === true,
-          isRamp: seg.isRamp === true,
-          elevation: typeof seg.elevation === "number" ? seg.elevation : 0,
-        });
-      }
-
+      const segs = parseSegments(br.segments);
       branches.push({
         sourceSegmentIndex: br.sourceSegmentIndex,
         sourceConnection: "c",
@@ -646,4 +834,22 @@ export function parseAILayoutResponse(raw: unknown): LayoutDefinition | null {
     startZ: typeof obj.startZ === "number" ? obj.startZ : undefined,
     startRotation: typeof obj.startRotation === "number" ? obj.startRotation : undefined,
   };
+}
+
+function parseSegments(arr: unknown[]): LayoutSegment[] {
+  const segments: LayoutSegment[] = [];
+  for (const item of arr) {
+    if (!item || typeof item !== "object") continue;
+    const seg = item as Record<string, unknown>;
+    if (typeof seg.pieceId !== "string") continue;
+    segments.push({
+      pieceId: seg.pieceId,
+      branch: seg.branch === "diverge" ? "diverge" : seg.branch === "straight" ? "straight" : undefined,
+      isTunnel: seg.isTunnel === true,
+      isBridge: seg.isBridge === true,
+      isRamp: seg.isRamp === true,
+      elevation: typeof seg.elevation === "number" ? seg.elevation : 0,
+    });
+  }
+  return segments;
 }

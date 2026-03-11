@@ -49,7 +49,7 @@ function renderLayoutSVG(templateId: string, scale: TrackScale): string {
     const y2 = worldB.position.z + padding;
     
     // Color: straight=white, curve=yellow, turnout=orange, branch pieces after mainLoop = cyan
-    const mainCount = layout.mainLoop.length;
+    const mainCount = (layout.mainLoop || []).length;
     let color = "#ffffff";
     if (i >= mainCount) color = "#00ccff"; // branch
     else if (piece.type === "curve") color = "#ffcc00";

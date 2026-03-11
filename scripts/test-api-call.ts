@@ -40,14 +40,14 @@ const apiTracks2 = layoutResultToAPIResponse(result2);
 
 console.log(`Total tracks: ${apiTracks2.length}`);
 console.log(`Loop closed: ${result2.loopClosed}, gap: ${result2.loopGapMm}mm`);
-console.log(`Main loop segments: ${layout2.mainLoop.length}, Branch segments: ${layout2.branches[0]?.segments.length || 0}\n`);
+console.log(`Main loop segments: ${(layout2.mainLoop || []).length}, Branch segments: ${(layout2.branches || [])[0]?.segments.length || 0}\n`);
 
 for (let i = 0; i < apiTracks2.length; i++) {
   const t = apiTracks2[i];
   const piece = getTrackPiece(t.pieceId)!;
   const rotDeg = ((t.rotation * 180 / Math.PI) % 360 + 360) % 360;
   
-  const isMainLoop = i < layout2.mainLoop.length;
+  const isMainLoop = i < (layout2.mainLoop || []).length;
   const label = isMainLoop ? "MAIN" : "BRANCH";
   
   console.log(`[${i}] ${label.padEnd(6)} ${t.pieceId.padEnd(12)} pos=(${t.x.toFixed(1)}, ${t.z.toFixed(1)}) rot=${rotDeg.toFixed(1)}° connectedTo=${JSON.stringify(t.connectedTo || {})}`);
@@ -60,7 +60,7 @@ for (let i = 0; i < apiTracks2.length; i++) {
 
 // The real question: are the branch positions correct?
 console.log("\n--- Branch track positions ---");
-const mainLoopCount = layout2.mainLoop.length;
+const mainLoopCount = (layout2.mainLoop || []).length;
 for (let i = mainLoopCount; i < apiTracks2.length; i++) {
   const t = apiTracks2[i];
   console.log(`Branch track: ${t.pieceId} at (${t.x.toFixed(1)}, ${t.z.toFixed(1)}) rot=${((t.rotation * 180 / Math.PI) % 360).toFixed(1)}°`);

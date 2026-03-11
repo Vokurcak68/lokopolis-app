@@ -228,34 +228,34 @@ function selectFallbackTemplate(
 ): LayoutDefinition {
   // Přímé mapování charakter → template ID
   const charMap: Record<string, string> = {
-    station: "station-3-tracks",
-    mountain: "mountain-loop",
-    corridor: "double-track",
-    industrial: "industrial-spur",
-    diorama: "simple-oval",
-    "through-station": "loop-with-station",
+    mountain: "mountain-pass",
+    station: "terminus-station",
+    corridor: "dogbone",
+    industrial: "industrial-complex",
+    diorama: "point-to-point",
+    "through-station": "double-oval",
   };
 
-  let templateId = "simple-oval";
+  let templateId = "dogbone"; // default — visually interesting
 
   if (character && charMap[character]) {
     templateId = charMap[character];
   } else if (complexity === "complex") {
-    templateId = "station-3-tracks";
+    templateId = "mountain-pass";
   } else if (complexity === "medium") {
-    templateId = "crossing-loops";
+    templateId = "double-oval";
   }
 
   // Feature overrides — pouze pokud nebylo mapováno z charakteru
   if (!character || !charMap[character]) {
-    if (features?.includes("tunnel")) {
-      templateId = "mountain-loop";
+    if (features?.includes("tunnel") || features?.includes("bridge")) {
+      templateId = "mountain-pass";
     }
     if (features?.includes("sidings") || features?.includes("station")) {
-      templateId = "station-3-tracks";
+      templateId = "terminus-station";
     }
     if (features?.includes("parallel")) {
-      templateId = "double-track";
+      templateId = "double-oval";
     }
   }
 
@@ -319,11 +319,11 @@ export async function POST(request: NextRequest) {
   const prompt = body.character ? buildPromptFromForm(body) : (body.prompt || "");
 
   if (!prompt || prompt.trim() === "") {
-    const layout = getTemplateLayout("simple-oval", scale)!;
+    const layout = getTemplateLayout("dogbone", scale)!;
     const result = computeLayout(layout, scale, effectiveWidth, effectiveDepth);
     return NextResponse.json({
       tracks: layoutResultToAPIResponse(result),
-      description: "Jednoduchý ovál",
+      description: "Kostková trať",
       loopClosed: result.loopClosed,
         hasClosedLoop: result.hasClosedLoop,
       loopGapMm: result.loopGapMm,
