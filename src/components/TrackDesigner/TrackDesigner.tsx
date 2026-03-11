@@ -111,13 +111,6 @@ export default function TrackDesigner() {
           }
         }
 
-        // Debug: log what we're about to render
-        if (typeof window !== "undefined") {
-          const debugMsg = `Engine v2 (det)\nSource: ${json.source || "?"}\nTracks: ${tracks.length}\nLoop gap: ${json.loopGapMm?.toFixed(4) ?? "?"}mm\nFirst: (${tracks[0]?.position.x.toFixed(0)}, ${tracks[0]?.position.z.toFixed(0)})\nLast: (${tracks[tracks.length-1]?.position.x.toFixed(0)}, ${tracks[tracks.length-1]?.position.z.toFixed(0)})`;
-          console.log("[TrackDesigner]", debugMsg);
-          alert(debugMsg);
-        }
-
         dispatch({ type: "AI_SUCCESS", tracks });
         setAiDialogOpen(false);
       } catch (err) {

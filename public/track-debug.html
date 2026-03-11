@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Track Debug v2</title>
+<title>Track Debug v3</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 body{margin:0;background:#000;overflow:hidden;font-family:sans-serif;}
@@ -34,7 +34,7 @@ let scene, camera, renderer, controls;
 let trackGroup = null;
 const boardW = 2000, boardD = 1000;
 
-// ===== HARDCODED TEMPLATE (simple-oval TT, verified 0mm gap) =====
+// Hardcoded simple-oval TT template (32 tracks, verified 0mm gap)
 const TEMPLATE_TRACKS = [
   {pieceId:"tt-g4",x:336,z:190,rotation:0,type:"straight",length:332},
   {pieceId:"tt-g4",x:668,z:190,rotation:0,type:"straight",length:332},
@@ -106,37 +106,136 @@ const railMat = new THREE.MeshStandardMaterial({color:0xc0c0c0, metalness:0.7, r
 const sleeperMat = new THREE.MeshStandardMaterial({color:0x6b4226});
 const GAUGE=3, RH=1.2, SS=12;
 
-function railProfile() {
-  const s = new THREE.Shape();
-  s.moveTo(-0.4,-0.6); s.lineTo(0.4,-0.6); s.lineTo(0.4,0.6); s.lineTo(-0.4,0.6); s.closePath();
-  return s;
+// ============================================================
+// FIXED: Manual sweep geometry (no ExtrudeGeometry for curves!)
+// ExtrudeGeometry uses Frenet frames which tilt the rail profile
+// on XZ-plane curves. We build geometry manually with Y-up.
+// ============================================================
+
+/** Build a straight rail as a simple box */
+function buildStraightRail(length, zOffset) {
+  const geo = new THREE.BoxGeometry(length, RH, 0.8);
+  geo.translate(length/2, RH/2, zOffset);
+  return geo;
+}
+
+/** Build curved rail by sweeping small quads along the arc, keeping profile vertical */
+function buildCurvedRail(radius, angleDeg, rOffset) {
+  const angleRad = angleDeg * Math.PI / 180;
+  const r = radius + rOffset; // inner or outer rail
+  const segments = Math.max(12, Math.ceil(angleDeg / 2));
+  
+  const positions = [];
+  const normals = [];
+  const indices = [];
+  
+  const hw = 0.4; // half rail width
+  const hh = RH / 2;
+  
+  for (let i = 0; i <= segments; i++) {
+    const t = (i / segments) * angleRad;
+    // Center of rail at this angle
+    const cx = r * Math.sin(t);
+    const cz = r - r * Math.cos(t);
+    // Tangent direction (normalized) in XZ
+    const tx = Math.cos(t);
+    const tz = Math.sin(t);
+    // Normal direction (perpendicular to tangent, pointing outward) in XZ
+    const nx = -tz; // sin(t)... actually for outward normal: (sin(t), 0, -cos(t)) rotated... 
+    // For a circle centered at (0, 0, R): outward normal at angle t = (sin(t), 0, -(cos(t) - 1)... no.
+    // Simpler: radial direction from center (0,0,R) to point is (sin(t), 0, -cos(t))
+    // That IS the outward normal for the rail cross-section lateral direction.
+    const rnx = Math.sin(t);
+    const rnz = -Math.cos(t);
+    
+    // 4 vertices per cross-section (rectangular profile):
+    // Bottom-left, bottom-right, top-right, top-left (looking along tangent)
+    // "left/right" = along radial normal
+    const baseIdx = i * 4;
+    
+    // BL
+    positions.push(cx + rnx * (-hw), 0,        cz + rnz * (-hw));
+    normals.push(0, -1, 0);
+    // BR  
+    positions.push(cx + rnx * hw,    0,        cz + rnz * hw);
+    normals.push(0, -1, 0);
+    // TR
+    positions.push(cx + rnx * hw,    RH,       cz + rnz * hw);
+    normals.push(0, 1, 0);
+    // TL
+    positions.push(cx + rnx * (-hw), RH,       cz + rnz * (-hw));
+    normals.push(0, 1, 0);
+    
+    if (i < segments) {
+      const ni = (i + 1) * 4;
+      // Front face (2 triangles)
+      indices.push(baseIdx, ni, ni+1,  baseIdx, ni+1, baseIdx+1);
+      // Back face
+      indices.push(baseIdx+3, baseIdx+2, ni+2,  baseIdx+3, ni+2, ni+3);
+      // Top face
+      indices.push(baseIdx+2, baseIdx+3, ni+3,  baseIdx+2, ni+3, ni+2); // wait this is wrong
+      // Let me redo: for each segment, connect 4 verts to next 4 verts
+      // Bottom: baseIdx+0, baseIdx+1, ni+1, ni+0
+      // Top: baseIdx+3, baseIdx+2, ni+2, ni+3
+      // Outer: baseIdx+1, baseIdx+2, ni+2, ni+1
+      // Inner: baseIdx+0, baseIdx+3, ni+3, ni+0
+    }
+  }
+  
+  // Redo indices properly
+  indices.length = 0;
+  for (let i = 0; i < segments; i++) {
+    const a = i * 4;
+    const b = (i+1) * 4;
+    // Bottom face (BL, BR of current → BR, BL of next)
+    indices.push(a+0, a+1, b+1,  a+0, b+1, b+0);
+    // Top face (TL, TR of current → TR, TL of next)
+    indices.push(a+3, b+3, b+2,  a+3, b+2, a+2);
+    // Outer face (BR, TR of current → TR, BR of next)
+    indices.push(a+1, a+2, b+2,  a+1, b+2, b+1);
+    // Inner face (BL, TL of current → TL, BL of next)
+    indices.push(a+0, b+0, b+3,  a+0, b+3, a+3);
+  }
+  
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals(); // proper normals
+  return geo;
 }
 
 function addStraight(group, len) {
-  const hg=GAUGE/2, prof=railProfile();
-  const lp=new THREE.LineCurve3(new THREE.Vector3(0,RH/2,-hg),new THREE.Vector3(len,RH/2,-hg));
-  const rp=new THREE.LineCurve3(new THREE.Vector3(0,RH/2,hg),new THREE.Vector3(len,RH/2,hg));
-  group.add(new THREE.Mesh(new THREE.ExtrudeGeometry(prof,{steps:2,bevelEnabled:false,extrudePath:lp}),railMat));
-  group.add(new THREE.Mesh(new THREE.ExtrudeGeometry(prof,{steps:2,bevelEnabled:false,extrudePath:rp}),railMat));
-  const cnt=Math.max(1,Math.floor(len/SS));
-  const sg=new THREE.BoxGeometry(1.5,0.6,8);
-  for(let i=0;i<cnt;i++){const m=new THREE.Mesh(sg,sleeperMat);m.position.set(((i+0.5)/cnt)*len,0.3,0);group.add(m);}
+  const hg = GAUGE/2;
+  group.add(new THREE.Mesh(buildStraightRail(len, -hg), railMat));
+  group.add(new THREE.Mesh(buildStraightRail(len, hg), railMat));
+  // Sleepers
+  const cnt = Math.max(1, Math.floor(len/SS));
+  const sg = new THREE.BoxGeometry(1.5, 0.6, 8);
+  for(let i=0;i<cnt;i++){
+    const m = new THREE.Mesh(sg, sleeperMat);
+    m.position.set(((i+0.5)/cnt)*len, 0.3, 0);
+    group.add(m);
+  }
 }
 
 function addCurve(group, radius, angleDeg) {
-  const ar=angleDeg*Math.PI/180, hg=GAUGE/2, segs=Math.max(8,Math.ceil(angleDeg/3)), prof=railProfile();
-  function mp(r,y){
-    const pts=[];
-    for(let i=0;i<=segs;i++){const t=(i/segs)*ar;pts.push(new THREE.Vector3(r*Math.sin(t),y,r-r*Math.cos(t)));}
-    const cp=new THREE.CurvePath();
-    for(let i=0;i<pts.length-1;i++)cp.add(new THREE.LineCurve3(pts[i],pts[i+1]));
-    return cp;
+  const hg = GAUGE/2;
+  // Inner rail (radius - half gauge), outer rail (radius + half gauge)
+  group.add(new THREE.Mesh(buildCurvedRail(radius, angleDeg, -hg), railMat));
+  group.add(new THREE.Mesh(buildCurvedRail(radius, angleDeg, hg), railMat));
+  // Sleepers along the curve
+  const ar = angleDeg * Math.PI / 180;
+  const arcLen = radius * ar;
+  const cnt = Math.max(1, Math.floor(arcLen/SS));
+  const sg = new THREE.BoxGeometry(1.5, 0.6, 8);
+  for(let i=0;i<cnt;i++){
+    const t = ((i+0.5)/cnt) * ar;
+    const m = new THREE.Mesh(sg, sleeperMat);
+    m.position.set(radius*Math.sin(t), 0.3, radius-radius*Math.cos(t));
+    m.rotation.y = -t;
+    group.add(m);
   }
-  group.add(new THREE.Mesh(new THREE.ExtrudeGeometry(prof,{steps:segs,bevelEnabled:false,extrudePath:mp(radius-hg,RH/2)}),railMat));
-  group.add(new THREE.Mesh(new THREE.ExtrudeGeometry(prof,{steps:segs,bevelEnabled:false,extrudePath:mp(radius+hg,RH/2)}),railMat));
-  const al=radius*ar, cnt=Math.max(1,Math.floor(al/SS));
-  const sg=new THREE.BoxGeometry(1.5,0.6,8);
-  for(let i=0;i<cnt;i++){const t=((i+0.5)/cnt)*ar;const m=new THREE.Mesh(sg,sleeperMat);m.position.set(radius*Math.sin(t),0.3,radius-radius*Math.cos(t));m.rotation.y=-t;group.add(m);}
 }
 
 function renderTracks(tracks, source) {
@@ -148,61 +247,43 @@ function renderTracks(tracks, source) {
     const t=tracks[i];
     const g=new THREE.Group();
     
-    if(t.type==="straight") addStraight(g, t.length);
+    if(t.type==="straight"||t.type==="turnout") addStraight(g, t.length||166);
     else if(t.type==="curve") addCurve(g, t.radius, t.angle);
     
     g.position.set(t.x, 0, t.z);
     g.rotation.y = t.rotation;
     trackGroup.add(g);
     
-    // Green sphere at track origin
-    const sph = new THREE.Mesh(new THREE.SphereGeometry(3,8,8), new THREE.MeshBasicMaterial({color:0x00ff00}));
-    sph.position.set(t.x, 5, t.z);
-    trackGroup.add(sph);
-    
     // Check gap to next track
     const next = tracks[(i+1)%tracks.length];
     const cos=Math.cos(t.rotation), sin=Math.sin(t.rotation);
     let endX, endZ;
-    if(t.type==="straight"){endX=t.x+t.length*cos;endZ=t.z+t.length*sin;}
+    if(t.type==="straight"||t.type==="turnout"){const l=t.length||166;endX=t.x+l*cos;endZ=t.z+l*sin;}
     else{const ar=t.angle*Math.PI/180;const lx=t.radius*Math.sin(ar);const lz=t.radius-t.radius*Math.cos(ar);endX=t.x+lx*cos-lz*sin;endZ=t.z+lx*sin+lz*cos;}
     const gap=Math.sqrt((next.x-endX)**2+(next.z-endZ)**2);
     if(gap>0.5) gapCount++;
-    
-    // Red sphere at end
-    const sph2 = new THREE.Mesh(new THREE.SphereGeometry(2,8,8), new THREE.MeshBasicMaterial({color:0xff3300}));
-    sph2.position.set(endX, 8, endZ);
-    trackGroup.add(sph2);
   }
   
   scene.add(trackGroup);
   document.getElementById('info').innerHTML = `
-    <b>Track Debug v2</b><br>
+    <b>Track Debug v3 (fixed geometry)</b><br>
     Source: <b>${source}</b><br>
     Tracks: ${tracks.length}<br>
     Gaps > 0.5mm: <span style="color:${gapCount?'#f33':'#0f0'}">${gapCount}</span><br>
-    <small><span style="color:#0f0">●</span> track start &nbsp; <span style="color:#f33">●</span> track end</small><br>
-    <small>Red ends should touch green starts of next track</small>
+    <small>Curves now use manual sweep (no ExtrudeGeometry)</small>
   `;
 }
 
-// Load hardcoded template
-window.loadTemplate = function() {
-  renderTracks(TEMPLATE_TRACKS, 'hardcoded template');
-};
+window.loadTemplate = function() { renderTracks(TEMPLATE_TRACKS, 'hardcoded template'); };
 
-// Load from live API
 window.loadFromAPI = async function() {
   document.getElementById('info').innerHTML = 'Načítám z API...';
   try {
     const resp = await fetch('/api/generate-track-3d', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({scale:'TT', boardWidth:200, boardDepth:100, character:'station'}),
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({scale:'TT',boardWidth:200,boardDepth:100,character:'station'}),
     });
     const json = await resp.json();
-    
-    // We need piece metadata - build from pieceId
     const PIECES = {
       'tt-g1':{type:'straight',length:166},'tt-g2':{type:'straight',length:83},'tt-g3':{type:'straight',length:41.5},
       'tt-g4':{type:'straight',length:332},'tt-g5':{type:'straight',length:228},
@@ -211,28 +292,16 @@ window.loadFromAPI = async function() {
       'tt-r3-15':{type:'curve',radius:396,angle:15},
       'tt-ewl':{type:'turnout',length:166,radius:310,angle:15,direction:'left'},
       'tt-ewr':{type:'turnout',length:166,radius:310,angle:15,direction:'right'},
-      'h0-g230':{type:'straight',length:230},'h0-g200':{type:'straight',length:200},'h0-g100':{type:'straight',length:100},
-      'h0-g345':{type:'straight',length:345},
-      'h0-r2-30':{type:'curve',radius:358,angle:30},'h0-r3-30':{type:'curve',radius:434.5,angle:30},
-      'h0-r2-15':{type:'curve',radius:358,angle:15},'h0-r3-15':{type:'curve',radius:434.5,angle:15},
-      'h0-wl15':{type:'turnout',length:230,radius:358,angle:15,direction:'left'},
-      'h0-wr15':{type:'turnout',length:230,radius:358,angle:15,direction:'right'},
     };
-    
-    const tracks = json.tracks.map(t => {
-      const def = PIECES[t.pieceId] || {type:'straight',length:100};
-      return { ...def, x: t.x, z: t.z, rotation: t.rotation, pieceId: t.pieceId };
-    });
-    
+    const tracks = json.tracks.map(t => ({...(PIECES[t.pieceId]||{type:'straight',length:100}), x:t.x, z:t.z, rotation:t.rotation, pieceId:t.pieceId}));
     renderTracks(tracks, `API (${json.source}, gap:${json.loopGapMm?.toFixed(2)||'?'}mm)`);
-  } catch(e) {
-    document.getElementById('info').innerHTML = 'Error: '+e.message;
-  }
+  } catch(e) { document.getElementById('info').innerHTML='Error: '+e.message; }
 };
 
 init();
-// Auto-load template on start
 window.loadTemplate();
+
+function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
 </script>
 </body>
 </html>

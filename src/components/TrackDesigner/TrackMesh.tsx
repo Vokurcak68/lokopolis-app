@@ -7,8 +7,11 @@ import type { TrackPieceDefinition } from "@/lib/track-library";
 // ============================================================
 // Track geometry builders
 // ============================================================
+// IMPORTANT: Curves use manual sweep geometry, NOT ExtrudeGeometry.
+// ExtrudeGeometry's Frenet frame tilts the rail profile on XZ-plane
+// curves, causing twisted/misaligned rails. Manual sweep keeps Y-up.
 
-const RAIL_GAUGE = 3; // mm between rails (visual, not scale-accurate)
+const RAIL_GAUGE = 3; // mm between rails (visual)
 const RAIL_WIDTH = 0.8;
 const RAIL_HEIGHT = 1.2;
 const SLEEPER_WIDTH = 8;
@@ -16,181 +19,155 @@ const SLEEPER_HEIGHT = 0.6;
 const SLEEPER_DEPTH = 1.5;
 const SLEEPER_SPACING = 12; // mm between sleepers
 
-/** Build a rail profile (cross section) */
-function createRailProfile(): THREE.Shape {
-  const shape = new THREE.Shape();
-  const hw = RAIL_WIDTH / 2;
-  const hh = RAIL_HEIGHT / 2;
-  shape.moveTo(-hw, -hh);
-  shape.lineTo(hw, -hh);
-  shape.lineTo(hw, hh);
-  shape.lineTo(-hw, hh);
-  shape.closePath();
-  return shape;
+/** Build geometry for a straight rail at given Z offset */
+function buildStraightRailGeo(length: number, zOffset: number): THREE.BufferGeometry {
+  const geo = new THREE.BoxGeometry(length, RAIL_HEIGHT, RAIL_WIDTH);
+  geo.translate(length / 2, RAIL_HEIGHT / 2, zOffset);
+  return geo;
+}
+
+/** Build merged sleepers for a straight track */
+function buildStraightSleepers(length: number): THREE.BufferGeometry {
+  const count = Math.max(1, Math.floor(length / SLEEPER_SPACING));
+  const sleeperGeo = new THREE.BoxGeometry(SLEEPER_DEPTH, SLEEPER_HEIGHT, SLEEPER_WIDTH);
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const indices: number[] = [];
+  const basePos = sleeperGeo.attributes.position.array;
+  const baseNorm = sleeperGeo.attributes.normal.array;
+  const baseIdx = sleeperGeo.index!.array;
+
+  for (let i = 0; i < count; i++) {
+    const offset = (i * basePos.length) / 3;
+    const x = ((i + 0.5) / count) * length;
+    const mat = new THREE.Matrix4().makeTranslation(x, SLEEPER_HEIGHT / 2, 0);
+    for (let j = 0; j < basePos.length; j += 3) {
+      const v = new THREE.Vector3(basePos[j], basePos[j + 1], basePos[j + 2]).applyMatrix4(mat);
+      positions.push(v.x, v.y, v.z);
+    }
+    for (let j = 0; j < baseNorm.length; j++) normals.push(baseNorm[j]);
+    for (let j = 0; j < baseIdx.length; j++) indices.push(baseIdx[j] + offset);
+  }
+
+  sleeperGeo.dispose();
+  const merged = new THREE.BufferGeometry();
+  merged.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  merged.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
+  merged.setIndex(indices);
+  return merged;
 }
 
 /** Build geometry for a straight track piece */
-function buildStraightGeometry(length: number): {
-  railLeft: THREE.BufferGeometry;
-  railRight: THREE.BufferGeometry;
-  sleepers: THREE.BufferGeometry;
-} {
-  const railProfile = createRailProfile();
+function buildStraightGeometry(length: number) {
   const halfGauge = RAIL_GAUGE / 2;
-
-  // Path for left rail
-  const leftPath = new THREE.LineCurve3(
-    new THREE.Vector3(0, RAIL_HEIGHT / 2, -halfGauge),
-    new THREE.Vector3(length, RAIL_HEIGHT / 2, -halfGauge)
-  );
-  const rightPath = new THREE.LineCurve3(
-    new THREE.Vector3(0, RAIL_HEIGHT / 2, halfGauge),
-    new THREE.Vector3(length, RAIL_HEIGHT / 2, halfGauge)
-  );
-
-  const extrudeSettings = {
-    steps: 2,
-    bevelEnabled: false,
-    extrudePath: leftPath,
+  return {
+    railLeft: buildStraightRailGeo(length, -halfGauge),
+    railRight: buildStraightRailGeo(length, halfGauge),
+    sleepers: buildStraightSleepers(length),
   };
-
-  const railLeft = new THREE.ExtrudeGeometry(railProfile, extrudeSettings);
-  const railRight = new THREE.ExtrudeGeometry(railProfile, {
-    ...extrudeSettings,
-    extrudePath: rightPath,
-  });
-
-  // Sleepers as merged box geometries
-  const sleeperCount = Math.max(1, Math.floor(length / SLEEPER_SPACING));
-  const sleeperGeo = new THREE.BoxGeometry(SLEEPER_DEPTH, SLEEPER_HEIGHT, SLEEPER_WIDTH);
-  const merged = new THREE.BufferGeometry();
-  const matrices: THREE.Matrix4[] = [];
-  for (let i = 0; i < sleeperCount; i++) {
-    const t = (i + 0.5) / sleeperCount;
-    const x = t * length;
-    const mat = new THREE.Matrix4().makeTranslation(x, SLEEPER_HEIGHT / 2, 0);
-    matrices.push(mat);
-  }
-  // Merge sleepers into instanced or merged geometry
-  const sleeperPositions: number[] = [];
-  const sleeperNormals: number[] = [];
-  const sleeperIndices: number[] = [];
-  const basePositions = sleeperGeo.attributes.position.array;
-  const baseNormals = sleeperGeo.attributes.normal.array;
-  const baseIndex = sleeperGeo.index!.array;
-
-  for (let i = 0; i < matrices.length; i++) {
-    const offset = (i * basePositions.length) / 3;
-    const mat = matrices[i];
-    for (let j = 0; j < basePositions.length; j += 3) {
-      const v = new THREE.Vector3(basePositions[j], basePositions[j + 1], basePositions[j + 2]);
-      v.applyMatrix4(mat);
-      sleeperPositions.push(v.x, v.y, v.z);
-    }
-    for (let j = 0; j < baseNormals.length; j++) {
-      sleeperNormals.push(baseNormals[j]);
-    }
-    for (let j = 0; j < baseIndex.length; j++) {
-      sleeperIndices.push(baseIndex[j] + offset);
-    }
-  }
-
-  merged.setAttribute("position", new THREE.Float32BufferAttribute(sleeperPositions, 3));
-  merged.setAttribute("normal", new THREE.Float32BufferAttribute(sleeperNormals, 3));
-  merged.setIndex(sleeperIndices);
-
-  sleeperGeo.dispose();
-
-  return { railLeft, railRight, sleepers: merged };
 }
 
-/** Build geometry for a curved track piece */
-function buildCurveGeometry(radius: number, angleDeg: number): {
-  railLeft: THREE.BufferGeometry;
-  railRight: THREE.BufferGeometry;
-  sleepers: THREE.BufferGeometry;
-} {
+/**
+ * Build a curved rail by manual sweep — keeps profile always vertical (Y-up).
+ * This avoids ExtrudeGeometry's Frenet frame tilt issue on XZ-plane curves.
+ * 
+ * Curve center is at (0, 0, radius). Rail sweeps from angle 0 to angleDeg.
+ * @param radius - curve center radius
+ * @param angleDeg - sweep angle in degrees
+ * @param rOffset - radial offset from center radius (negative = inner, positive = outer)
+ */
+function buildCurvedRailGeo(radius: number, angleDeg: number, rOffset: number): THREE.BufferGeometry {
   const angleRad = (angleDeg * Math.PI) / 180;
-  const halfGauge = RAIL_GAUGE / 2;
-  const segments = Math.max(8, Math.ceil(angleDeg / 3));
-  const railProfile = createRailProfile();
+  const r = radius + rOffset;
+  const segments = Math.max(12, Math.ceil(angleDeg / 2));
+  const hw = RAIL_WIDTH / 2;
 
-  // Build curve paths - curve bends to the left (positive Z direction)
-  // Center of curvature is at (0, 0, radius)
-  function makeCurvePath(r: number, yOffset: number): THREE.CurvePath<THREE.Vector3> {
-    const points: THREE.Vector3[] = [];
-    for (let i = 0; i <= segments; i++) {
-      const t = (i / segments) * angleRad;
-      const x = r * Math.sin(t);
-      const z = r - r * Math.cos(t);
-      // Offset perpendicular to curve direction
-      // Tangent direction at angle t: (cos(t), 0, sin(t))
-      // Normal (inward): (sin(t), 0, -cos(t))... but we want lateral offset
-      points.push(new THREE.Vector3(x, yOffset, z));
+  const positions: number[] = [];
+  const indices: number[] = [];
+
+  for (let i = 0; i <= segments; i++) {
+    const t = (i / segments) * angleRad;
+    // Center point of rail cross-section at this angle
+    const cx = r * Math.sin(t);
+    const cz = r - r * Math.cos(t);
+    // Radial direction (outward from curve center) in XZ
+    const nx = Math.sin(t);
+    const nz = -Math.cos(t);
+
+    // 4 vertices per cross-section (rectangular profile, always vertical):
+    // 0: bottom-inner, 1: bottom-outer, 2: top-outer, 3: top-inner
+    positions.push(cx - nx * hw, 0,           cz - nz * hw);         // 0 bottom-inner
+    positions.push(cx + nx * hw, 0,           cz + nz * hw);         // 1 bottom-outer
+    positions.push(cx + nx * hw, RAIL_HEIGHT,  cz + nz * hw);         // 2 top-outer
+    positions.push(cx - nx * hw, RAIL_HEIGHT,  cz - nz * hw);         // 3 top-inner
+
+    if (i < segments) {
+      const a = i * 4;
+      const b = (i + 1) * 4;
+      // Bottom face
+      indices.push(a, b, b + 1, a, b + 1, a + 1);
+      // Top face
+      indices.push(a + 3, a + 2, b + 2, a + 3, b + 2, b + 3);
+      // Outer face
+      indices.push(a + 1, b + 1, b + 2, a + 1, b + 2, a + 2);
+      // Inner face
+      indices.push(a, a + 3, b + 3, a, b + 3, b);
     }
-    const curvePath = new THREE.CurvePath<THREE.Vector3>();
-    for (let i = 0; i < points.length - 1; i++) {
-      curvePath.add(new THREE.LineCurve3(points[i], points[i + 1]));
-    }
-    return curvePath;
   }
 
-  // Inner rail (smaller radius) and outer rail (larger radius)
-  const innerPath = makeCurvePath(radius - halfGauge, RAIL_HEIGHT / 2);
-  const outerPath = makeCurvePath(radius + halfGauge, RAIL_HEIGHT / 2);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}
 
-  const railLeft = new THREE.ExtrudeGeometry(railProfile, {
-    steps: segments,
-    bevelEnabled: false,
-    extrudePath: innerPath,
-  });
-  const railRight = new THREE.ExtrudeGeometry(railProfile, {
-    steps: segments,
-    bevelEnabled: false,
-    extrudePath: outerPath,
-  });
-
-  // Sleepers along the curve
+/** Build merged sleepers for a curved track */
+function buildCurvedSleepers(radius: number, angleDeg: number): THREE.BufferGeometry {
+  const angleRad = (angleDeg * Math.PI) / 180;
   const arcLength = radius * angleRad;
-  const sleeperCount = Math.max(1, Math.floor(arcLength / SLEEPER_SPACING));
+  const count = Math.max(1, Math.floor(arcLength / SLEEPER_SPACING));
   const sleeperGeo = new THREE.BoxGeometry(SLEEPER_DEPTH, SLEEPER_HEIGHT, SLEEPER_WIDTH);
-  const sleeperPositions: number[] = [];
-  const sleeperNormals: number[] = [];
-  const sleeperIndices: number[] = [];
-  const basePositions = sleeperGeo.attributes.position.array;
-  const baseNormals = sleeperGeo.attributes.normal.array;
-  const baseIndex = sleeperGeo.index!.array;
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const indices: number[] = [];
+  const basePos = sleeperGeo.attributes.position.array;
+  const baseNorm = sleeperGeo.attributes.normal.array;
+  const baseIdx = sleeperGeo.index!.array;
 
-  for (let i = 0; i < sleeperCount; i++) {
-    const t = ((i + 0.5) / sleeperCount) * angleRad;
+  for (let i = 0; i < count; i++) {
+    const t = ((i + 0.5) / count) * angleRad;
     const x = radius * Math.sin(t);
     const z = radius - radius * Math.cos(t);
-    const offset = (i * basePositions.length) / 3;
-    // Rotation: sleeper should be perpendicular to track direction
+    const offset = (i * basePos.length) / 3;
     const rot = new THREE.Matrix4().makeRotationY(-t);
     const trans = new THREE.Matrix4().makeTranslation(x, SLEEPER_HEIGHT / 2, z);
     const mat = trans.multiply(rot);
 
-    for (let j = 0; j < basePositions.length; j += 3) {
-      const v = new THREE.Vector3(basePositions[j], basePositions[j + 1], basePositions[j + 2]);
-      v.applyMatrix4(mat);
-      sleeperPositions.push(v.x, v.y, v.z);
+    for (let j = 0; j < basePos.length; j += 3) {
+      const v = new THREE.Vector3(basePos[j], basePos[j + 1], basePos[j + 2]).applyMatrix4(mat);
+      positions.push(v.x, v.y, v.z);
     }
-    for (let j = 0; j < baseNormals.length; j++) {
-      sleeperNormals.push(baseNormals[j]);
-    }
-    for (let j = 0; j < baseIndex.length; j++) {
-      sleeperIndices.push(baseIndex[j] + offset);
-    }
+    for (let j = 0; j < baseNorm.length; j++) normals.push(baseNorm[j]);
+    for (let j = 0; j < baseIdx.length; j++) indices.push(baseIdx[j] + offset);
   }
 
-  const sleepers = new THREE.BufferGeometry();
-  sleepers.setAttribute("position", new THREE.Float32BufferAttribute(sleeperPositions, 3));
-  sleepers.setAttribute("normal", new THREE.Float32BufferAttribute(sleeperNormals, 3));
-  sleepers.setIndex(sleeperIndices);
   sleeperGeo.dispose();
+  const merged = new THREE.BufferGeometry();
+  merged.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  merged.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
+  merged.setIndex(indices);
+  return merged;
+}
 
-  return { railLeft, railRight, sleepers };
+/** Build geometry for a curved track piece */
+function buildCurveGeometry(radius: number, angleDeg: number) {
+  const halfGauge = RAIL_GAUGE / 2;
+  return {
+    railLeft: buildCurvedRailGeo(radius, angleDeg, -halfGauge),
+    railRight: buildCurvedRailGeo(radius, angleDeg, halfGauge),
+    sleepers: buildCurvedSleepers(radius, angleDeg),
+  };
 }
 
 // ============================================================
@@ -251,8 +228,6 @@ export default function TrackMesh({
 
   const railColor = isSelected ? SELECTED_COLOR : isHovered ? HOVERED_COLOR : RAIL_COLOR;
   const opacity = isTunnel ? TUNNEL_OPACITY : 1;
-
-  // Convert mm to scene units (1mm = 1 unit in scene, but we'll scale the whole scene)
   const worldY = elevation;
 
   return (
@@ -304,7 +279,7 @@ export default function TrackMesh({
         </>
       )}
 
-      {/* Tunnel shell (simple box over track) */}
+      {/* Tunnel shell */}
       {isTunnel && (
         <mesh position={[(piece.length || 100) / 2, 10, 0]}>
           <boxGeometry args={[piece.length || 100, 20, 20]} />
@@ -312,7 +287,7 @@ export default function TrackMesh({
         </mesh>
       )}
 
-      {/* Selection highlight ring */}
+      {/* Selection highlight */}
       {isSelected && (
         <mesh position={[(piece.length || 50) / 2, 0.1, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[10, 12, 32]} />
