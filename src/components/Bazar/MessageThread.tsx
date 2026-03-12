@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/components/Auth/AuthProvider";
 import { timeAgo } from "@/lib/timeAgo";
@@ -24,68 +24,49 @@ export default function MessageThread({
   const [loading, setLoading] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const fetchMessages = useCallback(async (showLoading = false) => {
+    if (!user) return;
+    if (showLoading) setLoading(true);
+
+    const { data } = await supabase
+      .from("bazar_messages")
+      .select("*")
+      .eq("listing_id", listingId)
+      .or(
+        `and(sender_id.eq.${user.id},recipient_id.eq.${recipientId}),and(sender_id.eq.${recipientId},recipient_id.eq.${user.id})`
+      )
+      .order("created_at", { ascending: true });
+
+    if (data) {
+      setMessages((prev) => {
+        // Only update if there are new messages (avoid unnecessary re-renders)
+        if (prev.length !== data.length || (data.length > 0 && prev[prev.length - 1]?.id !== data[data.length - 1]?.id)) {
+          return data;
+        }
+        return prev;
+      });
+    }
+    setLoading(false);
+
+    // Mark unread as read
+    await supabase
+      .from("bazar_messages")
+      .update({ read: true })
+      .eq("listing_id", listingId)
+      .eq("sender_id", recipientId)
+      .eq("recipient_id", user.id)
+      .eq("read", false);
+  }, [user, listingId, recipientId]);
+
+  // Initial fetch + polling every 5s for live chat feel
   useEffect(() => {
     if (!user) return;
 
-    async function fetchMessages() {
-      const { data } = await supabase
-        .from("bazar_messages")
-        .select("*")
-        .eq("listing_id", listingId)
-        .or(
-          `and(sender_id.eq.${user!.id},recipient_id.eq.${recipientId}),and(sender_id.eq.${recipientId},recipient_id.eq.${user!.id})`
-        )
-        .order("created_at", { ascending: true });
+    fetchMessages(true);
 
-      if (data) setMessages(data);
-      setLoading(false);
-
-      // Mark unread as read
-      await supabase
-        .from("bazar_messages")
-        .update({ read: true })
-        .eq("listing_id", listingId)
-        .eq("sender_id", recipientId)
-        .eq("recipient_id", user!.id)
-        .eq("read", false);
-    }
-
-    fetchMessages();
-
-    // Realtime subscription
-    const channel = supabase
-      .channel(`bazar-msgs-${listingId}-${user.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "bazar_messages",
-          filter: `listing_id=eq.${listingId}`,
-        },
-        (payload) => {
-          const msg = payload.new as BazarMessage;
-          if (
-            (msg.sender_id === user!.id && msg.recipient_id === recipientId) ||
-            (msg.sender_id === recipientId && msg.recipient_id === user!.id)
-          ) {
-            setMessages((prev) => [...prev, msg]);
-            // Auto-mark received as read
-            if (msg.sender_id === recipientId) {
-              supabase
-                .from("bazar_messages")
-                .update({ read: true })
-                .eq("id", msg.id);
-            }
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user, listingId, recipientId]);
+    const interval = setInterval(() => fetchMessages(false), 5000);
+    return () => clearInterval(interval);
+  }, [user, fetchMessages]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -95,7 +76,22 @@ export default function MessageThread({
 
   async function handleSend() {
     if (!user || !newMessage.trim()) return;
+    const content = newMessage.trim();
     setSending(true);
+    setNewMessage("");
+
+    // Optimistic: add message to local state immediately
+    const optimisticMsg: BazarMessage = {
+      id: crypto.randomUUID(),
+      listing_id: listingId,
+      sender_id: user.id,
+      recipient_id: recipientId,
+      content,
+      read: false,
+      created_at: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, optimisticMsg]);
+
     try {
       const res = await fetch("/api/bazar/message", {
         method: "POST",
@@ -104,13 +100,17 @@ export default function MessageThread({
           listingId,
           senderId: user.id,
           recipientId,
-          content: newMessage.trim(),
+          content,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Chyba při odesílání");
-      setNewMessage("");
+      // Refresh to get the real message from DB
+      fetchMessages(false);
     } catch (err) {
+      // Remove optimistic message on failure
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
+      setNewMessage(content);
       alert(err instanceof Error ? err.message : "Chyba při odesílání");
     } finally {
       setSending(false);
