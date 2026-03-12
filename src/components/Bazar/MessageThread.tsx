@@ -97,13 +97,18 @@ export default function MessageThread({
     if (!user || !newMessage.trim()) return;
     setSending(true);
     try {
-      const { error } = await supabase.from("bazar_messages").insert({
-        listing_id: listingId,
-        sender_id: user.id,
-        recipient_id: recipientId,
-        content: newMessage.trim(),
+      const res = await fetch("/api/bazar/message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          listingId,
+          senderId: user.id,
+          recipientId,
+          content: newMessage.trim(),
+        }),
       });
-      if (error) throw error;
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Chyba při odesílání");
       setNewMessage("");
     } catch (err) {
       alert(err instanceof Error ? err.message : "Chyba při odesílání");
