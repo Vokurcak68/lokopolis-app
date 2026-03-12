@@ -77,6 +77,8 @@ export default function ListingDetailPage() {
   const [showMessages, setShowMessages] = useState(false);
   const [lightbox, setLightbox] = useState(false);
   const [statusUpdating, setStatusUpdating] = useState(false);
+  const [incomingUsers, setIncomingUsers] = useState<{ id: string; name: string; unread: number }[]>([]);
+  const [selectedBuyer, setSelectedBuyer] = useState<{ id: string; name: string } | null>(null);
 
   const isOwner = user && listing && user.id === listing.seller_id;
   const isAdmin = profile?.role === "admin";
@@ -143,6 +145,46 @@ export default function ListingDetailPage() {
   useEffect(() => {
     fetchListing();
   }, [fetchListing]);
+
+  // Fetch incoming message senders for owner
+  useEffect(() => {
+    if (!user || !listing || user.id !== listing.seller_id) return;
+
+    async function fetchIncoming() {
+      const { data: msgs } = await supabase
+        .from("bazar_messages")
+        .select("sender_id, read")
+        .eq("listing_id", listing!.id)
+        .eq("recipient_id", user!.id);
+
+      if (!msgs || msgs.length === 0) { setIncomingUsers([]); return; }
+
+      // Group by sender
+      const senderMap = new Map<string, number>();
+      for (const m of msgs) {
+        senderMap.set(m.sender_id, (senderMap.get(m.sender_id) || 0) + (!m.read ? 1 : 0));
+      }
+
+      const senderIds = [...senderMap.keys()];
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, display_name, username")
+        .in("id", senderIds);
+
+      const users = senderIds.map((sid) => {
+        const p = (profiles || []).find((pr: { id: string }) => pr.id === sid);
+        return {
+          id: sid,
+          name: (p as { display_name?: string; username?: string })?.display_name || (p as { username?: string })?.username || "Anonym",
+          unread: senderMap.get(sid) || 0,
+        };
+      });
+
+      setIncomingUsers(users);
+    }
+
+    fetchIncoming();
+  }, [user, listing]);
 
   async function updateStatus(newStatus: string) {
     if (!listing) return;
@@ -589,6 +631,22 @@ export default function ListingDetailPage() {
                 >
                   🗑️ Smazat
                 </button>
+                <Link
+                  href="/bazar/zpravy"
+                  style={{
+                    display: "inline-block",
+                    padding: "12px 24px",
+                    background: "rgba(59,130,246,0.15)",
+                    color: "#3b82f6",
+                    border: "1px solid rgba(59,130,246,0.3)",
+                    borderRadius: "10px",
+                    fontSize: "14px",
+                    fontWeight: 600,
+                    textDecoration: "none",
+                  }}
+                >
+                  💬 Zprávy
+                </Link>
               </>
             ) : user ? (
               <button
@@ -624,14 +682,75 @@ export default function ListingDetailPage() {
             )}
           </div>
 
-          {/* Message thread */}
-          {showMessages && user && seller && (
+          {/* Message thread — buyer → seller */}
+          {showMessages && user && seller && !isOwner && (
             <div style={{ marginTop: "20px" }}>
               <MessageThread
                 listingId={listing.id}
                 recipientId={listing.seller_id}
                 recipientName={seller.display_name || seller.username}
               />
+            </div>
+          )}
+
+          {/* Incoming messages — seller sees buyers */}
+          {isOwner && incomingUsers.length > 0 && (
+            <div style={{ marginTop: "24px" }}>
+              <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "12px" }}>
+                📩 Příchozí zprávy ({incomingUsers.length})
+              </h3>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "16px" }}>
+                {incomingUsers.map((bu) => (
+                  <button
+                    key={bu.id}
+                    onClick={() => setSelectedBuyer(selectedBuyer?.id === bu.id ? null : bu)}
+                    style={{
+                      padding: "8px 16px",
+                      background: selectedBuyer?.id === bu.id ? "var(--accent)" : "var(--bg-card)",
+                      color: selectedBuyer?.id === bu.id ? "var(--accent-text-on)" : "var(--text-primary)",
+                      border: `1px solid ${selectedBuyer?.id === bu.id ? "var(--accent)" : "var(--border)"}`,
+                      borderRadius: "8px",
+                      fontSize: "13px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    👤 {bu.name}
+                    {bu.unread > 0 && (
+                      <span style={{
+                        background: "#ef4444",
+                        color: "#fff",
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        borderRadius: "50%",
+                        width: "18px",
+                        height: "18px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}>
+                        {bu.unread}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+              {selectedBuyer && (
+                <MessageThread
+                  listingId={listing.id}
+                  recipientId={selectedBuyer.id}
+                  recipientName={selectedBuyer.name}
+                />
+              )}
+            </div>
+          )}
+
+          {isOwner && incomingUsers.length === 0 && (
+            <div style={{ marginTop: "24px", textAlign: "center", padding: "24px", color: "var(--text-dimmer)", fontSize: "13px" }}>
+              📩 Zatím žádné zprávy od zájemců
             </div>
           )}
         </div>

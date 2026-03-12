@@ -89,6 +89,22 @@ export default function UserMenu() {
             📝 Moje články
           </Link>
 
+          <Link
+            href="/bazar/moje"
+            onClick={() => setOpen(false)}
+            className="block w-full text-left px-4 py-2 text-sm text-text-muted hover:text-[var(--text-primary)] hover:bg-bg-card-hover transition-colors"
+          >
+            🏷️ Moje inzeráty
+          </Link>
+
+          <Link
+            href="/bazar/zpravy"
+            onClick={() => setOpen(false)}
+            className="block w-full text-left px-4 py-2 text-sm text-text-muted hover:text-[var(--text-primary)] hover:bg-bg-card-hover transition-colors"
+          >
+            💬 Zprávy z bazaru
+          </Link>
+
           {profile?.role === "admin" && (
             <>
               <Link
