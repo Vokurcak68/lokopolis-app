@@ -90,13 +90,22 @@ export default function UserMenu() {
           </Link>
 
           {profile?.role === "admin" && (
-            <Link
-              href="/admin/clanky"
-              onClick={() => setOpen(false)}
-              className="block w-full text-left px-4 py-2 text-sm text-primary hover:bg-bg-card-hover transition-colors"
-            >
-              🛡️ Správa článků
-            </Link>
+            <>
+              <Link
+                href="/admin/clanky"
+                onClick={() => setOpen(false)}
+                className="block w-full text-left px-4 py-2 text-sm text-primary hover:bg-bg-card-hover transition-colors"
+              >
+                🛡️ Správa článků
+              </Link>
+              <Link
+                href="/admin/shop"
+                onClick={() => setOpen(false)}
+                className="block w-full text-left px-4 py-2 text-sm text-primary hover:bg-bg-card-hover transition-colors"
+              >
+                🛍️ Správa e-shopu
+              </Link>
+            </>
           )}
 
           <button
