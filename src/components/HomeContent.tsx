@@ -13,6 +13,7 @@ import type {
   PopularTag,
   CompetitionHomeData,
   BazarListingHome,
+  ShopProductHome,
 } from "@/app/home-data";
 
 function optimizeImageUrl(url: string, width: number = 400): string {
@@ -152,6 +153,7 @@ export default function HomeContent({ data }: { data: HomePageData }) {
     activeAuthors,
     competition,
     latestListings,
+    featuredShopProducts,
   } = data;
 
   return (
@@ -332,6 +334,105 @@ export default function HomeContent({ data }: { data: HomePageData }) {
           })}
         </div>
       </section>
+
+      {/* ===================== FEATURED SHOP PRODUCTS ===================== */}
+      {featuredShopProducts && featuredShopProducts.length > 0 && (
+        <section style={{ maxWidth: "1200px", margin: "48px auto 0", padding: "0 20px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
+            <h2 style={{ fontSize: "24px", fontWeight: 700, color: "var(--text-primary)" }}>🛍️ Doporučené produkty</h2>
+            <Link href="/shop" style={{ color: "var(--accent)", textDecoration: "none", fontSize: "14px", fontWeight: 600 }}>
+              Zobrazit Shop →
+            </Link>
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+              gap: "16px",
+            }}
+          >
+            {featuredShopProducts.map((p: ShopProductHome) => {
+              const catColors: Record<string, string> = {
+                "kolejovy-plan": "#3b82f6",
+                "stl-model": "#a855f7",
+                navod: "#22c55e",
+                ebook: "#f59e0b",
+                balicek: "#ec4899",
+              };
+              const catLabels: Record<string, string> = {
+                "kolejovy-plan": "📐 Kolejové plány",
+                "stl-model": "🧊 3D modely",
+                navod: "📖 Návody",
+                ebook: "📖 E-booky",
+                balicek: "📦 Balíčky",
+              };
+              const isFree = p.price === 0;
+              const hasDiscount = p.original_price && p.original_price > p.price;
+              const catColor = catColors[p.category] || "#6b7280";
+              return (
+                <Link key={p.id} href={`/shop/${p.slug}`} style={{ textDecoration: "none" }}>
+                  <div
+                    style={{
+                      background: "var(--bg-card)",
+                      border: "1px solid var(--border)",
+                      borderRadius: "12px",
+                      overflow: "hidden",
+                      transition: "all 0.2s",
+                      height: "100%",
+                      display: "flex",
+                      flexDirection: "column",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = "var(--accent)";
+                      e.currentTarget.style.transform = "translateY(-2px)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = "var(--border)";
+                      e.currentTarget.style.transform = "translateY(0)";
+                    }}
+                  >
+                    <div style={{ position: "relative", width: "100%", paddingBottom: "75%", background: "var(--bg-page)" }}>
+                      {p.cover_image_url ? (
+                        <Image src={optimizeImageUrl(p.cover_image_url)} alt={p.title} fill style={{ objectFit: "cover" }} sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw" />
+                      ) : (
+                        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "40px", color: "var(--text-dimmer)" }}>
+                          {p.category === "kolejovy-plan" ? "📐" : p.category === "stl-model" ? "🧊" : "📖"}
+                        </div>
+                      )}
+                      <div style={{ position: "absolute", top: "8px", left: "8px", padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, background: `${catColor}dd`, color: "#fff" }}>
+                        {catLabels[p.category] || p.category}
+                      </div>
+                      {isFree && (
+                        <div style={{ position: "absolute", top: "8px", right: "8px", padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 700, background: "rgba(34,197,94,0.9)", color: "#fff" }}>
+                          ZDARMA
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ padding: "16px", flex: 1, display: "flex", flexDirection: "column" }}>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: "8px", marginBottom: "6px" }}>
+                        <span style={{ fontSize: "20px", fontWeight: 700, color: isFree ? "#22c55e" : "var(--accent)" }}>
+                          {isFree ? "Zdarma" : `${p.price.toLocaleString("cs-CZ")} Kč`}
+                        </span>
+                        {hasDiscount && (
+                          <span style={{ fontSize: "14px", color: "var(--text-dimmer)", textDecoration: "line-through" }}>
+                            {p.original_price!.toLocaleString("cs-CZ")} Kč
+                          </span>
+                        )}
+                      </div>
+                      <h3 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)", lineHeight: 1.4, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", flex: 1 }}>
+                        {p.title}
+                      </h3>
+                      <div style={{ fontSize: "12px", color: "var(--text-dimmer)", marginTop: "8px" }}>
+                        ⬇️ {p.download_count}× staženo
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* ===================== DOWNLOADS ===================== */}
       <section style={{ maxWidth: "1200px", margin: "48px auto 0", padding: "0 20px" }}>

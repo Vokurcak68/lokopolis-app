@@ -326,6 +326,65 @@ export interface SellerReview {
   created_at: string;
 }
 
+// Shop types
+export type ShopProductCategory = 'kolejovy-plan' | 'stl-model' | 'navod' | 'ebook' | 'balicek';
+export type ShopProductStatus = 'active' | 'draft' | 'archived';
+export type ShopOrderStatus = 'pending' | 'paid' | 'cancelled' | 'refunded';
+
+export interface ShopProduct {
+  id: string;
+  title: string;
+  slug: string;
+  description: string | null;
+  long_description: string | null;
+  price: number;
+  original_price: number | null;
+  category: ShopProductCategory;
+  scale: string | null;
+  cover_image_url: string | null;
+  preview_images: string[];
+  file_url: string | null;
+  file_name: string | null;
+  file_size: number | null;
+  file_type: string | null;
+  tags: string[];
+  featured: boolean;
+  status: ShopProductStatus;
+  download_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ShopOrder {
+  id: string;
+  order_number: string;
+  user_id: string;
+  product_id: string;
+  price: number;
+  status: ShopOrderStatus;
+  payment_method: string | null;
+  notes: string | null;
+  admin_notes: string | null;
+  paid_at: string | null;
+  created_at: string;
+}
+
+export interface UserPurchase {
+  id: string;
+  user_id: string;
+  product_id: string;
+  order_id: string | null;
+  granted_at: string;
+}
+
+export interface ShopOrderWithProduct extends ShopOrder {
+  product: ShopProduct | null;
+}
+
+export interface UserPurchaseWithProduct extends UserPurchase {
+  product: ShopProduct | null;
+}
+
 // Supabase Database type pro type-safe klienta
 export interface Database {
   public: {

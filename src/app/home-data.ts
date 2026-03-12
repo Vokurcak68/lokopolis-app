@@ -110,6 +110,21 @@ export interface BazarListingHome {
   created_at: string;
 }
 
+export interface ShopProductHome {
+  id: string;
+  title: string;
+  slug: string;
+  description: string | null;
+  price: number;
+  original_price: number | null;
+  category: string;
+  scale: string | null;
+  cover_image_url: string | null;
+  file_type: string | null;
+  download_count: number;
+  featured: boolean;
+}
+
 export interface HomePageData {
   stats: HomeStats;
   memberCount: number | null;
@@ -123,6 +138,7 @@ export interface HomePageData {
   activeAuthors: ActiveAuthor[];
   competition: CompetitionHomeData | null;
   latestListings: BazarListingHome[];
+  featuredShopProducts: ShopProductHome[];
 }
 
 /* ============================================================
@@ -166,6 +182,7 @@ async function fetchHomeDataInternal(): Promise<HomePageData> {
       activeAuthors: [],
       competition: null,
       latestListings: [],
+      featuredShopProducts: [],
     };
   }
 
@@ -373,6 +390,21 @@ async function fetchHomeDataInternal(): Promise<HomePageData> {
     // table may not exist yet
   }
 
+  // --- Featured shop products ---
+  let featuredShopProducts: ShopProductHome[] = [];
+  try {
+    const { data: shopData } = await supabase
+      .from("shop_products")
+      .select("id, title, slug, description, price, original_price, category, scale, cover_image_url, file_type, download_count, featured")
+      .eq("status", "active")
+      .eq("featured", true)
+      .order("created_at", { ascending: false })
+      .limit(4);
+    if (shopData) featuredShopProducts = shopData as ShopProductHome[];
+  } catch {
+    // table may not exist yet
+  }
+
   return {
     stats,
     memberCount: memCount,
@@ -386,6 +418,7 @@ async function fetchHomeDataInternal(): Promise<HomePageData> {
     activeAuthors,
     competition,
     latestListings,
+    featuredShopProducts,
   };
 }
 
