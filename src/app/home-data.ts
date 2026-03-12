@@ -99,6 +99,17 @@ export interface CompetitionHomeData {
   } | null;
 }
 
+export interface BazarListingHome {
+  id: string;
+  title: string;
+  price: number;
+  condition: string;
+  scale: string | null;
+  images: string[];
+  location: string | null;
+  created_at: string;
+}
+
 export interface HomePageData {
   stats: HomeStats;
   memberCount: number | null;
@@ -111,6 +122,7 @@ export interface HomePageData {
   forumStats: ForumStats;
   activeAuthors: ActiveAuthor[];
   competition: CompetitionHomeData | null;
+  latestListings: BazarListingHome[];
 }
 
 /* ============================================================
@@ -153,6 +165,7 @@ async function fetchHomeDataInternal(): Promise<HomePageData> {
       forumStats: { thread_count: 0, post_count: 0, last_thread_title: null, last_thread_id: null, last_thread_section_slug: null },
       activeAuthors: [],
       competition: null,
+      latestListings: [],
     };
   }
 
@@ -346,6 +359,20 @@ async function fetchHomeDataInternal(): Promise<HomePageData> {
     // keep null
   }
 
+  // --- Latest bazar listings ---
+  let latestListings: BazarListingHome[] = [];
+  try {
+    const { data: bazarData } = await supabase
+      .from("listings")
+      .select("id, title, price, condition, scale, images, location, created_at")
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .limit(4);
+    if (bazarData) latestListings = bazarData as BazarListingHome[];
+  } catch {
+    // table may not exist yet
+  }
+
   return {
     stats,
     memberCount: memCount,
@@ -358,6 +385,7 @@ async function fetchHomeDataInternal(): Promise<HomePageData> {
     forumStats,
     activeAuthors,
     competition,
+    latestListings,
   };
 }
 

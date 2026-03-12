@@ -15,6 +15,7 @@ const navItems = [
   { label: "Ke stažení", href: "/ke-stazeni" },
   { label: "Akce", href: "/akce" },
   { label: "Fórum", href: "/forum" },
+  { label: "Bazar", href: "/bazar" },
   { label: "Soutěž", href: "/soutez" },
   { label: "🛤️ Návrhář", href: "/navrhar-trati", adminOnly: true },
 ];

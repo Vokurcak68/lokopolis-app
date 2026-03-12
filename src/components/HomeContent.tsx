@@ -12,7 +12,13 @@ import type {
   PopularArticle,
   PopularTag,
   CompetitionHomeData,
+  BazarListingHome,
 } from "@/app/home-data";
+
+function optimizeImageUrl(url: string, width: number = 400): string {
+  if (!url) return "";
+  return url.replace("/object/public/", "/render/image/public/").concat(`?width=${width}&quality=75`);
+}
 
 /* ============================================================
    HELPERS
@@ -42,11 +48,6 @@ const defaultTags = ["Tillig", "DCC", "epocha IV", "3D tisk", "ČSD", "krajina",
 /* ============================================================
    COMPETITION BANNER
    ============================================================ */
-
-function optimizeImageUrl(url: string, width: number = 400): string {
-  if (!url) return "";
-  return url.replace("/object/public/", "/render/image/public/").concat(`?width=${width}&quality=75`);
-}
 
 function CompetitionBanner({ competition }: { competition: CompetitionHomeData }) {
   const isActive = competition.status === "active" || competition.status === "voting";
@@ -150,6 +151,7 @@ export default function HomeContent({ data }: { data: HomePageData }) {
     forumStats,
     activeAuthors,
     competition,
+    latestListings,
   } = data;
 
   return (
@@ -375,6 +377,47 @@ export default function HomeContent({ data }: { data: HomePageData }) {
           </div>
         )}
       </section>
+
+      {/* ===================== BAZAR ===================== */}
+      {latestListings && latestListings.length > 0 && (
+        <section style={{ maxWidth: "1200px", margin: "48px auto 0", padding: "0 20px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
+            <h2 style={{ fontSize: "24px", fontWeight: 700, color: "var(--text-primary)" }}>🛒 Nejnovější v bazaru</h2>
+            <Link href="/bazar" style={{ color: "var(--accent)", textDecoration: "none", fontSize: "14px", fontWeight: 600 }}>
+              Zobrazit vše →
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" style={{ gap: "16px" }}>
+            {latestListings.map((listing: BazarListingHome) => {
+              const firstImage = listing.images && listing.images.length > 0 ? listing.images[0] : null;
+              const condLabel: Record<string, string> = { new: "Nový", opened: "Rozbalený", used: "Použitý", parts: "Na díly" };
+              const condColor: Record<string, string> = { new: "#22c55e", opened: "#3b82f6", used: "#f59e0b", parts: "#ef4444" };
+              const scaleColor: Record<string, string> = { TT: "#3b82f6", H0: "#22c55e", N: "#a855f7", Z: "#ec4899", G: "#f59e0b" };
+              return (
+                <Link key={listing.id} href={`/bazar/${listing.id}`} style={{ textDecoration: "none" }}>
+                  <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px", overflow: "hidden", transition: "all 0.2s", height: "100%" }} onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.transform = "translateY(0)"; }}>
+                    <div style={{ position: "relative", width: "100%", paddingBottom: "75%", background: "var(--bg-page)" }}>
+                      {firstImage ? (
+                        <Image src={optimizeImageUrl(firstImage)} alt={listing.title} fill style={{ objectFit: "cover" }} sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw" />
+                      ) : (
+                        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "32px", color: "var(--text-dimmer)" }}>🚂</div>
+                      )}
+                    </div>
+                    <div style={{ padding: "12px" }}>
+                      <div style={{ fontSize: "18px", fontWeight: 700, color: "var(--accent)", marginBottom: "4px" }}>{listing.price.toLocaleString("cs-CZ")} Kč</div>
+                      <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "6px", lineHeight: 1.3, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{listing.title}</div>
+                      <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
+                        {listing.scale && <span style={{ padding: "1px 6px", borderRadius: "4px", fontSize: "10px", fontWeight: 600, background: `${scaleColor[listing.scale] || "#6b7280"}20`, color: scaleColor[listing.scale] || "#6b7280" }}>{listing.scale}</span>}
+                        <span style={{ padding: "1px 6px", borderRadius: "4px", fontSize: "10px", fontWeight: 600, background: `${condColor[listing.condition]}20`, color: condColor[listing.condition] }}>{condLabel[listing.condition] || listing.condition}</span>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* ===================== COMPETITION ===================== */}
       {competition && (

@@ -276,6 +276,56 @@ export interface CompetitionWithWinner extends Competition {
   winner: CompetitionEntryWithAuthor | null;
 }
 
+// Bazar types
+export type ListingCondition = 'new' | 'opened' | 'used' | 'parts';
+export type ListingScale = 'TT' | 'H0' | 'N' | 'Z' | 'G' | '0' | '1' | 'other';
+export type ListingCategory = 'lokomotivy' | 'vagony' | 'koleje' | 'prislusenstvi' | 'budovy' | 'elektronika' | 'literatura' | 'kolejiste' | 'ostatni';
+export type ListingStatus = 'active' | 'reserved' | 'sold' | 'removed';
+
+export interface Listing {
+  id: string;
+  title: string;
+  description: string | null;
+  price: number;
+  condition: ListingCondition;
+  scale: ListingScale | null;
+  brand: string | null;
+  category: ListingCategory;
+  images: string[];
+  seller_id: string;
+  status: ListingStatus;
+  location: string | null;
+  shipping: boolean;
+  personal_pickup: boolean;
+  view_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ListingWithSeller extends Listing {
+  seller: Profile | null;
+}
+
+export interface BazarMessage {
+  id: string;
+  listing_id: string;
+  sender_id: string;
+  recipient_id: string;
+  content: string;
+  read: boolean;
+  created_at: string;
+}
+
+export interface SellerReview {
+  id: string;
+  seller_id: string;
+  reviewer_id: string;
+  listing_id: string | null;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+}
+
 // Supabase Database type pro type-safe klienta
 export interface Database {
   public: {
