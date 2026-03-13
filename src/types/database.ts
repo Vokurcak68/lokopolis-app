@@ -331,6 +331,8 @@ export interface SellerReview {
 // Shop types
 export type ShopProductStatus = 'active' | 'draft' | 'archived';
 export type ShopOrderStatus = 'pending' | 'paid' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'refunded';
+export type StockMode = 'unlimited' | 'tracked' | 'preorder';
+export type StockMovementType = 'reserve' | 'release' | 'sale' | 'restock' | 'adjustment' | 'return';
 
 export interface ShopProduct {
   id: string;
@@ -353,8 +355,28 @@ export interface ShopProduct {
   status: ShopProductStatus;
   download_count: number;
   is_digital: boolean;
+  stock_mode: StockMode;
+  stock_quantity: number | null;
+  stock_reserved: number | null;
+  stock_alert_threshold: number | null;
+  max_per_order: number | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface StockMovement {
+  id: string;
+  product_id: string;
+  order_id: string | null;
+  movement_type: StockMovementType;
+  quantity: number;
+  quantity_before: number | null;
+  quantity_after: number | null;
+  reserved_before: number | null;
+  reserved_after: number | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
 }
 
 export interface ShippingMethod {

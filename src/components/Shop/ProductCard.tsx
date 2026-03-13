@@ -6,6 +6,7 @@ import Image from "next/image";
 import type { ShopProduct } from "@/types/database";
 import { type ShopCategory, getFullCategoryLabel, getCategoryColor } from "@/lib/shop-categories";
 import { useCart } from "./CartProvider";
+import { getStockLabel } from "@/lib/inventory";
 
 const SCALE_COLORS: Record<string, string> = {
   TT: "#3b82f6",
@@ -36,6 +37,12 @@ export default function ProductCard({ product, featured, categories = [] }: Prod
   const { addToCart, items } = useCart();
   const [added, setAdded] = useState(false);
   const inCart = items.some((i) => i.product.id === product.id);
+  const stockInfo = getStockLabel(
+    product.stock_mode,
+    product.stock_quantity,
+    product.stock_reserved,
+    product.stock_alert_threshold
+  );
 
   return (
     <Link href={`/shop/${product.slug}`} style={{ textDecoration: "none" }}>
@@ -117,24 +124,37 @@ export default function ProductCard({ product, featured, categories = [] }: Prod
             {catLabel}
           </div>
 
-          {/* Free badge */}
-          {isFree && (
-            <div
-              style={{
-                position: "absolute",
-                top: "8px",
-                right: "8px",
-                padding: "3px 10px",
-                borderRadius: "6px",
-                fontSize: "11px",
-                fontWeight: 700,
-                background: "rgba(34, 197, 94, 0.9)",
-                color: "#fff",
-              }}
-            >
-              ZDARMA
-            </div>
-          )}
+          {/* Free/Stock badges */}
+          <div style={{ position: "absolute", top: "8px", right: "8px", display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-end" }}>
+            {isFree && (
+              <div
+                style={{
+                  padding: "3px 10px",
+                  borderRadius: "6px",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  background: "rgba(34, 197, 94, 0.9)",
+                  color: "#fff",
+                }}
+              >
+                ZDARMA
+              </div>
+            )}
+            {product.stock_mode !== "unlimited" && (
+              <div
+                style={{
+                  padding: "3px 10px",
+                  borderRadius: "6px",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  background: `${stockInfo.color}dd`,
+                  color: "#fff",
+                }}
+              >
+                {stockInfo.label}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Content */}

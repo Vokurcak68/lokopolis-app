@@ -113,6 +113,11 @@ export default function AdminShopPage() {
     tags: "",
     featured: false,
     status: "active" as string,
+    stock_mode: "unlimited" as string,
+    stock_quantity: null as number | null,
+    stock_reserved: 0,
+    stock_alert_threshold: 5,
+    max_per_order: null as number | null,
   });
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [previewFiles, setPreviewFiles] = useState<File[]>([]);
@@ -232,6 +237,11 @@ export default function AdminShopPage() {
         tags: formData.tags ? formData.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
         featured: formData.featured,
         status: formData.status,
+        stock_mode: formData.stock_mode,
+        stock_quantity: formData.stock_quantity,
+        stock_reserved: formData.stock_reserved || 0,
+        stock_alert_threshold: formData.stock_alert_threshold || 5,
+        max_per_order: formData.max_per_order,
         cover_image_url, preview_images, file_url, file_name, file_size, file_type,
       };
 
@@ -261,6 +271,11 @@ export default function AdminShopPage() {
       price: 0, original_price: "",
       category: categories[0]?.slug || "",
       scale: "", tags: "", featured: false, status: "active",
+      stock_mode: "unlimited",
+      stock_quantity: null,
+      stock_reserved: 0,
+      stock_alert_threshold: 5,
+      max_per_order: null,
     });
     setCoverFile(null);
     setPreviewFiles([]);
@@ -276,6 +291,11 @@ export default function AdminShopPage() {
       price: product.price, original_price: product.original_price?.toString() || "",
       category: product.category, scale: product.scale || "",
       tags: product.tags?.join(", ") || "", featured: product.featured, status: product.status,
+      stock_mode: product.stock_mode || "unlimited",
+      stock_quantity: product.stock_quantity,
+      stock_reserved: product.stock_reserved || 0,
+      stock_alert_threshold: product.stock_alert_threshold || 5,
+      max_per_order: product.max_per_order,
     });
     setTab("edit");
   }
@@ -882,6 +902,75 @@ export default function AdminShopPage() {
               <div>
                 <label style={labelStyle}>Původní cena (pro slevu)</label>
                 <input type="number" value={formData.original_price} onChange={(e) => setFormData((f) => ({ ...f, original_price: e.target.value }))} style={inputStyle} min={0} placeholder="Prázdné = bez slevy" />
+              </div>
+            </div>
+
+            {/* Stock management */}
+            <div style={{ padding: "16px", background: "var(--bg-page)", borderRadius: "8px", border: "1px solid var(--border)" }}>
+              <h4 style={{ margin: "0 0 12px 0", fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>📦 Skladové zásoby</h4>
+              
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
+                <div>
+                  <label style={labelStyle}>Režim zásob</label>
+                  <select 
+                    value={formData.stock_mode || "unlimited"} 
+                    onChange={(e) => setFormData((f) => ({ ...f, stock_mode: e.target.value }))} 
+                    style={inputStyle}
+                  >
+                    <option value="unlimited">Neomezené (digitální)</option>
+                    <option value="tracked">Sledované (fyzické)</option>
+                    <option value="preorder">Předobjednávka</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={labelStyle}>Počet kusů skladem</label>
+                  <input 
+                    type="number" 
+                    value={formData.stock_quantity ?? ""} 
+                    onChange={(e) => setFormData((f) => ({ ...f, stock_quantity: e.target.value === "" ? null : parseInt(e.target.value) }))} 
+                    style={inputStyle} 
+                    min={0}
+                    disabled={formData.stock_mode === "unlimited"}
+                    placeholder={formData.stock_mode === "unlimited" ? "N/A" : "0"}
+                  />
+                </div>
+
+                <div>
+                  <label style={labelStyle}>Rezervováno (readonly)</label>
+                  <input 
+                    type="number" 
+                    value={formData.stock_reserved ?? 0} 
+                    style={{ ...inputStyle, background: "var(--bg-page)", cursor: "not-allowed" }} 
+                    disabled
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginTop: "12px" }}>
+                <div>
+                  <label style={labelStyle}>Upozornění při zásobě ≤</label>
+                  <input 
+                    type="number" 
+                    value={formData.stock_alert_threshold ?? 5} 
+                    onChange={(e) => setFormData((f) => ({ ...f, stock_alert_threshold: parseInt(e.target.value) || 5 }))} 
+                    style={inputStyle} 
+                    min={0}
+                    disabled={formData.stock_mode === "unlimited"}
+                  />
+                </div>
+
+                <div>
+                  <label style={labelStyle}>Max kusů na objednávku</label>
+                  <input 
+                    type="number" 
+                    value={formData.max_per_order ?? ""} 
+                    onChange={(e) => setFormData((f) => ({ ...f, max_per_order: e.target.value === "" ? null : parseInt(e.target.value) }))} 
+                    style={inputStyle} 
+                    min={1}
+                    placeholder="Neomezeno"
+                  />
+                </div>
               </div>
             </div>
 
