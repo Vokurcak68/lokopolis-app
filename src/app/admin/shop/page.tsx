@@ -7,24 +7,7 @@ import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import type { ShopProduct, ShopOrder } from "@/types/database";
 
-interface ShopCategory {
-  id: string;
-  slug: string;
-  name: string;
-  emoji: string;
-  color: string;
-  sort_order: number;
-  active: boolean;
-}
-
-// Fallback until categories load from DB
-const DEFAULT_CATEGORY_LABELS: Record<string, string> = {
-  "kolejovy-plan": "📐 Kolejové plány",
-  "stl-model": "🧊 3D modely",
-  navod: "📖 Návody",
-  ebook: "📖 E-booky",
-  balicek: "📦 Balíčky",
-};
+import { getShopCategories, type ShopCategory, CATEGORY_META } from "@/lib/shop-categories";
 
 const STATUS_LABELS: Record<string, string> = {
   active: "Aktivní",
@@ -66,7 +49,7 @@ interface OrderWithDetails extends ShopOrder {
   user: { username: string; display_name: string | null; email?: string } | null;
 }
 
-type AdminTab = "products" | "orders" | "add" | "edit" | "categories";
+type AdminTab = "products" | "orders" | "add" | "edit";
 
 export default function AdminShopPage() {
   const router = useRouter();
@@ -74,20 +57,14 @@ export default function AdminShopPage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<AdminTab>("products");
 
-  // Categories
+  // Categories — loaded dynamically from products
   const [categories, setCategories] = useState<ShopCategory[]>([]);
-  const [catForm, setCatForm] = useState({ slug: "", name: "", emoji: "📦", color: "#6b7280", sort_order: 0, active: true });
-  const [editingCat, setEditingCat] = useState<ShopCategory | null>(null);
-  const [catSaving, setCatSaving] = useState(false);
+  const [customCategory, setCustomCategory] = useState("");
 
-  // Build category labels from DB
+  // Build category labels
   const CATEGORY_LABELS: Record<string, string> = {};
   for (const c of categories) {
     CATEGORY_LABELS[c.slug] = `${c.emoji} ${c.name}`;
-  }
-  // Fallback if no categories loaded yet
-  if (categories.length === 0) {
-    Object.assign(CATEGORY_LABELS, DEFAULT_CATEGORY_LABELS);
   }
 
   // Product list
@@ -142,13 +119,10 @@ export default function AdminShopPage() {
     checkAdmin();
   }, [router]);
 
-  // Fetch categories
+  // Fetch categories dynamically from products
   const fetchCategories = useCallback(async () => {
-    const { data } = await supabase
-      .from("shop_categories")
-      .select("*")
-      .order("sort_order", { ascending: true });
-    if (data) setCategories(data as ShopCategory[]);
+    const cats = await getShopCategories();
+    setCategories(cats);
   }, []);
 
   // Fetch products
@@ -391,7 +365,7 @@ export default function AdminShopPage() {
 
       {/* Tabs */}
       <div style={{ display: "flex", gap: "8px", marginBottom: "24px", borderBottom: "1px solid var(--border)", paddingBottom: "12px" }}>
-        {(["products", "orders", "categories", "add"] as AdminTab[]).map((t) => (
+        {(["products", "orders", "add"] as AdminTab[]).map((t) => (
           <button
             key={t}
             onClick={() => {
@@ -409,7 +383,7 @@ export default function AdminShopPage() {
               color: tab === t || (tab === "edit" && t === "add") ? "var(--accent-text-on)" : "var(--text-muted)",
             }}
           >
-            {t === "products" ? "📦 Produkty" : t === "orders" ? "📋 Objednávky" : t === "categories" ? "🏷️ Kategorie" : "➕ Přidat"}
+            {t === "products" ? "📦 Produkty" : t === "orders" ? "📋 Objednávky" : "➕ Přidat"}
           </button>
         ))}
       </div>
@@ -637,261 +611,6 @@ export default function AdminShopPage() {
         </div>
       )}
 
-      {/* CATEGORIES TAB */}
-      {tab === "categories" && (
-        <div style={{ maxWidth: "700px" }}>
-          <h2 style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "20px" }}>
-            🏷️ Správa kategorií
-          </h2>
-
-          {/* Category form */}
-          <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px", padding: "20px", marginBottom: "24px" }}>
-            <h3 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "16px" }}>
-              {editingCat ? `✏️ Upravit: ${editingCat.name}` : "➕ Přidat kategorii"}
-            </h3>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
-              <div>
-                <label style={labelStyle}>Název *</label>
-                <input
-                  value={catForm.name}
-                  onChange={(e) => {
-                    const name = e.target.value;
-                    setCatForm((f) => ({
-                      ...f,
-                      name,
-                      slug: editingCat ? f.slug : name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""),
-                    }));
-                  }}
-                  style={inputStyle}
-                  placeholder="Kolejové plány"
-                />
-              </div>
-              <div>
-                <label style={labelStyle}>Slug *</label>
-                <input
-                  value={catForm.slug}
-                  onChange={(e) => setCatForm((f) => ({ ...f, slug: e.target.value }))}
-                  style={inputStyle}
-                  placeholder="kolejovy-plan"
-                />
-              </div>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "80px 120px 100px auto", gap: "12px", marginBottom: "16px", alignItems: "end" }}>
-              <div>
-                <label style={labelStyle}>Emoji</label>
-                <input
-                  value={catForm.emoji}
-                  onChange={(e) => setCatForm((f) => ({ ...f, emoji: e.target.value }))}
-                  style={inputStyle}
-                  placeholder="📦"
-                />
-              </div>
-              <div>
-                <label style={labelStyle}>Barva</label>
-                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                  <input
-                    type="color"
-                    value={catForm.color}
-                    onChange={(e) => setCatForm((f) => ({ ...f, color: e.target.value }))}
-                    style={{ width: "36px", height: "36px", border: "none", borderRadius: "6px", cursor: "pointer", background: "transparent" }}
-                  />
-                  <input
-                    value={catForm.color}
-                    onChange={(e) => setCatForm((f) => ({ ...f, color: e.target.value }))}
-                    style={{ ...inputStyle, width: "80px", fontSize: "12px" }}
-                  />
-                </div>
-              </div>
-              <div>
-                <label style={labelStyle}>Pořadí</label>
-                <input
-                  type="number"
-                  value={catForm.sort_order}
-                  onChange={(e) => setCatForm((f) => ({ ...f, sort_order: parseInt(e.target.value) || 0 }))}
-                  style={inputStyle}
-                />
-              </div>
-              <div>
-                <label style={labelStyle}>Aktivní</label>
-                <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", padding: "10px 0" }}>
-                  <input
-                    type="checkbox"
-                    checked={catForm.active}
-                    onChange={(e) => setCatForm((f) => ({ ...f, active: e.target.checked }))}
-                    style={{ width: "18px", height: "18px" }}
-                  />
-                  <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>{catForm.active ? "Ano" : "Ne"}</span>
-                </label>
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: "8px" }}>
-              <button
-                disabled={catSaving || !catForm.name.trim() || !catForm.slug.trim()}
-                onClick={async () => {
-                  setCatSaving(true);
-                  try {
-                    if (editingCat) {
-                      const { error } = await supabase
-                        .from("shop_categories")
-                        .update({
-                          name: catForm.name,
-                          slug: catForm.slug,
-                          emoji: catForm.emoji,
-                          color: catForm.color,
-                          sort_order: catForm.sort_order,
-                          active: catForm.active,
-                        })
-                        .eq("id", editingCat.id);
-                      if (error) throw error;
-                    } else {
-                      const { error } = await supabase
-                        .from("shop_categories")
-                        .insert({
-                          name: catForm.name,
-                          slug: catForm.slug,
-                          emoji: catForm.emoji,
-                          color: catForm.color,
-                          sort_order: catForm.sort_order,
-                          active: catForm.active,
-                        });
-                      if (error) throw error;
-                    }
-                    setEditingCat(null);
-                    setCatForm({ slug: "", name: "", emoji: "📦", color: "#6b7280", sort_order: 0, active: true });
-                    fetchCategories();
-                  } catch (err) {
-                    alert(err instanceof Error ? err.message : "Chyba při ukládání");
-                  } finally {
-                    setCatSaving(false);
-                  }
-                }}
-                style={{
-                  padding: "10px 24px",
-                  background: catSaving || !catForm.name.trim() ? "var(--border-hover)" : "var(--accent)",
-                  color: catSaving || !catForm.name.trim() ? "var(--text-dimmer)" : "var(--accent-text-on)",
-                  border: "none",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  fontWeight: 600,
-                  cursor: catSaving || !catForm.name.trim() ? "not-allowed" : "pointer",
-                }}
-              >
-                {catSaving ? "Ukládám..." : editingCat ? "💾 Uložit" : "➕ Přidat"}
-              </button>
-              {editingCat && (
-                <button
-                  onClick={() => {
-                    setEditingCat(null);
-                    setCatForm({ slug: "", name: "", emoji: "📦", color: "#6b7280", sort_order: 0, active: true });
-                  }}
-                  style={{
-                    padding: "10px 24px",
-                    background: "var(--bg-card)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "8px",
-                    color: "var(--text-muted)",
-                    fontSize: "14px",
-                    cursor: "pointer",
-                  }}
-                >
-                  ✕ Zrušit
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Category list */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {categories.length === 0 ? (
-              <p style={{ color: "var(--text-dimmer)", textAlign: "center", padding: "24px" }}>
-                Zatím žádné kategorie. Spusť migraci <code>012_shop_categories.sql</code>.
-              </p>
-            ) : (
-              categories.map((cat) => (
-                <div
-                  key={cat.id}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "12px",
-                    padding: "12px 16px",
-                    background: "var(--bg-card)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "10px",
-                    opacity: cat.active ? 1 : 0.5,
-                  }}
-                >
-                  <span style={{ fontSize: "24px" }}>{cat.emoji}</span>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>
-                      {cat.name}
-                    </div>
-                    <div style={{ fontSize: "12px", color: "var(--text-dimmer)" }}>
-                      {cat.slug} · pořadí {cat.sort_order} {!cat.active && "· neaktivní"}
-                    </div>
-                  </div>
-                  <div
-                    style={{
-                      width: "24px",
-                      height: "24px",
-                      borderRadius: "6px",
-                      background: cat.color,
-                      border: "1px solid var(--border)",
-                      flexShrink: 0,
-                    }}
-                    title={cat.color}
-                  />
-                  <button
-                    onClick={() => {
-                      setEditingCat(cat);
-                      setCatForm({
-                        slug: cat.slug,
-                        name: cat.name,
-                        emoji: cat.emoji,
-                        color: cat.color,
-                        sort_order: cat.sort_order,
-                        active: cat.active,
-                      });
-                    }}
-                    style={{
-                      padding: "6px 14px",
-                      background: "rgba(59,130,246,0.15)",
-                      color: "#3b82f6",
-                      border: "1px solid rgba(59,130,246,0.3)",
-                      borderRadius: "6px",
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                    }}
-                  >
-                    ✏️
-                  </button>
-                  <button
-                    onClick={async () => {
-                      if (!confirm(`Smazat kategorii "${cat.name}"?`)) return;
-                      await supabase.from("shop_categories").delete().eq("id", cat.id);
-                      fetchCategories();
-                    }}
-                    style={{
-                      padding: "6px 14px",
-                      background: "rgba(239,68,68,0.1)",
-                      color: "#ef4444",
-                      border: "1px solid rgba(239,68,68,0.3)",
-                      borderRadius: "6px",
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                    }}
-                  >
-                    🗑️
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-
       {/* ADD / EDIT TAB */}
       {(tab === "add" || tab === "edit") && (
         <div style={{ maxWidth: "700px" }}>
@@ -934,14 +653,36 @@ export default function AdminShopPage() {
               <div>
                 <label style={labelStyle}>Kategorie *</label>
                 <select
-                  value={formData.category}
-                  onChange={(e) => setFormData((f) => ({ ...f, category: e.target.value }))}
+                  value={categories.some(c => c.slug === formData.category) || formData.category === "__custom__" ? formData.category : "__custom__"}
+                  onChange={(e) => {
+                    if (e.target.value === "__custom__") {
+                      setFormData((f) => ({ ...f, category: "__custom__" }));
+                    } else {
+                      setCustomCategory("");
+                      setFormData((f) => ({ ...f, category: e.target.value }));
+                    }
+                  }}
                   style={inputStyle}
                 >
-                  {Object.entries(CATEGORY_LABELS).map(([v, l]) => (
-                    <option key={v} value={v}>{l}</option>
+                  {categories.map((c) => (
+                    <option key={c.slug} value={c.slug}>{c.emoji} {c.name}</option>
                   ))}
+                  <option value="__custom__">➕ Nová kategorie...</option>
                 </select>
+                {(formData.category === "__custom__" || (!categories.some(c => c.slug === formData.category) && formData.category !== "__custom__" && formData.category)) && (
+                  <input
+                    type="text"
+                    value={customCategory || (formData.category !== "__custom__" ? formData.category : "")}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setCustomCategory(val);
+                      const slug = val.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+                      setFormData((f) => ({ ...f, category: slug }));
+                    }}
+                    placeholder="Název nové kategorie (např. Lokomotivy TT)"
+                    style={{ ...inputStyle, marginTop: "8px" }}
+                  />
+                )}
               </div>
               <div>
                 <label style={labelStyle}>Měřítko</label>

@@ -11,7 +11,7 @@ export interface ShopCategory {
 }
 
 // Visual config for known category slugs — easy to extend
-const CATEGORY_META: Record<string, { name: string; emoji: string; color: string; sort: number }> = {
+export const CATEGORY_META: Record<string, { name: string; emoji: string; color: string; sort: number }> = {
   "kolejovy-plan": { name: "Kolejové plány", emoji: "📐", color: "#3b82f6", sort: 1 },
   "stl-model":     { name: "3D modely / STL", emoji: "🧊", color: "#8b5cf6", sort: 2 },
   "navod":         { name: "Návody", emoji: "📖", color: "#22c55e", sort: 3 },
