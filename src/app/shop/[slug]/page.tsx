@@ -137,26 +137,10 @@ export default function ShopProductDetailPage() {
   }
 
   async function handleFreeDownload() {
-    if (!product || !user) return;
+    if (!product) return;
     setDownloading(true);
     try {
-      // For free products, create order first (auto-paid), then download
-      const { data: { session: orderSession } } = await supabase.auth.getSession();
-      const orderRes = await fetch("/api/shop/order", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(orderSession?.access_token ? { Authorization: `Bearer ${orderSession.access_token}` } : {}),
-        },
-        body: JSON.stringify({ productId: product.id }),
-      });
-      if (!orderRes.ok) {
-        const data = await orderRes.json();
-        alert(data.error || "Chyba");
-        return;
-      }
-
-      // Now download
+      // For free products, just download directly — no order or login needed
       const { data: { session: dlSession } } = await supabase.auth.getSession();
       const dlRes = await fetch(`/api/shop/download?productId=${product.id}`, {
         headers: dlSession?.access_token ? { Authorization: `Bearer ${dlSession.access_token}` } : {},
@@ -392,25 +376,7 @@ export default function ShopProductDetailPage() {
 
           {/* Action button */}
           <div style={{ marginBottom: "24px" }}>
-            {!user ? (
-              <Link
-                href="/prihlaseni"
-                style={{
-                  display: "block",
-                  textAlign: "center",
-                  padding: "14px 24px",
-                  background: "var(--bg-card)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "10px",
-                  color: "var(--text-muted)",
-                  fontSize: "15px",
-                  fontWeight: 600,
-                  textDecoration: "none",
-                }}
-              >
-                Přihlaste se pro stažení / objednávku
-              </Link>
-            ) : isFree ? (
+            {isFree ? (
               <button
                 onClick={handleFreeDownload}
                 disabled={downloading}
@@ -428,6 +394,24 @@ export default function ShopProductDetailPage() {
               >
                 {downloading ? "Stahuji..." : "📥 Stáhnout zdarma"}
               </button>
+            ) : !user ? (
+              <Link
+                href="/prihlaseni"
+                style={{
+                  display: "block",
+                  textAlign: "center",
+                  padding: "14px 24px",
+                  background: "var(--bg-card)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "10px",
+                  color: "var(--text-muted)",
+                  fontSize: "15px",
+                  fontWeight: 600,
+                  textDecoration: "none",
+                }}
+              >
+                Přihlaste se pro objednávku
+              </Link>
             ) : hasPurchase ? (
               <button
                 onClick={handleDownload}
