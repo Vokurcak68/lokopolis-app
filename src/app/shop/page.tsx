@@ -6,17 +6,11 @@ import { supabase } from "@/lib/supabase";
 import ProductCard from "@/components/Shop/ProductCard";
 import ProductFilters, { type ShopFilterState } from "@/components/Shop/ProductFilters";
 import type { ShopProduct } from "@/types/database";
-
-const CATEGORY_CARDS = [
-  { value: "kolejovy-plan", label: "Kolejové plány", icon: "📐", color: "#3b82f6" },
-  { value: "stl-model", label: "3D modely", icon: "🧊", color: "#a855f7" },
-  { value: "navod", label: "Návody", icon: "📖", color: "#22c55e" },
-  { value: "ebook", label: "E-booky", icon: "📖", color: "#f59e0b" },
-  { value: "balicek", label: "Balíčky", icon: "📦", color: "#ec4899" },
-];
+import { getShopCategories, type ShopCategory } from "@/lib/shop-categories";
 
 export default function ShopPage() {
   const [products, setProducts] = useState<ShopProduct[]>([]);
+  const [categories, setCategories] = useState<ShopCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<ShopFilterState>({
     search: "",
@@ -75,6 +69,10 @@ export default function ShopPage() {
   }, [filters.category, filters.scales, filters.freeOnly, filters.priceFrom, filters.priceTo, filters.sort]);
 
   useEffect(() => {
+    getShopCategories().then(setCategories);
+  }, []);
+
+  useEffect(() => {
     fetchProducts();
   }, [fetchProducts]);
 
@@ -122,15 +120,15 @@ export default function ShopPage() {
           paddingBottom: "4px",
         }}
       >
-        {CATEGORY_CARDS.map((cat) => (
+        {categories.map((cat) => (
           <button
-            key={cat.value}
-            onClick={() => setFilters(f => ({ ...f, category: f.category === cat.value ? "" : cat.value }))}
+            key={cat.slug}
+            onClick={() => setFilters(f => ({ ...f, category: f.category === cat.slug ? "" : cat.slug }))}
             style={{
               flex: "0 0 auto",
               padding: "14px 24px",
-              background: filters.category === cat.value ? `${cat.color}20` : "var(--bg-card)",
-              border: `1px solid ${filters.category === cat.value ? cat.color : "var(--border)"}`,
+              background: filters.category === cat.slug ? `${cat.color}20` : "var(--bg-card)",
+              border: `1px solid ${filters.category === cat.slug ? cat.color : "var(--border)"}`,
               borderRadius: "12px",
               cursor: "pointer",
               display: "flex",
@@ -140,15 +138,15 @@ export default function ShopPage() {
               minWidth: "fit-content",
             }}
           >
-            <span style={{ fontSize: "24px" }}>{cat.icon}</span>
+            <span style={{ fontSize: "24px" }}>{cat.emoji}</span>
             <span
               style={{
                 fontSize: "14px",
                 fontWeight: 600,
-                color: filters.category === cat.value ? cat.color : "var(--text-body)",
+                color: filters.category === cat.slug ? cat.color : "var(--text-body)",
               }}
             >
-              {cat.label}
+              {cat.name}
             </span>
           </button>
         ))}
@@ -159,6 +157,7 @@ export default function ShopPage() {
         filters={filters}
         onChange={setFilters}
         totalCount={filtered.length}
+        categories={categories}
       />
 
       {/* Content */}
@@ -204,7 +203,7 @@ export default function ShopPage() {
                 }}
               >
                 {featured.map((product) => (
-                  <ProductCard key={product.id} product={product} featured />
+                  <ProductCard key={product.id} product={product} featured categories={categories} />
                 ))}
               </div>
             </div>
@@ -226,7 +225,7 @@ export default function ShopPage() {
                 }}
               >
                 {regular.map((product) => (
-                  <ProductCard key={product.id} product={product} />
+                  <ProductCard key={product.id} product={product} categories={categories} />
                 ))}
               </div>
             </div>

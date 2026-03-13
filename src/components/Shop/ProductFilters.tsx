@@ -1,15 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-
-const CATEGORIES = [
-  { value: "", label: "Všechny kategorie" },
-  { value: "kolejovy-plan", label: "📐 Kolejové plány" },
-  { value: "stl-model", label: "🧊 3D modely" },
-  { value: "navod", label: "📖 Návody" },
-  { value: "ebook", label: "📖 E-booky" },
-  { value: "balicek", label: "📦 Balíčky" },
-];
+import type { ShopCategory } from "@/lib/shop-categories";
 
 const SCALES = ["TT", "H0", "N", "universal"];
 
@@ -48,9 +40,10 @@ interface ProductFiltersProps {
   filters: ShopFilterState;
   onChange: (filters: ShopFilterState) => void;
   totalCount: number;
+  categories?: ShopCategory[];
 }
 
-export default function ProductFilters({ filters, onChange, totalCount }: ProductFiltersProps) {
+export default function ProductFilters({ filters, onChange, totalCount, categories = [] }: ProductFiltersProps) {
   const [collapsed, setCollapsed] = useState(true);
 
   const update = useCallback(
@@ -139,9 +132,10 @@ export default function ProductFilters({ filters, onChange, totalCount }: Produc
           onChange={(e) => update({ category: e.target.value })}
           style={selectStyle}
         >
-          {CATEGORIES.map((c) => (
-            <option key={c.value} value={c.value}>
-              {c.label}
+          <option value="">Všechny kategorie</option>
+          {categories.map((c) => (
+            <option key={c.slug} value={c.slug}>
+              {c.emoji} {c.name}
             </option>
           ))}
         </select>

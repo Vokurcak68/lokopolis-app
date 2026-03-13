@@ -9,21 +9,7 @@ import { useAuth } from "@/components/Auth/AuthProvider";
 import ProductCard from "@/components/Shop/ProductCard";
 import OrderModal from "@/components/Shop/OrderModal";
 import type { ShopProduct } from "@/types/database";
-
-const CATEGORY_LABELS: Record<string, string> = {
-  "kolejovy-plan": "📐 Kolejové plány",
-  "stl-model": "🧊 3D modely",
-  navod: "📖 Návody",
-  ebook: "📖 E-booky",
-  balicek: "📦 Balíčky",
-};
-const CATEGORY_COLORS: Record<string, string> = {
-  "kolejovy-plan": "#3b82f6",
-  "stl-model": "#a855f7",
-  navod: "#22c55e",
-  ebook: "#f59e0b",
-  balicek: "#ec4899",
-};
+import { getShopCategories, type ShopCategory } from "@/lib/shop-categories";
 const SCALE_COLORS: Record<string, string> = {
   TT: "#3b82f6",
   H0: "#22c55e",
@@ -59,6 +45,7 @@ export default function ShopProductDetailPage() {
   const slug = params.slug as string;
 
   const [product, setProduct] = useState<ShopProduct | null>(null);
+  const [categories, setCategories] = useState<ShopCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasPurchase, setHasPurchase] = useState(false);
   const [similar, setSimilar] = useState<ShopProduct[]>([]);
@@ -114,6 +101,7 @@ export default function ShopProductDetailPage() {
   }, [slug, user, router]);
 
   useEffect(() => {
+    getShopCategories().then(setCategories);
     fetchProduct();
   }, [fetchProduct]);
 
@@ -193,8 +181,9 @@ export default function ShopProductDetailPage() {
 
   const isFree = product.price === 0;
   const hasDiscount = product.original_price && product.original_price > product.price;
-  const catColor = CATEGORY_COLORS[product.category] || "#6b7280";
-  const catLabel = CATEGORY_LABELS[product.category] || product.category;
+  const cat = categories.find((c) => c.slug === product.category);
+  const catColor = cat?.color || "#6b7280";
+  const catLabel = cat ? `${cat.emoji} ${cat.name}` : product.category;
 
   return (
     <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "32px 20px" }}>
@@ -559,7 +548,7 @@ export default function ShopProductDetailPage() {
             }}
           >
             {similar.map((p) => (
-              <ProductCard key={p.id} product={p} />
+              <ProductCard key={p.id} product={p} categories={categories} />
             ))}
           </div>
         </div>

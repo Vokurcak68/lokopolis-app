@@ -7,14 +7,7 @@ import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/components/Auth/AuthProvider";
 import type { ShopProduct, ShopOrder } from "@/types/database";
-
-const CATEGORY_LABELS: Record<string, string> = {
-  "kolejovy-plan": "📐 Kolejové plány",
-  "stl-model": "🧊 3D modely",
-  navod: "📖 Návody",
-  ebook: "📖 E-booky",
-  balicek: "📦 Balíčky",
-};
+import { getShopCategories, getCategoryLabel, type ShopCategory } from "@/lib/shop-categories";
 
 const ORDER_STATUS_LABELS: Record<string, string> = {
   pending: "Čeká na platbu",
@@ -46,6 +39,7 @@ export default function MyPurchasesPage() {
   const { user, loading: authLoading } = useAuth();
   const [purchases, setPurchases] = useState<PurchaseWithProduct[]>([]);
   const [orders, setOrders] = useState<OrderWithProduct[]>([]);
+  const [categories, setCategories] = useState<ShopCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState<string | null>(null);
 
@@ -76,6 +70,10 @@ export default function MyPurchasesPage() {
       setLoading(false);
     }
   }, [user]);
+
+  useEffect(() => {
+    getShopCategories().then(setCategories);
+  }, []);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -203,7 +201,7 @@ export default function MyPurchasesPage() {
                       {p.title}
                     </Link>
                     <div style={{ fontSize: "12px", color: "var(--text-dimmer)", marginTop: "2px" }}>
-                      {CATEGORY_LABELS[p.category]} • Získáno {new Date(purchase.granted_at).toLocaleDateString("cs-CZ")}
+                      {getCategoryLabel(categories, p.category)} • Získáno {new Date(purchase.granted_at).toLocaleDateString("cs-CZ")}
                     </div>
                   </div>
 

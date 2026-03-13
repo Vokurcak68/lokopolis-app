@@ -3,22 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import type { ShopProduct } from "@/types/database";
-
-const CATEGORY_LABELS: Record<string, string> = {
-  "kolejovy-plan": "📐 Kolejové plány",
-  "stl-model": "🧊 3D modely",
-  navod: "📖 Návody",
-  ebook: "📖 E-booky",
-  balicek: "📦 Balíčky",
-};
-
-const CATEGORY_COLORS: Record<string, string> = {
-  "kolejovy-plan": "#3b82f6",
-  "stl-model": "#a855f7",
-  navod: "#22c55e",
-  ebook: "#f59e0b",
-  balicek: "#ec4899",
-};
+import type { ShopCategory } from "@/lib/shop-categories";
 
 const SCALE_COLORS: Record<string, string> = {
   TT: "#3b82f6",
@@ -37,11 +22,13 @@ function optimizeImageUrl(url: string, width: number = 400): string {
 interface ProductCardProps {
   product: ShopProduct;
   featured?: boolean;
+  categories?: ShopCategory[];
 }
 
-export default function ProductCard({ product, featured }: ProductCardProps) {
-  const catColor = CATEGORY_COLORS[product.category] || "#6b7280";
-  const catLabel = CATEGORY_LABELS[product.category] || product.category;
+export default function ProductCard({ product, featured, categories = [] }: ProductCardProps) {
+  const cat = categories.find((c) => c.slug === product.category);
+  const catColor = cat?.color || "#6b7280";
+  const catLabel = cat ? `${cat.emoji} ${cat.name}` : product.category;
   const isFree = product.price === 0;
   const hasDiscount = product.original_price && product.original_price > product.price;
 
@@ -100,10 +87,7 @@ export default function ProductCard({ product, featured }: ProductCardProps) {
                 color: "var(--text-dimmer)",
               }}
             >
-              {product.category === "kolejovy-plan" ? "📐" :
-               product.category === "stl-model" ? "🧊" :
-               product.category === "navod" ? "📖" :
-               product.category === "ebook" ? "📖" : "📦"}
+              {cat?.emoji || "📦"}
             </div>
           )}
 
