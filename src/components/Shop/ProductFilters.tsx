@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import type { ShopCategory } from "@/lib/shop-categories";
+import { useState, useCallback, useMemo } from "react";
+import { type ShopCategory, buildCategoryTree } from "@/lib/shop-categories";
 
 const SCALES = ["TT", "H0", "N", "universal"];
 
@@ -45,6 +45,8 @@ interface ProductFiltersProps {
 
 export default function ProductFilters({ filters, onChange, totalCount, categories = [] }: ProductFiltersProps) {
   const [collapsed, setCollapsed] = useState(true);
+
+  const tree = useMemo(() => buildCategoryTree(categories), [categories]);
 
   const update = useCallback(
     (patch: Partial<ShopFilterState>) => {
@@ -126,18 +128,36 @@ export default function ProductFilters({ filters, onChange, totalCount, categori
           alignItems: "center",
         }}
       >
-        {/* Category */}
+        {/* Category — hierarchical select */}
         <select
           value={filters.category}
           onChange={(e) => update({ category: e.target.value })}
           style={selectStyle}
         >
           <option value="">Všechny kategorie</option>
-          {categories.map((c) => (
-            <option key={c.slug} value={c.slug}>
-              {c.emoji} {c.name}
-            </option>
-          ))}
+          {tree.map((parent) => {
+            if (parent.children.length === 0) {
+              // No children — directly selectable
+              return (
+                <option key={parent.slug} value={parent.slug}>
+                  {parent.emoji} {parent.name}
+                </option>
+              );
+            }
+            // Has children — parent is group header, children are selectable
+            return (
+              <optgroup key={parent.slug} label={`${parent.emoji} ${parent.name}`}>
+                <option value={parent.slug}>
+                  Vše z {parent.name}
+                </option>
+                {parent.children.map((child) => (
+                  <option key={child.slug} value={child.slug}>
+                    &nbsp;&nbsp;{child.name}
+                  </option>
+                ))}
+              </optgroup>
+            );
+          })}
         </select>
 
         {/* Scale badges */}

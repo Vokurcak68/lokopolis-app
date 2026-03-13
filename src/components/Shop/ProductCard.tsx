@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import type { ShopProduct } from "@/types/database";
-import type { ShopCategory } from "@/lib/shop-categories";
+import { type ShopCategory, getFullCategoryLabel, getCategoryColor } from "@/lib/shop-categories";
 
 const SCALE_COLORS: Record<string, string> = {
   TT: "#3b82f6",
@@ -27,8 +27,8 @@ interface ProductCardProps {
 
 export default function ProductCard({ product, featured, categories = [] }: ProductCardProps) {
   const cat = categories.find((c) => c.slug === product.category);
-  const catColor = cat?.color || "#6b7280";
-  const catLabel = cat ? `${cat.emoji} ${cat.name}` : product.category;
+  const catColor = getCategoryColor(categories, product.category);
+  const catLabel = getFullCategoryLabel(categories, product.category);
   const isFree = product.price === 0;
   const hasDiscount = product.original_price && product.original_price > product.price;
 
@@ -103,6 +103,10 @@ export default function ProductCard({ product, featured, categories = [] }: Prod
               fontWeight: 600,
               background: `${catColor}dd`,
               color: "#fff",
+              maxWidth: "calc(100% - 16px)",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
             }}
           >
             {catLabel}

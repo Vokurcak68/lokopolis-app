@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import type { ShopProduct, ShopOrder } from "@/types/database";
-import { type ShopCategory } from "@/lib/shop-categories";
+import { type ShopCategory, buildCategoryTree, type ShopCategoryTreeNode } from "@/lib/shop-categories";
 
 const STATUS_LABELS: Record<string, string> = {
   active: "Aktivní",
@@ -48,6 +48,16 @@ interface OrderWithDetails extends ShopOrder {
   user: { username: string; display_name: string | null; email?: string } | null;
 }
 
+interface CatFormState {
+  slug: string;
+  name: string;
+  emoji: string;
+  color: string;
+  sort_order: number;
+  active: boolean;
+  parent_id: string | null;
+}
+
 type AdminTab = "products" | "orders" | "categories" | "add" | "edit";
 
 export default function AdminShopPage() {
@@ -56,11 +66,19 @@ export default function AdminShopPage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<AdminTab>("products");
 
-  // Categories from DB
+  // Categories from DB (flat + all including inactive)
   const [categories, setCategories] = useState<ShopCategory[]>([]);
-  const [catForm, setCatForm] = useState({ slug: "", name: "", emoji: "📦", color: "#6b7280", sort_order: 0, active: true });
+  const [catForm, setCatForm] = useState<CatFormState>({
+    slug: "", name: "", emoji: "📦", color: "#6b7280", sort_order: 0, active: true, parent_id: null,
+  });
   const [editingCat, setEditingCat] = useState<ShopCategory | null>(null);
   const [catSaving, setCatSaving] = useState(false);
+
+  // Category tree (built from categories)
+  const categoryTree = useMemo(() => buildCategoryTree(categories), [categories]);
+
+  // Product counts per category slug
+  const [productCounts, setProductCounts] = useState<Record<string, number>>({});
 
   // Helper: get label for a category slug
   function catLabel(slug: string): string {
@@ -109,7 +127,7 @@ export default function AdminShopPage() {
     checkAdmin();
   }, [router]);
 
-  // Fetch categories from DB table
+  // Fetch categories from DB table (all, including inactive)
   const fetchCategories = useCallback(async () => {
     const { data } = await supabase
       .from("shop_categories")
@@ -121,7 +139,15 @@ export default function AdminShopPage() {
   // Fetch products
   const fetchProducts = useCallback(async () => {
     const { data } = await supabase.from("shop_products").select("*").order("created_at", { ascending: false });
-    setProducts((data as ShopProduct[]) || []);
+    const prods = (data as ShopProduct[]) || [];
+    setProducts(prods);
+
+    // Count products per category
+    const counts: Record<string, number> = {};
+    for (const p of prods) {
+      counts[p.category] = (counts[p.category] || 0) + 1;
+    }
+    setProductCounts(counts);
   }, []);
 
   // Fetch orders
@@ -214,7 +240,7 @@ export default function AdminShopPage() {
       resetForm();
       setTab("products");
       fetchProducts();
-      fetchCategories(); // refresh categories (new product may have new category)
+      fetchCategories();
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Chyba při ukládání");
     } finally {
@@ -265,7 +291,7 @@ export default function AdminShopPage() {
   // === CATEGORY CRUD ===
   function resetCatForm() {
     setEditingCat(null);
-    setCatForm({ slug: "", name: "", emoji: "📦", color: "#6b7280", sort_order: 0, active: true });
+    setCatForm({ slug: "", name: "", emoji: "📦", color: "#6b7280", sort_order: 0, active: true, parent_id: null });
   }
 
   async function handleSaveCategory() {
@@ -278,6 +304,7 @@ export default function AdminShopPage() {
         color: catForm.color,
         sort_order: catForm.sort_order,
         active: catForm.active,
+        parent_id: catForm.parent_id || null,
       };
       if (editingCat) {
         const { error } = await supabase.from("shop_categories").update(payload).eq("id", editingCat.id);
@@ -296,10 +323,46 @@ export default function AdminShopPage() {
   }
 
   async function deleteCategory(cat: ShopCategory) {
-    if (!confirm(`Smazat kategorii "${cat.name}"? Produkty s touto kategorií zůstanou, jen nebudou mít přiřazenou kategorii.`)) return;
+    const count = productCounts[cat.slug] || 0;
+    if (count > 0) {
+      alert(`Nelze smazat — obsahuje ${count} produktů`);
+      return;
+    }
+    // Also check children product counts
+    const childSlugs = categories.filter((c) => c.parent_id === cat.id).map((c) => c.slug);
+    const childCount = childSlugs.reduce((sum, s) => sum + (productCounts[s] || 0), 0);
+    if (childCount > 0) {
+      alert(`Nelze smazat — podkategorie obsahují ${childCount} produktů`);
+      return;
+    }
+    if (!confirm(`Smazat kategorii "${cat.name}"?`)) return;
     await supabase.from("shop_categories").delete().eq("id", cat.id);
     fetchCategories();
   }
+
+  // Start adding subcategory with prefilled parent
+  function startAddSubcategory(parentCat: ShopCategoryTreeNode) {
+    resetCatForm();
+    setCatForm((f) => ({
+      ...f,
+      parent_id: parentCat.id,
+      color: parentCat.color,
+      emoji: parentCat.emoji,
+      sort_order: (parentCat.children.length + 1) * 10 + parentCat.sort_order * 10,
+    }));
+  }
+
+  // Root-level parents only (for parent select in cat form)
+  const rootCategories = useMemo(
+    () => categories.filter((c) => !c.parent_id),
+    [categories]
+  );
+
+  // Hierarchical category select for product form
+  const productCategorySelect = useMemo(() => {
+    const tree = buildCategoryTree(categories.filter((c) => c.active));
+    return tree;
+  }, [categories]);
 
   if (loading || !isAdmin) {
     return (
@@ -450,6 +513,25 @@ export default function AdminShopPage() {
               {editingCat ? `✏️ Upravit: ${editingCat.name}` : "➕ Přidat kategorii"}
             </h3>
 
+            {/* Parent category select */}
+            <div style={{ marginBottom: "12px" }}>
+              <label style={labelStyle}>Nadřazená kategorie</label>
+              <select
+                value={catForm.parent_id || ""}
+                onChange={(e) => setCatForm((f) => ({ ...f, parent_id: e.target.value || null }))}
+                style={inputStyle}
+              >
+                <option value="">— Hlavní kategorie —</option>
+                {rootCategories
+                  .filter((c) => !editingCat || c.id !== editingCat.id)
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.emoji} {c.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
             {/* Name + Slug */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
               <div>
@@ -530,6 +612,11 @@ export default function AdminShopPage() {
                 <span style={{ fontSize: "20px" }}>{catForm.emoji}</span>
                 <span style={{ fontSize: "14px", fontWeight: 600, color: catForm.color }}>{catForm.name}</span>
                 <span style={{ fontSize: "12px", color: "var(--text-dimmer)" }}>({catForm.slug})</span>
+                {catForm.parent_id && (
+                  <span style={{ fontSize: "11px", color: "var(--text-dimmer)", background: "var(--bg-card)", padding: "2px 6px", borderRadius: "4px" }}>
+                    podkat. {rootCategories.find((c) => c.id === catForm.parent_id)?.name || "?"}
+                  </span>
+                )}
               </div>
             )}
 
@@ -555,29 +642,106 @@ export default function AdminShopPage() {
             </div>
           </div>
 
-          {/* Category list */}
+          {/* Category tree list */}
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             {categories.length === 0 ? (
               <p style={{ color: "var(--text-dimmer)", textAlign: "center", padding: "24px" }}>
-                Zatím žádné kategorie. Přidejte první, nebo spusťte migraci <code>012_shop_categories.sql</code>.
+                Zatím žádné kategorie. Přidejte první, nebo spusťte migraci <code>013_shop_categories_hierarchy.sql</code>.
               </p>
             ) : (
-              categories.map((cat) => (
-                <div key={cat.id} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px 16px", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", opacity: cat.active ? 1 : 0.5 }}>
-                  <span style={{ fontSize: "24px" }}>{cat.emoji}</span>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>{cat.name}</div>
-                    <div style={{ fontSize: "12px", color: "var(--text-dimmer)" }}>{cat.slug} · pořadí {cat.sort_order}{!cat.active && " · neaktivní"}</div>
+              categoryTree.map((parent) => (
+                <div key={parent.id}>
+                  {/* Parent category row */}
+                  <div style={{
+                    display: "flex", alignItems: "center", gap: "12px", padding: "12px 16px",
+                    background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px",
+                    opacity: parent.active ? 1 : 0.5,
+                  }}>
+                    <span style={{ fontSize: "24px" }}>{parent.emoji}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>
+                        {parent.name}
+                        {(productCounts[parent.slug] || 0) > 0 && (
+                          <span style={{
+                            marginLeft: "8px", padding: "1px 7px", borderRadius: "10px", fontSize: "11px",
+                            fontWeight: 600, background: `${parent.color}20`, color: parent.color,
+                          }}>
+                            {productCounts[parent.slug]}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: "12px", color: "var(--text-dimmer)" }}>
+                        {parent.slug} · pořadí {parent.sort_order}{!parent.active && " · neaktivní"}
+                        {parent.children.length > 0 && ` · ${parent.children.length} podkat.`}
+                      </div>
+                    </div>
+                    <div style={{ width: "24px", height: "24px", borderRadius: "6px", background: parent.color, border: "1px solid var(--border)", flexShrink: 0 }} title={parent.color} />
+                    <button
+                      onClick={() => startAddSubcategory(parent)}
+                      title="Přidat podkategorii"
+                      style={{ padding: "6px 10px", background: "rgba(34,197,94,0.1)", color: "#22c55e", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "6px", fontSize: "14px", fontWeight: 700, cursor: "pointer" }}
+                    >+</button>
+                    <button
+                      onClick={() => {
+                        setEditingCat(parent);
+                        setCatForm({
+                          slug: parent.slug, name: parent.name, emoji: parent.emoji,
+                          color: parent.color, sort_order: parent.sort_order, active: parent.active,
+                          parent_id: parent.parent_id,
+                        });
+                      }}
+                      style={{ padding: "6px 14px", background: "rgba(59,130,246,0.15)", color: "#3b82f6", border: "1px solid rgba(59,130,246,0.3)", borderRadius: "6px", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                    >✏️</button>
+                    <button
+                      onClick={() => deleteCategory(parent)}
+                      style={{ padding: "6px 14px", background: "rgba(239,68,68,0.1)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "6px", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                    >🗑️</button>
                   </div>
-                  <div style={{ width: "24px", height: "24px", borderRadius: "6px", background: cat.color, border: "1px solid var(--border)", flexShrink: 0 }} title={cat.color} />
-                  <button
-                    onClick={() => { setEditingCat(cat); setCatForm({ slug: cat.slug, name: cat.name, emoji: cat.emoji, color: cat.color, sort_order: cat.sort_order, active: cat.active }); }}
-                    style={{ padding: "6px 14px", background: "rgba(59,130,246,0.15)", color: "#3b82f6", border: "1px solid rgba(59,130,246,0.3)", borderRadius: "6px", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
-                  >✏️</button>
-                  <button
-                    onClick={() => deleteCategory(cat)}
-                    style={{ padding: "6px 14px", background: "rgba(239,68,68,0.1)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "6px", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
-                  >🗑️</button>
+
+                  {/* Children rows */}
+                  {parent.children.map((child) => (
+                    <div key={child.id} style={{
+                      display: "flex", alignItems: "center", gap: "12px", padding: "10px 16px 10px 48px",
+                      background: "var(--bg-card)", border: "1px solid var(--border)", borderTop: "none",
+                      borderRadius: "0 0 10px 10px", opacity: child.active ? 1 : 0.5,
+                      marginTop: "-1px",
+                    }}>
+                      <span style={{ fontSize: "12px", color: "var(--text-dimmer)" }}>└</span>
+                      <span style={{ fontSize: "18px" }}>{child.emoji}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>
+                          {child.name}
+                          {(productCounts[child.slug] || 0) > 0 && (
+                            <span style={{
+                              marginLeft: "8px", padding: "1px 7px", borderRadius: "10px", fontSize: "11px",
+                              fontWeight: 600, background: `${child.color}20`, color: child.color,
+                            }}>
+                              {productCounts[child.slug]}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: "11px", color: "var(--text-dimmer)" }}>
+                          {child.slug} · pořadí {child.sort_order}{!child.active && " · neaktivní"}
+                        </div>
+                      </div>
+                      <div style={{ width: "18px", height: "18px", borderRadius: "4px", background: child.color, border: "1px solid var(--border)", flexShrink: 0 }} title={child.color} />
+                      <button
+                        onClick={() => {
+                          setEditingCat(child);
+                          setCatForm({
+                            slug: child.slug, name: child.name, emoji: child.emoji,
+                            color: child.color, sort_order: child.sort_order, active: child.active,
+                            parent_id: child.parent_id,
+                          });
+                        }}
+                        style={{ padding: "4px 10px", background: "rgba(59,130,246,0.15)", color: "#3b82f6", border: "1px solid rgba(59,130,246,0.3)", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer" }}
+                      >✏️</button>
+                      <button
+                        onClick={() => deleteCategory(child)}
+                        style={{ padding: "4px 10px", background: "rgba(239,68,68,0.1)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer" }}
+                      >🗑️</button>
+                    </div>
+                  ))}
                 </div>
               ))
             )}
@@ -615,9 +779,24 @@ export default function AdminShopPage() {
                   style={inputStyle}
                 >
                   <option value="">— Vyberte —</option>
-                  {categories.map((c) => (
-                    <option key={c.slug} value={c.slug}>{c.emoji} {c.name}</option>
-                  ))}
+                  {productCategorySelect.map((parent) => {
+                    if (parent.children.length === 0) {
+                      return (
+                        <option key={parent.slug} value={parent.slug}>
+                          {parent.emoji} {parent.name}
+                        </option>
+                      );
+                    }
+                    return (
+                      <optgroup key={parent.slug} label={`${parent.emoji} ${parent.name}`}>
+                        {parent.children.map((child) => (
+                          <option key={child.slug} value={child.slug}>
+                            &nbsp;&nbsp;{child.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    );
+                  })}
                 </select>
                 {categories.length === 0 && (
                   <p style={{ fontSize: "11px", color: "#f59e0b", marginTop: "4px" }}>
