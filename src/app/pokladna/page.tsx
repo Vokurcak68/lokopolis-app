@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useAuth } from "@/components/Auth/AuthProvider";
 import { useCart } from "@/components/Shop/CartProvider";
 import { supabase } from "@/lib/supabase";
+import Turnstile from "@/components/Turnstile";
 import type { ShippingMethod, PaymentMethod } from "@/types/database";
 
 interface BillingData {
@@ -52,6 +53,7 @@ export default function CheckoutPage() {
   const [couponLoading, setCouponLoading] = useState(false);
   const [loyaltyInfo, setLoyaltyInfo] = useState<{ points: number; pointsValueCzk: number; currentLevel: { name: string; icon: string; color: string } | null } | null>(null);
   const [loyaltyPointsToUse, setLoyaltyPointsToUse] = useState(0);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   // Determine if cart is all-digital
   const isAllDigital = items.every((i) => !!i.product.file_url);
@@ -205,6 +207,10 @@ export default function CheckoutPage() {
 
   async function handleSubmit() {
     if (!validateStep()) return;
+    if (!turnstileToken) {
+      setError("Potvrďte prosím anti-bot ověření.");
+      return;
+    }
     setSubmitting(true);
     setError("");
 
@@ -223,6 +229,7 @@ export default function CheckoutPage() {
           paymentMethodId: selectedPayment,
           couponCode: couponApplied?.code || null,
           loyaltyPointsToUse: loyaltyPointsToUse > 0 ? loyaltyPointsToUse : null,
+          turnstileToken,
         }),
       });
 
@@ -665,6 +672,15 @@ export default function CheckoutPage() {
         </div>
       )}
 
+      {step === 3 && (
+        <div style={{ marginTop: "16px" }}>
+          <div style={{ fontSize: "13px", color: "var(--text-muted)", marginBottom: "6px" }}>
+            Ověření proti botům
+          </div>
+          <Turnstile onVerify={setTurnstileToken} onExpire={() => setTurnstileToken(null)} />
+        </div>
+      )}
+
       {/* Navigation buttons */}
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: "32px", gap: "12px" }}>
         {step > 0 ? (
@@ -731,16 +747,16 @@ export default function CheckoutPage() {
         ) : (
           <button
             onClick={handleSubmit}
-            disabled={submitting}
+            disabled={submitting || !turnstileToken}
             style={{
               padding: "14px 32px",
               border: "none",
               borderRadius: "10px",
-              background: submitting ? "var(--text-muted)" : "#22c55e",
+              background: (submitting || !turnstileToken) ? "var(--text-muted)" : "#22c55e",
               color: "#fff",
               fontSize: "16px",
               fontWeight: 700,
-              cursor: submitting ? "not-allowed" : "pointer",
+              cursor: (submitting || !turnstileToken) ? "not-allowed" : "pointer",
             }}
           >
             {submitting ? "Odesílám..." : "✓ Dokončit objednávku"}

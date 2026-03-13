@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { grantOrderPoints, redeemPoints, applyPointsToOrder } from "@/lib/loyalty";
+import { verifyTurnstile } from "@/lib/turnstile";
 import { getClientIp, isValidEmail, normalizeText, rateLimit } from "@/lib/security";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
@@ -21,7 +22,16 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { items, billing, shippingMethodId, paymentMethodId, couponCode, loyaltyPointsToUse } = body;
+    const { items, billing, shippingMethodId, paymentMethodId, couponCode, loyaltyPointsToUse, turnstileToken } = body;
+
+    if (!turnstileToken) {
+      return NextResponse.json({ error: "Chybí anti-bot ověření." }, { status: 400 });
+    }
+
+    const turnstileOk = await verifyTurnstile(turnstileToken, ip);
+    if (!turnstileOk) {
+      return NextResponse.json({ error: "Anti-bot ověření selhalo." }, { status: 403 });
+    }
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: "Prázdný košík" }, { status: 400 });

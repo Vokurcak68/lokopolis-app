@@ -1,4 +1,4 @@
-const TURNSTILE_SECRET = "0x4AAAAAACoE4zw8cH197ejBUMhQvK8FXqY";
+const TURNSTILE_SECRET = process.env.TURNSTILE_SECRET_KEY || "0x4AAAAAACoE4zw8cH197ejBUMhQvK8FXqY";
 
 export async function verifyTurnstile(token: string, ip?: string): Promise<boolean> {
   try {

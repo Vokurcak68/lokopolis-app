@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/components/Auth/AuthProvider";
 import { timeAgo } from "@/lib/timeAgo";
+import Turnstile from "@/components/Turnstile";
 import type { BazarMessage } from "@/types/database";
 
 interface MessageThreadProps {
@@ -22,6 +23,7 @@ export default function MessageThread({
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const fetchMessages = useCallback(async (showLoading = false) => {
@@ -76,6 +78,10 @@ export default function MessageThread({
 
   async function handleSend() {
     if (!user || !newMessage.trim()) return;
+    if (!turnstileToken) {
+      alert("Potvrď anti-bot ověření.");
+      return;
+    }
     const content = newMessage.trim();
     setSending(true);
     setNewMessage("");
@@ -109,10 +115,12 @@ export default function MessageThread({
           senderId: user.id,
           recipientId,
           content,
+          turnstileToken,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Chyba při odesílání");
+      setTurnstileToken(null);
       // Refresh to get the real message from DB
       fetchMessages(false);
     } catch (err) {
@@ -235,9 +243,15 @@ export default function MessageThread({
           borderTop: "1px solid var(--border)",
           background: "var(--bg-card)",
           display: "flex",
+          flexDirection: "column",
           gap: "8px",
         }}
       >
+        <div>
+          <Turnstile onVerify={setTurnstileToken} onExpire={() => setTurnstileToken(null)} />
+        </div>
+
+        <div style={{ display: "flex", gap: "8px" }}>
         <textarea
           value={newMessage}
           onChange={(e) => setNewMessage(e.target.value)}
@@ -264,15 +278,15 @@ export default function MessageThread({
         />
         <button
           onClick={handleSend}
-          disabled={sending || !newMessage.trim()}
+          disabled={sending || !newMessage.trim() || !turnstileToken}
           style={{
             padding: "10px 20px",
             background:
-              sending || !newMessage.trim()
+              sending || !newMessage.trim() || !turnstileToken
                 ? "var(--border-hover)"
                 : "var(--accent)",
             color:
-              sending || !newMessage.trim()
+              sending || !newMessage.trim() || !turnstileToken
                 ? "var(--text-dimmer)"
                 : "var(--accent-text-on)",
             border: "none",
@@ -280,11 +294,12 @@ export default function MessageThread({
             fontSize: "14px",
             fontWeight: 600,
             cursor:
-              sending || !newMessage.trim() ? "not-allowed" : "pointer",
+              sending || !newMessage.trim() || !turnstileToken ? "not-allowed" : "pointer",
           }}
         >
           {sending ? "..." : "Odeslat"}
         </button>
+        </div>
       </div>
     </div>
   );

@@ -2,8 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-// Site key hardcoded (same pattern as other credentials in this project)
-const TURNSTILE_SITE_KEY = "0x4AAAAAACoE4_gtCgNEZDLm";
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAACoE4_gtCgNEZDLm";
 
 interface TurnstileProps {
   onVerify: (token: string) => void;

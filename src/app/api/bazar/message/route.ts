@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendEmail } from "@/lib/email";
+import { verifyTurnstile } from "@/lib/turnstile";
 import { getClientIp, normalizeText, rateLimit } from "@/lib/security";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -23,10 +24,20 @@ export async function POST(req: NextRequest) {
     const listingId = body?.listingId as string;
     const senderId = body?.senderId as string;
     const recipientId = body?.recipientId as string;
+    const turnstileToken = body?.turnstileToken as string;
     const content = normalizeText(body?.content || "", 2000);
 
     if (!listingId || !senderId || !recipientId || !content) {
       return NextResponse.json({ error: "Chybí povinná pole." }, { status: 400 });
+    }
+
+    if (!turnstileToken) {
+      return NextResponse.json({ error: "Chybí anti-bot ověření." }, { status: 400 });
+    }
+
+    const turnstileOk = await verifyTurnstile(turnstileToken, ip);
+    if (!turnstileOk) {
+      return NextResponse.json({ error: "Anti-bot ověření selhalo." }, { status: 403 });
     }
     if (senderId === recipientId) {
       return NextResponse.json({ error: "Nemůžeš poslat zprávu sám sobě." }, { status: 400 });
