@@ -4,36 +4,38 @@ import nodemailer from "nodemailer";
 import { verifyTurnstile } from "@/lib/turnstile";
 import { getClientIp, honeypotValid, minFillTimeValid, normalizeText, payloadDigest, rateLimit, replayGuard } from "@/lib/security";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const smtpHost = process.env.SMTP_HOST;
-const smtpPort = process.env.SMTP_PORT;
-const smtpUser = process.env.SMTP_USER;
-const smtpPass = process.env.SMTP_PASS;
+// Lazy env check - only validate at runtime, not at build time
+function getEnvConfig() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const smtpHost = process.env.SMTP_HOST;
+  const smtpPort = process.env.SMTP_PORT;
+  const smtpUser = process.env.SMTP_USER;
+  const smtpPass = process.env.SMTP_PASS;
 
-if (!supabaseUrl || !supabaseServiceKey) {
-  throw new Error("Missing required env vars: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error("Missing required env vars: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY");
+  }
+
+  if (!smtpHost || !smtpPort || !smtpUser || !smtpPass) {
+    throw new Error("Missing required SMTP env vars: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS");
+  }
+
+  return {
+    supabaseUrl,
+    supabaseServiceKey,
+    smtpHost,
+    smtpPort: Number(smtpPort),
+    smtpUser,
+    smtpPass,
+    smtpSecure: process.env.SMTP_SECURE ? process.env.SMTP_SECURE === "true" : true,
+  };
 }
-
-if (!smtpHost || !smtpPort || !smtpUser || !smtpPass) {
-  throw new Error("Missing required SMTP env vars: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS");
-}
-
-const smtpPortNum = Number(smtpPort);
-const smtpSecure = process.env.SMTP_SECURE ? process.env.SMTP_SECURE === "true" : true;
-
-const transporter = nodemailer.createTransport({
-  host: smtpHost,
-  port: smtpPortNum,
-  secure: smtpSecure,
-  auth: {
-    user: smtpUser,
-    pass: smtpPass,
-  },
-});
 
 export async function POST(req: NextRequest) {
   try {
+    const config = getEnvConfig();
+
     const ip = getClientIp(req);
     const rl = rateLimit(`shop-order:${ip}`, 10, 60_000);
     if (!rl.ok) {
@@ -80,7 +82,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Server config error" }, { status: 500 });
     }
 
-    const userClient = createClient(supabaseUrl!, anonKey, {
+    const userClient = createClient(config.supabaseUrl, anonKey, {
       auth: { autoRefreshToken: false, persistSession: false },
       global: token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
     });
@@ -90,7 +92,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Nepřihlášen" }, { status: 401 });
     }
 
-    const supabase = createClient(supabaseUrl!, supabaseServiceKey!, {
+    const supabase = createClient(config.supabaseUrl, config.supabaseServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
@@ -163,6 +165,16 @@ export async function POST(req: NextRequest) {
         .single();
 
       const username = profile?.display_name || profile?.username || user.email || "Neznámý";
+
+      const transporter = nodemailer.createTransport({
+        host: config.smtpHost,
+        port: config.smtpPort,
+        secure: config.smtpSecure,
+        auth: {
+          user: config.smtpUser,
+          pass: config.smtpPass,
+        },
+      });
 
       try {
         await transporter.sendMail({

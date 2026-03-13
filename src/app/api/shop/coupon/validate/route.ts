@@ -3,15 +3,22 @@ import { createClient } from "@supabase/supabase-js";
 import { verifyTurnstile } from "@/lib/turnstile";
 import { getClientIp, normalizeText, payloadDigest, rateLimit, replayGuard } from "@/lib/security";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// Lazy env check - only validate at runtime, not at build time
+function getEnvConfig() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!supabaseUrl || !supabaseServiceKey) {
-  throw new Error("Missing required env vars: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error("Missing required env vars: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY");
+  }
+
+  return { supabaseUrl, supabaseServiceKey };
 }
 
 export async function POST(req: NextRequest) {
   try {
+    const config = getEnvConfig();
+
     const ip = getClientIp(req);
     const rl = rateLimit(`shop-coupon:${ip}`, 15, 60_000);
     if (!rl.ok) {
@@ -40,7 +47,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Příliš rychlé opakování požadavku." }, { status: 429 });
     }
 
-    const supabase = createClient(supabaseUrl!, supabaseServiceKey!, {
+    const supabase = createClient(config.supabaseUrl, config.supabaseServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
@@ -52,7 +59,7 @@ export async function POST(req: NextRequest) {
       if (!anonKey) {
         return NextResponse.json({ error: "Server config error" }, { status: 500 });
       }
-      const userClient = createClient(supabaseUrl!, anonKey, {
+      const userClient = createClient(config.supabaseUrl, anonKey, {
         auth: { autoRefreshToken: false, persistSession: false },
         global: { headers: { Authorization: `Bearer ${token}` } },
       });
