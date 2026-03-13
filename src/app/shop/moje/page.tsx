@@ -88,7 +88,10 @@ export default function MyPurchasesPage() {
   async function handleDownload(productId: string) {
     setDownloading(productId);
     try {
-      const res = await fetch(`/api/shop/download?productId=${productId}`);
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/shop/download?productId=${productId}`, {
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+      });
       if (!res.ok) {
         const data = await res.json();
         alert(data.error || "Chyba při stahování");

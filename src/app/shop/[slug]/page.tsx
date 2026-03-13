@@ -116,7 +116,10 @@ export default function ShopProductDetailPage() {
     if (!product || !user) return;
     setDownloading(true);
     try {
-      const res = await fetch(`/api/shop/download?productId=${product.id}`);
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/shop/download?productId=${product.id}`, {
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+      });
       if (!res.ok) {
         const data = await res.json();
         alert(data.error || "Chyba při stahování");
@@ -138,9 +141,13 @@ export default function ShopProductDetailPage() {
     setDownloading(true);
     try {
       // For free products, create order first (auto-paid), then download
+      const { data: { session: orderSession } } = await supabase.auth.getSession();
       const orderRes = await fetch("/api/shop/order", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(orderSession?.access_token ? { Authorization: `Bearer ${orderSession.access_token}` } : {}),
+        },
         body: JSON.stringify({ productId: product.id }),
       });
       if (!orderRes.ok) {
@@ -150,7 +157,10 @@ export default function ShopProductDetailPage() {
       }
 
       // Now download
-      const dlRes = await fetch(`/api/shop/download?productId=${product.id}`);
+      const { data: { session: dlSession } } = await supabase.auth.getSession();
+      const dlRes = await fetch(`/api/shop/download?productId=${product.id}`, {
+        headers: dlSession?.access_token ? { Authorization: `Bearer ${dlSession.access_token}` } : {},
+      });
       if (!dlRes.ok) {
         const data = await dlRes.json();
         alert(data.error || "Chyba při stahování");
