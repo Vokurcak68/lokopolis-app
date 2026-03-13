@@ -121,6 +121,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Některé produkty nejsou dostupné" }, { status: 400 });
     }
 
+    // Check stock availability for tracked products
+    for (const item of items) {
+      const product = products.find((p) => p.id === item.productId);
+      if (!product) continue;
+
+      if (product.stock_mode === "tracked") {
+        const available = (product.stock_quantity || 0) - (product.stock_reserved || 0);
+        const qty = product.file_url ? 1 : Math.max(1, Math.min(99, Math.floor(Number(item.quantity || 1))));
+        
+        if (available < qty) {
+          return NextResponse.json({ 
+            error: `Produkt "${product.title}" není dostupný v požadovaném množství (skladem: ${available} ks)` 
+          }, { status: 400 });
+        }
+      }
+    }
+
     // Validate shipping method
     const { data: shipping } = await supabase
       .from("shipping_methods")
@@ -294,6 +311,27 @@ export async function POST(req: NextRequest) {
     if (orderErr || !order) {
       console.error("Order create error:", orderErr);
       return NextResponse.json({ error: "Chyba při vytváření objednávky" }, { status: 500 });
+    }
+
+    // Reserve stock for tracked products
+    for (const item of orderItems) {
+      const product = products.find((p) => p.id === item.productId);
+      if (product?.stock_mode === "tracked") {
+        const { data: reserveResult, error: reserveErr } = await supabase.rpc("reserve_stock", {
+          p_product_id: item.productId,
+          p_quantity: item.quantity,
+          p_order_id: order.id,
+        });
+
+        if (reserveErr || !reserveResult?.success) {
+          // Rollback order if reservation fails
+          await supabase.from("shop_orders").delete().eq("id", order.id);
+          console.error("Stock reservation failed:", reserveErr || reserveResult);
+          return NextResponse.json({ 
+            error: `Nepodařilo se rezervovat produkt "${product.title}". Zkuste to prosím znovu.` 
+          }, { status: 500 });
+        }
+      }
     }
 
     // Create order items

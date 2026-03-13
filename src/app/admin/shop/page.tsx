@@ -312,22 +312,51 @@ export default function AdminShopPage() {
 
     await supabase.from("shop_orders").update(updates).eq("id", orderId);
 
-    // Auto-grant purchases when marking as paid
+    // Auto-grant purchases + confirm stock sale when marking as paid
     if (newStatus === "paid") {
       const { data: order } = await supabase.from("shop_orders").select("*").eq("id", orderId).single();
       if (order?.user_id) {
         // Grant from order_items (new multi-product flow)
-        const { data: items } = await supabase.from("order_items").select("product_id").eq("order_id", orderId);
+        const { data: items } = await supabase.from("order_items").select("product_id, quantity").eq("order_id", orderId);
         if (items && items.length > 0) {
           for (const item of items) {
             await supabase.from("user_purchases").upsert({ user_id: order.user_id, product_id: item.product_id, order_id: orderId }, { onConflict: "user_id,product_id" }).select();
+            
+            // Confirm stock sale (deduct quantity + reserved)
+            await supabase.rpc("confirm_sale", {
+              p_product_id: item.product_id,
+              p_quantity: item.quantity,
+              p_order_id: orderId,
+            });
           }
         } else if (order.product_id) {
           // Legacy single-product order
           await supabase.from("user_purchases").upsert({ user_id: order.user_id, product_id: order.product_id, order_id: orderId }, { onConflict: "user_id,product_id" }).select();
+          
+          // Confirm stock sale for legacy
+          await supabase.rpc("confirm_sale", {
+            p_product_id: order.product_id,
+            p_quantity: 1,
+            p_order_id: orderId,
+          });
         }
       }
     }
+
+    // Release stock if order is cancelled
+    if (newStatus === "cancelled" || newStatus === "refunded") {
+      const { data: items } = await supabase.from("order_items").select("product_id, quantity").eq("order_id", orderId);
+      if (items) {
+        for (const item of items) {
+          await supabase.rpc("release_stock", {
+            p_product_id: item.product_id,
+            p_quantity: item.quantity,
+            p_order_id: orderId,
+          });
+        }
+      }
+    }
+
     fetchOrders();
   }
 
