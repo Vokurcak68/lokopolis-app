@@ -6,8 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import type { ShopProduct, ShopOrder } from "@/types/database";
-
-import { getShopCategories, type ShopCategory, CATEGORY_META } from "@/lib/shop-categories";
+import { type ShopCategory } from "@/lib/shop-categories";
 
 const STATUS_LABELS: Record<string, string> = {
   active: "Aktivní",
@@ -49,7 +48,7 @@ interface OrderWithDetails extends ShopOrder {
   user: { username: string; display_name: string | null; email?: string } | null;
 }
 
-type AdminTab = "products" | "orders" | "add" | "edit";
+type AdminTab = "products" | "orders" | "categories" | "add" | "edit";
 
 export default function AdminShopPage() {
   const router = useRouter();
@@ -57,14 +56,16 @@ export default function AdminShopPage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<AdminTab>("products");
 
-  // Categories — loaded dynamically from products
+  // Categories from DB
   const [categories, setCategories] = useState<ShopCategory[]>([]);
-  const [customCategory, setCustomCategory] = useState("");
+  const [catForm, setCatForm] = useState({ slug: "", name: "", emoji: "📦", color: "#6b7280", sort_order: 0, active: true });
+  const [editingCat, setEditingCat] = useState<ShopCategory | null>(null);
+  const [catSaving, setCatSaving] = useState(false);
 
-  // Build category labels
-  const CATEGORY_LABELS: Record<string, string> = {};
-  for (const c of categories) {
-    CATEGORY_LABELS[c.slug] = `${c.emoji} ${c.name}`;
+  // Helper: get label for a category slug
+  function catLabel(slug: string): string {
+    const cat = categories.find((c) => c.slug === slug);
+    return cat ? `${cat.emoji} ${cat.name}` : slug;
   }
 
   // Product list
@@ -83,7 +84,7 @@ export default function AdminShopPage() {
     long_description: "",
     price: 0,
     original_price: "",
-    category: "kolejovy-plan" as string,
+    category: "" as string,
     scale: "",
     tags: "",
     featured: false,
@@ -99,38 +100,27 @@ export default function AdminShopPage() {
   useEffect(() => {
     async function checkAdmin() {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        router.push("/prihlaseni");
-        return;
-      }
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .single();
-
-      if (profile?.role !== "admin") {
-        router.push("/");
-        return;
-      }
+      if (!user) { router.push("/prihlaseni"); return; }
+      const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+      if (profile?.role !== "admin") { router.push("/"); return; }
       setIsAdmin(true);
       setLoading(false);
     }
     checkAdmin();
   }, [router]);
 
-  // Fetch categories dynamically from products
+  // Fetch categories from DB table
   const fetchCategories = useCallback(async () => {
-    const cats = await getShopCategories();
-    setCategories(cats);
+    const { data } = await supabase
+      .from("shop_categories")
+      .select("*")
+      .order("sort_order", { ascending: true });
+    if (data) setCategories(data as ShopCategory[]);
   }, []);
 
   // Fetch products
   const fetchProducts = useCallback(async () => {
-    const { data } = await supabase
-      .from("shop_products")
-      .select("*")
-      .order("created_at", { ascending: false });
+    const { data } = await supabase.from("shop_products").select("*").order("created_at", { ascending: false });
     setProducts((data as ShopProduct[]) || []);
   }, []);
 
@@ -140,32 +130,21 @@ export default function AdminShopPage() {
       .from("shop_orders")
       .select("*, product:shop_products(title), user:profiles!shop_orders_user_id_fkey(username, display_name)")
       .order("created_at", { ascending: false });
-
-    if (orderFilter) {
-      query = query.eq("status", orderFilter);
-    }
-
+    if (orderFilter) query = query.eq("status", orderFilter);
     const { data } = await query;
     setOrders((data as unknown as OrderWithDetails[]) || []);
   }, [orderFilter]);
 
   useEffect(() => {
-    if (isAdmin) {
-      fetchCategories();
-      fetchProducts();
-      fetchOrders();
-    }
+    if (isAdmin) { fetchCategories(); fetchProducts(); fetchOrders(); }
   }, [isAdmin, fetchCategories, fetchProducts, fetchOrders]);
 
-  // Upload file to shop bucket
+  // Upload file
   async function uploadFile(file: File, folder: string): Promise<string | null> {
     const ext = file.name.split(".").pop() || "bin";
     const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
     const { error } = await supabase.storage.from("shop").upload(path, file);
-    if (error) {
-      console.error("Upload error:", error);
-      return null;
-    }
+    if (error) { console.error("Upload error:", error); return null; }
     return path;
   }
 
@@ -173,7 +152,6 @@ export default function AdminShopPage() {
   async function handleSave() {
     setSaving(true);
     setSaveError(null);
-
     try {
       let cover_image_url = editProduct?.cover_image_url || null;
       let preview_images = editProduct?.preview_images || [];
@@ -182,7 +160,6 @@ export default function AdminShopPage() {
       let file_size = editProduct?.file_size || null;
       let file_type = editProduct?.file_type || null;
 
-      // Upload cover image
       if (coverFile) {
         const path = await uploadFile(coverFile, "covers");
         if (path) {
@@ -190,8 +167,6 @@ export default function AdminShopPage() {
           cover_image_url = publicUrl;
         }
       }
-
-      // Upload preview images
       if (previewFiles.length > 0) {
         const urls: string[] = [...preview_images];
         for (const file of previewFiles) {
@@ -203,8 +178,6 @@ export default function AdminShopPage() {
         }
         preview_images = urls;
       }
-
-      // Upload product file
       if (productFile) {
         const path = await uploadFile(productFile, "files");
         if (path) {
@@ -227,35 +200,21 @@ export default function AdminShopPage() {
         tags: formData.tags ? formData.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
         featured: formData.featured,
         status: formData.status,
-        cover_image_url,
-        preview_images,
-        file_url,
-        file_name,
-        file_size,
-        file_type,
+        cover_image_url, preview_images, file_url, file_name, file_size, file_type,
       };
 
       if (editProduct) {
-        // Update
-        const { error } = await supabase
-          .from("shop_products")
-          .update(productData)
-          .eq("id", editProduct.id);
-
+        const { error } = await supabase.from("shop_products").update(productData).eq("id", editProduct.id);
         if (error) throw error;
       } else {
-        // Insert
-        const { error } = await supabase
-          .from("shop_products")
-          .insert(productData);
-
+        const { error } = await supabase.from("shop_products").insert(productData);
         if (error) throw error;
       }
 
-      // Reset and go back to list
       resetForm();
       setTab("products");
       fetchProducts();
+      fetchCategories(); // refresh categories (new product may have new category)
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Chyba při ukládání");
     } finally {
@@ -266,17 +225,10 @@ export default function AdminShopPage() {
   function resetForm() {
     setEditProduct(null);
     setFormData({
-      title: "",
-      slug: "",
-      description: "",
-      long_description: "",
-      price: 0,
-      original_price: "",
-      category: "kolejovy-plan",
-      scale: "",
-      tags: "",
-      featured: false,
-      status: "active",
+      title: "", slug: "", description: "", long_description: "",
+      price: 0, original_price: "",
+      category: categories[0]?.slug || "",
+      scale: "", tags: "", featured: false, status: "active",
     });
     setCoverFile(null);
     setPreviewFiles([]);
@@ -287,43 +239,20 @@ export default function AdminShopPage() {
   function startEdit(product: ShopProduct) {
     setEditProduct(product);
     setFormData({
-      title: product.title,
-      slug: product.slug,
-      description: product.description || "",
-      long_description: product.long_description || "",
-      price: product.price,
-      original_price: product.original_price?.toString() || "",
-      category: product.category,
-      scale: product.scale || "",
-      tags: product.tags?.join(", ") || "",
-      featured: product.featured,
-      status: product.status,
+      title: product.title, slug: product.slug,
+      description: product.description || "", long_description: product.long_description || "",
+      price: product.price, original_price: product.original_price?.toString() || "",
+      category: product.category, scale: product.scale || "",
+      tags: product.tags?.join(", ") || "", featured: product.featured, status: product.status,
     });
     setTab("edit");
   }
 
   async function confirmPayment(orderId: string) {
-    const { data: order } = await supabase
-      .from("shop_orders")
-      .select("*")
-      .eq("id", orderId)
-      .single();
-
+    const { data: order } = await supabase.from("shop_orders").select("*").eq("id", orderId).single();
     if (!order) return;
-
-    // Update order status
-    await supabase
-      .from("shop_orders")
-      .update({ status: "paid", paid_at: new Date().toISOString() })
-      .eq("id", orderId);
-
-    // Create purchase
-    await supabase.from("user_purchases").insert({
-      user_id: order.user_id,
-      product_id: order.product_id,
-      order_id: orderId,
-    });
-
+    await supabase.from("shop_orders").update({ status: "paid", paid_at: new Date().toISOString() }).eq("id", orderId);
+    await supabase.from("user_purchases").insert({ user_id: order.user_id, product_id: order.product_id, order_id: orderId });
     fetchOrders();
   }
 
@@ -331,6 +260,45 @@ export default function AdminShopPage() {
     if (!confirm("Opravdu smazat tento produkt?")) return;
     await supabase.from("shop_products").delete().eq("id", id);
     fetchProducts();
+  }
+
+  // === CATEGORY CRUD ===
+  function resetCatForm() {
+    setEditingCat(null);
+    setCatForm({ slug: "", name: "", emoji: "📦", color: "#6b7280", sort_order: 0, active: true });
+  }
+
+  async function handleSaveCategory() {
+    setCatSaving(true);
+    try {
+      const payload = {
+        name: catForm.name,
+        slug: catForm.slug,
+        emoji: catForm.emoji,
+        color: catForm.color,
+        sort_order: catForm.sort_order,
+        active: catForm.active,
+      };
+      if (editingCat) {
+        const { error } = await supabase.from("shop_categories").update(payload).eq("id", editingCat.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("shop_categories").insert(payload);
+        if (error) throw error;
+      }
+      resetCatForm();
+      fetchCategories();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Chyba při ukládání kategorie");
+    } finally {
+      setCatSaving(false);
+    }
+  }
+
+  async function deleteCategory(cat: ShopCategory) {
+    if (!confirm(`Smazat kategorii "${cat.name}"? Produkty s touto kategorií zůstanou, jen nebudou mít přiřazenou kategorii.`)) return;
+    await supabase.from("shop_categories").delete().eq("id", cat.id);
+    fetchCategories();
   }
 
   if (loading || !isAdmin) {
@@ -344,51 +312,30 @@ export default function AdminShopPage() {
   return (
     <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "32px 20px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
-        <h1 style={{ fontSize: "28px", fontWeight: 800, color: "var(--text-primary)" }}>
-          🛒 Admin — Shop
-        </h1>
-        <Link
-          href="/admin"
-          style={{
-            padding: "8px 16px",
-            background: "var(--bg-card)",
-            border: "1px solid var(--border)",
-            borderRadius: "8px",
-            color: "var(--text-muted)",
-            fontSize: "13px",
-            textDecoration: "none",
-          }}
-        >
+        <h1 style={{ fontSize: "28px", fontWeight: 800, color: "var(--text-primary)" }}>🛒 Admin — Shop</h1>
+        <Link href="/admin" style={{ padding: "8px 16px", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "8px", color: "var(--text-muted)", fontSize: "13px", textDecoration: "none" }}>
           ← Admin panel
         </Link>
       </div>
 
       {/* Tabs */}
-      <div style={{ display: "flex", gap: "8px", marginBottom: "24px", borderBottom: "1px solid var(--border)", paddingBottom: "12px" }}>
-        {(["products", "orders", "add"] as AdminTab[]).map((t) => (
+      <div style={{ display: "flex", gap: "8px", marginBottom: "24px", borderBottom: "1px solid var(--border)", paddingBottom: "12px", flexWrap: "wrap" }}>
+        {(["products", "orders", "categories", "add"] as AdminTab[]).map((t) => (
           <button
             key={t}
-            onClick={() => {
-              if (t === "add") resetForm();
-              setTab(t);
-            }}
+            onClick={() => { if (t === "add") resetForm(); if (t === "categories") resetCatForm(); setTab(t); }}
             style={{
-              padding: "8px 20px",
-              borderRadius: "8px",
-              fontSize: "14px",
-              fontWeight: 600,
-              cursor: "pointer",
-              border: "none",
+              padding: "8px 20px", borderRadius: "8px", fontSize: "14px", fontWeight: 600, cursor: "pointer", border: "none",
               background: tab === t || (tab === "edit" && t === "add") ? "var(--accent)" : "var(--bg-card)",
               color: tab === t || (tab === "edit" && t === "add") ? "var(--accent-text-on)" : "var(--text-muted)",
             }}
           >
-            {t === "products" ? "📦 Produkty" : t === "orders" ? "📋 Objednávky" : "➕ Přidat"}
+            {t === "products" ? "📦 Produkty" : t === "orders" ? "📋 Objednávky" : t === "categories" ? "🏷️ Kategorie" : "➕ Přidat"}
           </button>
         ))}
       </div>
 
-      {/* PRODUCTS TAB */}
+      {/* ==================== PRODUCTS TAB ==================== */}
       {tab === "products" && (
         <div>
           <div style={{ overflowX: "auto" }}>
@@ -396,20 +343,7 @@ export default function AdminShopPage() {
               <thead>
                 <tr>
                   {["", "Název", "Kategorie", "Cena", "Stav", "Stažení", "Akce"].map((h) => (
-                    <th
-                      key={h}
-                      style={{
-                        textAlign: "left",
-                        padding: "10px 12px",
-                        fontSize: "12px",
-                        fontWeight: 600,
-                        color: "var(--text-dimmer)",
-                        borderBottom: "1px solid var(--border)",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {h}
-                    </th>
+                    <th key={h} style={{ textAlign: "left", padding: "10px 12px", fontSize: "12px", fontWeight: 600, color: "var(--text-dimmer)", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -422,9 +356,7 @@ export default function AdminShopPage() {
                           <Image src={p.cover_image_url} alt="" fill style={{ objectFit: "cover" }} sizes="48px" />
                         </div>
                       ) : (
-                        <div style={{ width: "48px", height: "36px", borderRadius: "4px", background: "var(--bg-page)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px" }}>
-                          📦
-                        </div>
+                        <div style={{ width: "48px", height: "36px", borderRadius: "4px", background: "var(--bg-page)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px" }}>📦</div>
                       )}
                     </td>
                     <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)" }}>
@@ -432,58 +364,21 @@ export default function AdminShopPage() {
                       <div style={{ fontSize: "12px", color: "var(--text-dimmer)" }}>{p.slug}</div>
                     </td>
                     <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "13px", color: "var(--text-body)" }}>
-                      {CATEGORY_LABELS[p.category] || p.category}
+                      {catLabel(p.category)}
                     </td>
                     <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "14px", fontWeight: 600, color: p.price === 0 ? "#22c55e" : "var(--accent)" }}>
                       {p.price === 0 ? "Zdarma" : `${p.price} Kč`}
                     </td>
                     <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)" }}>
-                      <span
-                        style={{
-                          padding: "2px 8px",
-                          borderRadius: "4px",
-                          fontSize: "11px",
-                          fontWeight: 600,
-                          background: `${STATUS_COLORS[p.status]}20`,
-                          color: STATUS_COLORS[p.status],
-                        }}
-                      >
+                      <span style={{ padding: "2px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: 600, background: `${STATUS_COLORS[p.status]}20`, color: STATUS_COLORS[p.status] }}>
                         {STATUS_LABELS[p.status]}
                       </span>
                     </td>
-                    <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "13px", color: "var(--text-dimmer)" }}>
-                      {p.download_count}×
-                    </td>
+                    <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "13px", color: "var(--text-dimmer)" }}>{p.download_count}×</td>
                     <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)" }}>
                       <div style={{ display: "flex", gap: "6px" }}>
-                        <button
-                          onClick={() => startEdit(p)}
-                          style={{
-                            padding: "4px 10px",
-                            borderRadius: "6px",
-                            fontSize: "12px",
-                            cursor: "pointer",
-                            border: "1px solid var(--border)",
-                            background: "var(--bg-card)",
-                            color: "var(--text-muted)",
-                          }}
-                        >
-                          ✏️ Upravit
-                        </button>
-                        <button
-                          onClick={() => deleteProduct(p.id)}
-                          style={{
-                            padding: "4px 10px",
-                            borderRadius: "6px",
-                            fontSize: "12px",
-                            cursor: "pointer",
-                            border: "1px solid rgba(239,68,68,0.3)",
-                            background: "rgba(239,68,68,0.1)",
-                            color: "#ef4444",
-                          }}
-                        >
-                          🗑️
-                        </button>
+                        <button onClick={() => startEdit(p)} style={{ padding: "4px 10px", borderRadius: "6px", fontSize: "12px", cursor: "pointer", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-muted)" }}>✏️ Upravit</button>
+                        <button onClick={() => deleteProduct(p.id)} style={{ padding: "4px 10px", borderRadius: "6px", fontSize: "12px", cursor: "pointer", border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>🗑️</button>
                       </div>
                     </td>
                   </tr>
@@ -491,110 +386,48 @@ export default function AdminShopPage() {
               </tbody>
             </table>
           </div>
-
-          {products.length === 0 && (
-            <p style={{ textAlign: "center", padding: "32px 0", color: "var(--text-dimmer)" }}>
-              Zatím žádné produkty. Přidejte první!
-            </p>
-          )}
+          {products.length === 0 && <p style={{ textAlign: "center", padding: "32px 0", color: "var(--text-dimmer)" }}>Zatím žádné produkty. Přidejte první!</p>}
         </div>
       )}
 
-      {/* ORDERS TAB */}
+      {/* ==================== ORDERS TAB ==================== */}
       {tab === "orders" && (
         <div>
-          <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+          <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
             {["pending", "paid", "cancelled", ""].map((s) => (
-              <button
-                key={s}
-                onClick={() => setOrderFilter(s)}
-                style={{
-                  padding: "6px 14px",
-                  borderRadius: "6px",
-                  fontSize: "13px",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  border: `1px solid ${orderFilter === s ? "var(--accent)" : "var(--border)"}`,
-                  background: orderFilter === s ? "var(--accent)" : "transparent",
-                  color: orderFilter === s ? "var(--accent-text-on)" : "var(--text-muted)",
-                }}
-              >
+              <button key={s} onClick={() => setOrderFilter(s)} style={{
+                padding: "6px 14px", borderRadius: "6px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
+                border: `1px solid ${orderFilter === s ? "var(--accent)" : "var(--border)"}`,
+                background: orderFilter === s ? "var(--accent)" : "transparent",
+                color: orderFilter === s ? "var(--accent-text-on)" : "var(--text-muted)",
+              }}>
                 {s ? ORDER_STATUS_LABELS[s] : "Všechny"}
               </button>
             ))}
           </div>
-
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
                   {["Číslo", "Produkt", "Uživatel", "Cena", "Stav", "Datum", "Akce"].map((h) => (
-                    <th
-                      key={h}
-                      style={{
-                        textAlign: "left",
-                        padding: "10px 12px",
-                        fontSize: "12px",
-                        fontWeight: 600,
-                        color: "var(--text-dimmer)",
-                        borderBottom: "1px solid var(--border)",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {h}
-                    </th>
+                    <th key={h} style={{ textAlign: "left", padding: "10px 12px", fontSize: "12px", fontWeight: 600, color: "var(--text-dimmer)", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {orders.map((o) => (
                   <tr key={o.id}>
-                    <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "14px", fontWeight: 600, color: "var(--accent)" }}>
-                      {o.order_number}
-                    </td>
-                    <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "13px", color: "var(--text-body)" }}>
-                      {o.product?.title || "—"}
-                    </td>
-                    <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "13px", color: "var(--text-body)" }}>
-                      {o.user?.display_name || o.user?.username || "—"}
-                    </td>
-                    <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>
-                      {o.price} Kč
-                    </td>
+                    <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "14px", fontWeight: 600, color: "var(--accent)" }}>{o.order_number}</td>
+                    <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "13px", color: "var(--text-body)" }}>{o.product?.title || "—"}</td>
+                    <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "13px", color: "var(--text-body)" }}>{o.user?.display_name || o.user?.username || "—"}</td>
+                    <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>{o.price} Kč</td>
                     <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)" }}>
-                      <span
-                        style={{
-                          padding: "2px 8px",
-                          borderRadius: "4px",
-                          fontSize: "11px",
-                          fontWeight: 600,
-                          background: `${ORDER_STATUS_COLORS[o.status]}20`,
-                          color: ORDER_STATUS_COLORS[o.status],
-                        }}
-                      >
-                        {ORDER_STATUS_LABELS[o.status]}
-                      </span>
+                      <span style={{ padding: "2px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: 600, background: `${ORDER_STATUS_COLORS[o.status]}20`, color: ORDER_STATUS_COLORS[o.status] }}>{ORDER_STATUS_LABELS[o.status]}</span>
                     </td>
-                    <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "13px", color: "var(--text-dimmer)" }}>
-                      {new Date(o.created_at).toLocaleDateString("cs-CZ")}
-                    </td>
+                    <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "13px", color: "var(--text-dimmer)" }}>{new Date(o.created_at).toLocaleDateString("cs-CZ")}</td>
                     <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)" }}>
                       {o.status === "pending" && (
-                        <button
-                          onClick={() => confirmPayment(o.id)}
-                          style={{
-                            padding: "4px 12px",
-                            borderRadius: "6px",
-                            fontSize: "12px",
-                            fontWeight: 600,
-                            cursor: "pointer",
-                            border: "1px solid rgba(34,197,94,0.4)",
-                            background: "rgba(34,197,94,0.1)",
-                            color: "#22c55e",
-                          }}
-                        >
-                          ✅ Potvrdit platbu
-                        </button>
+                        <button onClick={() => confirmPayment(o.id)} style={{ padding: "4px 12px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, cursor: "pointer", border: "1px solid rgba(34,197,94,0.4)", background: "rgba(34,197,94,0.1)", color: "#22c55e" }}>✅ Potvrdit platbu</button>
                       )}
                     </td>
                   </tr>
@@ -602,16 +435,157 @@ export default function AdminShopPage() {
               </tbody>
             </table>
           </div>
-
-          {orders.length === 0 && (
-            <p style={{ textAlign: "center", padding: "32px 0", color: "var(--text-dimmer)" }}>
-              Žádné objednávky v této kategorii
-            </p>
-          )}
+          {orders.length === 0 && <p style={{ textAlign: "center", padding: "32px 0", color: "var(--text-dimmer)" }}>Žádné objednávky v této kategorii</p>}
         </div>
       )}
 
-      {/* ADD / EDIT TAB */}
+      {/* ==================== CATEGORIES TAB ==================== */}
+      {tab === "categories" && (
+        <div style={{ maxWidth: "700px" }}>
+          <h2 style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "20px" }}>🏷️ Správa kategorií</h2>
+
+          {/* Category form */}
+          <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px", padding: "20px", marginBottom: "24px" }}>
+            <h3 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "16px" }}>
+              {editingCat ? `✏️ Upravit: ${editingCat.name}` : "➕ Přidat kategorii"}
+            </h3>
+
+            {/* Name + Slug */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+              <div>
+                <label style={labelStyle}>Název *</label>
+                <input
+                  value={catForm.name}
+                  onChange={(e) => {
+                    const name = e.target.value;
+                    setCatForm((f) => ({
+                      ...f, name,
+                      slug: editingCat ? f.slug : slugify(name),
+                    }));
+                  }}
+                  style={inputStyle}
+                  placeholder="Lokomotivy TT"
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Slug *</label>
+                <input
+                  value={catForm.slug}
+                  onChange={(e) => setCatForm((f) => ({ ...f, slug: e.target.value }))}
+                  style={inputStyle}
+                  placeholder="lokomotivy-tt"
+                />
+              </div>
+            </div>
+
+            {/* Emoji + Color + Sort + Active */}
+            <div style={{ display: "grid", gridTemplateColumns: "100px 160px 100px auto", gap: "12px", marginBottom: "16px", alignItems: "end" }}>
+              <div>
+                <label style={labelStyle}>Emoji</label>
+                <input
+                  value={catForm.emoji}
+                  onChange={(e) => setCatForm((f) => ({ ...f, emoji: e.target.value }))}
+                  style={{ ...inputStyle, fontSize: "20px", textAlign: "center" }}
+                  placeholder="🚂"
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Barva</label>
+                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  <input
+                    type="color"
+                    value={catForm.color}
+                    onChange={(e) => setCatForm((f) => ({ ...f, color: e.target.value }))}
+                    style={{ width: "40px", height: "40px", border: "none", borderRadius: "6px", cursor: "pointer", background: "transparent", padding: 0 }}
+                  />
+                  <input
+                    value={catForm.color}
+                    onChange={(e) => setCatForm((f) => ({ ...f, color: e.target.value }))}
+                    style={{ ...inputStyle, width: "90px", fontSize: "12px", fontFamily: "monospace" }}
+                  />
+                </div>
+              </div>
+              <div>
+                <label style={labelStyle}>Pořadí</label>
+                <input
+                  type="number"
+                  value={catForm.sort_order}
+                  onChange={(e) => setCatForm((f) => ({ ...f, sort_order: parseInt(e.target.value) || 0 }))}
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Aktivní</label>
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", padding: "10px 0" }}>
+                  <input type="checkbox" checked={catForm.active} onChange={(e) => setCatForm((f) => ({ ...f, active: e.target.checked }))} style={{ width: "18px", height: "18px" }} />
+                  <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>{catForm.active ? "Ano" : "Ne"}</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Preview */}
+            {catForm.name && (
+              <div style={{ marginBottom: "16px", padding: "10px 14px", background: "var(--bg-page)", borderRadius: "8px", display: "flex", alignItems: "center", gap: "10px" }}>
+                <span style={{ fontSize: "13px", color: "var(--text-dimmer)" }}>Náhled:</span>
+                <span style={{ fontSize: "20px" }}>{catForm.emoji}</span>
+                <span style={{ fontSize: "14px", fontWeight: 600, color: catForm.color }}>{catForm.name}</span>
+                <span style={{ fontSize: "12px", color: "var(--text-dimmer)" }}>({catForm.slug})</span>
+              </div>
+            )}
+
+            {/* Buttons */}
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button
+                disabled={catSaving || !catForm.name.trim() || !catForm.slug.trim()}
+                onClick={handleSaveCategory}
+                style={{
+                  padding: "10px 24px", border: "none", borderRadius: "8px", fontSize: "14px", fontWeight: 600,
+                  background: catSaving || !catForm.name.trim() ? "var(--border-hover)" : "var(--accent)",
+                  color: catSaving || !catForm.name.trim() ? "var(--text-dimmer)" : "var(--accent-text-on)",
+                  cursor: catSaving || !catForm.name.trim() ? "not-allowed" : "pointer",
+                }}
+              >
+                {catSaving ? "Ukládám..." : editingCat ? "💾 Uložit" : "➕ Přidat"}
+              </button>
+              {editingCat && (
+                <button onClick={resetCatForm} style={{ padding: "10px 24px", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "8px", color: "var(--text-muted)", fontSize: "14px", cursor: "pointer" }}>
+                  ✕ Zrušit
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Category list */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {categories.length === 0 ? (
+              <p style={{ color: "var(--text-dimmer)", textAlign: "center", padding: "24px" }}>
+                Zatím žádné kategorie. Přidejte první, nebo spusťte migraci <code>012_shop_categories.sql</code>.
+              </p>
+            ) : (
+              categories.map((cat) => (
+                <div key={cat.id} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px 16px", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", opacity: cat.active ? 1 : 0.5 }}>
+                  <span style={{ fontSize: "24px" }}>{cat.emoji}</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>{cat.name}</div>
+                    <div style={{ fontSize: "12px", color: "var(--text-dimmer)" }}>{cat.slug} · pořadí {cat.sort_order}{!cat.active && " · neaktivní"}</div>
+                  </div>
+                  <div style={{ width: "24px", height: "24px", borderRadius: "6px", background: cat.color, border: "1px solid var(--border)", flexShrink: 0 }} title={cat.color} />
+                  <button
+                    onClick={() => { setEditingCat(cat); setCatForm({ slug: cat.slug, name: cat.name, emoji: cat.emoji, color: cat.color, sort_order: cat.sort_order, active: cat.active }); }}
+                    style={{ padding: "6px 14px", background: "rgba(59,130,246,0.15)", color: "#3b82f6", border: "1px solid rgba(59,130,246,0.3)", borderRadius: "6px", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                  >✏️</button>
+                  <button
+                    onClick={() => deleteCategory(cat)}
+                    style={{ padding: "6px 14px", background: "rgba(239,68,68,0.1)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "6px", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                  >🗑️</button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ==================== ADD / EDIT PRODUCT TAB ==================== */}
       {(tab === "add" || tab === "edit") && (
         <div style={{ maxWidth: "700px" }}>
           <h2 style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "20px" }}>
@@ -622,30 +596,13 @@ export default function AdminShopPage() {
             {/* Title */}
             <div>
               <label style={labelStyle}>Název *</label>
-              <input
-                type="text"
-                value={formData.title}
-                onChange={(e) => {
-                  setFormData((f) => ({
-                    ...f,
-                    title: e.target.value,
-                    slug: editProduct ? f.slug : slugify(e.target.value),
-                  }));
-                }}
-                style={inputStyle}
-                required
-              />
+              <input type="text" value={formData.title} onChange={(e) => setFormData((f) => ({ ...f, title: e.target.value, slug: editProduct ? f.slug : slugify(e.target.value) }))} style={inputStyle} required />
             </div>
 
             {/* Slug */}
             <div>
               <label style={labelStyle}>Slug (URL)</label>
-              <input
-                type="text"
-                value={formData.slug}
-                onChange={(e) => setFormData((f) => ({ ...f, slug: e.target.value }))}
-                style={inputStyle}
-              />
+              <input type="text" value={formData.slug} onChange={(e) => setFormData((f) => ({ ...f, slug: e.target.value }))} style={inputStyle} />
             </div>
 
             {/* Category + Scale */}
@@ -653,44 +610,29 @@ export default function AdminShopPage() {
               <div>
                 <label style={labelStyle}>Kategorie *</label>
                 <select
-                  value={categories.some(c => c.slug === formData.category) || formData.category === "__custom__" ? formData.category : "__custom__"}
-                  onChange={(e) => {
-                    if (e.target.value === "__custom__") {
-                      setFormData((f) => ({ ...f, category: "__custom__" }));
-                    } else {
-                      setCustomCategory("");
-                      setFormData((f) => ({ ...f, category: e.target.value }));
-                    }
-                  }}
+                  value={formData.category}
+                  onChange={(e) => setFormData((f) => ({ ...f, category: e.target.value }))}
                   style={inputStyle}
                 >
+                  <option value="">— Vyberte —</option>
                   {categories.map((c) => (
                     <option key={c.slug} value={c.slug}>{c.emoji} {c.name}</option>
                   ))}
-                  <option value="__custom__">➕ Nová kategorie...</option>
                 </select>
-                {(formData.category === "__custom__" || (!categories.some(c => c.slug === formData.category) && formData.category !== "__custom__" && formData.category)) && (
-                  <input
-                    type="text"
-                    value={customCategory || (formData.category !== "__custom__" ? formData.category : "")}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setCustomCategory(val);
-                      const slug = val.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-                      setFormData((f) => ({ ...f, category: slug }));
-                    }}
-                    placeholder="Název nové kategorie (např. Lokomotivy TT)"
-                    style={{ ...inputStyle, marginTop: "8px" }}
-                  />
+                {categories.length === 0 && (
+                  <p style={{ fontSize: "11px", color: "#f59e0b", marginTop: "4px" }}>
+                    ⚠️ Nejsou žádné kategorie. Přidejte je v záložce &quot;Kategorie&quot;.
+                  </p>
+                )}
+                {formData.category && !categories.some(c => c.slug === formData.category) && (
+                  <p style={{ fontSize: "11px", color: "#f59e0b", marginTop: "4px" }}>
+                    ⚠️ Kategorie &quot;{formData.category}&quot; není v DB. Přidejte ji v záložce &quot;Kategorie&quot;.
+                  </p>
                 )}
               </div>
               <div>
                 <label style={labelStyle}>Měřítko</label>
-                <select
-                  value={formData.scale}
-                  onChange={(e) => setFormData((f) => ({ ...f, scale: e.target.value }))}
-                  style={inputStyle}
-                >
+                <select value={formData.scale} onChange={(e) => setFormData((f) => ({ ...f, scale: e.target.value }))} style={inputStyle}>
                   <option value="">—</option>
                   <option value="TT">TT</option>
                   <option value="H0">H0</option>
@@ -704,91 +646,45 @@ export default function AdminShopPage() {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
               <div>
                 <label style={labelStyle}>Cena (Kč) — 0 = zdarma</label>
-                <input
-                  type="number"
-                  value={formData.price}
-                  onChange={(e) => setFormData((f) => ({ ...f, price: parseInt(e.target.value) || 0 }))}
-                  style={inputStyle}
-                  min={0}
-                />
+                <input type="number" value={formData.price} onChange={(e) => setFormData((f) => ({ ...f, price: parseInt(e.target.value) || 0 }))} style={inputStyle} min={0} />
               </div>
               <div>
                 <label style={labelStyle}>Původní cena (pro slevu)</label>
-                <input
-                  type="number"
-                  value={formData.original_price}
-                  onChange={(e) => setFormData((f) => ({ ...f, original_price: e.target.value }))}
-                  style={inputStyle}
-                  min={0}
-                  placeholder="Prázdné = bez slevy"
-                />
+                <input type="number" value={formData.original_price} onChange={(e) => setFormData((f) => ({ ...f, original_price: e.target.value }))} style={inputStyle} min={0} placeholder="Prázdné = bez slevy" />
               </div>
             </div>
 
             {/* Description */}
             <div>
               <label style={labelStyle}>Krátký popis (pro kartu)</label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => setFormData((f) => ({ ...f, description: e.target.value }))}
-                style={{ ...inputStyle, minHeight: "80px", resize: "vertical" }}
-                rows={3}
-              />
+              <textarea value={formData.description} onChange={(e) => setFormData((f) => ({ ...f, description: e.target.value }))} style={{ ...inputStyle, minHeight: "80px", resize: "vertical" }} rows={3} />
             </div>
 
             {/* Long description */}
             <div>
               <label style={labelStyle}>Podrobný popis (HTML)</label>
-              <textarea
-                value={formData.long_description}
-                onChange={(e) => setFormData((f) => ({ ...f, long_description: e.target.value }))}
-                style={{ ...inputStyle, minHeight: "120px", resize: "vertical" }}
-                rows={6}
-              />
+              <textarea value={formData.long_description} onChange={(e) => setFormData((f) => ({ ...f, long_description: e.target.value }))} style={{ ...inputStyle, minHeight: "120px", resize: "vertical" }} rows={6} />
             </div>
 
             {/* Tags */}
             <div>
               <label style={labelStyle}>Tagy (čárkou oddělené)</label>
-              <input
-                type="text"
-                value={formData.tags}
-                onChange={(e) => setFormData((f) => ({ ...f, tags: e.target.value }))}
-                style={inputStyle}
-                placeholder="TT, Tillig, kolejový plán"
-              />
+              <input type="text" value={formData.tags} onChange={(e) => setFormData((f) => ({ ...f, tags: e.target.value }))} style={inputStyle} placeholder="TT, Tillig, kolejový plán" />
             </div>
 
             {/* Status + Featured */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
               <div>
                 <label style={labelStyle}>Stav</label>
-                <select
-                  value={formData.status}
-                  onChange={(e) => setFormData((f) => ({ ...f, status: e.target.value }))}
-                  style={inputStyle}
-                >
+                <select value={formData.status} onChange={(e) => setFormData((f) => ({ ...f, status: e.target.value }))} style={inputStyle}>
                   <option value="active">Aktivní</option>
                   <option value="draft">Koncept</option>
                   <option value="archived">Archivováno</option>
                 </select>
               </div>
               <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: "4px" }}>
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    fontSize: "14px",
-                    color: "var(--text-body)",
-                    cursor: "pointer",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={formData.featured}
-                    onChange={(e) => setFormData((f) => ({ ...f, featured: e.target.checked }))}
-                  />
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "14px", color: "var(--text-body)", cursor: "pointer" }}>
+                  <input type="checkbox" checked={formData.featured} onChange={(e) => setFormData((f) => ({ ...f, featured: e.target.checked }))} />
                   ⭐ Zvýrazněný produkt
                 </label>
               </div>
@@ -798,78 +694,35 @@ export default function AdminShopPage() {
             <div style={{ display: "grid", gap: "12px" }}>
               <div>
                 <label style={labelStyle}>Náhledový obrázek</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => setCoverFile(e.target.files?.[0] || null)}
-                  style={{ fontSize: "13px", color: "var(--text-body)" }}
-                />
-                {editProduct?.cover_image_url && !coverFile && (
-                  <span style={{ fontSize: "12px", color: "var(--text-dimmer)", marginLeft: "8px" }}>
-                    (aktuální obrázek zachován)
-                  </span>
-                )}
+                <input type="file" accept="image/*" onChange={(e) => setCoverFile(e.target.files?.[0] || null)} style={{ fontSize: "13px", color: "var(--text-body)" }} />
+                {editProduct?.cover_image_url && !coverFile && <span style={{ fontSize: "12px", color: "var(--text-dimmer)", marginLeft: "8px" }}>(aktuální obrázek zachován)</span>}
               </div>
               <div>
                 <label style={labelStyle}>Galerie náhledů (více souborů)</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={(e) => setPreviewFiles(Array.from(e.target.files || []))}
-                  style={{ fontSize: "13px", color: "var(--text-body)" }}
-                />
+                <input type="file" accept="image/*" multiple onChange={(e) => setPreviewFiles(Array.from(e.target.files || []))} style={{ fontSize: "13px", color: "var(--text-body)" }} />
               </div>
               <div>
                 <label style={labelStyle}>Soubor ke stažení (PDF, ZIP, STL...)</label>
-                <input
-                  type="file"
-                  onChange={(e) => setProductFile(e.target.files?.[0] || null)}
-                  style={{ fontSize: "13px", color: "var(--text-body)" }}
-                />
-                {editProduct?.file_name && !productFile && (
-                  <span style={{ fontSize: "12px", color: "var(--text-dimmer)", marginLeft: "8px" }}>
-                    (aktuální: {editProduct.file_name})
-                  </span>
-                )}
+                <input type="file" onChange={(e) => setProductFile(e.target.files?.[0] || null)} style={{ fontSize: "13px", color: "var(--text-body)" }} />
+                {editProduct?.file_name && !productFile && <span style={{ fontSize: "12px", color: "var(--text-dimmer)", marginLeft: "8px" }}>(aktuální: {editProduct.file_name})</span>}
               </div>
             </div>
 
             {/* Error */}
             {saveError && (
-              <div style={{ padding: "10px 14px", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "8px", color: "#ef4444", fontSize: "13px" }}>
-                {saveError}
-              </div>
+              <div style={{ padding: "10px 14px", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "8px", color: "#ef4444", fontSize: "13px" }}>{saveError}</div>
             )}
 
             {/* Actions */}
             <div style={{ display: "flex", gap: "12px", marginTop: "8px" }}>
-              <button
-                onClick={() => { resetForm(); setTab("products"); }}
-                style={{
-                  padding: "12px 24px",
-                  background: "transparent",
-                  border: "1px solid var(--border)",
-                  borderRadius: "10px",
-                  color: "var(--text-muted)",
-                  fontSize: "14px",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                Zrušit
-              </button>
+              <button onClick={() => { resetForm(); setTab("products"); }} style={{ padding: "12px 24px", background: "transparent", border: "1px solid var(--border)", borderRadius: "10px", color: "var(--text-muted)", fontSize: "14px", fontWeight: 600, cursor: "pointer" }}>Zrušit</button>
               <button
                 onClick={handleSave}
-                disabled={saving || !formData.title}
+                disabled={saving || !formData.title || !formData.category}
                 style={{
-                  padding: "12px 24px",
+                  padding: "12px 24px", border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: 600,
                   background: saving ? "var(--border)" : "var(--accent)",
-                  border: "none",
-                  borderRadius: "10px",
                   color: "var(--accent-text-on)",
-                  fontSize: "14px",
-                  fontWeight: 600,
                   cursor: saving ? "not-allowed" : "pointer",
                 }}
               >
