@@ -1,10 +1,11 @@
 const TURNSTILE_SECRET = process.env.TURNSTILE_SECRET_KEY;
 
-if (!TURNSTILE_SECRET) {
-  throw new Error("Missing TURNSTILE_SECRET_KEY env var");
-}
-
 export async function verifyTurnstile(token: string, ip?: string): Promise<boolean> {
+  if (!TURNSTILE_SECRET) {
+    console.error("Missing TURNSTILE_SECRET_KEY env var");
+    return false;
+  }
+
   try {
     const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
       method: "POST",

@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { verifyTurnstile } from "@/lib/turnstile";
 import { getClientIp, normalizeText, payloadDigest, rateLimit, replayGuard } from "@/lib/security";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  throw new Error("Missing required env vars: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY");
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,7 +19,16 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { code, items } = body;
+    const { code, items, turnstileToken } = body;
+
+    // Anti-bot check
+    if (!turnstileToken) {
+      return NextResponse.json({ error: "Chybí ověření." }, { status: 400 });
+    }
+    const validTurnstile = await verifyTurnstile(turnstileToken, ip);
+    if (!validTurnstile) {
+      return NextResponse.json({ error: "Ověření se nezdařilo." }, { status: 403 });
+    }
 
     const safeCode = normalizeText(code || "", 64).toUpperCase();
     if (!safeCode) {
@@ -26,7 +40,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Příliš rychlé opakování požadavku." }, { status: 429 });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+    const supabase = createClient(supabaseUrl!, supabaseServiceKey!, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
@@ -34,8 +48,11 @@ export async function POST(req: NextRequest) {
     const authHeader = req.headers.get("authorization");
     const token = authHeader?.replace("Bearer ", "") || "";
     if (token) {
-      const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-      const userClient = createClient(supabaseUrl, anonKey, {
+      const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      if (!anonKey) {
+        return NextResponse.json({ error: "Server config error" }, { status: 500 });
+      }
+      const userClient = createClient(supabaseUrl!, anonKey, {
         auth: { autoRefreshToken: false, persistSession: false },
         global: { headers: { Authorization: `Bearer ${token}` } },
       });

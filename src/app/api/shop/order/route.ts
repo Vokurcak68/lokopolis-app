@@ -4,18 +4,27 @@ import nodemailer from "nodemailer";
 import { verifyTurnstile } from "@/lib/turnstile";
 import { getClientIp, honeypotValid, minFillTimeValid, normalizeText, payloadDigest, rateLimit, replayGuard } from "@/lib/security";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const smtpHost = process.env.SMTP_HOST;
+const smtpPort = process.env.SMTP_PORT;
+const smtpUser = process.env.SMTP_USER;
+const smtpPass = process.env.SMTP_PASS;
 
-const smtpHost = process.env.SMTP_HOST || "smtp.cesky-hosting.cz";
-const smtpPort = Number(process.env.SMTP_PORT || "465");
+if (!supabaseUrl || !supabaseServiceKey) {
+  throw new Error("Missing required env vars: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY");
+}
+
+if (!smtpHost || !smtpPort || !smtpUser || !smtpPass) {
+  throw new Error("Missing required SMTP env vars: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS");
+}
+
+const smtpPortNum = Number(smtpPort);
 const smtpSecure = process.env.SMTP_SECURE ? process.env.SMTP_SECURE === "true" : true;
-const smtpUser = process.env.SMTP_USER || "info@lokopolis.cz";
-const smtpPass = process.env.SMTP_PASS || "";
 
 const transporter = nodemailer.createTransport({
   host: smtpHost,
-  port: smtpPort,
+  port: smtpPortNum,
   secure: smtpSecure,
   auth: {
     user: smtpUser,
@@ -66,7 +75,12 @@ export async function POST(req: NextRequest) {
     const authHeader = req.headers.get("authorization");
     const token = authHeader?.replace("Bearer ", "");
 
-    const userClient = createClient(supabaseUrl, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "", {
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!anonKey) {
+      return NextResponse.json({ error: "Server config error" }, { status: 500 });
+    }
+
+    const userClient = createClient(supabaseUrl!, anonKey, {
       auth: { autoRefreshToken: false, persistSession: false },
       global: token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
     });
@@ -76,7 +90,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Nepřihlášen" }, { status: 401 });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+    const supabase = createClient(supabaseUrl!, supabaseServiceKey!, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 

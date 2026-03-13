@@ -4,8 +4,12 @@ import { grantOrderPoints, redeemPoints, applyPointsToOrder } from "@/lib/loyalt
 import { verifyTurnstile } from "@/lib/turnstile";
 import { getClientIp, honeypotValid, isValidEmail, minFillTimeValid, normalizeText, payloadDigest, rateLimit, replayGuard } from "@/lib/security";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  throw new Error("Missing required env vars: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY");
+}
 
 function generateOrderNumber(): string {
   const year = new Date().getFullYear();
@@ -82,8 +86,11 @@ export async function POST(req: NextRequest) {
     let userId: string | null = null;
 
     if (token) {
-      const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-      const userClient = createClient(supabaseUrl, anonKey, {
+      const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      if (!anonKey) {
+        return NextResponse.json({ error: "Server config error" }, { status: 500 });
+      }
+      const userClient = createClient(supabaseUrl!, anonKey, {
         auth: { autoRefreshToken: false, persistSession: false },
         global: { headers: { Authorization: `Bearer ${token}` } },
       });
@@ -91,7 +98,7 @@ export async function POST(req: NextRequest) {
       userId = user?.id || null;
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+    const supabase = createClient(supabaseUrl!, supabaseServiceKey!, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 

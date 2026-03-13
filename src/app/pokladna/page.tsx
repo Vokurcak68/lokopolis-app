@@ -169,6 +169,10 @@ export default function CheckoutPage() {
 
   async function applyCoupon() {
     if (!couponCode.trim()) return;
+    if (!turnstileToken) {
+      setCouponError("Potvrďte prosím anti-bot ověření.");
+      return;
+    }
     setCouponLoading(true);
     setCouponError("");
     try {
@@ -184,6 +188,7 @@ export default function CheckoutPage() {
             category: i.product.category,
           })),
           userId: user?.id || null,
+          turnstileToken,
         }),
       });
       const data = await res.json();
