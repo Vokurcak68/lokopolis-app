@@ -93,9 +93,17 @@ export default function MessageThread({
     setMessages((prev) => [...prev, optimisticMsg]);
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error("Neplatná session. Přihlas se znovu.");
+      }
+
       const res = await fetch("/api/bazar/message", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({
           listingId,
           senderId: user.id,

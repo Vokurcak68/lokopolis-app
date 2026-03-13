@@ -1,13 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getClientIp, rateLimit } from "@/lib/security";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = getClientIp(req);
+    const rl = rateLimit(`shop-coupon:${ip}`, 40, 60_000);
+    if (!rl.ok) {
+      return NextResponse.json({ error: "Příliš mnoho pokusů, zkus to za chvíli." }, { status: 429 });
+    }
+
     const body = await req.json();
-    const { code, items, userId } = body;
+    const { code, items } = body;
 
     if (!code?.trim()) {
       return NextResponse.json({ error: "Zadejte kód kupónu" }, { status: 400 });
@@ -16,6 +23,19 @@ export async function POST(req: NextRequest) {
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
+
+    let userId: string | null = null;
+    const authHeader = req.headers.get("authorization");
+    const token = authHeader?.replace("Bearer ", "") || "";
+    if (token) {
+      const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+      const userClient = createClient(supabaseUrl, anonKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+        global: { headers: { Authorization: `Bearer ${token}` } },
+      });
+      const { data: { user } } = await userClient.auth.getUser(token);
+      userId = user?.id || null;
+    }
 
     // Find coupon
     const { data: coupon } = await supabase

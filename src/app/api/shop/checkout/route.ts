@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { grantOrderPoints, redeemPoints, applyPointsToOrder, POINTS_VALUE_CZK } from "@/lib/loyalty";
+import { grantOrderPoints, redeemPoints, applyPointsToOrder } from "@/lib/loyalty";
+import { getClientIp, isValidEmail, normalizeText, rateLimit } from "@/lib/security";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -13,17 +14,36 @@ function generateOrderNumber(): string {
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = getClientIp(req);
+    const rl = rateLimit(`shop-checkout:${ip}`, 12, 60_000);
+    if (!rl.ok) {
+      return NextResponse.json({ error: "Příliš mnoho pokusů o objednávku. Zkus to za chvíli." }, { status: 429 });
+    }
+
     const body = await req.json();
     const { items, billing, shippingMethodId, paymentMethodId, couponCode, loyaltyPointsToUse } = body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: "Prázdný košík" }, { status: 400 });
     }
-    if (!billing?.name?.trim() || !billing?.email?.trim()) {
+
+    const safeName = normalizeText(billing?.name || "", 120);
+    const safeEmail = normalizeText(billing?.email || "", 200).toLowerCase();
+
+    if (!safeName || !safeEmail) {
       return NextResponse.json({ error: "Vyplňte jméno a email" }, { status: 400 });
     }
+
+    if (!isValidEmail(safeEmail)) {
+      return NextResponse.json({ error: "Neplatný email" }, { status: 400 });
+    }
+
     if (!shippingMethodId || !paymentMethodId) {
       return NextResponse.json({ error: "Vyberte dopravu a platbu" }, { status: 400 });
+    }
+
+    if (items.length > 50) {
+      return NextResponse.json({ error: "Košík je příliš velký" }, { status: 400 });
     }
 
     // Get user (optional — guest checkout allowed)
@@ -88,10 +108,16 @@ export async function POST(req: NextRequest) {
     for (const item of items) {
       const product = products.find((p) => p.id === item.productId);
       if (!product) continue;
-      const qty = item.quantity || 1;
-      const total = product.price * qty;
+
+      const qtyRaw = Number(item.quantity || 1);
+      const qty = Number.isFinite(qtyRaw) ? Math.max(1, Math.min(99, Math.floor(qtyRaw))) : 1;
+
+      // Digital products max 1 ks
+      const finalQty = product.file_url ? 1 : qty;
+
+      const total = Number(product.price) * finalQty;
       itemsTotal += total;
-      orderItems.push({ productId: product.id, quantity: qty, unitPrice: product.price, totalPrice: total });
+      orderItems.push({ productId: product.id, quantity: finalQty, unitPrice: Number(product.price), totalPrice: total });
     }
 
     const shippingPrice = shipping.free_from && itemsTotal >= shipping.free_from ? 0 : shipping.price;
@@ -170,6 +196,18 @@ export async function POST(req: NextRequest) {
     const totalPrice = Math.max(0, itemsTotal - couponDiscount - loyaltyDiscount + shippingPrice + paymentSurcharge);
     const allFree = totalPrice === 0;
 
+    const safePhone = normalizeText(billing?.phone || "", 40) || null;
+    const safeStreet = normalizeText(billing?.street || "", 160) || null;
+    const safeCity = normalizeText(billing?.city || "", 120) || null;
+    const safeZip = normalizeText(billing?.zip || "", 20) || null;
+    const safeCountry = normalizeText(billing?.country || "CZ", 2).toUpperCase() || "CZ";
+    const safeIco = normalizeText(billing?.ico || "", 20) || null;
+    const safeDic = normalizeText(billing?.dic || "", 30) || null;
+    const safeShippingStreet = normalizeText(billing?.shippingStreet || "", 160) || null;
+    const safeShippingCity = normalizeText(billing?.shippingCity || "", 120) || null;
+    const safeShippingZip = normalizeText(billing?.shippingZip || "", 20) || null;
+    const safeShippingCountry = normalizeText(billing?.shippingCountry || "", 2).toUpperCase() || "CZ";
+
     // Create order
     const orderNumber = generateOrderNumber();
     const { data: order, error: orderErr } = await supabase
@@ -186,24 +224,24 @@ export async function POST(req: NextRequest) {
         shipping_price: shippingPrice,
         payment_surcharge: paymentSurcharge,
         total_price: totalPrice,
-        billing_name: billing.name,
-        billing_email: billing.email,
-        billing_phone: billing.phone || null,
-        billing_street: billing.street || null,
-        billing_city: billing.city || null,
-        billing_zip: billing.zip || null,
-        billing_country: billing.country || "CZ",
+        billing_name: safeName,
+        billing_email: safeEmail,
+        billing_phone: safePhone,
+        billing_street: safeStreet,
+        billing_city: safeCity,
+        billing_zip: safeZip,
+        billing_country: safeCountry,
         coupon_id: couponId,
         coupon_code: appliedCouponCode,
         coupon_discount: couponDiscount,
         loyalty_points_used: loyaltyPointsUsed,
         loyalty_discount: loyaltyDiscount,
-        billing_ico: billing.isBusiness ? billing.ico : null,
-        billing_dic: billing.isBusiness ? billing.dic : null,
-        shipping_street: billing.differentShipping ? billing.shippingStreet : billing.street || null,
-        shipping_city: billing.differentShipping ? billing.shippingCity : billing.city || null,
-        shipping_zip: billing.differentShipping ? billing.shippingZip : billing.zip || null,
-        shipping_country: billing.differentShipping ? billing.shippingCountry : billing.country || "CZ",
+        billing_ico: billing.isBusiness ? safeIco : null,
+        billing_dic: billing.isBusiness ? safeDic : null,
+        shipping_street: billing.differentShipping ? safeShippingStreet : safeStreet,
+        shipping_city: billing.differentShipping ? safeShippingCity : safeCity,
+        shipping_zip: billing.differentShipping ? safeShippingZip : safeZip,
+        shipping_country: billing.differentShipping ? safeShippingCountry : safeCountry,
         paid_at: allFree ? new Date().toISOString() : null,
       })
       .select("id")

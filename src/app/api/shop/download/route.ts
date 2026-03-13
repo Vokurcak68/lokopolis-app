@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getClientIp, rateLimit } from "@/lib/security";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
 export async function GET(req: NextRequest) {
   try {
+    const ip = getClientIp(req);
+    const rl = rateLimit(`shop-download:${ip}`, 60, 60_000);
+    if (!rl.ok) {
+      return NextResponse.json({ error: "Příliš mnoho pokusů, zkus to za chvíli." }, { status: 429 });
+    }
+
     const productId = req.nextUrl.searchParams.get("productId");
     if (!productId) {
       return NextResponse.json({ error: "Chybí productId" }, { status: 400 });

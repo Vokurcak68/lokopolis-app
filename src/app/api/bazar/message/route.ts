@@ -1,18 +1,69 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendEmail } from "@/lib/email";
+import { getClientIp, normalizeText, rateLimit } from "@/lib/security";
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  supabaseUrl,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
 export async function POST(req: NextRequest) {
   try {
-    const { listingId, senderId, recipientId, content } = await req.json();
+    const ip = getClientIp(req);
+    const rl = rateLimit(`bazar-message:${ip}`, 20, 60_000);
+    if (!rl.ok) {
+      return NextResponse.json({ error: "Příliš mnoho zpráv, zkus to za chvíli." }, { status: 429 });
+    }
 
-    if (!listingId || !senderId || !recipientId || !content?.trim()) {
+    const body = await req.json();
+    const listingId = body?.listingId as string;
+    const senderId = body?.senderId as string;
+    const recipientId = body?.recipientId as string;
+    const content = normalizeText(body?.content || "", 2000);
+
+    if (!listingId || !senderId || !recipientId || !content) {
       return NextResponse.json({ error: "Chybí povinná pole." }, { status: 400 });
+    }
+    if (senderId === recipientId) {
+      return NextResponse.json({ error: "Nemůžeš poslat zprávu sám sobě." }, { status: 400 });
+    }
+
+    const authHeader = req.headers.get("authorization");
+    const token = authHeader?.replace("Bearer ", "") || "";
+    if (!token) {
+      return NextResponse.json({ error: "Nepřihlášen" }, { status: 401 });
+    }
+
+    const userClient = createClient(supabaseUrl, anonKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    });
+
+    const {
+      data: { user },
+    } = await userClient.auth.getUser(token);
+
+    if (!user || user.id !== senderId) {
+      return NextResponse.json({ error: "Neplatný odesílatel." }, { status: 403 });
+    }
+
+    // Verify listing and recipient relationship
+    const { data: listing } = await supabaseAdmin
+      .from("listings")
+      .select("id, title, seller_id")
+      .eq("id", listingId)
+      .single();
+
+    if (!listing) {
+      return NextResponse.json({ error: "Inzerát nenalezen." }, { status: 404 });
+    }
+
+    if (recipientId !== listing.seller_id && senderId !== listing.seller_id) {
+      return NextResponse.json({ error: "Neplatný příjemce." }, { status: 403 });
     }
 
     // Verify sender exists
@@ -33,7 +84,7 @@ export async function POST(req: NextRequest) {
         listing_id: listingId,
         sender_id: senderId,
         recipient_id: recipientId,
-        content: content.trim(),
+        content,
       })
       .select()
       .single();
@@ -43,16 +94,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Nepodařilo se odeslat zprávu." }, { status: 500 });
     }
 
-    // Fetch recipient's email + listing title for notification
+    // Fetch recipient's email for notification
     try {
-      const [{ data: recipientAuth }, { data: listing }] = await Promise.all([
-        supabaseAdmin.auth.admin.getUserById(recipientId),
-        supabaseAdmin
-          .from("listings")
-          .select("id, title")
-          .eq("id", listingId)
-          .single(),
-      ]);
+      const { data: recipientAuth } = await supabaseAdmin.auth.admin.getUserById(recipientId);
 
       const recipientEmail = recipientAuth?.user?.email;
       const listingTitle = listing?.title || "Inzerát";
