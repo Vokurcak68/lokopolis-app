@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import type { ShopProduct } from "@/types/database";
 import { type ShopCategory, getFullCategoryLabel, getCategoryColor } from "@/lib/shop-categories";
+import { useCart } from "./CartProvider";
 
 const SCALE_COLORS: Record<string, string> = {
   TT: "#3b82f6",
@@ -31,6 +33,9 @@ export default function ProductCard({ product, featured, categories = [] }: Prod
   const catLabel = getFullCategoryLabel(categories, product.category);
   const isFree = product.price === 0;
   const hasDiscount = product.original_price && product.original_price > product.price;
+  const { addToCart, items } = useCart();
+  const [added, setAdded] = useState(false);
+  const inCart = items.some((i) => i.product.id === product.id);
 
   return (
     <Link href={`/shop/${product.slug}`} style={{ textDecoration: "none" }}>
@@ -236,12 +241,50 @@ export default function ProductCard({ product, featured, categories = [] }: Prod
               alignItems: "center",
               fontSize: "12px",
               color: "var(--text-dimmer)",
+              marginBottom: "10px",
             }}
           >
             <span style={{ display: "flex", alignItems: "center", gap: "3px" }}>
               ⬇️ {product.download_count}× staženo
             </span>
           </div>
+
+          {/* Add to cart button */}
+          {!isFree && (
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!inCart && !added) {
+                  addToCart(product);
+                  setAdded(true);
+                  setTimeout(() => setAdded(false), 1500);
+                }
+              }}
+              style={{
+                width: "100%",
+                padding: "10px",
+                borderRadius: "8px",
+                border: "none",
+                fontSize: "13px",
+                fontWeight: 600,
+                cursor: inCart ? "default" : "pointer",
+                background: added
+                  ? "rgba(34, 197, 94, 0.15)"
+                  : inCart
+                  ? "var(--bg-page)"
+                  : "var(--accent)",
+                color: added
+                  ? "#22c55e"
+                  : inCart
+                  ? "var(--text-muted)"
+                  : "var(--accent-text-on)",
+                transition: "all 0.2s",
+              }}
+            >
+              {added ? "✓ Přidáno" : inCart ? "V košíku" : "🛒 Do košíku"}
+            </button>
+          )}
         </div>
       </div>
     </Link>

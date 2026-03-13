@@ -5,6 +5,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import AuthProvider from "@/components/Auth/AuthProvider";
 import ThemeProvider from "@/components/ThemeProvider";
+import { CartProvider } from "@/components/Shop/CartProvider";
 
 const inter = Inter({
   subsets: ["latin", "latin-ext"],
@@ -65,9 +66,11 @@ export default function RootLayout({
       <body className={`${inter.variable} antialiased flex flex-col min-h-screen`}>
         <ThemeProvider>
           <AuthProvider>
-            <Header />
-            <main className="flex-1">{children}</main>
-            <Footer />
+            <CartProvider>
+              <Header />
+              <main className="flex-1">{children}</main>
+              <Footer />
+            </CartProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>

@@ -327,9 +327,8 @@ export interface SellerReview {
 }
 
 // Shop types
-export type ShopProductCategory = 'kolejovy-plan' | 'stl-model' | 'navod' | 'ebook' | 'balicek';
 export type ShopProductStatus = 'active' | 'draft' | 'archived';
-export type ShopOrderStatus = 'pending' | 'paid' | 'cancelled' | 'refunded';
+export type ShopOrderStatus = 'pending' | 'paid' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'refunded';
 
 export interface ShopProduct {
   id: string;
@@ -339,7 +338,7 @@ export interface ShopProduct {
   long_description: string | null;
   price: number;
   original_price: number | null;
-  category: ShopProductCategory;
+  category: string;
   scale: string | null;
   cover_image_url: string | null;
   preview_images: string[];
@@ -351,21 +350,81 @@ export interface ShopProduct {
   featured: boolean;
   status: ShopProductStatus;
   download_count: number;
+  is_digital: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface ShippingMethod {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  price: number;
+  free_from: number | null;
+  delivery_days: string | null;
+  digital_only: boolean;
+  physical_only: boolean;
+  active: boolean;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface PaymentMethod {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  surcharge: number;
+  instructions: string | null;
+  active: boolean;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface OrderItem {
+  id: string;
+  order_id: string;
+  product_id: string;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+  created_at: string;
+  product?: ShopProduct | null;
 }
 
 export interface ShopOrder {
   id: string;
   order_number: string;
-  user_id: string;
-  product_id: string;
+  user_id: string | null;
+  product_id: string | null;
   price: number;
   status: ShopOrderStatus;
   payment_method: string | null;
+  shipping_method_id: string | null;
+  payment_method_id: string | null;
+  shipping_price: number;
+  payment_surcharge: number;
+  total_price: number | null;
+  billing_name: string | null;
+  billing_email: string | null;
+  billing_phone: string | null;
+  billing_street: string | null;
+  billing_city: string | null;
+  billing_zip: string | null;
+  billing_country: string | null;
+  billing_ico: string | null;
+  billing_dic: string | null;
+  shipping_street: string | null;
+  shipping_city: string | null;
+  shipping_zip: string | null;
+  shipping_country: string | null;
+  tracking_number: string | null;
   notes: string | null;
   admin_notes: string | null;
   paid_at: string | null;
+  shipped_at: string | null;
+  delivered_at: string | null;
   created_at: string;
 }
 
@@ -377,12 +436,20 @@ export interface UserPurchase {
   granted_at: string;
 }
 
-export interface ShopOrderWithProduct extends ShopOrder {
+export interface ShopOrderWithDetails extends ShopOrder {
+  items: OrderItem[];
   product: ShopProduct | null;
+  shipping: ShippingMethod | null;
+  payment: PaymentMethod | null;
 }
 
 export interface UserPurchaseWithProduct extends UserPurchase {
   product: ShopProduct | null;
+}
+
+export interface CartItemData {
+  product: ShopProduct;
+  quantity: number;
 }
 
 // Supabase Database type pro type-safe klienta

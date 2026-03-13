@@ -6,6 +6,7 @@ import BadgeLogo from "./BadgeLogo";
 import UserMenu from "./Auth/UserMenu";
 import { useAuth } from "./Auth/AuthProvider";
 import { useTheme } from "./ThemeProvider";
+import { useCart } from "./Shop/CartProvider";
 import { supabase } from "@/lib/supabase";
 
 const navItems = [
@@ -40,6 +41,54 @@ function ThemeToggle() {
     >
       {theme === "dark" ? "☀️" : "🌙"}
     </button>
+  );
+}
+
+function CartBadge() {
+  const { cartCount } = useCart();
+  return (
+    <Link
+      href="/kosik"
+      title="Košík"
+      style={{
+        position: "relative",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "6px 10px",
+        border: "1px solid var(--border-nav)",
+        borderRadius: "8px",
+        color: "var(--text-muted)",
+        fontSize: "16px",
+        lineHeight: 1,
+        textDecoration: "none",
+        transition: "border-color 0.2s",
+      }}
+    >
+      🛒
+      {cartCount > 0 && (
+        <span
+          style={{
+            position: "absolute",
+            top: "-6px",
+            right: "-6px",
+            background: "#ef4444",
+            color: "#fff",
+            fontSize: "10px",
+            fontWeight: 700,
+            borderRadius: "50%",
+            minWidth: "18px",
+            height: "18px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "0 4px",
+          }}
+        >
+          {cartCount > 99 ? "99+" : cartCount}
+        </span>
+      )}
+    </Link>
   );
 }
 
@@ -99,6 +148,7 @@ export default function Header() {
         </nav>
 
         <div className="desktop-actions" style={{ alignItems: "center", gap: "12px" }}>
+          <CartBadge />
           <ThemeToggle />
           {user ? (
             <>
@@ -194,6 +244,7 @@ export default function Header() {
         </div>
 
         <div className="mobile-controls" style={{ alignItems: "center", gap: "8px" }}>
+          <CartBadge />
           <ThemeToggle />
           <button
             style={{ color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer" }}
