@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { grantOrderPoints, redeemPoints, applyPointsToOrder } from "@/lib/loyalty";
 import { verifyTurnstile } from "@/lib/turnstile";
-import { getClientIp, isValidEmail, normalizeText, rateLimit } from "@/lib/security";
+import { getClientIp, honeypotValid, isValidEmail, minFillTimeValid, normalizeText, payloadDigest, rateLimit, replayGuard } from "@/lib/security";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -22,7 +22,15 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { items, billing, shippingMethodId, paymentMethodId, couponCode, loyaltyPointsToUse, turnstileToken } = body;
+    const { items, billing, shippingMethodId, paymentMethodId, couponCode, loyaltyPointsToUse, turnstileToken, website, startedAt } = body;
+
+    if (!honeypotValid(website)) {
+      return NextResponse.json({ error: "Požadavek byl zablokován." }, { status: 400 });
+    }
+
+    if (!minFillTimeValid(startedAt, 4000)) {
+      return NextResponse.json({ error: "Formulář byl odeslán příliš rychle." }, { status: 400 });
+    }
 
     if (!turnstileToken) {
       return NextResponse.json({ error: "Chybí anti-bot ověření." }, { status: 400 });
@@ -35,6 +43,18 @@ export async function POST(req: NextRequest) {
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: "Prázdný košík" }, { status: 400 });
+    }
+
+    const replayKey = `checkout:${ip}:${payloadDigest({
+      email: (billing?.email || "").toLowerCase(),
+      shippingMethodId,
+      paymentMethodId,
+      items: items.map((i: { productId: string; quantity: number }) => ({ productId: i.productId, quantity: i.quantity })),
+      couponCode: couponCode || null,
+      loyaltyPointsToUse: loyaltyPointsToUse || null,
+    })}`;
+    if (!replayGuard(replayKey, 120000)) {
+      return NextResponse.json({ error: "Duplicitní objednávka. Počkejte chvíli a zkuste to znovu." }, { status: 409 });
     }
 
     const safeName = normalizeText(billing?.name || "", 120);

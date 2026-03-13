@@ -24,6 +24,8 @@ export default function MessageThread({
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [messageStartedAt] = useState<number>(() => Date.now());
+  const [website] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const fetchMessages = useCallback(async (showLoading = false) => {
@@ -116,6 +118,8 @@ export default function MessageThread({
           recipientId,
           content,
           turnstileToken,
+          startedAt: messageStartedAt,
+          website,
         }),
       });
       const data = await res.json();
@@ -249,6 +253,16 @@ export default function MessageThread({
       >
         <div>
           <Turnstile onVerify={setTurnstileToken} onExpire={() => setTurnstileToken(null)} />
+          <input
+            type="text"
+            name="website"
+            value={website}
+            onChange={() => {}}
+            autoComplete="off"
+            tabIndex={-1}
+            aria-hidden="true"
+            style={{ position: "absolute", left: "-10000px", width: "1px", height: "1px", opacity: 0, pointerEvents: "none" }}
+          />
         </div>
 
         <div style={{ display: "flex", gap: "8px" }}>

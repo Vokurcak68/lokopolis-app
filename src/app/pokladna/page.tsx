@@ -54,6 +54,8 @@ export default function CheckoutPage() {
   const [loyaltyInfo, setLoyaltyInfo] = useState<{ points: number; pointsValueCzk: number; currentLevel: { name: string; icon: string; color: string } | null } | null>(null);
   const [loyaltyPointsToUse, setLoyaltyPointsToUse] = useState(0);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [checkoutStartedAt] = useState<number>(() => Date.now());
+  const [website] = useState("");
 
   // Determine if cart is all-digital
   const isAllDigital = items.every((i) => !!i.product.file_url);
@@ -230,6 +232,8 @@ export default function CheckoutPage() {
           couponCode: couponApplied?.code || null,
           loyaltyPointsToUse: loyaltyPointsToUse > 0 ? loyaltyPointsToUse : null,
           turnstileToken,
+          startedAt: checkoutStartedAt,
+          website,
         }),
       });
 
@@ -678,6 +682,16 @@ export default function CheckoutPage() {
             Ověření proti botům
           </div>
           <Turnstile onVerify={setTurnstileToken} onExpire={() => setTurnstileToken(null)} />
+          <input
+            type="text"
+            name="website"
+            value={website}
+            onChange={() => {}}
+            autoComplete="off"
+            tabIndex={-1}
+            aria-hidden="true"
+            style={{ position: "absolute", left: "-10000px", width: "1px", height: "1px", opacity: 0, pointerEvents: "none" }}
+          />
         </div>
       )}
 

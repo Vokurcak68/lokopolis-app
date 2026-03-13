@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import crypto from "crypto";
 
 type RateEntry = {
   count: number;
@@ -6,6 +7,11 @@ type RateEntry = {
 };
 
 const RATE_STORE = new Map<string, RateEntry>();
+const SEEN_STORE = new Map<string, SeenEntry>();
+
+type SeenEntry = {
+  seenAt: number;
+};
 
 export function getClientIp(req: NextRequest): string {
   const fwd = req.headers.get("x-forwarded-for");
@@ -43,4 +49,36 @@ export function isValidEmail(email: string): boolean {
 
 export function normalizeText(input: string, maxLen = 2000): string {
   return (input || "").replace(/\u0000/g, "").trim().slice(0, maxLen);
+}
+
+export function honeypotValid(value: unknown): boolean {
+  return typeof value === "undefined" || value === null || String(value).trim() === "";
+}
+
+export function minFillTimeValid(startedAt: unknown, minMs = 3000): boolean {
+  const ts = Number(startedAt);
+  if (!Number.isFinite(ts) || ts <= 0) return false;
+  return Date.now() - ts >= minMs;
+}
+
+export function payloadDigest(input: unknown): string {
+  const text = typeof input === "string" ? input : JSON.stringify(input);
+  return crypto.createHash("sha256").update(text).digest("hex");
+}
+
+export function replayGuard(key: string, windowMs = 120000): boolean {
+  const now = Date.now();
+
+  for (const [k, v] of SEEN_STORE.entries()) {
+    if (now - v.seenAt > windowMs) {
+      SEEN_STORE.delete(k);
+    }
+  }
+
+  if (SEEN_STORE.has(key)) {
+    return false;
+  }
+
+  SEEN_STORE.set(key, { seenAt: now });
+  return true;
 }

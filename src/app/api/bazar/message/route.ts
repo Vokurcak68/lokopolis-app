@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendEmail } from "@/lib/email";
 import { verifyTurnstile } from "@/lib/turnstile";
-import { getClientIp, normalizeText, rateLimit } from "@/lib/security";
+import { getClientIp, honeypotValid, minFillTimeValid, normalizeText, payloadDigest, rateLimit, replayGuard } from "@/lib/security";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -25,14 +25,29 @@ export async function POST(req: NextRequest) {
     const senderId = body?.senderId as string;
     const recipientId = body?.recipientId as string;
     const turnstileToken = body?.turnstileToken as string;
+    const hp = body?.website as string | undefined;
+    const startedAt = body?.startedAt as number | undefined;
     const content = normalizeText(body?.content || "", 2000);
 
     if (!listingId || !senderId || !recipientId || !content) {
       return NextResponse.json({ error: "Chybí povinná pole." }, { status: 400 });
     }
 
+    if (!honeypotValid(hp)) {
+      return NextResponse.json({ error: "Požadavek byl zablokován." }, { status: 400 });
+    }
+
+    if (!minFillTimeValid(startedAt, 2500)) {
+      return NextResponse.json({ error: "Formulář byl odeslán příliš rychle." }, { status: 400 });
+    }
+
     if (!turnstileToken) {
       return NextResponse.json({ error: "Chybí anti-bot ověření." }, { status: 400 });
+    }
+
+    const replayKey = `bazar-msg:${ip}:${payloadDigest({ listingId, senderId, recipientId, content })}`;
+    if (!replayGuard(replayKey, 120000)) {
+      return NextResponse.json({ error: "Duplicitní požadavek. Zkuste to znovu za chvíli." }, { status: 409 });
     }
 
     const turnstileOk = await verifyTurnstile(turnstileToken, ip);
