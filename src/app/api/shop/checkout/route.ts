@@ -13,7 +13,7 @@ function generateOrderNumber(): string {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { items, billing, shippingMethodId, paymentMethodId } = body;
+    const { items, billing, shippingMethodId, paymentMethodId, couponCode } = body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: "Prázdný košík" }, { status: 400 });
@@ -95,8 +95,68 @@ export async function POST(req: NextRequest) {
 
     const shippingPrice = shipping.free_from && itemsTotal >= shipping.free_from ? 0 : shipping.price;
     const paymentSurcharge = payment.surcharge || 0;
-    const totalPrice = itemsTotal + shippingPrice + paymentSurcharge;
-    const allFree = itemsTotal === 0;
+
+    // Coupon validation
+    let couponId: string | null = null;
+    let couponDiscount = 0;
+    let appliedCouponCode: string | null = null;
+
+    if (couponCode?.trim()) {
+      const { data: coupon } = await supabase
+        .from("coupons")
+        .select("*")
+        .eq("code", couponCode.trim().toUpperCase())
+        .eq("active", true)
+        .single();
+
+      if (coupon) {
+        const now = new Date();
+        const isValid =
+          (!coupon.valid_from || new Date(coupon.valid_from) <= now) &&
+          (!coupon.valid_until || new Date(coupon.valid_until) >= now) &&
+          (coupon.max_uses === null || coupon.used_count < coupon.max_uses);
+
+        if (isValid) {
+          // Check per-user limit
+          let userOk = true;
+          if (userId && coupon.max_uses_per_user) {
+            const { count } = await supabase
+              .from("coupon_usage")
+              .select("*", { count: "exact", head: true })
+              .eq("coupon_id", coupon.id)
+              .eq("user_id", userId);
+            if (count !== null && count >= coupon.max_uses_per_user) userOk = false;
+          }
+
+          if (userOk) {
+            // Calculate applicable total (respecting product/category restrictions)
+            let applicableTotal = 0;
+            for (const item of orderItems) {
+              const product = products.find((p) => p.id === item.productId);
+              if (!product) continue;
+              if (coupon.product_ids?.length > 0 && !coupon.product_ids.includes(product.id)) continue;
+              if (coupon.category_slugs?.length > 0 && !coupon.category_slugs.includes(product.category)) continue;
+              applicableTotal += item.totalPrice;
+            }
+
+            if (!coupon.min_order_amount || applicableTotal >= coupon.min_order_amount) {
+              if (coupon.discount_type === "percent") {
+                couponDiscount = applicableTotal * (coupon.discount_value / 100);
+                if (coupon.max_discount !== null) couponDiscount = Math.min(couponDiscount, coupon.max_discount);
+              } else {
+                couponDiscount = Math.min(coupon.discount_value, applicableTotal);
+              }
+              couponDiscount = Math.round(couponDiscount * 100) / 100;
+              couponId = coupon.id;
+              appliedCouponCode = coupon.code;
+            }
+          }
+        }
+      }
+    }
+
+    const totalPrice = Math.max(0, itemsTotal - couponDiscount + shippingPrice + paymentSurcharge);
+    const allFree = totalPrice === 0;
 
     // Create order
     const orderNumber = generateOrderNumber();
@@ -121,6 +181,9 @@ export async function POST(req: NextRequest) {
         billing_city: billing.city || null,
         billing_zip: billing.zip || null,
         billing_country: billing.country || "CZ",
+        coupon_id: couponId,
+        coupon_code: appliedCouponCode,
+        coupon_discount: couponDiscount,
         billing_ico: billing.isBusiness ? billing.ico : null,
         billing_dic: billing.isBusiness ? billing.dic : null,
         shipping_street: billing.differentShipping ? billing.shippingStreet : billing.street || null,
@@ -146,6 +209,20 @@ export async function POST(req: NextRequest) {
         unit_price: item.unitPrice,
         total_price: item.totalPrice,
       });
+    }
+
+    // Record coupon usage + increment counter
+    if (couponId && couponDiscount > 0) {
+      await supabase.from("coupon_usage").insert({
+        coupon_id: couponId,
+        order_id: order.id,
+        user_id: userId,
+        discount_amount: couponDiscount,
+      });
+      const { data: cur } = await supabase.from("coupons").select("used_count").eq("id", couponId).single();
+      if (cur) {
+        await supabase.from("coupons").update({ used_count: cur.used_count + 1 }).eq("id", couponId);
+      }
     }
 
     // For free products + logged in user: auto-grant purchases
@@ -186,6 +263,8 @@ export async function POST(req: NextRequest) {
       orderNumber,
       orderId: order.id,
       totalPrice,
+      couponDiscount,
+      couponCode: appliedCouponCode,
       status: allFree ? "paid" : "pending",
       qrData,
       paymentSlug: payment.slug,

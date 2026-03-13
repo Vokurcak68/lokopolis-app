@@ -46,6 +46,10 @@ export default function CheckoutPage() {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [selectedShipping, setSelectedShipping] = useState<string>("");
   const [selectedPayment, setSelectedPayment] = useState<string>("");
+  const [couponCode, setCouponCode] = useState("");
+  const [couponApplied, setCouponApplied] = useState<{ code: string; discount: number; description: string } | null>(null);
+  const [couponError, setCouponError] = useState("");
+  const [couponLoading, setCouponLoading] = useState(false);
 
   // Determine if cart is all-digital
   const isAllDigital = items.every((i) => !!i.product.file_url);
@@ -94,7 +98,8 @@ export default function CheckoutPage() {
     ? (selectedShippingObj.free_from && cartTotal >= selectedShippingObj.free_from ? 0 : selectedShippingObj.price)
     : 0;
   const paymentSurcharge = selectedPaymentObj?.surcharge || 0;
-  const totalPrice = cartTotal + shippingPrice + paymentSurcharge;
+  const couponDiscountAmount = couponApplied?.discount || 0;
+  const totalPrice = Math.max(0, cartTotal - couponDiscountAmount + shippingPrice + paymentSurcharge);
 
   // Filter methods based on cart content
   const filteredShipping = shippingMethods.filter((s) => {
@@ -139,6 +144,46 @@ export default function CheckoutPage() {
     return true;
   }
 
+  async function applyCoupon() {
+    if (!couponCode.trim()) return;
+    setCouponLoading(true);
+    setCouponError("");
+    try {
+      const res = await fetch("/api/shop/coupon/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: couponCode.trim(),
+          items: items.map((i) => ({
+            productId: i.product.id,
+            quantity: i.quantity,
+            price: i.product.price,
+            category: i.product.category,
+          })),
+          userId: user?.id || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setCouponError(data.error || "Neplatný kupón");
+        setCouponApplied(null);
+      } else {
+        setCouponApplied({ code: data.code, discount: data.discount, description: data.description });
+        setCouponError("");
+      }
+    } catch {
+      setCouponError("Chyba při ověřování kupónu");
+    } finally {
+      setCouponLoading(false);
+    }
+  }
+
+  function removeCoupon() {
+    setCouponApplied(null);
+    setCouponCode("");
+    setCouponError("");
+  }
+
   async function handleSubmit() {
     if (!validateStep()) return;
     setSubmitting(true);
@@ -157,6 +202,7 @@ export default function CheckoutPage() {
           billing,
           shippingMethodId: selectedShipping,
           paymentMethodId: selectedPayment,
+          couponCode: couponApplied?.code || null,
         }),
       });
 
@@ -484,6 +530,50 @@ export default function CheckoutPage() {
             </div>
           </div>
 
+          {/* Coupon */}
+          <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "16px" }}>
+            <h3 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-muted)", marginBottom: "12px" }}>🎟️ Slevový kupón</h3>
+            {couponApplied ? (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div>
+                  <span style={{ padding: "4px 12px", background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "6px", fontSize: "14px", fontWeight: 600, color: "#22c55e" }}>
+                    ✅ {couponApplied.code} ({couponApplied.description})
+                  </span>
+                  <span style={{ marginLeft: "12px", fontSize: "14px", fontWeight: 600, color: "#22c55e" }}>-{couponApplied.discount} Kč</span>
+                </div>
+                <button onClick={removeCoupon} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}>✕ Odebrat</button>
+              </div>
+            ) : (
+              <div style={{ display: "flex", gap: "8px" }}>
+                <input
+                  value={couponCode}
+                  onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); setCouponError(""); }}
+                  placeholder="Zadejte kód kupónu"
+                  style={{
+                    flex: 1, padding: "10px 14px", borderRadius: "8px", fontSize: "14px",
+                    border: `1px solid ${couponError ? "#ef4444" : "var(--border)"}`,
+                    background: "var(--bg-header)", color: "var(--text-primary)",
+                    textTransform: "uppercase", letterSpacing: "1px",
+                  }}
+                  onKeyDown={(e) => e.key === "Enter" && applyCoupon()}
+                />
+                <button
+                  onClick={applyCoupon}
+                  disabled={couponLoading || !couponCode.trim()}
+                  style={{
+                    padding: "10px 20px", borderRadius: "8px", fontSize: "14px", fontWeight: 600,
+                    border: "1px solid var(--accent)", background: "var(--accent)", color: "var(--accent-text-on)",
+                    cursor: couponLoading || !couponCode.trim() ? "not-allowed" : "pointer",
+                    opacity: couponLoading || !couponCode.trim() ? 0.5 : 1,
+                  }}
+                >
+                  {couponLoading ? "..." : "Uplatnit"}
+                </button>
+              </div>
+            )}
+            {couponError && <p style={{ color: "#ef4444", fontSize: "13px", marginTop: "8px" }}>{couponError}</p>}
+          </div>
+
           {/* Total */}
           <div
             style={{
@@ -491,13 +581,28 @@ export default function CheckoutPage() {
               background: "var(--bg-card)",
               border: "2px solid var(--accent)",
               borderRadius: "12px",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
             }}
           >
-            <span style={{ fontSize: "18px", fontWeight: 600, color: "var(--text-primary)" }}>Celkem k úhradě</span>
-            <span style={{ fontSize: "24px", fontWeight: 700, color: "var(--accent)" }}>{totalPrice} Kč</span>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "14px", color: "var(--text-muted)" }}>
+              <span>Produkty</span><span>{cartTotal} Kč</span>
+            </div>
+            {couponDiscountAmount > 0 && (
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "14px", color: "#22c55e" }}>
+                <span>Sleva ({couponApplied?.code})</span><span>-{couponDiscountAmount} Kč</span>
+              </div>
+            )}
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "14px", color: "var(--text-muted)" }}>
+              <span>Doprava</span><span>{shippingPrice === 0 ? "Zdarma" : `${shippingPrice} Kč`}</span>
+            </div>
+            {paymentSurcharge > 0 && (
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "14px", color: "var(--text-muted)" }}>
+                <span>Příplatek za platbu</span><span>+{paymentSurcharge} Kč</span>
+              </div>
+            )}
+            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "12px", marginTop: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: "18px", fontWeight: 600, color: "var(--text-primary)" }}>Celkem k úhradě</span>
+              <span style={{ fontSize: "24px", fontWeight: 700, color: "var(--accent)" }}>{totalPrice} Kč</span>
+            </div>
           </div>
         </div>
       )}

@@ -420,6 +420,9 @@ export interface ShopOrder {
   shipping_zip: string | null;
   shipping_country: string | null;
   tracking_number: string | null;
+  coupon_id: string | null;
+  coupon_code: string | null;
+  coupon_discount: number;
   notes: string | null;
   admin_notes: string | null;
   paid_at: string | null;
@@ -445,6 +448,38 @@ export interface ShopOrderWithDetails extends ShopOrder {
 
 export interface UserPurchaseWithProduct extends UserPurchase {
   product: ShopProduct | null;
+}
+
+// === Coupons ===
+export type CouponDiscountType = "percent" | "fixed";
+
+export interface Coupon {
+  id: string;
+  code: string;
+  description: string | null;
+  discount_type: CouponDiscountType;
+  discount_value: number;
+  min_order_amount: number | null;
+  max_discount: number | null;
+  max_uses: number | null;
+  max_uses_per_user: number;
+  used_count: number;
+  valid_from: string | null;
+  valid_until: string | null;
+  product_ids: string[] | null;
+  category_slugs: string[] | null;
+  first_order_only: boolean;
+  active: boolean;
+  created_at: string;
+}
+
+export interface CouponUsage {
+  id: string;
+  coupon_id: string;
+  order_id: string;
+  user_id: string | null;
+  discount_amount: number;
+  used_at: string;
 }
 
 export interface CartItemData {

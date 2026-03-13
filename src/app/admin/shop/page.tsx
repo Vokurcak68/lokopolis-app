@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
-import type { ShopProduct, ShopOrder, ShippingMethod, PaymentMethod } from "@/types/database";
+import type { ShopProduct, ShopOrder, ShippingMethod, PaymentMethod, Coupon } from "@/types/database";
 import { type ShopCategory, buildCategoryTree, type ShopCategoryTreeNode } from "@/lib/shop-categories";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -64,7 +64,7 @@ interface CatFormState {
   parent_id: string | null;
 }
 
-type AdminTab = "products" | "orders" | "categories" | "shipping" | "payments" | "add" | "edit";
+type AdminTab = "products" | "orders" | "categories" | "shipping" | "payments" | "coupons" | "add" | "edit";
 
 export default function AdminShopPage() {
   const router = useRouter();
@@ -412,10 +412,10 @@ export default function AdminShopPage() {
 
       {/* Tabs */}
       <div style={{ display: "flex", gap: "8px", marginBottom: "24px", borderBottom: "1px solid var(--border)", paddingBottom: "12px", flexWrap: "wrap" }}>
-        {(["products", "orders", "categories", "shipping", "payments", "add"] as AdminTab[]).map((t) => {
+        {(["products", "orders", "categories", "shipping", "payments", "coupons", "add"] as AdminTab[]).map((t) => {
           const labels: Record<string, string> = {
             products: "📦 Produkty", orders: "📋 Objednávky", categories: "🏷️ Kategorie",
-            shipping: "🚚 Doprava", payments: "💳 Platby", add: "➕ Přidat",
+            shipping: "🚚 Doprava", payments: "💳 Platby", coupons: "🎟️ Kupóny", add: "➕ Přidat",
           };
           return (
             <button
@@ -970,6 +970,9 @@ export default function AdminShopPage() {
       {/* ==================== PAYMENTS TAB ==================== */}
       {tab === "payments" && <PaymentsAdmin />}
 
+      {/* ==================== COUPONS TAB ==================== */}
+      {tab === "coupons" && <CouponsAdmin />}
+
       <div style={{ height: "48px" }} />
     </div>
   );
@@ -1266,3 +1269,210 @@ const inputStyle: React.CSSProperties = {
   fontSize: "14px",
   outline: "none",
 };
+
+// ==================== COUPONS ADMIN ====================
+function CouponsAdmin() {
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [editing, setEditing] = useState<Coupon | null>(null);
+  const [form, setForm] = useState({
+    code: "", description: "", discount_type: "percent" as "percent" | "fixed",
+    discount_value: "", min_order_amount: "", max_discount: "", max_uses: "",
+    max_uses_per_user: "1", valid_from: "", valid_until: "",
+    first_order_only: false, active: true,
+  });
+
+  useEffect(() => { fetchCoupons(); }, []);
+
+  async function fetchCoupons() {
+    const { data } = await supabase.from("coupons").select("*").order("created_at", { ascending: false });
+    if (data) setCoupons(data);
+  }
+
+  function resetForm() {
+    setEditing(null);
+    setForm({
+      code: "", description: "", discount_type: "percent", discount_value: "",
+      min_order_amount: "", max_discount: "", max_uses: "", max_uses_per_user: "1",
+      valid_from: "", valid_until: "", first_order_only: false, active: true,
+    });
+  }
+
+  function editCoupon(c: Coupon) {
+    setEditing(c);
+    setForm({
+      code: c.code, description: c.description || "", discount_type: c.discount_type as "percent" | "fixed",
+      discount_value: String(c.discount_value), min_order_amount: c.min_order_amount ? String(c.min_order_amount) : "",
+      max_discount: c.max_discount ? String(c.max_discount) : "", max_uses: c.max_uses ? String(c.max_uses) : "",
+      max_uses_per_user: String(c.max_uses_per_user), valid_from: c.valid_from ? c.valid_from.slice(0, 16) : "",
+      valid_until: c.valid_until ? c.valid_until.slice(0, 16) : "", first_order_only: c.first_order_only, active: c.active,
+    });
+  }
+
+  async function saveCoupon() {
+    if (!form.code.trim() || !form.discount_value) return;
+    const payload = {
+      code: form.code.trim().toUpperCase(),
+      description: form.description || null,
+      discount_type: form.discount_type,
+      discount_value: parseFloat(form.discount_value),
+      min_order_amount: form.min_order_amount ? parseFloat(form.min_order_amount) : null,
+      max_discount: form.max_discount ? parseFloat(form.max_discount) : null,
+      max_uses: form.max_uses ? parseInt(form.max_uses) : null,
+      max_uses_per_user: parseInt(form.max_uses_per_user) || 1,
+      valid_from: form.valid_from ? new Date(form.valid_from).toISOString() : null,
+      valid_until: form.valid_until ? new Date(form.valid_until).toISOString() : null,
+      first_order_only: form.first_order_only,
+      active: form.active,
+    };
+    if (editing) {
+      await supabase.from("coupons").update(payload).eq("id", editing.id);
+    } else {
+      await supabase.from("coupons").insert(payload);
+    }
+    resetForm();
+    fetchCoupons();
+  }
+
+  async function deleteCoupon(id: string) {
+    if (!confirm("Smazat tento kupón?")) return;
+    await supabase.from("coupons").delete().eq("id", id);
+    fetchCoupons();
+  }
+
+  const lbl: React.CSSProperties = { fontSize: "12px", fontWeight: 600, color: "var(--text-dimmer)", marginBottom: "4px", display: "block" };
+  const inp: React.CSSProperties = { ...inputStyle };
+
+  return (
+    <div style={{ maxWidth: "900px" }}>
+      <h2 style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "20px" }}>🎟️ Správa kupónů</h2>
+
+      {/* Form */}
+      <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px", padding: "20px", marginBottom: "24px" }}>
+        <h3 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "16px" }}>
+          {editing ? `✏️ Upravit: ${editing.code}` : "➕ Nový kupón"}
+        </h3>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+          <div>
+            <label style={lbl}>Kód *</label>
+            <input value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))} style={{ ...inp, textTransform: "uppercase", letterSpacing: "1px" }} placeholder="ZIMA2026" />
+          </div>
+          <div>
+            <label style={lbl}>Typ slevy</label>
+            <select value={form.discount_type} onChange={(e) => setForm((f) => ({ ...f, discount_type: e.target.value as "percent" | "fixed" }))} style={inp}>
+              <option value="percent">Procenta (%)</option>
+              <option value="fixed">Pevná částka (Kč)</option>
+            </select>
+          </div>
+          <div>
+            <label style={lbl}>Hodnota slevy *</label>
+            <input type="number" value={form.discount_value} onChange={(e) => setForm((f) => ({ ...f, discount_value: e.target.value }))} style={inp} placeholder={form.discount_type === "percent" ? "10" : "50"} />
+          </div>
+        </div>
+
+        <div style={{ marginBottom: "12px" }}>
+          <label style={lbl}>Popis (interní)</label>
+          <input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} style={inp} placeholder="Zimní sleva pro nové zákazníky" />
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+          <div>
+            <label style={lbl}>Min. objednávka (Kč)</label>
+            <input type="number" value={form.min_order_amount} onChange={(e) => setForm((f) => ({ ...f, min_order_amount: e.target.value }))} style={inp} placeholder="—" />
+          </div>
+          <div>
+            <label style={lbl}>Max. sleva (Kč)</label>
+            <input type="number" value={form.max_discount} onChange={(e) => setForm((f) => ({ ...f, max_discount: e.target.value }))} style={inp} placeholder="—" />
+          </div>
+          <div>
+            <label style={lbl}>Max. použití celkem</label>
+            <input type="number" value={form.max_uses} onChange={(e) => setForm((f) => ({ ...f, max_uses: e.target.value }))} style={inp} placeholder="∞" />
+          </div>
+          <div>
+            <label style={lbl}>Max. na uživatele</label>
+            <input type="number" value={form.max_uses_per_user} onChange={(e) => setForm((f) => ({ ...f, max_uses_per_user: e.target.value }))} style={inp} placeholder="1" />
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+          <div>
+            <label style={lbl}>Platný od</label>
+            <input type="datetime-local" value={form.valid_from} onChange={(e) => setForm((f) => ({ ...f, valid_from: e.target.value }))} style={inp} />
+          </div>
+          <div>
+            <label style={lbl}>Platný do</label>
+            <input type="datetime-local" value={form.valid_until} onChange={(e) => setForm((f) => ({ ...f, valid_until: e.target.value }))} style={inp} />
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: "24px", marginBottom: "16px" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "var(--text-primary)", cursor: "pointer" }}>
+            <input type="checkbox" checked={form.first_order_only} onChange={(e) => setForm((f) => ({ ...f, first_order_only: e.target.checked }))} />
+            Jen první objednávka
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "var(--text-primary)", cursor: "pointer" }}>
+            <input type="checkbox" checked={form.active} onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))} />
+            Aktivní
+          </label>
+        </div>
+
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button onClick={saveCoupon} style={{ padding: "10px 24px", borderRadius: "8px", fontSize: "14px", fontWeight: 600, cursor: "pointer", border: "none", background: "var(--accent)", color: "var(--accent-text-on)" }}>
+            {editing ? "💾 Uložit" : "➕ Vytvořit"}
+          </button>
+          {editing && (
+            <button onClick={resetForm} style={{ padding: "10px 24px", borderRadius: "8px", fontSize: "14px", fontWeight: 600, cursor: "pointer", border: "1px solid var(--border)", background: "transparent", color: "var(--text-muted)" }}>Zrušit</button>
+          )}
+        </div>
+      </div>
+
+      {/* List */}
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              {["Kód", "Sleva", "Omezení", "Použití", "Platnost", "Stav", "Akce"].map((h) => (
+                <th key={h} style={{ textAlign: "left", padding: "10px 12px", fontSize: "12px", fontWeight: 600, color: "var(--text-dimmer)", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {coupons.map((c) => (
+              <tr key={c.id}>
+                <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "14px", fontWeight: 700, color: "var(--accent)", fontFamily: "monospace", letterSpacing: "1px" }}>{c.code}</td>
+                <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>
+                  {c.discount_type === "percent" ? `${c.discount_value}%` : `${c.discount_value} Kč`}
+                  {c.max_discount && <span style={{ fontSize: "11px", color: "var(--text-dimmer)", marginLeft: "4px" }}>(max {c.max_discount} Kč)</span>}
+                </td>
+                <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "12px", color: "var(--text-muted)" }}>
+                  {c.min_order_amount && <div>Min. {c.min_order_amount} Kč</div>}
+                  {c.first_order_only && <div>🆕 Jen 1. objednávka</div>}
+                </td>
+                <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "14px", color: "var(--text-primary)" }}>
+                  {c.used_count}{c.max_uses !== null ? `/${c.max_uses}` : ""}×
+                </td>
+                <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "12px", color: "var(--text-muted)" }}>
+                  {c.valid_from ? new Date(c.valid_from).toLocaleDateString("cs-CZ") : "—"}
+                  {" → "}
+                  {c.valid_until ? new Date(c.valid_until).toLocaleDateString("cs-CZ") : "∞"}
+                </td>
+                <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)" }}>
+                  <span style={{ padding: "2px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: 600, background: c.active ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)", color: c.active ? "#22c55e" : "#ef4444" }}>
+                    {c.active ? "Aktivní" : "Neaktivní"}
+                  </span>
+                </td>
+                <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)" }}>
+                  <div style={{ display: "flex", gap: "4px" }}>
+                    <button onClick={() => editCoupon(c)} style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "1px solid var(--border)", background: "transparent", color: "var(--text-muted)" }}>✏️</button>
+                    <button onClick={() => deleteCoupon(c.id)} style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.08)", color: "#ef4444" }}>🗑️</button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {coupons.length === 0 && <p style={{ textAlign: "center", padding: "32px 0", color: "var(--text-dimmer)" }}>Zatím žádné kupóny</p>}
+      </div>
+    </div>
+  );
+}
