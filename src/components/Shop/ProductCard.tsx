@@ -72,20 +72,20 @@ export default function ProductCard({ product, featured, categories = [] }: Prod
         {/* Image */}
         <div
           style={{
-            position: "relative",
             width: "100%",
-            paddingBottom: "75%",
+            height: "250px",
             background: "var(--bg-page)",
             overflow: "hidden",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
           }}
         >
           {product.cover_image_url ? (
-            <Image
+            <img
               src={optimizeImageUrl(product.cover_image_url)}
               alt={product.title}
-              fill
-              style={{ objectFit: "cover" }}
-              sizes={featured ? "(max-width: 768px) 100vw, 50vw" : "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"}
+              style={{ maxWidth: "100%", maxHeight: "100%", display: "block", objectFit: "contain" }}
             />
           ) : (
             <div
