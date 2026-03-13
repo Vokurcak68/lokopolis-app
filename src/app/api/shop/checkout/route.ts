@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { grantOrderPoints, redeemPoints, applyPointsToOrder, POINTS_VALUE_CZK } from "@/lib/loyalty";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -13,7 +14,7 @@ function generateOrderNumber(): string {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { items, billing, shippingMethodId, paymentMethodId, couponCode } = body;
+    const { items, billing, shippingMethodId, paymentMethodId, couponCode, loyaltyPointsToUse } = body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: "Prázdný košík" }, { status: 400 });
@@ -155,7 +156,18 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const totalPrice = Math.max(0, itemsTotal - couponDiscount + shippingPrice + paymentSurcharge);
+    // Loyalty points redemption
+    let loyaltyDiscount = 0;
+    let loyaltyPointsUsed = 0;
+    if (loyaltyPointsToUse && loyaltyPointsToUse > 0 && userId) {
+      const result = await redeemPoints(userId, loyaltyPointsToUse);
+      if ("discount" in result) {
+        loyaltyDiscount = result.discount;
+        loyaltyPointsUsed = loyaltyPointsToUse;
+      }
+    }
+
+    const totalPrice = Math.max(0, itemsTotal - couponDiscount - loyaltyDiscount + shippingPrice + paymentSurcharge);
     const allFree = totalPrice === 0;
 
     // Create order
@@ -184,6 +196,8 @@ export async function POST(req: NextRequest) {
         coupon_id: couponId,
         coupon_code: appliedCouponCode,
         coupon_discount: couponDiscount,
+        loyalty_points_used: loyaltyPointsUsed,
+        loyalty_discount: loyaltyDiscount,
         billing_ico: billing.isBusiness ? billing.ico : null,
         billing_dic: billing.isBusiness ? billing.dic : null,
         shipping_street: billing.differentShipping ? billing.shippingStreet : billing.street || null,
@@ -223,6 +237,17 @@ export async function POST(req: NextRequest) {
       if (cur) {
         await supabase.from("coupons").update({ used_count: cur.used_count + 1 }).eq("id", couponId);
       }
+    }
+
+    // Loyalty: deduct used points
+    if (loyaltyPointsUsed > 0 && userId) {
+      await applyPointsToOrder(userId, order.id, loyaltyPointsUsed, loyaltyDiscount);
+    }
+
+    // Loyalty: grant points for purchase (only for paid orders)
+    let loyaltyPointsEarned = 0;
+    if (userId && itemsTotal > 0) {
+      loyaltyPointsEarned = await grantOrderPoints(userId, order.id, itemsTotal, orderNumber);
     }
 
     // For free products + logged in user: auto-grant purchases
@@ -265,6 +290,9 @@ export async function POST(req: NextRequest) {
       totalPrice,
       couponDiscount,
       couponCode: appliedCouponCode,
+      loyaltyPointsEarned,
+      loyaltyPointsUsed: loyaltyPointsUsed,
+      loyaltyDiscount,
       status: allFree ? "paid" : "pending",
       qrData,
       paymentSlug: payment.slug,

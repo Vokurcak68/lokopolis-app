@@ -105,6 +105,22 @@ export default function UserMenu() {
             💬 Zprávy z bazaru
           </Link>
 
+          <Link
+            href="/objednavky"
+            onClick={() => setOpen(false)}
+            className="block w-full text-left px-4 py-2 text-sm text-text-muted hover:text-[var(--text-primary)] hover:bg-bg-card-hover transition-colors"
+          >
+            📋 Moje objednávky
+          </Link>
+
+          <Link
+            href="/vernostni-program"
+            onClick={() => setOpen(false)}
+            className="block w-full text-left px-4 py-2 text-sm text-text-muted hover:text-[var(--text-primary)] hover:bg-bg-card-hover transition-colors"
+          >
+            ⭐ Věrnostní program
+          </Link>
+
           {profile?.role === "admin" && (
             <>
               <Link

@@ -50,6 +50,8 @@ export default function CheckoutPage() {
   const [couponApplied, setCouponApplied] = useState<{ code: string; discount: number; description: string } | null>(null);
   const [couponError, setCouponError] = useState("");
   const [couponLoading, setCouponLoading] = useState(false);
+  const [loyaltyInfo, setLoyaltyInfo] = useState<{ points: number; pointsValueCzk: number; currentLevel: { name: string; icon: string; color: string } | null } | null>(null);
+  const [loyaltyPointsToUse, setLoyaltyPointsToUse] = useState(0);
 
   // Determine if cart is all-digital
   const isAllDigital = items.every((i) => !!i.product.file_url);
@@ -64,6 +66,22 @@ export default function CheckoutPage() {
       }));
     }
   }, [user, profile]);
+
+  // Load loyalty info
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      const res = await fetch("/api/shop/loyalty", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setLoyaltyInfo(data);
+      }
+    })();
+  }, [user]);
 
   // Load shipping/payment methods
   useEffect(() => {
@@ -99,7 +117,8 @@ export default function CheckoutPage() {
     : 0;
   const paymentSurcharge = selectedPaymentObj?.surcharge || 0;
   const couponDiscountAmount = couponApplied?.discount || 0;
-  const totalPrice = Math.max(0, cartTotal - couponDiscountAmount + shippingPrice + paymentSurcharge);
+  const loyaltyDiscountAmount = Math.floor(loyaltyPointsToUse * 0.1);
+  const totalPrice = Math.max(0, cartTotal - couponDiscountAmount - loyaltyDiscountAmount + shippingPrice + paymentSurcharge);
 
   // Filter methods based on cart content
   const filteredShipping = shippingMethods.filter((s) => {
@@ -203,6 +222,7 @@ export default function CheckoutPage() {
           shippingMethodId: selectedShipping,
           paymentMethodId: selectedPayment,
           couponCode: couponApplied?.code || null,
+          loyaltyPointsToUse: loyaltyPointsToUse > 0 ? loyaltyPointsToUse : null,
         }),
       });
 
@@ -530,6 +550,39 @@ export default function CheckoutPage() {
             </div>
           </div>
 
+          {/* Loyalty Points */}
+          {user && loyaltyInfo && loyaltyInfo.points > 0 && (
+            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "16px" }}>
+              <h3 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-muted)", marginBottom: "12px" }}>
+                {loyaltyInfo.currentLevel?.icon || "⭐"} Věrnostní body
+                <span style={{ marginLeft: "8px", padding: "2px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: 700, background: loyaltyInfo.currentLevel?.color || "#cd7f32", color: "#fff" }}>
+                  {loyaltyInfo.currentLevel?.name || "Bronzový"}
+                </span>
+              </h3>
+              <div style={{ fontSize: "14px", color: "var(--text-primary)", marginBottom: "12px" }}>
+                Máte <strong>{loyaltyInfo.points} bodů</strong> (hodnota {loyaltyInfo.pointsValueCzk} Kč)
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <label style={{ fontSize: "13px", color: "var(--text-muted)", whiteSpace: "nowrap" }}>Uplatnit bodů:</label>
+                <input
+                  type="range"
+                  min={0}
+                  max={Math.min(loyaltyInfo.points, Math.floor(cartTotal / 0.1))}
+                  step={10}
+                  value={loyaltyPointsToUse}
+                  onChange={(e) => setLoyaltyPointsToUse(parseInt(e.target.value))}
+                  style={{ flex: 1 }}
+                />
+                <span style={{ fontSize: "14px", fontWeight: 600, color: "var(--accent)", minWidth: "100px", textAlign: "right" }}>
+                  {loyaltyPointsToUse} bodů = {loyaltyDiscountAmount} Kč
+                </span>
+              </div>
+              {loyaltyPointsToUse > 0 && (
+                <button onClick={() => setLoyaltyPointsToUse(0)} style={{ marginTop: "8px", background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: "12px" }}>✕ Nepoužívat body</button>
+              )}
+            </div>
+          )}
+
           {/* Coupon */}
           <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "16px" }}>
             <h3 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-muted)", marginBottom: "12px" }}>🎟️ Slevový kupón</h3>
@@ -589,6 +642,11 @@ export default function CheckoutPage() {
             {couponDiscountAmount > 0 && (
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "14px", color: "#22c55e" }}>
                 <span>Sleva ({couponApplied?.code})</span><span>-{couponDiscountAmount} Kč</span>
+              </div>
+            )}
+            {loyaltyDiscountAmount > 0 && (
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "14px", color: "#a855f7" }}>
+                <span>⭐ Věrnostní body ({loyaltyPointsToUse} b.)</span><span>-{loyaltyDiscountAmount} Kč</span>
               </div>
             )}
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "14px", color: "var(--text-muted)" }}>

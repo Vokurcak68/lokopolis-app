@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
-import type { ShopProduct, ShopOrder, ShippingMethod, PaymentMethod, Coupon } from "@/types/database";
+import type { ShopProduct, ShopOrder, ShippingMethod, PaymentMethod, Coupon, LoyaltyLevel } from "@/types/database";
 import { type ShopCategory, buildCategoryTree, type ShopCategoryTreeNode } from "@/lib/shop-categories";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -64,7 +64,7 @@ interface CatFormState {
   parent_id: string | null;
 }
 
-type AdminTab = "products" | "orders" | "categories" | "shipping" | "payments" | "coupons" | "add" | "edit";
+type AdminTab = "products" | "orders" | "categories" | "shipping" | "payments" | "coupons" | "loyalty" | "add" | "edit";
 
 export default function AdminShopPage() {
   const router = useRouter();
@@ -412,10 +412,10 @@ export default function AdminShopPage() {
 
       {/* Tabs */}
       <div style={{ display: "flex", gap: "8px", marginBottom: "24px", borderBottom: "1px solid var(--border)", paddingBottom: "12px", flexWrap: "wrap" }}>
-        {(["products", "orders", "categories", "shipping", "payments", "coupons", "add"] as AdminTab[]).map((t) => {
+        {(["products", "orders", "categories", "shipping", "payments", "coupons", "loyalty", "add"] as AdminTab[]).map((t) => {
           const labels: Record<string, string> = {
             products: "📦 Produkty", orders: "📋 Objednávky", categories: "🏷️ Kategorie",
-            shipping: "🚚 Doprava", payments: "💳 Platby", coupons: "🎟️ Kupóny", add: "➕ Přidat",
+            shipping: "🚚 Doprava", payments: "💳 Platby", coupons: "🎟️ Kupóny", loyalty: "⭐ Věrnost", add: "➕ Přidat",
           };
           return (
             <button
@@ -973,6 +973,9 @@ export default function AdminShopPage() {
       {/* ==================== COUPONS TAB ==================== */}
       {tab === "coupons" && <CouponsAdmin />}
 
+      {/* ==================== LOYALTY TAB ==================== */}
+      {tab === "loyalty" && <LoyaltyAdmin />}
+
       <div style={{ height: "48px" }} />
     </div>
   );
@@ -1271,6 +1274,189 @@ const inputStyle: React.CSSProperties = {
 };
 
 // ==================== COUPONS ADMIN ====================
+// ==================== LOYALTY ADMIN ====================
+function LoyaltyAdmin() {
+  const [levels, setLevels] = useState<LoyaltyLevel[]>([]);
+  const [users, setUsers] = useState<{ id: string; username: string; display_name: string | null; loyalty_points: number; loyalty_level_id: string | null }[]>([]);
+  const [editLevel, setEditLevel] = useState<LoyaltyLevel | null>(null);
+  const [levelForm, setLevelForm] = useState({ name: "", slug: "", min_points: "", discount_percent: "", points_multiplier: "1.0", color: "#cd7f32", icon: "⭐", perks: "" });
+  const [bonusUserId, setBonusUserId] = useState("");
+  const [bonusPoints, setBonusPoints] = useState("");
+  const [bonusReason, setBonusReason] = useState("");
+
+  useEffect(() => { fetchLevels(); fetchUsers(); }, []);
+
+  async function fetchLevels() {
+    const { data } = await supabase.from("loyalty_levels").select("*").order("sort_order", { ascending: true });
+    if (data) setLevels(data);
+  }
+
+  async function fetchUsers() {
+    const { data } = await supabase.from("profiles").select("id, username, display_name, loyalty_points, loyalty_level_id").order("loyalty_points", { ascending: false }).limit(50);
+    if (data) setUsers(data);
+  }
+
+  function startEditLevel(l: LoyaltyLevel) {
+    setEditLevel(l);
+    setLevelForm({
+      name: l.name, slug: l.slug, min_points: String(l.min_points),
+      discount_percent: String(l.discount_percent), points_multiplier: String(l.points_multiplier),
+      color: l.color, icon: l.icon, perks: l.perks?.join(", ") || "",
+    });
+  }
+
+  function resetLevelForm() {
+    setEditLevel(null);
+    setLevelForm({ name: "", slug: "", min_points: "", discount_percent: "", points_multiplier: "1.0", color: "#cd7f32", icon: "⭐", perks: "" });
+  }
+
+  async function saveLevel() {
+    if (!levelForm.name.trim() || !levelForm.slug.trim()) return;
+    const payload = {
+      name: levelForm.name.trim(),
+      slug: levelForm.slug.trim(),
+      min_points: parseInt(levelForm.min_points) || 0,
+      discount_percent: parseFloat(levelForm.discount_percent) || 0,
+      points_multiplier: parseFloat(levelForm.points_multiplier) || 1.0,
+      color: levelForm.color,
+      icon: levelForm.icon,
+      perks: levelForm.perks ? levelForm.perks.split(",").map((s) => s.trim()).filter(Boolean) : [],
+      sort_order: editLevel ? editLevel.sort_order : levels.length + 1,
+    };
+    if (editLevel) {
+      await supabase.from("loyalty_levels").update(payload).eq("id", editLevel.id);
+    } else {
+      await supabase.from("loyalty_levels").insert(payload);
+    }
+    resetLevelForm();
+    fetchLevels();
+  }
+
+  async function deleteLevel(id: string) {
+    if (!confirm("Smazat úroveň?")) return;
+    await supabase.from("loyalty_levels").delete().eq("id", id);
+    fetchLevels();
+  }
+
+  async function grantBonus() {
+    if (!bonusUserId || !bonusPoints) return;
+    const pts = parseInt(bonusPoints);
+    if (!pts) return;
+    const res = await fetch("/api/shop/loyalty/admin-grant", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: bonusUserId, points: pts, reason: bonusReason || "admin" }),
+    });
+    if (res.ok) {
+      setBonusUserId(""); setBonusPoints(""); setBonusReason("");
+      fetchUsers();
+    }
+  }
+
+  const lbl: React.CSSProperties = { fontSize: "12px", fontWeight: 600, color: "var(--text-dimmer)", marginBottom: "4px", display: "block" };
+  const inp: React.CSSProperties = { ...inputStyle };
+
+  return (
+    <div style={{ maxWidth: "900px" }}>
+      <h2 style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "20px" }}>⭐ Věrnostní program</h2>
+
+      {/* Level editor */}
+      <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px", padding: "20px", marginBottom: "24px" }}>
+        <h3 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "16px" }}>
+          {editLevel ? `✏️ Upravit: ${editLevel.name}` : "➕ Nová úroveň"}
+        </h3>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 80px", gap: "12px", marginBottom: "12px" }}>
+          <div><label style={lbl}>Název *</label><input value={levelForm.name} onChange={(e) => setLevelForm((f) => ({ ...f, name: e.target.value }))} style={inp} placeholder="Zlatý" /></div>
+          <div><label style={lbl}>Slug *</label><input value={levelForm.slug} onChange={(e) => setLevelForm((f) => ({ ...f, slug: e.target.value }))} style={inp} placeholder="gold" /></div>
+          <div><label style={lbl}>Min. bodů</label><input type="number" value={levelForm.min_points} onChange={(e) => setLevelForm((f) => ({ ...f, min_points: e.target.value }))} style={inp} placeholder="0" /></div>
+          <div><label style={lbl}>Ikona</label><input value={levelForm.icon} onChange={(e) => setLevelForm((f) => ({ ...f, icon: e.target.value }))} style={inp} /></div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+          <div><label style={lbl}>Sleva (%)</label><input type="number" step="0.5" value={levelForm.discount_percent} onChange={(e) => setLevelForm((f) => ({ ...f, discount_percent: e.target.value }))} style={inp} placeholder="5" /></div>
+          <div><label style={lbl}>Násobitel bodů</label><input type="number" step="0.1" value={levelForm.points_multiplier} onChange={(e) => setLevelForm((f) => ({ ...f, points_multiplier: e.target.value }))} style={inp} placeholder="1.5" /></div>
+          <div><label style={lbl}>Barva</label><input type="color" value={levelForm.color} onChange={(e) => setLevelForm((f) => ({ ...f, color: e.target.value }))} style={{ ...inp, padding: "4px", height: "38px" }} /></div>
+        </div>
+        <div style={{ marginBottom: "12px" }}>
+          <label style={lbl}>Výhody (čárkou oddělené)</label>
+          <input value={levelForm.perks} onChange={(e) => setLevelForm((f) => ({ ...f, perks: e.target.value }))} style={inp} placeholder="5% sleva na vše, 1.5× body, Přednostní přístup" />
+        </div>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button onClick={saveLevel} style={{ padding: "10px 24px", borderRadius: "8px", fontSize: "14px", fontWeight: 600, cursor: "pointer", border: "none", background: "var(--accent)", color: "var(--accent-text-on)" }}>
+            {editLevel ? "💾 Uložit" : "➕ Vytvořit"}
+          </button>
+          {editLevel && <button onClick={resetLevelForm} style={{ padding: "10px 24px", borderRadius: "8px", fontSize: "14px", fontWeight: 600, cursor: "pointer", border: "1px solid var(--border)", background: "transparent", color: "var(--text-muted)" }}>Zrušit</button>}
+        </div>
+      </div>
+
+      {/* Levels list */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "12px", marginBottom: "32px" }}>
+        {levels.map((l) => (
+          <div key={l.id} style={{ background: "var(--bg-card)", border: `2px solid ${l.color}`, borderRadius: "12px", padding: "16px" }}>
+            <div style={{ fontSize: "24px", marginBottom: "4px" }}>{l.icon}</div>
+            <div style={{ fontSize: "16px", fontWeight: 700, color: l.color }}>{l.name}</div>
+            <div style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "8px" }}>od {l.min_points} b. · {l.discount_percent}% sleva · {l.points_multiplier}× body</div>
+            <div style={{ display: "flex", gap: "4px" }}>
+              <button onClick={() => startEditLevel(l)} style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "1px solid var(--border)", background: "transparent", color: "var(--text-muted)" }}>✏️</button>
+              <button onClick={() => deleteLevel(l.id)} style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.08)", color: "#ef4444" }}>🗑️</button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Grant bonus points */}
+      <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px", padding: "20px", marginBottom: "24px" }}>
+        <h3 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "16px" }}>🎁 Přidělit bonus body</h3>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 120px 1fr auto", gap: "12px", alignItems: "end" }}>
+          <div>
+            <label style={lbl}>Uživatel</label>
+            <select value={bonusUserId} onChange={(e) => setBonusUserId(e.target.value)} style={inp}>
+              <option value="">— vyberte —</option>
+              {users.map((u) => <option key={u.id} value={u.id}>{u.display_name || u.username} ({u.loyalty_points} b.)</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={lbl}>Bodů</label>
+            <input type="number" value={bonusPoints} onChange={(e) => setBonusPoints(e.target.value)} style={inp} placeholder="100" />
+          </div>
+          <div>
+            <label style={lbl}>Důvod</label>
+            <input value={bonusReason} onChange={(e) => setBonusReason(e.target.value)} style={inp} placeholder="Bonus za recenzi" />
+          </div>
+          <button onClick={grantBonus} style={{ padding: "10px 20px", borderRadius: "8px", fontSize: "14px", fontWeight: 600, cursor: "pointer", border: "none", background: "var(--accent)", color: "var(--accent-text-on)" }}>Přidělit</button>
+        </div>
+      </div>
+
+      {/* Users leaderboard */}
+      <h3 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "12px" }}>🏆 Žebříček uživatelů</h3>
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <thead>
+          <tr>
+            {["#", "Uživatel", "Body", "Úroveň"].map((h) => (
+              <th key={h} style={{ textAlign: "left", padding: "10px 12px", fontSize: "12px", fontWeight: 600, color: "var(--text-dimmer)", borderBottom: "1px solid var(--border)" }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {users.map((u, i) => {
+            const level = levels.find((l) => l.id === u.loyalty_level_id) || levels[0];
+            return (
+              <tr key={u.id}>
+                <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "14px", color: "var(--text-muted)" }}>{i + 1}</td>
+                <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>{u.display_name || u.username}</td>
+                <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "14px", fontWeight: 700, color: "var(--accent)" }}>{u.loyalty_points}</td>
+                <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)" }}>
+                  {level && <span style={{ padding: "2px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: 700, background: `${level.color}20`, color: level.color }}>{level.icon} {level.name}</span>}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {users.length === 0 && <p style={{ textAlign: "center", padding: "24px 0", color: "var(--text-dimmer)" }}>Žádní uživatelé</p>}
+    </div>
+  );
+}
+
 function CouponsAdmin() {
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [editing, setEditing] = useState<Coupon | null>(null);

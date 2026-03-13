@@ -12,6 +12,8 @@ export interface Profile {
   avatar_url: string | null;
   bio: string | null;
   role: UserRole;
+  loyalty_points: number;
+  loyalty_level_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -423,6 +425,9 @@ export interface ShopOrder {
   coupon_id: string | null;
   coupon_code: string | null;
   coupon_discount: number;
+  loyalty_points_earned: number;
+  loyalty_points_used: number;
+  loyalty_discount: number;
   notes: string | null;
   admin_notes: string | null;
   paid_at: string | null;
@@ -480,6 +485,31 @@ export interface CouponUsage {
   user_id: string | null;
   discount_amount: number;
   used_at: string;
+}
+
+// === Loyalty Program ===
+export interface LoyaltyLevel {
+  id: string;
+  name: string;
+  slug: string;
+  min_points: number;
+  discount_percent: number;
+  points_multiplier: number;
+  color: string;
+  icon: string;
+  perks: string[] | null;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface LoyaltyPointEntry {
+  id: string;
+  user_id: string;
+  points: number;
+  reason: string;
+  order_id: string | null;
+  description: string | null;
+  created_at: string;
 }
 
 export interface CartItemData {
