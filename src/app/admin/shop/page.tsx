@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
-import type { ShopProduct, ShopOrder } from "@/types/database";
+import type { ShopProduct, ShopOrder, ShippingMethod, PaymentMethod } from "@/types/database";
 import { type ShopCategory, buildCategoryTree, type ShopCategoryTreeNode } from "@/lib/shop-categories";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -23,6 +23,9 @@ const STATUS_COLORS: Record<string, string> = {
 const ORDER_STATUS_LABELS: Record<string, string> = {
   pending: "Čeká na platbu",
   paid: "Zaplaceno",
+  processing: "Zpracovává se",
+  shipped: "Odesláno",
+  delivered: "Doručeno",
   cancelled: "Zrušeno",
   refunded: "Vráceno",
 };
@@ -30,6 +33,9 @@ const ORDER_STATUS_LABELS: Record<string, string> = {
 const ORDER_STATUS_COLORS: Record<string, string> = {
   pending: "#f59e0b",
   paid: "#22c55e",
+  processing: "#3b82f6",
+  shipped: "#8b5cf6",
+  delivered: "#22c55e",
   cancelled: "#ef4444",
   refunded: "#6b7280",
 };
@@ -58,7 +64,7 @@ interface CatFormState {
   parent_id: string | null;
 }
 
-type AdminTab = "products" | "orders" | "categories" | "add" | "edit";
+type AdminTab = "products" | "orders" | "categories" | "shipping" | "payments" | "add" | "edit";
 
 export default function AdminShopPage() {
   const router = useRouter();
@@ -383,19 +389,25 @@ export default function AdminShopPage() {
 
       {/* Tabs */}
       <div style={{ display: "flex", gap: "8px", marginBottom: "24px", borderBottom: "1px solid var(--border)", paddingBottom: "12px", flexWrap: "wrap" }}>
-        {(["products", "orders", "categories", "add"] as AdminTab[]).map((t) => (
-          <button
-            key={t}
-            onClick={() => { if (t === "add") resetForm(); if (t === "categories") resetCatForm(); setTab(t); }}
-            style={{
-              padding: "8px 20px", borderRadius: "8px", fontSize: "14px", fontWeight: 600, cursor: "pointer", border: "none",
-              background: tab === t || (tab === "edit" && t === "add") ? "var(--accent)" : "var(--bg-card)",
-              color: tab === t || (tab === "edit" && t === "add") ? "var(--accent-text-on)" : "var(--text-muted)",
-            }}
-          >
-            {t === "products" ? "📦 Produkty" : t === "orders" ? "📋 Objednávky" : t === "categories" ? "🏷️ Kategorie" : "➕ Přidat"}
-          </button>
-        ))}
+        {(["products", "orders", "categories", "shipping", "payments", "add"] as AdminTab[]).map((t) => {
+          const labels: Record<string, string> = {
+            products: "📦 Produkty", orders: "📋 Objednávky", categories: "🏷️ Kategorie",
+            shipping: "🚚 Doprava", payments: "💳 Platby", add: "➕ Přidat",
+          };
+          return (
+            <button
+              key={t}
+              onClick={() => { if (t === "add") resetForm(); if (t === "categories") resetCatForm(); setTab(t); }}
+              style={{
+                padding: "8px 20px", borderRadius: "8px", fontSize: "14px", fontWeight: 600, cursor: "pointer", border: "none",
+                background: tab === t || (tab === "edit" && t === "add") ? "var(--accent)" : "var(--bg-card)",
+                color: tab === t || (tab === "edit" && t === "add") ? "var(--accent-text-on)" : "var(--text-muted)",
+              }}
+            >
+              {labels[t] || t}
+            </button>
+          );
+        })}
       </div>
 
       {/* ==================== PRODUCTS TAB ==================== */}
@@ -912,7 +924,286 @@ export default function AdminShopPage() {
         </div>
       )}
 
+      {/* ==================== SHIPPING TAB ==================== */}
+      {tab === "shipping" && <ShippingAdmin />}
+
+      {/* ==================== PAYMENTS TAB ==================== */}
+      {tab === "payments" && <PaymentsAdmin />}
+
       <div style={{ height: "48px" }} />
+    </div>
+  );
+}
+
+/* ==================== SHIPPING ADMIN COMPONENT ==================== */
+function ShippingAdmin() {
+  const [methods, setMethods] = useState<ShippingMethod[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<ShippingMethod | null>(null);
+  const [form, setForm] = useState({ name: "", slug: "", description: "", price: 0, free_from: "" as string, delivery_days: "", digital_only: false, physical_only: false, active: true, sort_order: 0 });
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    const { data } = await supabase.from("shipping_methods").select("*").order("sort_order");
+    setMethods((data as ShippingMethod[]) || []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  function resetForm() {
+    setForm({ name: "", slug: "", description: "", price: 0, free_from: "", delivery_days: "", digital_only: false, physical_only: false, active: true, sort_order: 0 });
+    setEditing(null);
+  }
+
+  function startEdit(m: ShippingMethod) {
+    setEditing(m);
+    setForm({
+      name: m.name, slug: m.slug, description: m.description || "", price: m.price,
+      free_from: m.free_from?.toString() || "", delivery_days: m.delivery_days || "",
+      digital_only: m.digital_only, physical_only: m.physical_only, active: m.active, sort_order: m.sort_order,
+    });
+  }
+
+  async function save() {
+    if (!form.name.trim()) return;
+    setSaving(true);
+    const slug = form.slug.trim() || slugify(form.name);
+    const payload = {
+      name: form.name, slug, description: form.description || null, price: form.price,
+      free_from: form.free_from ? parseFloat(form.free_from) : null,
+      delivery_days: form.delivery_days || null, digital_only: form.digital_only,
+      physical_only: form.physical_only, active: form.active, sort_order: form.sort_order,
+    };
+    if (editing) {
+      await supabase.from("shipping_methods").update(payload).eq("id", editing.id);
+    } else {
+      await supabase.from("shipping_methods").insert(payload);
+    }
+    resetForm();
+    await load();
+    setSaving(false);
+  }
+
+  async function remove(id: string) {
+    if (!confirm("Smazat způsob dopravy?")) return;
+    await supabase.from("shipping_methods").delete().eq("id", id);
+    load();
+  }
+
+  const fStyle: React.CSSProperties = { width: "100%", padding: "8px 12px", border: "1px solid var(--border)", borderRadius: "8px", background: "var(--bg-card)", color: "var(--text-primary)", fontSize: "14px" };
+
+  if (loading) return <p style={{ color: "var(--text-muted)" }}>Načítám...</p>;
+
+  return (
+    <div>
+      <h2 style={{ fontSize: "18px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "16px" }}>🚚 Způsoby dopravy</h2>
+
+      {/* List */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "24px" }}>
+        {methods.map((m) => (
+          <div key={m.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "8px", opacity: m.active ? 1 : 0.5 }}>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-primary)" }}>{m.name}</div>
+              <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+                {m.price} Kč · {m.delivery_days || "—"} {m.digital_only ? " · Jen digitální" : ""}{m.physical_only ? " · Jen fyzické" : ""}
+                {m.free_from ? ` · Zdarma od ${m.free_from} Kč` : ""}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button onClick={() => startEdit(m)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "14px" }}>✏️</button>
+              <button onClick={() => remove(m.id)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "14px" }}>🗑️</button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Form */}
+      <div style={{ padding: "16px", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px" }}>
+        <h3 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "12px" }}>
+          {editing ? "Upravit dopravní metodu" : "Přidat novou"}
+        </h3>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+          <div>
+            <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>Název *</label>
+            <input style={fStyle} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value, slug: form.slug || slugify(e.target.value) })} />
+          </div>
+          <div>
+            <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>Slug</label>
+            <input style={fStyle} value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} />
+          </div>
+          <div>
+            <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>Cena (Kč)</label>
+            <input style={fStyle} type="number" step="1" value={form.price} onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} />
+          </div>
+          <div>
+            <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>Zdarma od (Kč)</label>
+            <input style={fStyle} type="number" placeholder="Prázdné = nikdy" value={form.free_from} onChange={(e) => setForm({ ...form, free_from: e.target.value })} />
+          </div>
+          <div>
+            <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>Doba doručení</label>
+            <input style={fStyle} placeholder="2-3 pracovní dny" value={form.delivery_days} onChange={(e) => setForm({ ...form, delivery_days: e.target.value })} />
+          </div>
+          <div>
+            <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>Popis</label>
+            <input style={fStyle} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+          </div>
+          <div>
+            <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>Pořadí</label>
+            <input style={fStyle} type="number" value={form.sort_order} onChange={(e) => setForm({ ...form, sort_order: parseInt(e.target.value) || 0 })} />
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: "16px", marginTop: "12px", flexWrap: "wrap" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "var(--text-muted)", cursor: "pointer" }}>
+            <input type="checkbox" checked={form.digital_only} onChange={(e) => setForm({ ...form, digital_only: e.target.checked, physical_only: false })} /> Jen digitální
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "var(--text-muted)", cursor: "pointer" }}>
+            <input type="checkbox" checked={form.physical_only} onChange={(e) => setForm({ ...form, physical_only: e.target.checked, digital_only: false })} /> Jen fyzické
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "var(--text-muted)", cursor: "pointer" }}>
+            <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} /> Aktivní
+          </label>
+        </div>
+        <div style={{ display: "flex", gap: "8px", marginTop: "16px" }}>
+          <button onClick={save} disabled={saving} style={{ padding: "10px 20px", background: "var(--accent)", color: "var(--accent-text-on)", border: "none", borderRadius: "8px", fontWeight: 600, fontSize: "14px", cursor: "pointer" }}>
+            {saving ? "Ukládám..." : editing ? "💾 Uložit" : "➕ Přidat"}
+          </button>
+          {editing && (
+            <button onClick={resetForm} style={{ padding: "10px 20px", background: "var(--bg-page)", border: "1px solid var(--border)", borderRadius: "8px", color: "var(--text-muted)", fontSize: "14px", cursor: "pointer" }}>
+              Zrušit
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ==================== PAYMENTS ADMIN COMPONENT ==================== */
+function PaymentsAdmin() {
+  const [methods, setMethods] = useState<PaymentMethod[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<PaymentMethod | null>(null);
+  const [form, setForm] = useState({ name: "", slug: "", description: "", instructions: "", surcharge: 0, active: true, sort_order: 0 });
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    const { data } = await supabase.from("payment_methods").select("*").order("sort_order");
+    setMethods((data as PaymentMethod[]) || []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  function resetForm() {
+    setForm({ name: "", slug: "", description: "", instructions: "", surcharge: 0, active: true, sort_order: 0 });
+    setEditing(null);
+  }
+
+  function startEdit(m: PaymentMethod) {
+    setEditing(m);
+    setForm({
+      name: m.name, slug: m.slug, description: m.description || "",
+      instructions: m.instructions || "", surcharge: m.surcharge, active: m.active, sort_order: m.sort_order,
+    });
+  }
+
+  async function save() {
+    if (!form.name.trim()) return;
+    setSaving(true);
+    const slug = form.slug.trim() || slugify(form.name);
+    const payload = {
+      name: form.name, slug, description: form.description || null,
+      instructions: form.instructions || null, surcharge: form.surcharge, active: form.active, sort_order: form.sort_order,
+    };
+    if (editing) {
+      await supabase.from("payment_methods").update(payload).eq("id", editing.id);
+    } else {
+      await supabase.from("payment_methods").insert(payload);
+    }
+    resetForm();
+    await load();
+    setSaving(false);
+  }
+
+  async function remove(id: string) {
+    if (!confirm("Smazat platební metodu?")) return;
+    await supabase.from("payment_methods").delete().eq("id", id);
+    load();
+  }
+
+  const fStyle: React.CSSProperties = { width: "100%", padding: "8px 12px", border: "1px solid var(--border)", borderRadius: "8px", background: "var(--bg-card)", color: "var(--text-primary)", fontSize: "14px" };
+
+  if (loading) return <p style={{ color: "var(--text-muted)" }}>Načítám...</p>;
+
+  return (
+    <div>
+      <h2 style={{ fontSize: "18px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "16px" }}>💳 Platební metody</h2>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "24px" }}>
+        {methods.map((m) => (
+          <div key={m.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "8px", opacity: m.active ? 1 : 0.5 }}>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-primary)" }}>{m.name}</div>
+              <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+                {m.surcharge > 0 ? `+${m.surcharge} Kč příplatek` : "Bez příplatku"}
+                {m.description ? ` · ${m.description}` : ""}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button onClick={() => startEdit(m)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "14px" }}>✏️</button>
+              <button onClick={() => remove(m.id)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "14px" }}>🗑️</button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ padding: "16px", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px" }}>
+        <h3 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "12px" }}>
+          {editing ? "Upravit platební metodu" : "Přidat novou"}
+        </h3>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+          <div>
+            <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>Název *</label>
+            <input style={fStyle} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value, slug: form.slug || slugify(e.target.value) })} />
+          </div>
+          <div>
+            <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>Slug</label>
+            <input style={fStyle} value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} />
+          </div>
+          <div>
+            <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>Příplatek (Kč)</label>
+            <input style={fStyle} type="number" step="1" value={form.surcharge} onChange={(e) => setForm({ ...form, surcharge: parseFloat(e.target.value) || 0 })} />
+          </div>
+          <div>
+            <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>Pořadí</label>
+            <input style={fStyle} type="number" value={form.sort_order} onChange={(e) => setForm({ ...form, sort_order: parseInt(e.target.value) || 0 })} />
+          </div>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>Popis</label>
+            <input style={fStyle} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+          </div>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>Pokyny k platbě (zákazník uvidí po objednávce)</label>
+            <textarea style={{ ...fStyle, minHeight: "60px", resize: "vertical" }} value={form.instructions} onChange={(e) => setForm({ ...form, instructions: e.target.value })} />
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: "16px", marginTop: "12px" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "var(--text-muted)", cursor: "pointer" }}>
+            <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} /> Aktivní
+          </label>
+        </div>
+        <div style={{ display: "flex", gap: "8px", marginTop: "16px" }}>
+          <button onClick={save} disabled={saving} style={{ padding: "10px 20px", background: "var(--accent)", color: "var(--accent-text-on)", border: "none", borderRadius: "8px", fontWeight: 600, fontSize: "14px", cursor: "pointer" }}>
+            {saving ? "Ukládám..." : editing ? "💾 Uložit" : "➕ Přidat"}
+          </button>
+          {editing && (
+            <button onClick={resetForm} style={{ padding: "10px 20px", background: "var(--bg-page)", border: "1px solid var(--border)", borderRadius: "8px", color: "var(--text-muted)", fontSize: "14px", cursor: "pointer" }}>
+              Zrušit
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
