@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/components/Auth/AuthProvider";
 import ProductCard from "@/components/Shop/ProductCard";
 import OrderModal from "@/components/Shop/OrderModal";
+import { useCart } from "@/components/Shop/CartProvider";
 import type { ShopProduct } from "@/types/database";
 import { getShopCategories, type ShopCategory } from "@/lib/shop-categories";
 const SCALE_COLORS: Record<string, string> = {
@@ -53,6 +54,8 @@ export default function ShopProductDetailPage() {
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState<string | null>(null);
+  const { addToCart, items: cartItems } = useCart();
+  const [addedToCart, setAddedToCart] = useState(false);
 
   const fetchProduct = useCallback(async () => {
     try {
@@ -447,24 +450,55 @@ export default function ShopProductDetailPage() {
                   Po potvrzení platby vám odemkneme stažení
                 </p>
               </div>
-            ) : (
-              <button
-                onClick={() => setShowOrderModal(true)}
-                style={{
-                  width: "100%",
-                  padding: "14px 24px",
-                  background: "var(--accent)",
-                  border: "none",
-                  borderRadius: "10px",
-                  color: "var(--accent-text-on)",
-                  fontSize: "16px",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                }}
-              >
-                🛒 Objednat za {product.price.toLocaleString("cs-CZ")} Kč
-              </button>
-            )}
+            ) : (() => {
+              const isInCart = cartItems.some((ci) => ci.product.id === product.id);
+              const isDigital = !!product.file_url;
+              return (
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <button
+                    onClick={() => {
+                      if (isInCart && isDigital) return;
+                      addToCart(product);
+                      setAddedToCart(true);
+                      setTimeout(() => setAddedToCart(false), 2000);
+                    }}
+                    disabled={isInCart && isDigital}
+                    style={{
+                      width: "100%",
+                      padding: "14px 24px",
+                      background: addedToCart ? "#22c55e" : isInCart && isDigital ? "var(--border)" : "var(--accent)",
+                      border: "none",
+                      borderRadius: "10px",
+                      color: addedToCart ? "#fff" : "var(--accent-text-on)",
+                      fontSize: "16px",
+                      fontWeight: 700,
+                      cursor: isInCart && isDigital ? "default" : "pointer",
+                      transition: "all 0.2s",
+                    }}
+                  >
+                    {addedToCart ? "✓ Přidáno do košíku" : isInCart ? "✓ V košíku" : `🛒 Do košíku · ${product.price.toLocaleString("cs-CZ")} Kč`}
+                  </button>
+                  {isInCart && (
+                    <Link
+                      href="/kosik"
+                      style={{
+                        display: "block",
+                        textAlign: "center",
+                        padding: "10px",
+                        border: "1px solid var(--accent)",
+                        borderRadius: "10px",
+                        color: "var(--accent)",
+                        textDecoration: "none",
+                        fontSize: "14px",
+                        fontWeight: 600,
+                      }}
+                    >
+                      Přejít do košíku →
+                    </Link>
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
           {/* Stats */}

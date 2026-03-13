@@ -281,10 +281,33 @@ export default function AdminShopPage() {
   }
 
   async function confirmPayment(orderId: string) {
-    const { data: order } = await supabase.from("shop_orders").select("*").eq("id", orderId).single();
-    if (!order) return;
-    await supabase.from("shop_orders").update({ status: "paid", paid_at: new Date().toISOString() }).eq("id", orderId);
-    await supabase.from("user_purchases").insert({ user_id: order.user_id, product_id: order.product_id, order_id: orderId });
+    await updateOrderStatus(orderId, "paid");
+  }
+
+  async function updateOrderStatus(orderId: string, newStatus: string) {
+    const updates: Record<string, unknown> = { status: newStatus };
+    if (newStatus === "paid") updates.paid_at = new Date().toISOString();
+    if (newStatus === "shipped") updates.shipped_at = new Date().toISOString();
+    if (newStatus === "delivered") updates.delivered_at = new Date().toISOString();
+
+    await supabase.from("shop_orders").update(updates).eq("id", orderId);
+
+    // Auto-grant purchases when marking as paid
+    if (newStatus === "paid") {
+      const { data: order } = await supabase.from("shop_orders").select("*").eq("id", orderId).single();
+      if (order?.user_id) {
+        // Grant from order_items (new multi-product flow)
+        const { data: items } = await supabase.from("order_items").select("product_id").eq("order_id", orderId);
+        if (items && items.length > 0) {
+          for (const item of items) {
+            await supabase.from("user_purchases").upsert({ user_id: order.user_id, product_id: item.product_id, order_id: orderId }, { onConflict: "user_id,product_id" }).select();
+          }
+        } else if (order.product_id) {
+          // Legacy single-product order
+          await supabase.from("user_purchases").upsert({ user_id: order.user_id, product_id: order.product_id, order_id: orderId }, { onConflict: "user_id,product_id" }).select();
+        }
+      }
+    }
     fetchOrders();
   }
 
@@ -469,7 +492,7 @@ export default function AdminShopPage() {
       {tab === "orders" && (
         <div>
           <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
-            {["pending", "paid", "cancelled", ""].map((s) => (
+            {["pending", "paid", "processing", "shipped", "delivered", "cancelled", ""].map((s) => (
               <button key={s} onClick={() => setOrderFilter(s)} style={{
                 padding: "6px 14px", borderRadius: "6px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
                 border: `1px solid ${orderFilter === s ? "var(--accent)" : "var(--border)"}`,
@@ -495,15 +518,32 @@ export default function AdminShopPage() {
                     <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "14px", fontWeight: 600, color: "var(--accent)" }}>{o.order_number}</td>
                     <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "13px", color: "var(--text-body)" }}>{o.product?.title || "—"}</td>
                     <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "13px", color: "var(--text-body)" }}>{o.user?.display_name || o.user?.username || "—"}</td>
-                    <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>{o.price} Kč</td>
+                    <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>{o.total_price || o.price} Kč</td>
                     <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)" }}>
-                      <span style={{ padding: "2px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: 600, background: `${ORDER_STATUS_COLORS[o.status]}20`, color: ORDER_STATUS_COLORS[o.status] }}>{ORDER_STATUS_LABELS[o.status]}</span>
+                      <span style={{ padding: "2px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: 600, background: `${ORDER_STATUS_COLORS[o.status] || "#6b7280"}20`, color: ORDER_STATUS_COLORS[o.status] || "#6b7280" }}>{ORDER_STATUS_LABELS[o.status] || o.status}</span>
                     </td>
-                    <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "13px", color: "var(--text-dimmer)" }}>{new Date(o.created_at).toLocaleDateString("cs-CZ")}</td>
+                    <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "13px", color: "var(--text-dimmer)" }}>
+                      {new Date(o.created_at).toLocaleDateString("cs-CZ")}
+                      {o.billing_email && <div style={{ fontSize: "11px", color: "var(--text-dimmer)" }}>{o.billing_email}</div>}
+                    </td>
                     <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)" }}>
-                      {o.status === "pending" && (
-                        <button onClick={() => confirmPayment(o.id)} style={{ padding: "4px 12px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, cursor: "pointer", border: "1px solid rgba(34,197,94,0.4)", background: "rgba(34,197,94,0.1)", color: "#22c55e" }}>✅ Potvrdit platbu</button>
-                      )}
+                      <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
+                        {o.status === "pending" && (
+                          <button onClick={() => updateOrderStatus(o.id, "paid")} style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "1px solid rgba(34,197,94,0.4)", background: "rgba(34,197,94,0.1)", color: "#22c55e" }}>✅ Zaplaceno</button>
+                        )}
+                        {o.status === "paid" && (
+                          <button onClick={() => updateOrderStatus(o.id, "processing")} style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "1px solid rgba(59,130,246,0.4)", background: "rgba(59,130,246,0.1)", color: "#3b82f6" }}>📦 Zpracovat</button>
+                        )}
+                        {o.status === "processing" && (
+                          <button onClick={() => updateOrderStatus(o.id, "shipped")} style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "1px solid rgba(139,92,246,0.4)", background: "rgba(139,92,246,0.1)", color: "#8b5cf6" }}>🚚 Odesláno</button>
+                        )}
+                        {o.status === "shipped" && (
+                          <button onClick={() => updateOrderStatus(o.id, "delivered")} style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "1px solid rgba(34,197,94,0.4)", background: "rgba(34,197,94,0.1)", color: "#22c55e" }}>✓ Doručeno</button>
+                        )}
+                        {(o.status === "pending" || o.status === "paid") && (
+                          <button onClick={() => updateOrderStatus(o.id, "cancelled")} style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.08)", color: "#ef4444" }}>✕ Zrušit</button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
