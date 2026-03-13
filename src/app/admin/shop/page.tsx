@@ -1342,15 +1342,32 @@ function LoyaltyAdmin() {
     if (!bonusUserId || !bonusPoints) return;
     const pts = parseInt(bonusPoints);
     if (!pts) return;
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      alert("Neplatná session. Přihlas se znovu.");
+      return;
+    }
+
     const res = await fetch("/api/shop/loyalty/admin-grant", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
       body: JSON.stringify({ userId: bonusUserId, points: pts, reason: bonusReason || "admin" }),
     });
-    if (res.ok) {
-      setBonusUserId(""); setBonusPoints(""); setBonusReason("");
-      fetchUsers();
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert(err.error || "Nepodařilo se přidělit body");
+      return;
     }
+
+    setBonusUserId("");
+    setBonusPoints("");
+    setBonusReason("");
+    fetchUsers();
   }
 
   const lbl: React.CSSProperties = { fontSize: "12px", fontWeight: 600, color: "var(--text-dimmer)", marginBottom: "4px", display: "block" };
