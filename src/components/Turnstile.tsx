@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAACoE4_gtCgNEZDLm";
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
 interface TurnstileProps {
   onVerify: (token: string) => void;
@@ -45,6 +45,7 @@ export default function Turnstile({ onVerify, onExpire }: TurnstileProps) {
   }, []);
 
   useEffect(() => {
+    if (!TURNSTILE_SITE_KEY) return;
     if (!scriptLoaded || !containerRef.current || !window.turnstile) return;
 
     // Remove old widget if re-rendering
@@ -66,6 +67,14 @@ export default function Turnstile({ onVerify, onExpire }: TurnstileProps) {
       }
     };
   }, [scriptLoaded, onVerify, onExpire]);
+
+  if (!TURNSTILE_SITE_KEY) {
+    return (
+      <div style={{ marginTop: "8px", fontSize: "12px", color: "#ef4444" }}>
+        Chybí konfigurace anti-bot ověření (NEXT_PUBLIC_TURNSTILE_SITE_KEY).
+      </div>
+    );
+  }
 
   return <div ref={containerRef} style={{ marginTop: "8px" }} />;
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { getClientIp, rateLimit } from "@/lib/security";
+import { getClientIp, normalizeText, payloadDigest, rateLimit, replayGuard } from "@/lib/security";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -8,7 +8,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 export async function POST(req: NextRequest) {
   try {
     const ip = getClientIp(req);
-    const rl = rateLimit(`shop-coupon:${ip}`, 40, 60_000);
+    const rl = rateLimit(`shop-coupon:${ip}`, 15, 60_000);
     if (!rl.ok) {
       return NextResponse.json({ error: "Příliš mnoho pokusů, zkus to za chvíli." }, { status: 429 });
     }
@@ -16,8 +16,14 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { code, items } = body;
 
-    if (!code?.trim()) {
+    const safeCode = normalizeText(code || "", 64).toUpperCase();
+    if (!safeCode) {
       return NextResponse.json({ error: "Zadejte kód kupónu" }, { status: 400 });
+    }
+
+    const replayKey = `coupon:${ip}:${payloadDigest({ safeCode, items: Array.isArray(items) ? items.length : 0 })}`;
+    if (!replayGuard(replayKey, 5000)) {
+      return NextResponse.json({ error: "Příliš rychlé opakování požadavku." }, { status: 429 });
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
@@ -41,7 +47,7 @@ export async function POST(req: NextRequest) {
     const { data: coupon } = await supabase
       .from("coupons")
       .select("*")
-      .eq("code", code.trim().toUpperCase())
+      .eq("code", safeCode)
       .eq("active", true)
       .single();
 

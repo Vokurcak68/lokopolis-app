@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { grantBonusPoints } from "@/lib/loyalty";
+import { getClientIp, normalizeText, payloadDigest, rateLimit, replayGuard } from "@/lib/security";
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = getClientIp(req);
+    const rl = rateLimit(`loyalty-admin-grant:${ip}`, 20, 60_000);
+    if (!rl.ok) {
+      return NextResponse.json({ error: "Příliš mnoho pokusů, zkus to za chvíli." }, { status: 429 });
+    }
+
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
     const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -45,7 +52,10 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { userId, points, reason } = body;
 
-    if (!userId || !points) {
+    const safeUserId = normalizeText(userId || "", 64);
+    const safeReason = normalizeText(reason || "admin", 160);
+
+    if (!safeUserId || !points) {
       return NextResponse.json({ error: "userId a points jsou povinné" }, { status: 400 });
     }
 
@@ -54,11 +64,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Body musí být nenulové číslo" }, { status: 400 });
     }
 
+    const replayKey = `loyalty-admin-grant:${ip}:${payloadDigest({ safeUserId, parsedPoints, safeReason, admin: user.id })}`;
+    if (!replayGuard(replayKey, 15000)) {
+      return NextResponse.json({ error: "Duplicitní požadavek" }, { status: 409 });
+    }
+
     await grantBonusPoints(
-      userId,
+      safeUserId,
       parsedPoints,
-      reason || "admin",
-      `Admin bonus: ${reason || "manuální přidělení"}`,
+      safeReason,
+      `Admin bonus: ${safeReason || "manuální přidělení"}`,
     );
 
     return NextResponse.json({ success: true });

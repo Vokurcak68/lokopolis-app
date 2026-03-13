@@ -1,4 +1,8 @@
-const TURNSTILE_SECRET = process.env.TURNSTILE_SECRET_KEY || "0x4AAAAAACoE4zw8cH197ejBUMhQvK8FXqY";
+const TURNSTILE_SECRET = process.env.TURNSTILE_SECRET_KEY;
+
+if (!TURNSTILE_SECRET) {
+  throw new Error("Missing TURNSTILE_SECRET_KEY env var");
+}
 
 export async function verifyTurnstile(token: string, ip?: string): Promise<boolean> {
   try {

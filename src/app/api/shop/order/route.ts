@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import nodemailer from "nodemailer";
-import { getClientIp, normalizeText, rateLimit } from "@/lib/security";
+import { verifyTurnstile } from "@/lib/turnstile";
+import { getClientIp, honeypotValid, minFillTimeValid, normalizeText, payloadDigest, rateLimit, replayGuard } from "@/lib/security";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -31,13 +32,35 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { productId, notes } = body;
+    const { productId, notes, turnstileToken, website, startedAt } = body;
+
+    if (!honeypotValid(website)) {
+      return NextResponse.json({ error: "Požadavek byl zablokován." }, { status: 400 });
+    }
+
+    if (!minFillTimeValid(startedAt, 2500)) {
+      return NextResponse.json({ error: "Formulář byl odeslán příliš rychle." }, { status: 400 });
+    }
+
+    if (!turnstileToken) {
+      return NextResponse.json({ error: "Chybí anti-bot ověření." }, { status: 400 });
+    }
+
+    const turnstileOk = await verifyTurnstile(turnstileToken, ip);
+    if (!turnstileOk) {
+      return NextResponse.json({ error: "Anti-bot ověření selhalo." }, { status: 403 });
+    }
 
     if (!productId) {
       return NextResponse.json({ error: "Chybí productId" }, { status: 400 });
     }
 
     const safeNotes = normalizeText(notes || "", 1000) || null;
+
+    const replayKey = `shop-order:${ip}:${payloadDigest({ productId, safeNotes })}`;
+    if (!replayGuard(replayKey, 120000)) {
+      return NextResponse.json({ error: "Duplicitní objednávka. Zkus to za chvíli znovu." }, { status: 409 });
+    }
 
     // Get auth token
     const authHeader = req.headers.get("authorization");

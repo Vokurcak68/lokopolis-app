@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { supabase } from "@/lib/supabase";
+import Turnstile from "@/components/Turnstile";
 import type { ShopProduct } from "@/types/database";
 
 interface OrderModalProps {
@@ -22,17 +24,36 @@ export default function OrderModal({ product, onClose, onSuccess }: OrderModalPr
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [orderResult, setOrderResult] = useState<{ orderNumber: string; spdString: string } | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [startedAt] = useState<number>(() => Date.now());
+  const [website] = useState("");
 
   async function handleSubmit() {
+    if (!turnstileToken) {
+      setError("Potvrď anti-bot ověření.");
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error("Neplatná session. Přihlas se znovu.");
+      }
+
       const res = await fetch("/api/shop/order", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({
           productId: product.id,
           notes: notes.trim() || null,
+          turnstileToken,
+          startedAt,
+          website,
         }),
       });
 
@@ -139,6 +160,20 @@ export default function OrderModal({ product, onClose, onSuccess }: OrderModalPr
                 marginBottom: "20px",
               }}
             />
+
+            <div style={{ marginBottom: "14px" }}>
+              <Turnstile onVerify={setTurnstileToken} onExpire={() => setTurnstileToken(null)} />
+              <input
+                type="text"
+                name="website"
+                value={website}
+                onChange={() => {}}
+                autoComplete="off"
+                tabIndex={-1}
+                aria-hidden="true"
+                style={{ position: "absolute", left: "-10000px", width: "1px", height: "1px", opacity: 0, pointerEvents: "none" }}
+              />
+            </div>
 
             {error && (
               <div style={{ padding: "10px 14px", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "8px", color: "#ef4444", fontSize: "13px", marginBottom: "16px" }}>
