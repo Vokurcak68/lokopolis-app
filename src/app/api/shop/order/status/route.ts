@@ -89,7 +89,7 @@ export async function PUT(req: NextRequest) {
 
     if (updateErr) {
       console.error("Order status update error:", updateErr);
-      return NextResponse.json({ error: "Nepodařilo se aktualizovat stav" }, { status: 500 });
+      return NextResponse.json({ error: `Nepodařilo se aktualizovat stav: ${updateErr.message}` }, { status: 500 });
     }
 
     // Fetch full order for email
@@ -99,30 +99,27 @@ export async function PUT(req: NextRequest) {
       .eq("id", orderId)
       .single();
 
-    // Send email notification to customer (non-blocking)
+    // Send email notification to customer (must await on Vercel serverless)
     if (order?.billing_email) {
-      const emailPromise = (async () => {
-        try {
-          const shopSettings = await getSettings() as Record<string, any>;
-          if (newStatus === "shipped") {
-            await sendEmail(
-              order.billing_email,
-              `Objednávka ${order.order_number} byla odeslána 📦`,
-              orderShipped(order, shopSettings)
-            );
-          } else {
-            await sendEmail(
-              order.billing_email,
-              `Objednávka ${order.order_number} — ${newStatus === "paid" ? "zaplaceno" : newStatus === "delivered" ? "doručeno" : "změna stavu"}`,
-              orderStatusChanged(order, newStatus, shopSettings)
-            );
-          }
-        } catch (emailErr) {
-          console.error("Order status email error:", emailErr);
+      try {
+        const shopSettings = await getSettings() as Record<string, any>;
+        if (newStatus === "shipped") {
+          await sendEmail(
+            order.billing_email,
+            `Objednávka ${order.order_number} byla odeslána 📦`,
+            orderShipped(order, shopSettings)
+          );
+        } else {
+          await sendEmail(
+            order.billing_email,
+            `Objednávka ${order.order_number} — ${newStatus === "paid" ? "zaplaceno" : newStatus === "delivered" ? "doručeno" : "změna stavu"}`,
+            orderStatusChanged(order, newStatus, shopSettings)
+          );
         }
-      })();
-      // Fire and forget
-      void emailPromise;
+      } catch (emailErr) {
+        console.error("Order status email error:", emailErr);
+        // Don't fail the request because of email
+      }
     }
 
     return NextResponse.json({ ok: true, status: newStatus });
