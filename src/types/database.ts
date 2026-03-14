@@ -483,6 +483,7 @@ export interface ShopOrder {
   billing_city: string | null;
   billing_zip: string | null;
   billing_country: string | null;
+  billing_company: string | null;
   billing_ico: string | null;
   billing_dic: string | null;
   shipping_name: string | null;
