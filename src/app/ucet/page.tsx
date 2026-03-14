@@ -55,6 +55,7 @@ export default function AccountPage() {
 
   // Billing address form
   const [billingForm, setBillingForm] = useState({
+    billing_name: "",
     billing_street: "",
     billing_city: "",
     billing_zip: "",
@@ -98,6 +99,7 @@ export default function AccountPage() {
       bio: profile.bio || "",
     });
     setBillingForm({
+      billing_name: profile.billing_name || "",
       billing_street: profile.billing_street || "",
       billing_city: profile.billing_city || "",
       billing_zip: profile.billing_zip || "",
@@ -172,6 +174,7 @@ export default function AccountPage() {
     const { error } = await supabase
       .from("profiles")
       .update({
+        billing_name: billingForm.billing_name || null,
         billing_street: billingForm.billing_street || null,
         billing_city: billingForm.billing_city || null,
         billing_zip: billingForm.billing_zip || null,
@@ -453,6 +456,15 @@ export default function AccountPage() {
             🏠 Fakturační adresa
           </h3>
           <div style={{ display: "grid", gap: "12px" }}>
+            <div>
+              <label style={labelStyle}>Jméno a příjmení</label>
+              <input
+                value={billingForm.billing_name}
+                onChange={(e) => setBillingForm(f => ({ ...f, billing_name: e.target.value }))}
+                style={inputStyle}
+                placeholder="Jan Novák"
+              />
+            </div>
             <div>
               <label style={labelStyle}>Ulice a číslo popisné</label>
               <input

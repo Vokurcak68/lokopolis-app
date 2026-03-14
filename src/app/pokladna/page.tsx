@@ -72,7 +72,7 @@ export default function CheckoutPage() {
     if (user && profile) {
       setBilling((b) => ({
         ...b,
-        name: b.name || profile.display_name || profile.username || "",
+        name: b.name || profile.billing_name || profile.display_name || "",
         email: b.email || user.email || "",
         phone: b.phone || profile.phone || "",
         street: b.street || profile.billing_street || "",

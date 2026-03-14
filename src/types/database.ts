@@ -16,6 +16,7 @@ export interface Profile {
   loyalty_points: number;
   loyalty_level_id: string | null;
   phone: string | null;
+  billing_name: string | null;
   billing_street: string | null;
   billing_city: string | null;
   billing_zip: string | null;
