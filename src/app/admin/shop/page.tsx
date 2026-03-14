@@ -849,16 +849,16 @@ export default function AdminShopPage() {
                       <td style={{ padding: "10px 12px", borderBottom: expandedOrderId === o.id ? "none" : "1px solid var(--border)" }} onClick={(e) => e.stopPropagation()}>
                         <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
                           {o.status === "pending" && (
-                            <button onClick={() => updateOrderStatus(o.id, "paid", o)} style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "1px solid rgba(34,197,94,0.4)", background: "rgba(34,197,94,0.1)", color: "#22c55e" }}>✅ Zaplaceno</button>
+                            <button onClick={() => updateOrderStatus(o.id, "paid", o)} style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "1px solid rgba(34,197,94,0.4)", background: "rgba(34,197,94,0.1)", color: "#22c55e" }}>✅ Označit zaplaceno</button>
                           )}
                           {o.status === "paid" && (
-                            <button onClick={() => updateOrderStatus(o.id, "processing", o)} style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "1px solid rgba(59,130,246,0.4)", background: "rgba(59,130,246,0.1)", color: "#3b82f6" }}>📦 Zpracovat</button>
+                            <button onClick={() => updateOrderStatus(o.id, "processing", o)} style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "1px solid rgba(59,130,246,0.4)", background: "rgba(59,130,246,0.1)", color: "#3b82f6" }}>📦 Označit zpracováno</button>
                           )}
                           {o.status === "processing" && (
-                            <button onClick={() => updateOrderStatus(o.id, "shipped", o)} style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "1px solid rgba(139,92,246,0.4)", background: "rgba(139,92,246,0.1)", color: "#8b5cf6" }}>🚚 Odesláno</button>
+                            <button onClick={() => updateOrderStatus(o.id, "shipped", o)} style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "1px solid rgba(139,92,246,0.4)", background: "rgba(139,92,246,0.1)", color: "#8b5cf6" }}>🚚 Označit odesláno</button>
                           )}
                           {o.status === "shipped" && (
-                            <button onClick={() => updateOrderStatus(o.id, "delivered", o)} style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "1px solid rgba(34,197,94,0.4)", background: "rgba(34,197,94,0.1)", color: "#22c55e" }}>✓ Doručeno</button>
+                            <button onClick={() => updateOrderStatus(o.id, "delivered", o)} style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "1px solid rgba(34,197,94,0.4)", background: "rgba(34,197,94,0.1)", color: "#22c55e" }}>✓ Označit doručeno</button>
                           )}
                           {(o.status === "pending" || o.status === "paid") && (
                             <button onClick={() => updateOrderStatus(o.id, "cancelled", o)} style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.08)", color: "#ef4444" }}>✕ Zrušit</button>
