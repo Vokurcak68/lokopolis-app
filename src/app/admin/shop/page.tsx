@@ -69,11 +69,24 @@ type AdminTab = "products" | "orders" | "categories" | "shipping" | "payments" |
 
 const VALID_TABS: AdminTab[] = ["products", "orders", "categories", "shipping", "payments", "coupons", "loyalty", "reviews", "settings", "add"];
 
+// Czech aliases for tab names (for backwards compatibility with old notification links)
+const TAB_ALIASES: Record<string, AdminTab> = {
+  objednavky: "orders",
+  produkty: "products",
+  kategorie: "categories",
+  doprava: "shipping",
+  platby: "payments",
+  slevy: "coupons",
+  recenze: "reviews",
+  nastaveni: "settings",
+};
+
 function getInitialTab(): AdminTab {
   if (typeof window === "undefined") return "products";
   const params = new URLSearchParams(window.location.search);
-  const t = params.get("tab") as AdminTab | null;
-  return t && VALID_TABS.includes(t) ? t : "products";
+  const raw = params.get("tab") || "";
+  const t = (TAB_ALIASES[raw] || raw) as AdminTab;
+  return VALID_TABS.includes(t) ? t : "products";
 }
 
 export default function AdminShopPage() {
