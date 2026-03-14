@@ -50,8 +50,20 @@ function slugify(text: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
+interface OrderItem {
+  id: string;
+  product_id: string;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+  product: { title: string; slug: string } | null;
+}
+
 interface OrderWithDetails extends ShopOrder {
   product: { title: string } | null;
+  items: OrderItem[] | null;
+  shipping: { name: string } | null;
+  payment: { name: string } | null;
   user: { username: string; display_name: string | null; email?: string } | null;
 }
 
@@ -205,7 +217,7 @@ export default function AdminShopPage() {
   const fetchOrders = useCallback(async () => {
     let query = supabase
       .from("shop_orders")
-      .select("*, product:shop_products(title), user:profiles!shop_orders_user_id_fkey(username, display_name)")
+      .select("*, items:order_items(*, product:shop_products(title, slug)), user:profiles!shop_orders_user_id_fkey(username, display_name), shipping:shipping_methods(name), payment:payment_methods(name)")
       .order("created_at", { ascending: false });
     if (orderFilter) query = query.eq("status", orderFilter);
     const { data } = await query;
@@ -820,7 +832,14 @@ export default function AdminShopPage() {
                         <span style={{ marginRight: "6px", fontSize: "10px" }}>{expandedOrderId === o.id ? "▼" : "▶"}</span>
                         {o.order_number}
                       </td>
-                      <td style={{ padding: "10px 12px", borderBottom: expandedOrderId === o.id ? "none" : "1px solid var(--border)", fontSize: "13px", color: "var(--text-body)" }}>{o.product?.title || "—"}</td>
+                      <td style={{ padding: "10px 12px", borderBottom: expandedOrderId === o.id ? "none" : "1px solid var(--border)", fontSize: "13px", color: "var(--text-body)" }}>
+                        {(() => {
+                          const items = o.items || [];
+                          if (items.length === 0) return o.product?.title || "—";
+                          if (items.length === 1) return items[0].product?.title || "—";
+                          return `${items[0].product?.title || "—"} a dalších ${items.length - 1}`;
+                        })()}
+                      </td>
                       <td style={{ padding: "10px 12px", borderBottom: expandedOrderId === o.id ? "none" : "1px solid var(--border)", fontSize: "13px", color: "var(--text-body)" }}>{o.user?.display_name || o.user?.username || "—"}</td>
                       <td style={{ padding: "10px 12px", borderBottom: expandedOrderId === o.id ? "none" : "1px solid var(--border)", fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>{o.total_price || o.price} Kč</td>
                       <td style={{ padding: "10px 12px", borderBottom: expandedOrderId === o.id ? "none" : "1px solid var(--border)" }}>
@@ -854,49 +873,182 @@ export default function AdminShopPage() {
                     {expandedOrderId === o.id && (
                       <tr>
                         <td colSpan={7} style={{ padding: "0 12px 16px", borderBottom: "1px solid var(--border)", background: "var(--bg-page)" }}>
-                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", maxWidth: "600px", padding: "16px", background: "var(--bg-card)", borderRadius: "10px", border: "1px solid var(--border)" }}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "16px", padding: "16px", background: "var(--bg-card)", borderRadius: "10px", border: "1px solid var(--border)" }}>
+
+                            {/* === Section 1: Položky objednávky === */}
+                            {(o.items && o.items.length > 0) && (
+                              <div>
+                                <h4 style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "8px" }}>📦 Položky objednávky</h4>
+                                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                                  <thead>
+                                    <tr>
+                                      {["Produkt", "Množství", "Cena/ks", "Celkem"].map((h) => (
+                                        <th key={h} style={{ textAlign: "left", padding: "6px 8px", fontSize: "11px", fontWeight: 600, color: "var(--text-dimmer)", borderBottom: "1px solid var(--border)" }}>{h}</th>
+                                      ))}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {o.items.map((item) => (
+                                      <tr key={item.id}>
+                                        <td style={{ padding: "6px 8px", color: "var(--text-body)", borderBottom: "1px solid var(--border)" }}>{item.product?.title || "—"}</td>
+                                        <td style={{ padding: "6px 8px", color: "var(--text-body)", borderBottom: "1px solid var(--border)" }}>{item.quantity}×</td>
+                                        <td style={{ padding: "6px 8px", color: "var(--text-body)", borderBottom: "1px solid var(--border)" }}>{item.unit_price} Kč</td>
+                                        <td style={{ padding: "6px 8px", color: "var(--text-body)", borderBottom: "1px solid var(--border)", fontWeight: 600 }}>{item.total_price} Kč</td>
+                                      </tr>
+                                    ))}
+                                    <tr>
+                                      <td colSpan={3} style={{ padding: "6px 8px", textAlign: "right", fontWeight: 600, color: "var(--text-dimmer)", fontSize: "12px" }}>Mezisoučet:</td>
+                                      <td style={{ padding: "6px 8px", fontWeight: 700, color: "var(--text-primary)" }}>{o.items.reduce((sum, i) => sum + i.total_price, 0)} Kč</td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+
+                            {/* === Section 2: Adresy === */}
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                              <div>
+                                <h4 style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "6px" }}>🏢 Fakturační adresa</h4>
+                                <div style={{ fontSize: "13px", color: "var(--text-body)", lineHeight: 1.6 }}>
+                                  {o.billing_name && <div style={{ fontWeight: 600 }}>{o.billing_name}</div>}
+                                  {o.billing_company && <div>{o.billing_company}</div>}
+                                  {o.billing_street && <div>{o.billing_street}</div>}
+                                  {(o.billing_city || o.billing_zip) && <div>{[o.billing_zip, o.billing_city].filter(Boolean).join(" ")}</div>}
+                                  {o.billing_country && <div>{o.billing_country}</div>}
+                                  {o.billing_ico && <div style={{ fontSize: "12px", color: "var(--text-dimmer)", marginTop: "4px" }}>IČO: {o.billing_ico}</div>}
+                                  {o.billing_dic && <div style={{ fontSize: "12px", color: "var(--text-dimmer)" }}>DIČ: {o.billing_dic}</div>}
+                                </div>
+                              </div>
+                              <div>
+                                <h4 style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "6px" }}>📬 Dodací adresa</h4>
+                                <div style={{ fontSize: "13px", color: "var(--text-body)", lineHeight: 1.6 }}>
+                                  {o.shipping_street ? (
+                                    <>
+                                      {o.shipping_name && <div style={{ fontWeight: 600 }}>{o.shipping_name}</div>}
+                                      {o.shipping_company && <div>{o.shipping_company}</div>}
+                                      <div>{o.shipping_street}</div>
+                                      {(o.shipping_city || o.shipping_zip) && <div>{[o.shipping_zip, o.shipping_city].filter(Boolean).join(" ")}</div>}
+                                      {o.shipping_country && <div>{o.shipping_country}</div>}
+                                    </>
+                                  ) : (
+                                    <span style={{ color: "var(--text-dimmer)", fontStyle: "italic" }}>Stejná jako fakturační</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* === Section 3: Doprava a platba === */}
+                            <div style={{ display: "flex", gap: "24px", flexWrap: "wrap", fontSize: "13px", color: "var(--text-body)" }}>
+                              <div>
+                                <span style={{ fontWeight: 600, color: "var(--text-dimmer)", fontSize: "12px" }}>Doprava: </span>
+                                {o.shipping?.name || "—"} <span style={{ color: "var(--text-dimmer)" }}>({o.shipping_price} Kč)</span>
+                              </div>
+                              <div>
+                                <span style={{ fontWeight: 600, color: "var(--text-dimmer)", fontSize: "12px" }}>Platba: </span>
+                                {o.payment?.name || "—"}
+                                {o.payment_surcharge > 0 && <span style={{ color: "var(--text-dimmer)" }}> (+{o.payment_surcharge} Kč)</span>}
+                              </div>
+                            </div>
+
+                            {/* === Section 4: Slevy === */}
+                            {(o.coupon_code || o.loyalty_discount > 0) && (
+                              <div style={{ display: "flex", gap: "24px", flexWrap: "wrap", fontSize: "13px", color: "var(--text-body)" }}>
+                                {o.coupon_code && (
+                                  <div>
+                                    <span style={{ fontWeight: 600, color: "var(--text-dimmer)", fontSize: "12px" }}>Kupón: </span>
+                                    <span style={{ background: "rgba(139,92,246,0.1)", padding: "1px 6px", borderRadius: "4px", fontWeight: 600, color: "#8b5cf6" }}>{o.coupon_code}</span>
+                                    <span style={{ color: "var(--text-dimmer)" }}> −{o.coupon_discount} Kč</span>
+                                  </div>
+                                )}
+                                {o.loyalty_discount > 0 && (
+                                  <div>
+                                    <span style={{ fontWeight: 600, color: "var(--text-dimmer)", fontSize: "12px" }}>Věrnostní sleva: </span>
+                                    <span style={{ color: "#22c55e", fontWeight: 600 }}>−{o.loyalty_discount} Kč</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* === Section 5: Celková cena === */}
+                            <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--accent)" }}>
+                              Celkem: {o.total_price || o.price} Kč
+                            </div>
+
+                            {/* === Section 6: Tracking & poznámka === */}
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                              <div>
+                                <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "var(--text-dimmer)", marginBottom: "4px" }}>Tracking číslo</label>
+                                <input
+                                  value={orderTrackingNumber}
+                                  onChange={(e) => setOrderTrackingNumber(e.target.value)}
+                                  placeholder="např. DR123456789CZ"
+                                  style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-input)", borderRadius: "6px", color: "var(--text-body)", fontSize: "13px", outline: "none", boxSizing: "border-box" }}
+                                />
+                              </div>
+                              <div>
+                                <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "var(--text-dimmer)", marginBottom: "4px" }}>Tracking URL</label>
+                                <input
+                                  value={orderTrackingUrl}
+                                  onChange={(e) => setOrderTrackingUrl(e.target.value)}
+                                  placeholder="https://tracking.example.com/..."
+                                  style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-input)", borderRadius: "6px", color: "var(--text-body)", fontSize: "13px", outline: "none", boxSizing: "border-box" }}
+                                />
+                              </div>
+                              <div style={{ gridColumn: "1 / -1" }}>
+                                <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "var(--text-dimmer)", marginBottom: "4px" }}>Poznámka k objednávce (interní)</label>
+                                <textarea
+                                  value={orderAdminNote}
+                                  onChange={(e) => setOrderAdminNote(e.target.value)}
+                                  placeholder="Interní poznámka — zákazník ji neuvidí"
+                                  rows={2}
+                                  style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-input)", borderRadius: "6px", color: "var(--text-body)", fontSize: "13px", outline: "none", boxSizing: "border-box", resize: "vertical" }}
+                                />
+                              </div>
+                              <div style={{ gridColumn: "1 / -1", display: "flex", gap: "8px", alignItems: "center" }}>
+                                <button
+                                  onClick={() => saveOrderDetails(o.id)}
+                                  disabled={orderSaving}
+                                  style={{ padding: "6px 16px", borderRadius: "6px", fontSize: "13px", fontWeight: 600, cursor: orderSaving ? "not-allowed" : "pointer", border: "none", background: "var(--accent)", color: "var(--accent-text-on)" }}
+                                >
+                                  {orderSaving ? "Ukládám..." : "💾 Uložit"}
+                                </button>
+                                {o.tracking_number && (
+                                  <span style={{ fontSize: "12px", color: "var(--text-dimmer)" }}>
+                                    📦 {o.tracking_number}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* === Section 7: Časová osa === */}
                             <div>
-                              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "var(--text-dimmer)", marginBottom: "4px" }}>Tracking číslo</label>
-                              <input
-                                value={orderTrackingNumber}
-                                onChange={(e) => setOrderTrackingNumber(e.target.value)}
-                                placeholder="např. DR123456789CZ"
-                                style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-input)", borderRadius: "6px", color: "var(--text-body)", fontSize: "13px", outline: "none", boxSizing: "border-box" }}
-                              />
+                              <h4 style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "8px" }}>🕐 Časová osa</h4>
+                              <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", fontSize: "12px", color: "var(--text-dimmer)" }}>
+                                <div>
+                                  <span style={{ fontWeight: 600 }}>Vytvořeno:</span>{" "}
+                                  {new Date(o.created_at).toLocaleString("cs-CZ")}
+                                </div>
+                                {o.paid_at && (
+                                  <div>
+                                    <span style={{ fontWeight: 600, color: "#22c55e" }}>Zaplaceno:</span>{" "}
+                                    {new Date(o.paid_at).toLocaleString("cs-CZ")}
+                                  </div>
+                                )}
+                                {o.shipped_at && (
+                                  <div>
+                                    <span style={{ fontWeight: 600, color: "#8b5cf6" }}>Odesláno:</span>{" "}
+                                    {new Date(o.shipped_at).toLocaleString("cs-CZ")}
+                                  </div>
+                                )}
+                                {o.delivered_at && (
+                                  <div>
+                                    <span style={{ fontWeight: 600, color: "#22c55e" }}>Doručeno:</span>{" "}
+                                    {new Date(o.delivered_at).toLocaleString("cs-CZ")}
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                            <div>
-                              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "var(--text-dimmer)", marginBottom: "4px" }}>Tracking URL</label>
-                              <input
-                                value={orderTrackingUrl}
-                                onChange={(e) => setOrderTrackingUrl(e.target.value)}
-                                placeholder="https://tracking.example.com/..."
-                                style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-input)", borderRadius: "6px", color: "var(--text-body)", fontSize: "13px", outline: "none", boxSizing: "border-box" }}
-                              />
-                            </div>
-                            <div style={{ gridColumn: "1 / -1" }}>
-                              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "var(--text-dimmer)", marginBottom: "4px" }}>Poznámka k objednávce (interní)</label>
-                              <textarea
-                                value={orderAdminNote}
-                                onChange={(e) => setOrderAdminNote(e.target.value)}
-                                placeholder="Interní poznámka — zákazník ji neuvidí"
-                                rows={2}
-                                style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-input)", borderRadius: "6px", color: "var(--text-body)", fontSize: "13px", outline: "none", boxSizing: "border-box", resize: "vertical" }}
-                              />
-                            </div>
-                            <div style={{ gridColumn: "1 / -1", display: "flex", gap: "8px", alignItems: "center" }}>
-                              <button
-                                onClick={() => saveOrderDetails(o.id)}
-                                disabled={orderSaving}
-                                style={{ padding: "6px 16px", borderRadius: "6px", fontSize: "13px", fontWeight: 600, cursor: orderSaving ? "not-allowed" : "pointer", border: "none", background: "var(--accent)", color: "var(--accent-text-on)" }}
-                              >
-                                {orderSaving ? "Ukládám..." : "💾 Uložit"}
-                              </button>
-                              {o.tracking_number && (
-                                <span style={{ fontSize: "12px", color: "var(--text-dimmer)" }}>
-                                  📦 {o.tracking_number}
-                                </span>
-                              )}
-                            </div>
+
                           </div>
                         </td>
                       </tr>
