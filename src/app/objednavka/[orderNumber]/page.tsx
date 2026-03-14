@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/components/Auth/AuthProvider";
+import QRCode from "qrcode";
 import type { ShopOrder, OrderItem, ShopProduct, ShippingMethod, PaymentMethod } from "@/types/database";
 
 interface OrderDetail extends ShopOrder {
@@ -28,7 +29,38 @@ export default function OrderConfirmationPage() {
   const orderNumber = params.orderNumber as string;
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [bankAccount, setBankAccount] = useState("");
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const { user } = useAuth();
+
+  // Load bank account from shop settings
+  useEffect(() => {
+    fetch("/api/shop/settings")
+      .then((r) => r.json())
+      .then((s) => {
+        if (s.company && typeof s.company === "object" && s.company.bank_account) {
+          setBankAccount(s.company.bank_account);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Generate QR code for SPD payment
+  useEffect(() => {
+    if (!order || !bankAccount) return;
+    const isPendingPayment = order.status === "pending" && (order.payment_method === "bank-transfer" || order.payment_method === "qr-payment");
+    if (!isPendingPayment) return;
+
+    const totalPrice = order.total_price || order.price;
+    const vs = order.order_number.replace(/\D/g, "");
+    // IBAN format: remove spaces, slashes from Czech account number
+    const acc = bankAccount.replace(/\s/g, "");
+    const spd = `SPD*1.0*ACC:${acc}*AM:${totalPrice.toFixed(2)}*CC:CZK*MSG:${order.order_number}*X-VS:${vs}`;
+
+    QRCode.toDataURL(spd, { width: 200, margin: 2 })
+      .then((url: string) => setQrDataUrl(url))
+      .catch(() => setQrDataUrl(null));
+  }, [order, bankAccount]);
 
   async function downloadInvoice(orderId: string, orderNum: string) {
     const session = await supabase.auth.getSession();
@@ -201,11 +233,21 @@ export default function OrderConfirmationPage() {
           <h3 style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "12px" }}>
             💳 Platební údaje
           </h3>
-          <div style={{ fontSize: "14px", color: "var(--text-primary)", lineHeight: 1.8 }}>
-            <div><strong>Číslo účtu:</strong> XXXX/XXXX (bude doplněno)</div>
-            <div><strong>Částka:</strong> {totalPrice} Kč</div>
-            <div><strong>Variabilní symbol:</strong> {order.order_number.replace(/\D/g, "")}</div>
-            <div><strong>Zpráva:</strong> {order.order_number}</div>
+          <div style={{ display: "flex", gap: "24px", alignItems: "flex-start", flexWrap: "wrap" }}>
+            <div style={{ fontSize: "14px", color: "var(--text-primary)", lineHeight: 1.8, flex: "1 1 200px" }}>
+              {bankAccount && <div><strong>Číslo účtu:</strong> {bankAccount}</div>}
+              <div><strong>Částka:</strong> {totalPrice} Kč</div>
+              <div><strong>Variabilní symbol:</strong> {order.order_number.replace(/\D/g, "")}</div>
+              <div><strong>Zpráva:</strong> {order.order_number}</div>
+            </div>
+            {qrDataUrl && (
+              <div style={{ textAlign: "center", flexShrink: 0 }}>
+                <img src={qrDataUrl} alt="QR platba" style={{ width: "160px", height: "160px", borderRadius: "8px" }} />
+                <div style={{ fontSize: "11px", color: "var(--text-dimmer)", marginTop: "4px" }}>
+                  Naskenujte v bankovní aplikaci
+                </div>
+              </div>
+            )}
           </div>
           {order.paymentObj?.instructions && (
             <p style={{ fontSize: "13px", color: "var(--text-muted)", marginTop: "12px" }}>
