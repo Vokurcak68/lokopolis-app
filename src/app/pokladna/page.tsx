@@ -67,13 +67,21 @@ export default function CheckoutPage() {
   // Determine if cart is all-digital
   const isAllDigital = items.every((i) => !!i.product.file_url);
 
-  // Pre-fill from profile
+  // Pre-fill from profile (name, email, phone, billing address, IČ/DIČ)
   useEffect(() => {
     if (user && profile) {
       setBilling((b) => ({
         ...b,
         name: b.name || profile.display_name || profile.username || "",
         email: b.email || user.email || "",
+        phone: b.phone || profile.phone || "",
+        street: b.street || profile.billing_street || "",
+        city: b.city || profile.billing_city || "",
+        zip: b.zip || profile.billing_zip || "",
+        country: b.country || profile.billing_country || "CZ",
+        isBusiness: b.isBusiness || !!(profile.billing_ico),
+        ico: b.ico || profile.billing_ico || "",
+        dic: b.dic || profile.billing_dic || "",
       }));
     }
   }, [user, profile]);
