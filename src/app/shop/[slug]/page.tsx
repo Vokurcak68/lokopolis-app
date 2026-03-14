@@ -505,22 +505,42 @@ export default function ShopProductDetailPage() {
                     {addedToCart ? "✓ Přidáno do košíku" : isInCart ? "✓ V košíku" : `🛒 Do košíku · ${product.price.toLocaleString("cs-CZ")} Kč`}
                   </button>
                   {isInCart && (
-                    <Link
-                      href="/kosik"
-                      style={{
-                        display: "block",
-                        textAlign: "center",
-                        padding: "10px",
-                        border: "1px solid var(--accent)",
-                        borderRadius: "10px",
-                        color: "var(--accent)",
-                        textDecoration: "none",
-                        fontSize: "14px",
-                        fontWeight: 600,
-                      }}
-                    >
-                      Přejít do košíku →
-                    </Link>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <Link
+                        href="/shop"
+                        style={{
+                          flex: 1,
+                          display: "block",
+                          textAlign: "center",
+                          padding: "10px",
+                          border: "1px solid var(--border)",
+                          borderRadius: "10px",
+                          color: "var(--text-secondary)",
+                          textDecoration: "none",
+                          fontSize: "14px",
+                          fontWeight: 600,
+                        }}
+                      >
+                        ← Pokračovat v nákupu
+                      </Link>
+                      <Link
+                        href="/kosik"
+                        style={{
+                          flex: 1,
+                          display: "block",
+                          textAlign: "center",
+                          padding: "10px",
+                          border: "1px solid var(--accent)",
+                          borderRadius: "10px",
+                          color: "var(--accent)",
+                          textDecoration: "none",
+                          fontSize: "14px",
+                          fontWeight: 600,
+                        }}
+                      >
+                        Přejít do košíku →
+                      </Link>
+                    </div>
                   )}
                 </div>
               );
