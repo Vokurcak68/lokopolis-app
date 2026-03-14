@@ -80,7 +80,13 @@ export default function AdminShopPage() {
   const router = useRouter();
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<AdminTab>(getInitialTab);
+  const [tab, setTab] = useState<AdminTab>("products");
+
+  // Read ?tab= from URL on mount (SSR returns "products", this corrects it client-side)
+  useEffect(() => {
+    const t = getInitialTab();
+    if (t !== "products") setTab(t);
+  }, []);
 
   // Categories from DB (flat + all including inactive)
   const [categories, setCategories] = useState<ShopCategory[]>([]);
