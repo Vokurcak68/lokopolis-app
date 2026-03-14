@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -6,11 +7,11 @@ export const metadata: Metadata = {
   description: "Všeobecné obchodní podmínky e-shopu Lokopolis.cz",
 };
 
-const sectionStyle: React.CSSProperties = {
+const sectionStyle: CSSProperties = {
   marginBottom: "32px",
 };
 
-const h2Style: React.CSSProperties = {
+const h2Style: CSSProperties = {
   fontSize: "20px",
   fontWeight: 700,
   color: "var(--text-primary)",
@@ -19,14 +20,14 @@ const h2Style: React.CSSProperties = {
   borderBottom: "1px solid var(--border)",
 };
 
-const pStyle: React.CSSProperties = {
+const pStyle: CSSProperties = {
   color: "var(--text-muted)",
   lineHeight: 1.7,
   marginBottom: "12px",
   fontSize: "15px",
 };
 
-const liStyle: React.CSSProperties = {
+const liStyle: CSSProperties = {
   color: "var(--text-muted)",
   lineHeight: 1.7,
   marginBottom: "6px",

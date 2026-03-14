@@ -36,7 +36,7 @@ export async function PUT(req: NextRequest) {
       global: { headers: { Authorization: `Bearer ${token}` } },
     });
 
-    const { data: { user } } = await userClient.auth.getUser(token);
+    const { data: { user } } = await userClient.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: "Nepřihlášen" }, { status: 401 });
     }
