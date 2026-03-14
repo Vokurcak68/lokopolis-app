@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 interface AdminNotification {
@@ -47,7 +46,6 @@ export default function AdminNotifications() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const router = useRouter();
 
   const fetchUnreadCount = useCallback(async () => {
     const { count } = await supabase
@@ -117,7 +115,8 @@ export default function AdminNotifications() {
     }
     setOpen(false);
     if (notif.link) {
-      router.push(notif.link);
+      // Full navigation to ensure page re-mounts and reads ?tab= correctly
+      window.location.href = notif.link;
     }
   }
 
