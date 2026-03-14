@@ -14,6 +14,7 @@ import { getShopCategories, type ShopCategory } from "@/lib/shop-categories";
 import { getImageVariant } from "@/lib/image-variants";
 import ProductReviews from "@/components/Shop/ProductReviews";
 import WishlistButton from "@/components/Shop/WishlistButton";
+import { getStockLabel } from "@/lib/inventory";
 
 const SCALE_COLORS: Record<string, string> = {
   TT: "#3b82f6",
@@ -319,6 +320,32 @@ export default function ShopProductDetailPage() {
               </span>
             )}
           </div>
+
+          {/* Stock badge */}
+          {(() => {
+            const stock = getStockLabel(product.stock_mode, product.stock_quantity, product.stock_reserved, product.stock_alert_threshold);
+            return (
+              <div style={{ marginBottom: "16px" }}>
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "6px 14px",
+                    borderRadius: "8px",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    background: `${stock.color}18`,
+                    color: stock.color,
+                    border: `1px solid ${stock.color}40`,
+                  }}
+                >
+                  <span style={{ fontSize: "10px" }}>●</span>
+                  {stock.label}
+                </span>
+              </div>
+            );
+          })()}
 
           {/* Badges */}
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "20px" }}>

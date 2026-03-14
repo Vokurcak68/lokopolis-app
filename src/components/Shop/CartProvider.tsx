@@ -19,25 +19,61 @@ interface CartContextType {
 const CartContext = createContext<CartContextType | null>(null);
 
 const LS_KEY = "lokopolis_cart";
+const DEFAULT_CART_TIMEOUT_MS = 72 * 60 * 60 * 1000; // 72 hours
 
-function getLocalCart(): { productId: string; quantity: number }[] {
-  if (typeof window === "undefined") return [];
+interface LocalCartData {
+  items: { productId: string; quantity: number }[];
+  updatedAt: number;
+}
+
+function getLocalCartRaw(): LocalCartData {
+  if (typeof window === "undefined") return { items: [], updatedAt: Date.now() };
   try {
-    return JSON.parse(localStorage.getItem(LS_KEY) || "[]");
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return { items: [], updatedAt: Date.now() };
+    const parsed = JSON.parse(raw);
+    // Support legacy format (plain array)
+    if (Array.isArray(parsed)) {
+      return { items: parsed, updatedAt: Date.now() };
+    }
+    return { items: parsed.items || [], updatedAt: parsed.updatedAt || Date.now() };
   } catch {
+    return { items: [], updatedAt: Date.now() };
+  }
+}
+
+function getLocalCart(timeoutMs: number): { productId: string; quantity: number }[] {
+  const data = getLocalCartRaw();
+  if (Date.now() - data.updatedAt > timeoutMs) {
+    // Cart expired — clear it
+    if (typeof window !== "undefined") localStorage.removeItem(LS_KEY);
     return [];
   }
+  return data.items;
 }
 
 function setLocalCart(items: { productId: string; quantity: number }[]) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(LS_KEY, JSON.stringify(items));
+  const data: LocalCartData = { items, updatedAt: Date.now() };
+  localStorage.setItem(LS_KEY, JSON.stringify(data));
 }
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [items, setItems] = useState<CartItemData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [cartTimeoutMs, setCartTimeoutMs] = useState(DEFAULT_CART_TIMEOUT_MS);
+
+  // Fetch cart timeout setting
+  useEffect(() => {
+    fetch("/api/shop/settings")
+      .then((res) => res.json())
+      .then((settings) => {
+        const hours = typeof settings.cart_timeout_hours === "number" ? settings.cart_timeout_hours : 72;
+        setCartTimeoutMs(hours * 60 * 60 * 1000);
+      })
+      .catch(() => {});
+  }, []);
 
   // Load cart
   const loadCart = useCallback(async () => {
@@ -47,9 +83,22 @@ export function CartProvider({ children }: { children: ReactNode }) {
         // DB cart for logged-in users
         const { data: cart } = await supabase
           .from("carts")
-          .select("id")
+          .select("id, updated_at")
           .eq("user_id", user.id)
           .maybeSingle();
+
+        // Check if DB cart is expired
+        if (cart && cart.updated_at) {
+          const updatedAt = new Date(cart.updated_at).getTime();
+          if (Date.now() - updatedAt > cartTimeoutMs) {
+            // Cart expired — clear it
+            await supabase.from("cart_items").delete().eq("cart_id", cart.id);
+            await supabase.from("carts").delete().eq("id", cart.id);
+            setItems([]);
+            setLoading(false);
+            return;
+          }
+        }
 
         if (cart) {
           const { data: cartItems } = await supabase
@@ -78,7 +127,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
           }
         } else {
           // Merge localStorage cart into DB on first login
-          const local = getLocalCart();
+          const local = getLocalCart(cartTimeoutMs);
           if (local.length > 0) {
             const { data: newCart } = await supabase
               .from("carts")
@@ -118,7 +167,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         }
       } else {
         // localStorage cart for anonymous
-        const local = getLocalCart();
+        const local = getLocalCart(cartTimeoutMs);
         if (local.length > 0) {
           const productIds = local.map((l) => l.productId);
           const { data: products } = await supabase
@@ -145,7 +194,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, cartTimeoutMs]);
 
   useEffect(() => {
     loadCart();
@@ -182,9 +231,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
             { cart_id: cart.id, product_id: product.id, quantity: finalQty },
             { onConflict: "cart_id,product_id" }
           );
+          // Touch updated_at
+          await supabase.from("carts").update({ updated_at: new Date().toISOString() }).eq("id", cart.id);
         }
       } else {
-        const local = getLocalCart();
+        const local = getLocalCart(cartTimeoutMs);
         const idx = local.findIndex((l) => l.productId === product.id);
         if (idx >= 0) {
           local[idx].quantity = finalQty;
@@ -222,15 +273,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
             .delete()
             .eq("cart_id", cart.id)
             .eq("product_id", productId);
+          await supabase.from("carts").update({ updated_at: new Date().toISOString() }).eq("id", cart.id);
         }
       } else {
-        const local = getLocalCart().filter((l) => l.productId !== productId);
+        const local = getLocalCart(cartTimeoutMs).filter((l) => l.productId !== productId);
         setLocalCart(local);
       }
 
       setItems((prev) => prev.filter((i) => i.product.id !== productId));
     },
-    [user]
+    [user, cartTimeoutMs]
   );
 
   const updateQuantity = useCallback(
@@ -253,9 +305,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
             .update({ quantity: qty })
             .eq("cart_id", cart.id)
             .eq("product_id", productId);
+          await supabase.from("carts").update({ updated_at: new Date().toISOString() }).eq("id", cart.id);
         }
       } else {
-        const local = getLocalCart();
+        const local = getLocalCart(cartTimeoutMs);
         const idx = local.findIndex((l) => l.productId === productId);
         if (idx >= 0) {
           local[idx].quantity = qty;
@@ -267,7 +320,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         prev.map((i) => (i.product.id === productId ? { ...i, quantity: qty } : i))
       );
     },
-    [user, removeFromCart]
+    [user, removeFromCart, cartTimeoutMs]
   );
 
   const clearCart = useCallback(async () => {

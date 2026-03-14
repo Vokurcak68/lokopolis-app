@@ -65,7 +65,7 @@ interface CatFormState {
   parent_id: string | null;
 }
 
-type AdminTab = "products" | "orders" | "categories" | "shipping" | "payments" | "coupons" | "loyalty" | "reviews" | "add" | "edit";
+type AdminTab = "products" | "orders" | "categories" | "shipping" | "payments" | "coupons" | "loyalty" | "reviews" | "settings" | "add" | "edit";
 
 export default function AdminShopPage() {
   const router = useRouter();
@@ -683,10 +683,10 @@ export default function AdminShopPage() {
 
       {/* Tabs */}
       <div style={{ display: "flex", gap: "8px", marginBottom: "24px", borderBottom: "1px solid var(--border)", paddingBottom: "12px", flexWrap: "wrap" }}>
-        {(["products", "orders", "categories", "shipping", "payments", "coupons", "loyalty", "reviews", "add"] as AdminTab[]).map((t) => {
+        {(["products", "orders", "categories", "shipping", "payments", "coupons", "loyalty", "reviews", "settings", "add"] as AdminTab[]).map((t) => {
           const labels: Record<string, string> = {
             products: "📦 Produkty", orders: "📋 Objednávky", categories: "🏷️ Kategorie",
-            shipping: "🚚 Doprava", payments: "💳 Platby", coupons: "🎟️ Kupóny", loyalty: "⭐ Věrnost", reviews: "⭐ Recenze", add: "➕ Přidat",
+            shipping: "🚚 Doprava", payments: "💳 Platby", coupons: "🎟️ Kupóny", loyalty: "⭐ Věrnost", reviews: "⭐ Recenze", settings: "⚙️ Nastavení", add: "➕ Přidat",
           };
           return (
             <button
@@ -1433,6 +1433,9 @@ export default function AdminShopPage() {
 
       {/* ==================== REVIEWS TAB ==================== */}
       {tab === "reviews" && <ReviewsAdmin />}
+
+      {/* ==================== SETTINGS TAB ==================== */}
+      {tab === "settings" && <SettingsAdmin />}
 
       <div style={{ height: "48px" }} />
     </div>
@@ -2378,6 +2381,237 @@ function ReviewsAdmin() {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ==================== SETTINGS ADMIN COMPONENT ==================== */
+interface CompanyData {
+  name: string;
+  ico: string;
+  dic: string;
+  street: string;
+  city: string;
+  zip: string;
+  country: string;
+  email: string;
+  phone: string;
+  bank_account: string;
+}
+
+function SettingsAdmin() {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [company, setCompany] = useState<CompanyData>({
+    name: "Lokopolis.cz", ico: "", dic: "", street: "", city: "", zip: "", country: "CZ", email: "info@lokopolis.cz", phone: "", bank_account: "",
+  });
+  const [cartTimeoutHours, setCartTimeoutHours] = useState(72);
+  const [invoiceNote, setInvoiceNote] = useState("Faktura slouží jako daňový doklad.");
+  const [emailFooter, setEmailFooter] = useState("Tento e-mail byl odeslán automaticky z Lokopolis.cz");
+  const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/shop/settings")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.company && typeof data.company === "object") setCompany(data.company as CompanyData);
+        if (typeof data.cart_timeout_hours === "number") setCartTimeoutHours(data.cart_timeout_hours);
+        else if (typeof data.cart_timeout_hours === "string") setCartTimeoutHours(parseInt(data.cart_timeout_hours) || 72);
+        if (typeof data.invoice_note === "string") setInvoiceNote(data.invoice_note);
+        if (typeof data.email_footer === "string") setEmailFooter(data.email_footer);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function handleSave() {
+    setSaving(true);
+    setMessage(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch("/api/shop/settings", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({
+          company,
+          cart_timeout_hours: cartTimeoutHours,
+          invoice_note: invoiceNote,
+          email_footer: emailFooter,
+        }),
+      });
+      if (res.ok) {
+        setMessage({ text: "Nastavení uloženo ✓", type: "success" });
+      } else {
+        const data = await res.json();
+        setMessage({ text: data.error || "Chyba při ukládání", type: "error" });
+      }
+    } catch {
+      setMessage({ text: "Chyba při ukládání", type: "error" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) {
+    return <div style={{ textAlign: "center", padding: "40px", color: "var(--text-dimmer)" }}>Načítám nastavení...</div>;
+  }
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    padding: "10px 14px",
+    background: "var(--bg-page)",
+    border: "1px solid var(--border)",
+    borderRadius: "8px",
+    color: "var(--text-primary)",
+    fontSize: "14px",
+  };
+
+  const labelStyle: React.CSSProperties = {
+    display: "block",
+    fontSize: "13px",
+    fontWeight: 600,
+    color: "var(--text-dim)",
+    marginBottom: "6px",
+  };
+
+  const sectionStyle: React.CSSProperties = {
+    background: "var(--bg-card)",
+    border: "1px solid var(--border)",
+    borderRadius: "12px",
+    padding: "24px",
+    marginBottom: "20px",
+  };
+
+  return (
+    <div style={{ maxWidth: "700px" }}>
+      {/* Company info */}
+      <div style={sectionStyle}>
+        <h3 style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "20px" }}>🏢 Údaje firmy</h3>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <label style={labelStyle}>Název firmy</label>
+            <input style={inputStyle} value={company.name} onChange={(e) => setCompany({ ...company, name: e.target.value })} />
+          </div>
+          <div>
+            <label style={labelStyle}>IČ</label>
+            <input style={inputStyle} value={company.ico} onChange={(e) => setCompany({ ...company, ico: e.target.value })} />
+          </div>
+          <div>
+            <label style={labelStyle}>DIČ</label>
+            <input style={inputStyle} value={company.dic} onChange={(e) => setCompany({ ...company, dic: e.target.value })} />
+          </div>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <label style={labelStyle}>Ulice</label>
+            <input style={inputStyle} value={company.street} onChange={(e) => setCompany({ ...company, street: e.target.value })} />
+          </div>
+          <div>
+            <label style={labelStyle}>Město</label>
+            <input style={inputStyle} value={company.city} onChange={(e) => setCompany({ ...company, city: e.target.value })} />
+          </div>
+          <div>
+            <label style={labelStyle}>PSČ</label>
+            <input style={inputStyle} value={company.zip} onChange={(e) => setCompany({ ...company, zip: e.target.value })} />
+          </div>
+          <div>
+            <label style={labelStyle}>E-mail</label>
+            <input style={inputStyle} type="email" value={company.email} onChange={(e) => setCompany({ ...company, email: e.target.value })} />
+          </div>
+          <div>
+            <label style={labelStyle}>Telefon</label>
+            <input style={inputStyle} value={company.phone} onChange={(e) => setCompany({ ...company, phone: e.target.value })} />
+          </div>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <label style={labelStyle}>Číslo účtu</label>
+            <input style={inputStyle} value={company.bank_account} onChange={(e) => setCompany({ ...company, bank_account: e.target.value })} />
+          </div>
+        </div>
+      </div>
+
+      {/* Cart timeout */}
+      <div style={sectionStyle}>
+        <h3 style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "20px" }}>🛒 Košík</h3>
+        <div>
+          <label style={labelStyle}>Timeout košíku (hodiny)</label>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <input
+              style={{ ...inputStyle, maxWidth: "120px" }}
+              type="number"
+              min={1}
+              value={cartTimeoutHours}
+              onChange={(e) => setCartTimeoutHours(parseInt(e.target.value) || 72)}
+            />
+            <span style={{ fontSize: "13px", color: "var(--text-dimmer)" }}>
+              = {cartTimeoutHours} h ({Math.round(cartTimeoutHours / 24)} dní)
+            </span>
+          </div>
+          <p style={{ fontSize: "12px", color: "var(--text-dimmer)", marginTop: "8px" }}>
+            Po uplynutí této doby se neaktivní košík automaticky vymaže. Sklad se nerezervuje — odečítá se až při objednání.
+          </p>
+        </div>
+      </div>
+
+      {/* Invoice note */}
+      <div style={sectionStyle}>
+        <h3 style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "20px" }}>📄 Faktura</h3>
+        <div>
+          <label style={labelStyle}>Poznámka na faktuře</label>
+          <textarea
+            style={{ ...inputStyle, minHeight: "80px", resize: "vertical" }}
+            value={invoiceNote}
+            onChange={(e) => setInvoiceNote(e.target.value)}
+          />
+        </div>
+      </div>
+
+      {/* Email footer */}
+      <div style={sectionStyle}>
+        <h3 style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "20px" }}>📧 E-mail</h3>
+        <div>
+          <label style={labelStyle}>Patička e-mailu</label>
+          <textarea
+            style={{ ...inputStyle, minHeight: "80px", resize: "vertical" }}
+            value={emailFooter}
+            onChange={(e) => setEmailFooter(e.target.value)}
+          />
+        </div>
+      </div>
+
+      {/* Message */}
+      {message && (
+        <div style={{
+          padding: "12px 16px",
+          borderRadius: "8px",
+          marginBottom: "16px",
+          background: message.type === "success" ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)",
+          border: `1px solid ${message.type === "success" ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"}`,
+          color: message.type === "success" ? "#22c55e" : "#ef4444",
+          fontSize: "14px",
+          fontWeight: 600,
+        }}>
+          {message.text}
+        </div>
+      )}
+
+      {/* Save button */}
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        style={{
+          padding: "14px 32px",
+          background: saving ? "var(--border)" : "var(--accent)",
+          border: "none",
+          borderRadius: "10px",
+          color: "var(--accent-text-on)",
+          fontSize: "15px",
+          fontWeight: 700,
+          cursor: saving ? "not-allowed" : "pointer",
+        }}
+      >
+        {saving ? "Ukládám..." : "💾 Uložit nastavení"}
+      </button>
     </div>
   );
 }
