@@ -393,7 +393,7 @@ export default function Header() {
       </div>
 
       {mobileMenuOpen && (
-        <nav className="mobile-menu" style={{ padding: "0 20px 16px", borderTop: "1px solid var(--border)" }}>
+        <nav className="mobile-menu" style={{ padding: "0 20px 16px", borderTop: "1px solid var(--border)", maxHeight: "calc(100vh - 64px)", overflowY: "auto" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: "4px", paddingTop: "12px" }}>
             {allLinks.map((item) => (
               <Link
