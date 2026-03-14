@@ -8,6 +8,7 @@ import { type ShopCategory, getFullCategoryLabel, getCategoryColor } from "@/lib
 import { useCart } from "./CartProvider";
 import { getStockLabel } from "@/lib/inventory";
 import { getImageVariant } from "@/lib/image-variants";
+import WishlistButton from "./WishlistButton";
 
 const SCALE_COLORS: Record<string, string> = {
   TT: "#3b82f6",
@@ -149,6 +150,9 @@ export default function ProductCard({ product, featured, categories = [] }: Prod
               </div>
             )}
           </div>
+
+          {/* Wishlist heart */}
+          <WishlistButton productId={product.id} size="small" />
         </div>
 
         {/* Content */}
@@ -176,6 +180,18 @@ export default function ProductCard({ product, featured, categories = [] }: Prod
               </span>
             )}
           </div>
+
+          {/* Rating stars */}
+          {product.review_count > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: "4px", marginBottom: "4px" }}>
+              <span style={{ fontSize: "13px", letterSpacing: "1px", color: "#f59e0b" }}>
+                {"★".repeat(Math.round(product.avg_rating || 0))}{"☆".repeat(5 - Math.round(product.avg_rating || 0))}
+              </span>
+              <span style={{ fontSize: "11px", color: "var(--text-dimmer)" }}>
+                ({product.review_count})
+              </span>
+            </div>
+          )}
 
           {/* Title */}
           <h3

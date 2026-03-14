@@ -114,6 +114,14 @@ export default function UserMenu() {
           </Link>
 
           <Link
+            href="/shop/oblibene"
+            onClick={() => setOpen(false)}
+            className="block w-full text-left px-4 py-2 text-sm text-text-muted hover:text-[var(--text-primary)] hover:bg-bg-card-hover transition-colors"
+          >
+            ♥ Oblíbené
+          </Link>
+
+          <Link
             href="/objednavky"
             onClick={() => setOpen(false)}
             className="block w-full text-left px-4 py-2 text-sm text-text-muted hover:text-[var(--text-primary)] hover:bg-bg-card-hover transition-colors"

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
-import type { ShopProduct, ShopOrder, ShippingMethod, PaymentMethod, Coupon, LoyaltyLevel, ProductAttachment } from "@/types/database";
+import type { ShopProduct, ShopOrder, ShippingMethod, PaymentMethod, Coupon, LoyaltyLevel, ProductAttachment, ProductReview } from "@/types/database";
 import { type ShopCategory, buildCategoryTree, type ShopCategoryTreeNode } from "@/lib/shop-categories";
 import { getImageVariant } from "@/lib/image-variants";
 
@@ -65,7 +65,7 @@ interface CatFormState {
   parent_id: string | null;
 }
 
-type AdminTab = "products" | "orders" | "categories" | "shipping" | "payments" | "coupons" | "loyalty" | "add" | "edit";
+type AdminTab = "products" | "orders" | "categories" | "shipping" | "payments" | "coupons" | "loyalty" | "reviews" | "add" | "edit";
 
 export default function AdminShopPage() {
   const router = useRouter();
@@ -650,10 +650,10 @@ export default function AdminShopPage() {
 
       {/* Tabs */}
       <div style={{ display: "flex", gap: "8px", marginBottom: "24px", borderBottom: "1px solid var(--border)", paddingBottom: "12px", flexWrap: "wrap" }}>
-        {(["products", "orders", "categories", "shipping", "payments", "coupons", "loyalty", "add"] as AdminTab[]).map((t) => {
+        {(["products", "orders", "categories", "shipping", "payments", "coupons", "loyalty", "reviews", "add"] as AdminTab[]).map((t) => {
           const labels: Record<string, string> = {
             products: "📦 Produkty", orders: "📋 Objednávky", categories: "🏷️ Kategorie",
-            shipping: "🚚 Doprava", payments: "💳 Platby", coupons: "🎟️ Kupóny", loyalty: "⭐ Věrnost", add: "➕ Přidat",
+            shipping: "🚚 Doprava", payments: "💳 Platby", coupons: "🎟️ Kupóny", loyalty: "⭐ Věrnost", reviews: "⭐ Recenze", add: "➕ Přidat",
           };
           return (
             <button
@@ -1397,6 +1397,9 @@ export default function AdminShopPage() {
       {/* ==================== LOYALTY TAB ==================== */}
       {tab === "loyalty" && <LoyaltyAdmin />}
 
+      {/* ==================== REVIEWS TAB ==================== */}
+      {tab === "reviews" && <ReviewsAdmin />}
+
       <div style={{ height: "48px" }} />
     </div>
   );
@@ -2097,6 +2100,250 @@ function CouponsAdmin() {
         </table>
         {coupons.length === 0 && <p style={{ textAlign: "center", padding: "32px 0", color: "var(--text-dimmer)" }}>Zatím žádné kupóny</p>}
       </div>
+    </div>
+  );
+}
+
+/* ==================== REVIEWS ADMIN COMPONENT ==================== */
+function ReviewsAdmin() {
+  const [reviews, setReviews] = useState<(ProductReview & { product_title?: string })[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<"pending" | "approved" | "all">("pending");
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      let query = supabase
+        .from("product_reviews")
+        .select("*, profiles(username, display_name, avatar_url)")
+        .order("created_at", { ascending: false });
+
+      if (filter === "pending") {
+        query = query.eq("is_approved", false);
+      } else if (filter === "approved") {
+        query = query.eq("is_approved", true);
+      }
+
+      const { data } = await query;
+      const items = (data || []) as ProductReview[];
+
+      // Fetch product titles
+      const productIds = [...new Set(items.map((r) => r.product_id))];
+      let productMap: Record<string, string> = {};
+      if (productIds.length > 0) {
+        const { data: products } = await supabase
+          .from("shop_products")
+          .select("id, title")
+          .in("id", productIds);
+        productMap = (products || []).reduce((acc: Record<string, string>, p: { id: string; title: string }) => {
+          acc[p.id] = p.title;
+          return acc;
+        }, {});
+      }
+
+      setReviews(items.map((r) => ({ ...r, product_title: productMap[r.product_id] || "—" })));
+    } catch {
+      setReviews([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [filter]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function updateReviewStats(productId: string) {
+    // Recalculate avg_rating and review_count from approved reviews
+    const { data } = await supabase
+      .from("product_reviews")
+      .select("rating")
+      .eq("product_id", productId)
+      .eq("is_approved", true);
+
+    const ratings = (data || []).map((r) => r.rating);
+    const count = ratings.length;
+    const avg = count > 0 ? ratings.reduce((a, b) => a + b, 0) / count : 0;
+
+    await supabase
+      .from("shop_products")
+      .update({ avg_rating: Math.round(avg * 10) / 10, review_count: count })
+      .eq("id", productId);
+  }
+
+  async function approveReview(review: ProductReview) {
+    setActionLoading(review.id);
+    await supabase.from("product_reviews").update({ is_approved: true }).eq("id", review.id);
+    await updateReviewStats(review.product_id);
+    setActionLoading(null);
+    load();
+  }
+
+  async function rejectReview(review: ProductReview) {
+    setActionLoading(review.id);
+    await supabase.from("product_reviews").update({ is_approved: false }).eq("id", review.id);
+    await updateReviewStats(review.product_id);
+    setActionLoading(null);
+    load();
+  }
+
+  async function deleteReview(review: ProductReview) {
+    if (!confirm("Opravdu smazat tuto recenzi?")) return;
+    setActionLoading(review.id);
+    await supabase.from("product_reviews").delete().eq("id", review.id);
+    await updateReviewStats(review.product_id);
+    setActionLoading(null);
+    load();
+  }
+
+  const filterButtons: { key: typeof filter; label: string }[] = [
+    { key: "pending", label: "Neschválené" },
+    { key: "approved", label: "Schválené" },
+    { key: "all", label: "Všechny" },
+  ];
+
+  return (
+    <div>
+      {/* Filter buttons */}
+      <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+        {filterButtons.map((fb) => (
+          <button
+            key={fb.key}
+            onClick={() => setFilter(fb.key)}
+            style={{
+              padding: "6px 16px",
+              borderRadius: "6px",
+              fontSize: "13px",
+              fontWeight: 600,
+              cursor: "pointer",
+              border: "none",
+              background: filter === fb.key ? "var(--accent)" : "var(--bg-card)",
+              color: filter === fb.key ? "var(--accent-text-on)" : "var(--text-muted)",
+            }}
+          >
+            {fb.label}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <p style={{ textAlign: "center", padding: "32px 0", color: "var(--text-dimmer)" }}>Načítám recenze...</p>
+      ) : reviews.length === 0 ? (
+        <p style={{ textAlign: "center", padding: "32px 0", color: "var(--text-dimmer)" }}>
+          {filter === "pending" ? "Žádné recenze čekající na schválení" : "Žádné recenze"}
+        </p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          {reviews.map((review) => {
+            const authorName = review.profiles?.display_name || review.profiles?.username || "Anonym";
+            const isLoading = actionLoading === review.id;
+            return (
+              <div
+                key={review.id}
+                style={{
+                  padding: "16px 20px",
+                  background: "var(--bg-card)",
+                  border: `1px solid ${review.is_approved ? "var(--border)" : "rgba(245, 158, 11, 0.3)"}`,
+                  borderRadius: "10px",
+                  opacity: isLoading ? 0.5 : 1,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px", flexWrap: "wrap" }}>
+                  <span style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-primary)" }}>{authorName}</span>
+                  <span style={{ fontSize: "14px", color: "#f59e0b", letterSpacing: "1px" }}>
+                    {"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)}
+                  </span>
+                  {review.is_verified_purchase && (
+                    <span style={{ fontSize: "12px", color: "#22c55e", fontWeight: 600 }}>✓ Ověřený</span>
+                  )}
+                  <span style={{
+                    fontSize: "11px",
+                    padding: "2px 8px",
+                    borderRadius: "4px",
+                    background: review.is_approved ? "rgba(34,197,94,0.1)" : "rgba(245,158,11,0.1)",
+                    color: review.is_approved ? "#22c55e" : "#f59e0b",
+                    fontWeight: 600,
+                  }}>
+                    {review.is_approved ? "Schváleno" : "Čeká"}
+                  </span>
+                  <span style={{ fontSize: "12px", color: "var(--text-dimmer)", marginLeft: "auto" }}>
+                    {new Date(review.created_at).toLocaleDateString("cs-CZ")}
+                  </span>
+                </div>
+
+                <div style={{ fontSize: "12px", color: "var(--accent)", marginBottom: "6px" }}>
+                  Produkt: {review.product_title}
+                </div>
+
+                {review.title && (
+                  <div style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-primary)", marginBottom: "4px" }}>
+                    {review.title}
+                  </div>
+                )}
+                {review.body && (
+                  <p style={{ fontSize: "13px", color: "var(--text-body)", lineHeight: 1.5, margin: "0 0 12px 0" }}>
+                    {review.body}
+                  </p>
+                )}
+
+                <div style={{ display: "flex", gap: "6px" }}>
+                  {!review.is_approved && (
+                    <button
+                      onClick={() => approveReview(review)}
+                      disabled={isLoading}
+                      style={{
+                        padding: "4px 14px",
+                        borderRadius: "6px",
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        border: "none",
+                        background: "rgba(34,197,94,0.15)",
+                        color: "#22c55e",
+                      }}
+                    >
+                      ✓ Schválit
+                    </button>
+                  )}
+                  {review.is_approved && (
+                    <button
+                      onClick={() => rejectReview(review)}
+                      disabled={isLoading}
+                      style={{
+                        padding: "4px 14px",
+                        borderRadius: "6px",
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        border: "none",
+                        background: "rgba(245,158,11,0.15)",
+                        color: "#f59e0b",
+                      }}
+                    >
+                      ✗ Odschválit
+                    </button>
+                  )}
+                  <button
+                    onClick={() => deleteReview(review)}
+                    disabled={isLoading}
+                    style={{
+                      padding: "4px 14px",
+                      borderRadius: "6px",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      border: "1px solid rgba(239,68,68,0.3)",
+                      background: "rgba(239,68,68,0.08)",
+                      color: "#ef4444",
+                    }}
+                  >
+                    🗑️ Smazat
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

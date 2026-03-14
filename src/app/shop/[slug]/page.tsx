@@ -12,6 +12,8 @@ import { useCart } from "@/components/Shop/CartProvider";
 import type { ShopProduct, ProductAttachment } from "@/types/database";
 import { getShopCategories, type ShopCategory } from "@/lib/shop-categories";
 import { getImageVariant } from "@/lib/image-variants";
+import ProductReviews from "@/components/Shop/ProductReviews";
+import WishlistButton from "@/components/Shop/WishlistButton";
 
 const SCALE_COLORS: Record<string, string> = {
   TT: "#3b82f6",
@@ -498,6 +500,11 @@ export default function ShopProductDetailPage() {
             })()}
           </div>
 
+          {/* Wishlist button */}
+          <div style={{ marginBottom: "16px" }}>
+            <WishlistButton productId={product.id} size="large" />
+          </div>
+
           {/* Stats */}
           <div style={{ display: "flex", gap: "24px", paddingTop: "16px", borderTop: "1px solid var(--border)" }}>
             <div>
@@ -602,6 +609,13 @@ export default function ShopProductDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Reviews section */}
+      <ProductReviews
+        productId={product.id}
+        avgRating={product.avg_rating || 0}
+        reviewCount={product.review_count || 0}
+      />
 
       {/* Similar products */}
       {similar.length > 0 && (

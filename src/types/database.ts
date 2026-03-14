@@ -386,6 +386,8 @@ export interface ShopProduct {
   status: ShopProductStatus;
   download_count: number;
   is_digital: boolean;
+  avg_rating: number;
+  review_count: number;
   stock_mode: StockMode;
   stock_quantity: number | null;
   stock_reserved: number | null;
@@ -578,6 +580,28 @@ export interface LoyaltyPointEntry {
   reason: string;
   order_id: string | null;
   description: string | null;
+  created_at: string;
+}
+
+export interface ProductReview {
+  id: string;
+  product_id: string;
+  user_id: string;
+  rating: number;
+  title: string | null;
+  body: string | null;
+  is_verified_purchase: boolean;
+  is_approved: boolean;
+  created_at: string;
+  updated_at: string;
+  // joined
+  profiles?: { username: string; display_name: string | null; avatar_url: string | null };
+}
+
+export interface WishlistItem {
+  id: string;
+  user_id: string;
+  product_id: string;
   created_at: string;
 }
 
