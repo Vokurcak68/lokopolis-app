@@ -6,6 +6,7 @@ import Image from "next/image";
 import BadgeLogo from "@/components/BadgeLogo";
 import Link from "next/link";
 import CategoryIcon from "@/components/CategoryIcon";
+import { getImageVariant } from "@/lib/image-variants";
 import type {
   HomePageData,
   LatestArticle,
@@ -393,7 +394,7 @@ export default function HomeContent({ data }: { data: HomePageData }) {
                   >
                     <div style={{ position: "relative", width: "100%", paddingBottom: "75%", background: "var(--bg-page)" }}>
                       {p.cover_image_url ? (
-                        <Image src={optimizeImageUrl(p.cover_image_url)} alt={p.title} fill style={{ objectFit: "cover" }} sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw" />
+                        <Image src={getImageVariant(p.cover_image_url, "card")} alt={p.title} fill style={{ objectFit: "contain" }} sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw" />
                       ) : (
                         <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "40px", color: "var(--text-dimmer)" }}>
                           {p.category === "kolejovy-plan" ? "📐" : p.category === "stl-model" ? "🧊" : "📖"}

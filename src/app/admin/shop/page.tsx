@@ -467,6 +467,11 @@ export default function AdminShopPage() {
     fetchProducts();
   }
 
+  async function toggleFeatured(id: string, current: boolean) {
+    await supabase.from("shop_products").update({ featured: !current }).eq("id", id);
+    fetchProducts();
+  }
+
   // === CATEGORY CRUD ===
   function resetCatForm() {
     setEditingCat(null);
@@ -625,6 +630,7 @@ export default function AdminShopPage() {
                     <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "13px", color: "var(--text-dimmer)" }}>{p.download_count}×</td>
                     <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)" }}>
                       <div style={{ display: "flex", gap: "6px" }}>
+                        <button onClick={() => toggleFeatured(p.id, p.featured)} title={p.featured ? "Odebrat z doporučených" : "Přidat do doporučených"} style={{ padding: "4px 10px", borderRadius: "6px", fontSize: "12px", cursor: "pointer", border: `1px solid ${p.featured ? "rgba(234,179,8,0.5)" : "var(--border)"}`, background: p.featured ? "rgba(234,179,8,0.15)" : "var(--bg-card)", color: p.featured ? "#eab308" : "var(--text-dimmer)" }}>{p.featured ? "⭐" : "☆"}</button>
                         <button onClick={() => startEdit(p)} style={{ padding: "4px 10px", borderRadius: "6px", fontSize: "12px", cursor: "pointer", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-muted)" }}>✏️ Upravit</button>
                         <button onClick={() => deleteProduct(p.id)} style={{ padding: "4px 10px", borderRadius: "6px", fontSize: "12px", cursor: "pointer", border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>🗑️</button>
                       </div>
