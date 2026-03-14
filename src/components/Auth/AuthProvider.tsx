@@ -44,6 +44,15 @@ export default function AuthProvider({
       .eq("id", userId)
       .single();
     setProfile(data);
+
+    // Sync email from auth to profile if missing
+    if (data && !data.email) {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (authUser?.email) {
+        await supabase.from("profiles").update({ email: authUser.email }).eq("id", userId);
+        setProfile({ ...data, email: authUser.email });
+      }
+    }
   }
 
   async function refreshProfile() {

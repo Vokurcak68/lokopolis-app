@@ -103,15 +103,8 @@ export default function AdminCustomerDetailPage() {
       is_blocked: profile.is_blocked || false,
     });
 
-    // Email from orders
-    const { data: orderEmail } = await supabase
-      .from("shop_orders")
-      .select("billing_email")
-      .eq("user_id", customerId)
-      .not("billing_email", "is", null)
-      .limit(1)
-      .single();
-    if (orderEmail?.billing_email) setCustomerEmail(orderEmail.billing_email);
+    // Email from profile (synced from auth)
+    if (profile.email) setCustomerEmail(profile.email);
 
     // Orders
     const { data: ordersData } = await supabase

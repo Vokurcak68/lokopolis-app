@@ -7,7 +7,6 @@ import { supabase } from "@/lib/supabase";
 import type { Profile } from "@/types/database";
 
 interface CustomerRow extends Profile {
-  email?: string;
   order_count: number;
   total_spent: number;
 }
@@ -43,19 +42,6 @@ export default function AdminCustomersPage() {
       .from("shop_orders")
       .select("user_id, total_price, price, status");
 
-    const orderEmails: Record<string, string> = {};
-    const { data: ordersWithEmail } = await supabase
-      .from("shop_orders")
-      .select("user_id, billing_email")
-      .not("billing_email", "is", null);
-    if (ordersWithEmail) {
-      for (const o of ordersWithEmail) {
-        if (o.user_id && o.billing_email) {
-          orderEmails[o.user_id] = o.billing_email;
-        }
-      }
-    }
-
     const orderStats: Record<string, { count: number; total: number }> = {};
     if (orders) {
       for (const o of orders) {
@@ -68,7 +54,6 @@ export default function AdminCustomersPage() {
 
     const customerRows: CustomerRow[] = profiles.map((p: Profile) => ({
       ...p,
-      email: orderEmails[p.id] || undefined,
       order_count: orderStats[p.id]?.count || 0,
       total_spent: orderStats[p.id]?.total || 0,
     }));

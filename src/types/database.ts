@@ -8,6 +8,7 @@ export type EventAccess = "public" | "authenticated";
 export interface Profile {
   id: string;
   username: string;
+  email: string | null;
   display_name: string | null;
   avatar_url: string | null;
   bio: string | null;
