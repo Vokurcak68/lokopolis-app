@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { supabase as anonClient } from "@/lib/supabase";
 import { invalidateSettingsCache } from "@/lib/shop-settings";
 
 export async function GET() {
-  const { data, error } = await supabase
+  const sb = createServerSupabaseClient() || anonClient;
+  const { data, error } = await sb
     .from("shop_settings")
     .select("key, value");
 
@@ -20,6 +22,11 @@ export async function GET() {
 }
 
 export async function PUT(req: NextRequest) {
+  const sb = createServerSupabaseClient();
+  if (!sb) {
+    return NextResponse.json({ error: "Server config error" }, { status: 500 });
+  }
+
   // Verify admin
   const authHeader = req.headers.get("authorization");
   const token = authHeader?.replace("Bearer ", "");
@@ -28,12 +35,12 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+  const { data: { user }, error: authError } = await sb.auth.getUser(token);
   if (authError || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data: profile } = await supabase
+  const { data: profile } = await sb
     .from("profiles")
     .select("role")
     .eq("id", user.id)
@@ -47,7 +54,7 @@ export async function PUT(req: NextRequest) {
   const updates = body as Record<string, unknown>;
 
   for (const [key, value] of Object.entries(updates)) {
-    const { error } = await supabase
+    const { error } = await sb
       .from("shop_settings")
       .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: "key" });
 
