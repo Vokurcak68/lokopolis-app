@@ -75,7 +75,7 @@ export default function CheckoutPage() {
 
     setBilling((b) => ({
       ...b,
-      name: profile.billing_name || profile.display_name || "",
+      name: profile.billing_name || "",
       email: user.email || "",
       phone: profile.phone || "",
       street: profile.billing_street || "",
