@@ -65,12 +65,12 @@ export default function OrderConfirmationPage() {
 
     // IBAN check: move CZ00 to end → bban + "1235" (C=12, Z=35) + "00"
     const numStr = bban + "123500";
-    // BigInt modulo 97
-    let remainder = 0n;
+    // Modulo 97 using string-based arithmetic (no BigInt needed)
+    let remainder = 0;
     for (const ch of numStr) {
-      remainder = (remainder * 10n + BigInt(ch)) % 97n;
+      remainder = (remainder * 10 + parseInt(ch)) % 97;
     }
-    const checkDigits = (98n - remainder).toString().padStart(2, "0");
+    const checkDigits = (98 - remainder).toString().padStart(2, "0");
 
     return `CZ${checkDigits}${bban}`;
   }
