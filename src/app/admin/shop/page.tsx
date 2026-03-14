@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
@@ -69,14 +69,18 @@ type AdminTab = "products" | "orders" | "categories" | "shipping" | "payments" |
 
 const VALID_TABS: AdminTab[] = ["products", "orders", "categories", "shipping", "payments", "coupons", "loyalty", "reviews", "settings", "add"];
 
+function getInitialTab(): AdminTab {
+  if (typeof window === "undefined") return "products";
+  const params = new URLSearchParams(window.location.search);
+  const t = params.get("tab") as AdminTab | null;
+  return t && VALID_TABS.includes(t) ? t : "products";
+}
+
 export default function AdminShopPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
-
-  const initialTab = (searchParams.get("tab") || "products") as AdminTab;
-  const [tab, setTab] = useState<AdminTab>(VALID_TABS.includes(initialTab) ? initialTab : "products");
+  const [tab, setTab] = useState<AdminTab>(getInitialTab);
 
   // Categories from DB (flat + all including inactive)
   const [categories, setCategories] = useState<ShopCategory[]>([]);
