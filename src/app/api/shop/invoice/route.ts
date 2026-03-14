@@ -138,7 +138,7 @@ export async function GET(req: NextRequest) {
 
     // Generate PDF
     const shopSettings = await getSettings() as Record<string, any>;
-    const doc = generateInvoicePdf(fullOrder, shopSettings);
+    const doc = await generateInvoicePdf(fullOrder, shopSettings);
     const pdfBuffer = Buffer.from(doc.output("arraybuffer"));
 
     return new NextResponse(pdfBuffer, {
