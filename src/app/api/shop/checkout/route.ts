@@ -409,7 +409,7 @@ export async function POST(req: NextRequest) {
         type: "new_order",
         title: `Nova objednavka ${orderNumber}`,
         message: `${safeName} — ${totalPrice} Kc`,
-        link: "/admin/shop?tab=objednavky",
+        link: "/admin/shop?tab=orders",
       });
     } catch { /* ignore */ }
 
