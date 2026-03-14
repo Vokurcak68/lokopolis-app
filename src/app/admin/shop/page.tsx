@@ -819,7 +819,7 @@ export default function AdminShopPage() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
-                  {["Číslo", "Produkt", "Uživatel", "Cena", "Stav", "Datum", "Akce"].map((h) => (
+                  {["Číslo", "Uživatel", "Cena", "Stav", "Datum", "Akce"].map((h) => (
                     <th key={h} style={{ textAlign: "left", padding: "10px 12px", fontSize: "12px", fontWeight: 600, color: "var(--text-dimmer)", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
@@ -831,14 +831,6 @@ export default function AdminShopPage() {
                       <td style={{ padding: "10px 12px", borderBottom: expandedOrderId === o.id ? "none" : "1px solid var(--border)", fontSize: "14px", fontWeight: 600, color: "var(--accent)" }}>
                         <span style={{ marginRight: "6px", fontSize: "10px" }}>{expandedOrderId === o.id ? "▼" : "▶"}</span>
                         {o.order_number}
-                      </td>
-                      <td style={{ padding: "10px 12px", borderBottom: expandedOrderId === o.id ? "none" : "1px solid var(--border)", fontSize: "13px", color: "var(--text-body)" }}>
-                        {(() => {
-                          const items = o.items || [];
-                          if (items.length === 0) return o.product?.title || "—";
-                          if (items.length === 1) return items[0].product?.title || "—";
-                          return `${items[0].product?.title || "—"} a dalších ${items.length - 1}`;
-                        })()}
                       </td>
                       <td style={{ padding: "10px 12px", borderBottom: expandedOrderId === o.id ? "none" : "1px solid var(--border)", fontSize: "13px", color: "var(--text-body)" }}>{o.user?.display_name || o.user?.username || "—"}</td>
                       <td style={{ padding: "10px 12px", borderBottom: expandedOrderId === o.id ? "none" : "1px solid var(--border)", fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>{o.total_price || o.price} Kč</td>
@@ -872,7 +864,7 @@ export default function AdminShopPage() {
                     </tr>
                     {expandedOrderId === o.id && (
                       <tr>
-                        <td colSpan={7} style={{ padding: "0 12px 16px", borderBottom: "1px solid var(--border)", background: "var(--bg-page)" }}>
+                        <td colSpan={6} style={{ padding: "0 12px 16px", borderBottom: "1px solid var(--border)", background: "var(--bg-page)" }}>
                           <div style={{ display: "flex", flexDirection: "column", gap: "16px", padding: "16px", background: "var(--bg-card)", borderRadius: "10px", border: "1px solid var(--border)" }}>
 
                             {/* === Section 1: Položky objednávky === */}
