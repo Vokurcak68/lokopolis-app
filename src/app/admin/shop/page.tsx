@@ -835,9 +835,12 @@ export default function AdminShopPage() {
                       <td style={{ padding: "10px 12px", borderBottom: expandedOrderId === o.id ? "none" : "1px solid var(--border)", fontSize: "13px", color: "var(--text-body)" }}>{o.user?.display_name || o.user?.username || "—"}</td>
                       <td style={{ padding: "10px 12px", borderBottom: expandedOrderId === o.id ? "none" : "1px solid var(--border)", fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>{o.total_price || o.price} Kč</td>
                       <td style={{ padding: "10px 12px", borderBottom: expandedOrderId === o.id ? "none" : "1px solid var(--border)" }}>
-                        <span title={JSON.stringify({ status: o.status, label: ORDER_STATUS_LABELS[o.status], color: ORDER_STATUS_COLORS[o.status] })} style={{ padding: "2px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: 600, background: `${ORDER_STATUS_COLORS[o.status] || "#6b7280"}20`, color: ORDER_STATUS_COLORS[o.status] || "#6b7280" }}>
-                          {o.status}: {ORDER_STATUS_LABELS[o.status] || "???"}
-                        </span>
+                        {(() => {
+                          const s = String(o.status || "").trim();
+                          const label = s === "pending" ? "Čeká na platbu" : s === "paid" ? "Zaplaceno" : s === "processing" ? "Zpracovává se" : s === "shipped" ? "Odesláno" : s === "delivered" ? "Doručeno" : s === "cancelled" ? "Zrušeno" : s === "refunded" ? "Vráceno" : s;
+                          const color = s === "pending" ? "#f59e0b" : s === "paid" ? "#22c55e" : s === "processing" ? "#3b82f6" : s === "shipped" ? "#8b5cf6" : s === "delivered" ? "#22c55e" : s === "cancelled" ? "#ef4444" : "#6b7280";
+                          return <span style={{ padding: "2px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: 600, background: `${color}20`, color }}>{label}</span>;
+                        })()}
                       </td>
                       <td style={{ padding: "10px 12px", borderBottom: expandedOrderId === o.id ? "none" : "1px solid var(--border)", fontSize: "13px", color: "var(--text-dimmer)" }}>
                         {new Date(o.created_at).toLocaleDateString("cs-CZ")}
