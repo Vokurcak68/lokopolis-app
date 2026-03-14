@@ -819,7 +819,7 @@ export default function AdminShopPage() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
-                  {["Číslo", "Uživatel", "Cena", "Stav", "Datum", "Akce"].map((h) => (
+                  {["Číslo", "Uživatel", "Cena", "Datum", "Akce"].map((h) => (
                     <th key={h} style={{ textAlign: "left", padding: "10px 12px", fontSize: "12px", fontWeight: 600, color: "var(--text-dimmer)", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
@@ -834,14 +834,6 @@ export default function AdminShopPage() {
                       </td>
                       <td style={{ padding: "10px 12px", borderBottom: expandedOrderId === o.id ? "none" : "1px solid var(--border)", fontSize: "13px", color: "var(--text-body)" }}>{o.user?.display_name || o.user?.username || "—"}</td>
                       <td style={{ padding: "10px 12px", borderBottom: expandedOrderId === o.id ? "none" : "1px solid var(--border)", fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>{o.total_price || o.price} Kč</td>
-                      <td style={{ padding: "10px 12px", borderBottom: expandedOrderId === o.id ? "none" : "1px solid var(--border)" }}>
-                        {(() => {
-                          const s = String(o.status || "").trim();
-                          const label = s === "pending" ? "Čeká na platbu" : s === "paid" ? "Zaplaceno" : s === "processing" ? "Zpracovává se" : s === "shipped" ? "Odesláno" : s === "delivered" ? "Doručeno" : s === "cancelled" ? "Zrušeno" : s === "refunded" ? "Vráceno" : s;
-                          const color = s === "pending" ? "#f59e0b" : s === "paid" ? "#22c55e" : s === "processing" ? "#3b82f6" : s === "shipped" ? "#8b5cf6" : s === "delivered" ? "#22c55e" : s === "cancelled" ? "#ef4444" : "#6b7280";
-                          return <span style={{ padding: "2px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: 600, background: `${color}20`, color }}>{label}</span>;
-                        })()}
-                      </td>
                       <td style={{ padding: "10px 12px", borderBottom: expandedOrderId === o.id ? "none" : "1px solid var(--border)", fontSize: "13px", color: "var(--text-dimmer)" }}>
                         {new Date(o.created_at).toLocaleDateString("cs-CZ")}
                         {o.billing_email && <div style={{ fontSize: "11px", color: "var(--text-dimmer)" }}>{o.billing_email}</div>}
@@ -869,7 +861,7 @@ export default function AdminShopPage() {
                     </tr>
                     {expandedOrderId === o.id && (
                       <tr>
-                        <td colSpan={6} style={{ padding: "0 12px 16px", borderBottom: "1px solid var(--border)", background: "var(--bg-page)" }}>
+                        <td colSpan={5} style={{ padding: "0 12px 16px", borderBottom: "1px solid var(--border)", background: "var(--bg-page)" }}>
                           <div style={{ display: "flex", flexDirection: "column", gap: "16px", padding: "16px", background: "var(--bg-card)", borderRadius: "10px", border: "1px solid var(--border)" }}>
 
                             {/* === Section 1: Položky objednávky === */}
