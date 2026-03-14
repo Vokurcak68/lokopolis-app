@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
-import type { ShopProduct, ShopOrder, ShippingMethod, PaymentMethod, Coupon, LoyaltyLevel } from "@/types/database";
+import type { ShopProduct, ShopOrder, ShippingMethod, PaymentMethod, Coupon, LoyaltyLevel, ProductAttachment } from "@/types/database";
 import { type ShopCategory, buildCategoryTree, type ShopCategoryTreeNode } from "@/lib/shop-categories";
 import { getImageVariant } from "@/lib/image-variants";
 
@@ -120,6 +120,12 @@ export default function AdminShopPage() {
     stock_alert_threshold: 5,
     max_per_order: null as number | null,
   });
+  // Attachments
+  const [attachments, setAttachments] = useState<ProductAttachment[]>([]);
+  const [attachTitle, setAttachTitle] = useState("");
+  const [attachFile, setAttachFile] = useState<File | null>(null);
+  const [attachSaving, setAttachSaving] = useState(false);
+
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [previewFiles, setPreviewFiles] = useState<File[]>([]);
   const [productFile, setProductFile] = useState<File | null>(null);
@@ -367,6 +373,9 @@ export default function AdminShopPage() {
 
   function resetForm() {
     setEditProduct(null);
+    setAttachments([]);
+    setAttachTitle("");
+    setAttachFile(null);
     setFormData({
       title: "", slug: "", description: "", long_description: "",
       price: 0, original_price: "",
@@ -399,6 +408,7 @@ export default function AdminShopPage() {
       max_per_order: product.max_per_order,
     });
     setTab("edit");
+    fetchAttachments(product.id);
   }
 
   async function confirmPayment(orderId: string) {
@@ -465,6 +475,52 @@ export default function AdminShopPage() {
     if (!confirm("Opravdu smazat tento produkt?")) return;
     await supabase.from("shop_products").delete().eq("id", id);
     fetchProducts();
+  }
+
+  // === ATTACHMENTS ===
+  async function fetchAttachments(productId: string) {
+    const { data } = await supabase
+      .from("product_attachments")
+      .select("*")
+      .eq("product_id", productId)
+      .order("sort_order", { ascending: true });
+    setAttachments((data as ProductAttachment[]) || []);
+  }
+
+  async function addAttachment() {
+    if (!editProduct || !attachFile || !attachTitle.trim()) return;
+    setAttachSaving(true);
+    try {
+      const ext = attachFile.name.split(".").pop() || "bin";
+      const path = `attachments/${editProduct.id}/${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("shop").upload(path, attachFile);
+      if (upErr) throw upErr;
+      const { data: { publicUrl } } = supabase.storage.from("shop").getPublicUrl(path);
+      await supabase.from("product_attachments").insert({
+        product_id: editProduct.id,
+        title: attachTitle.trim(),
+        file_url: publicUrl,
+        file_name: attachFile.name,
+        file_size: attachFile.size,
+        file_type: ext,
+        sort_order: attachments.length,
+      });
+      setAttachTitle("");
+      setAttachFile(null);
+      fetchAttachments(editProduct.id);
+    } catch (e: unknown) {
+      alert("Chyba při nahrávání: " + (e instanceof Error ? e.message : String(e)));
+    }
+    setAttachSaving(false);
+  }
+
+  async function deleteAttachment(att: ProductAttachment) {
+    if (!confirm(`Smazat "${att.title}"?`)) return;
+    // Delete file from storage
+    const match = att.file_url.match(/\/shop\/(.+)$/);
+    if (match) await supabase.storage.from("shop").remove([match[1]]);
+    await supabase.from("product_attachments").delete().eq("id", att.id);
+    if (editProduct) fetchAttachments(editProduct.id);
   }
 
   async function toggleFeatured(id: string, current: boolean) {
@@ -1163,6 +1219,64 @@ export default function AdminShopPage() {
                 {editProduct?.file_name && !productFile && <span style={{ fontSize: "12px", color: "var(--text-dimmer)", marginLeft: "8px" }}>(aktuální: {editProduct.file_name})</span>}
               </div>
             </div>
+
+            {/* Ke stažení (attachments) — only for existing products */}
+            {editProduct && (
+              <div style={{ background: "var(--bg-page)", borderRadius: "10px", padding: "16px", border: "1px solid var(--border)" }}>
+                <h4 style={{ margin: "0 0 12px", fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>📎 Ke stažení (přílohy)</h4>
+                
+                {/* Existing attachments */}
+                {attachments.length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px" }}>
+                    {attachments.map((att) => (
+                      <div key={att.id} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 12px", background: "var(--bg-card)", borderRadius: "8px", border: "1px solid var(--border)" }}>
+                        <span style={{ fontSize: "16px" }}>📄</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>{att.title}</div>
+                          <div style={{ fontSize: "11px", color: "var(--text-dimmer)" }}>
+                            {att.file_name} {att.file_size ? `(${(att.file_size / 1024).toFixed(0)} KB)` : ""}
+                          </div>
+                        </div>
+                        <a href={att.file_url} target="_blank" rel="noopener" style={{ padding: "3px 8px", borderRadius: "4px", fontSize: "11px", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-muted)", textDecoration: "none", cursor: "pointer" }}>👁️</a>
+                        <button onClick={() => deleteAttachment(att)} style={{ padding: "3px 8px", borderRadius: "4px", fontSize: "11px", border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.08)", color: "#ef4444", cursor: "pointer" }}>🗑️</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Add new attachment */}
+                <div style={{ display: "flex", gap: "8px", alignItems: "end", flexWrap: "wrap" }}>
+                  <div style={{ flex: "1 1 200px" }}>
+                    <label style={{ display: "block", fontSize: "12px", color: "var(--text-dimmer)", marginBottom: "4px" }}>Název</label>
+                    <input
+                      type="text"
+                      value={attachTitle}
+                      onChange={(e) => setAttachTitle(e.target.value)}
+                      placeholder="např. Návod k použití"
+                      style={{ width: "100%", padding: "8px 10px", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-primary)", fontSize: "13px" }}
+                    />
+                  </div>
+                  <div style={{ flex: "1 1 200px" }}>
+                    <label style={{ display: "block", fontSize: "12px", color: "var(--text-dimmer)", marginBottom: "4px" }}>Soubor</label>
+                    <input
+                      type="file"
+                      onChange={(e) => setAttachFile(e.target.files?.[0] || null)}
+                      style={{ fontSize: "13px", color: "var(--text-muted)" }}
+                    />
+                  </div>
+                  <button
+                    onClick={addAttachment}
+                    disabled={attachSaving || !attachTitle.trim() || !attachFile}
+                    style={{
+                      padding: "8px 16px", borderRadius: "6px", fontSize: "13px", fontWeight: 600, cursor: attachSaving || !attachTitle.trim() || !attachFile ? "not-allowed" : "pointer",
+                      border: "none", background: attachSaving ? "var(--border)" : "var(--accent)", color: "var(--accent-text-on)",
+                    }}
+                  >
+                    {attachSaving ? "Nahrávám..." : "➕ Přidat"}
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Error */}
             {saveError && (

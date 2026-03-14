@@ -364,6 +364,18 @@ export interface ShopProduct {
   updated_at: string;
 }
 
+export interface ProductAttachment {
+  id: string;
+  product_id: string;
+  title: string;
+  file_url: string;
+  file_name: string;
+  file_size: number | null;
+  file_type: string | null;
+  sort_order: number;
+  created_at: string;
+}
+
 export interface StockMovement {
   id: string;
   product_id: string;

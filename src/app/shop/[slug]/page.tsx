@@ -9,7 +9,7 @@ import { useAuth } from "@/components/Auth/AuthProvider";
 import ProductCard from "@/components/Shop/ProductCard";
 import OrderModal from "@/components/Shop/OrderModal";
 import { useCart } from "@/components/Shop/CartProvider";
-import type { ShopProduct } from "@/types/database";
+import type { ShopProduct, ProductAttachment } from "@/types/database";
 import { getShopCategories, type ShopCategory } from "@/lib/shop-categories";
 import { getImageVariant } from "@/lib/image-variants";
 
@@ -41,6 +41,7 @@ export default function ShopProductDetailPage() {
   const [selectedImage, setSelectedImage] = useState(0);
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [attachments, setAttachments] = useState<ProductAttachment[]>([]);
   const [orderSuccess, setOrderSuccess] = useState<string | null>(null);
   const { addToCart, items: cartItems } = useCart();
   const [addedToCart, setAddedToCart] = useState(false);
@@ -84,6 +85,14 @@ export default function ShopProductDetailPage() {
         .limit(3);
 
       setSimilar((sim as ShopProduct[]) || []);
+
+      // Fetch attachments
+      const { data: attData } = await supabase
+        .from("product_attachments")
+        .select("*")
+        .eq("product_id", p.id)
+        .order("sort_order", { ascending: true });
+      setAttachments((attData as ProductAttachment[]) || []);
     } catch {
       router.push("/shop");
     } finally {
@@ -547,6 +556,50 @@ export default function ShopProductDetailPage() {
             }}
             dangerouslySetInnerHTML={{ __html: product.long_description }}
           />
+        </div>
+      )}
+
+      {/* Attachments - Ke stažení */}
+      {attachments.length > 0 && (
+        <div style={{ marginTop: "48px", paddingTop: "32px", borderTop: "1px solid var(--border)" }}>
+          <h2 style={{ fontSize: "22px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px" }}>
+            📎 Ke stažení
+          </h2>
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            {attachments.map((att) => (
+              <a
+                key={att.id}
+                href={att.file_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                download={att.file_name}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                  padding: "12px 16px",
+                  background: "var(--bg-card)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "10px",
+                  textDecoration: "none",
+                  transition: "border-color 0.2s",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
+              >
+                <span style={{ fontSize: "24px" }}>📄</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)" }}>{att.title}</div>
+                  <div style={{ fontSize: "12px", color: "var(--text-dimmer)", marginTop: "2px" }}>
+                    {att.file_name}
+                    {att.file_size ? ` · ${att.file_size > 1048576 ? (att.file_size / 1048576).toFixed(1) + " MB" : (att.file_size / 1024).toFixed(0) + " KB"}` : ""}
+                    {att.file_type ? ` · ${att.file_type.toUpperCase()}` : ""}
+                  </div>
+                </div>
+                <span style={{ fontSize: "14px", fontWeight: 600, color: "var(--accent)", whiteSpace: "nowrap" }}>⬇ Stáhnout</span>
+              </a>
+            ))}
+          </div>
         </div>
       )}
 
