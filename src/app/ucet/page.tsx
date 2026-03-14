@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useAuth } from "@/components/Auth/AuthProvider";
 import { supabase } from "@/lib/supabase";
-import type { Profile, ShopOrder } from "@/types/database";
+import type { Profile, ShopOrder, UserAddress } from "@/types/database";
 
-type Tab = "osobni" | "adresy" | "heslo" | "objednavky";
+type Tab = "osobni" | "adresy" | "dodaci" | "heslo" | "objednavky";
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   pending: { label: "Čeká na platbu", color: "#f59e0b" },
@@ -18,6 +18,16 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   refunded: { label: "Vráceno", color: "#6b7280" },
 };
 
+const EMPTY_ADDRESS = {
+  label: "Domů",
+  full_name: "",
+  street: "",
+  city: "",
+  zip: "",
+  country: "CZ",
+  phone: "",
+};
+
 export default function AccountPage() {
   const { user, profile, loading: authLoading } = useAuth();
   const [tab, setTab] = useState<Tab>("osobni");
@@ -26,6 +36,15 @@ export default function AccountPage() {
   const [orders, setOrders] = useState<ShopOrder[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
 
+  // Delivery addresses
+  const [deliveryAddresses, setDeliveryAddresses] = useState<UserAddress[]>([]);
+  const [addressesLoading, setAddressesLoading] = useState(false);
+  const [editingAddress, setEditingAddress] = useState<UserAddress | null>(null);
+  const [newAddress, setNewAddress] = useState(false);
+  const [addressForm, setAddressForm] = useState({ ...EMPTY_ADDRESS });
+  const [addressSaving, setAddressSaving] = useState(false);
+  const [addressMsg, setAddressMsg] = useState("");
+
   // Personal info form
   const [personalForm, setPersonalForm] = useState({
     display_name: "",
@@ -33,8 +52,8 @@ export default function AccountPage() {
     bio: "",
   });
 
-  // Address form
-  const [addressForm, setAddressForm] = useState({
+  // Billing address form
+  const [billingForm, setBillingForm] = useState({
     billing_street: "",
     billing_city: "",
     billing_zip: "",
@@ -60,7 +79,7 @@ export default function AccountPage() {
       phone: profile.phone || "",
       bio: profile.bio || "",
     });
-    setAddressForm({
+    setBillingForm({
       billing_street: profile.billing_street || "",
       billing_city: profile.billing_city || "",
       billing_zip: profile.billing_zip || "",
@@ -87,6 +106,26 @@ export default function AccountPage() {
     }
   }, [tab, user, orders.length]);
 
+  // Load delivery addresses
+  const loadAddresses = useCallback(async () => {
+    if (!user) return;
+    setAddressesLoading(true);
+    const { data } = await supabase
+      .from("user_addresses")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("is_default", { ascending: false })
+      .order("created_at", { ascending: false });
+    setDeliveryAddresses((data as UserAddress[]) || []);
+    setAddressesLoading(false);
+  }, [user]);
+
+  useEffect(() => {
+    if (tab === "dodaci" && user && deliveryAddresses.length === 0) {
+      loadAddresses();
+    }
+  }, [tab, user, deliveryAddresses.length, loadAddresses]);
+
   // Save personal info
   async function savePersonal() {
     if (!user) return;
@@ -106,8 +145,8 @@ export default function AccountPage() {
     setSaving(false);
   }
 
-  // Save address
-  async function saveAddress() {
+  // Save billing address
+  async function saveBilling() {
     if (!user) return;
     setSaving(true);
     setSaveMsg("");
@@ -115,13 +154,13 @@ export default function AccountPage() {
     const { error } = await supabase
       .from("profiles")
       .update({
-        billing_street: addressForm.billing_street || null,
-        billing_city: addressForm.billing_city || null,
-        billing_zip: addressForm.billing_zip || null,
-        billing_country: addressForm.billing_country || "CZ",
-        billing_ico: addressForm.billing_ico || null,
-        billing_dic: addressForm.billing_dic || null,
-        billing_company: addressForm.billing_company || null,
+        billing_street: billingForm.billing_street || null,
+        billing_city: billingForm.billing_city || null,
+        billing_zip: billingForm.billing_zip || null,
+        billing_country: billingForm.billing_country || "CZ",
+        billing_ico: billingForm.billing_ico || null,
+        billing_dic: billingForm.billing_dic || null,
+        billing_company: billingForm.billing_company || null,
       })
       .eq("id", user.id);
 
@@ -156,6 +195,117 @@ export default function AccountPage() {
     setPasswordSaving(false);
   }
 
+  // Delivery address CRUD
+  function startNewAddress() {
+    setEditingAddress(null);
+    setNewAddress(true);
+    setAddressForm({ ...EMPTY_ADDRESS });
+    setAddressMsg("");
+  }
+
+  function startEditAddress(a: UserAddress) {
+    setNewAddress(false);
+    setEditingAddress(a);
+    setAddressForm({
+      label: a.label,
+      full_name: a.full_name,
+      street: a.street,
+      city: a.city,
+      zip: a.zip,
+      country: a.country,
+      phone: a.phone || "",
+    });
+    setAddressMsg("");
+  }
+
+  function cancelAddressForm() {
+    setNewAddress(false);
+    setEditingAddress(null);
+    setAddressMsg("");
+  }
+
+  async function saveDeliveryAddress() {
+    if (!user) return;
+    if (!addressForm.full_name || !addressForm.street || !addressForm.city || !addressForm.zip) {
+      setAddressMsg("❌ Vyplňte jméno, ulici, město a PSČ");
+      return;
+    }
+
+    setAddressSaving(true);
+    setAddressMsg("");
+
+    if (editingAddress) {
+      // Update
+      const { error } = await supabase
+        .from("user_addresses")
+        .update({
+          label: addressForm.label,
+          full_name: addressForm.full_name,
+          street: addressForm.street,
+          city: addressForm.city,
+          zip: addressForm.zip,
+          country: addressForm.country || "CZ",
+          phone: addressForm.phone || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", editingAddress.id);
+
+      if (error) {
+        setAddressMsg("❌ " + error.message);
+      } else {
+        setAddressMsg("✅ Adresa aktualizována");
+        setEditingAddress(null);
+        await loadAddresses();
+      }
+    } else {
+      // Insert
+      const { error } = await supabase
+        .from("user_addresses")
+        .insert({
+          user_id: user.id,
+          label: addressForm.label,
+          full_name: addressForm.full_name,
+          street: addressForm.street,
+          city: addressForm.city,
+          zip: addressForm.zip,
+          country: addressForm.country || "CZ",
+          phone: addressForm.phone || null,
+          is_default: deliveryAddresses.length === 0,
+        });
+
+      if (error) {
+        setAddressMsg("❌ " + error.message);
+      } else {
+        setAddressMsg("✅ Adresa přidána");
+        setNewAddress(false);
+        setAddressForm({ ...EMPTY_ADDRESS });
+        await loadAddresses();
+      }
+    }
+    setAddressSaving(false);
+  }
+
+  async function deleteAddress(id: string) {
+    if (!confirm("Opravdu smazat tuto adresu?")) return;
+    const { error } = await supabase.from("user_addresses").delete().eq("id", id);
+    if (!error) await loadAddresses();
+  }
+
+  async function setDefaultAddress(id: string) {
+    if (!user) return;
+    // Unset all defaults first
+    await supabase
+      .from("user_addresses")
+      .update({ is_default: false })
+      .eq("user_id", user.id);
+    // Set the new default
+    await supabase
+      .from("user_addresses")
+      .update({ is_default: true })
+      .eq("id", id);
+    await loadAddresses();
+  }
+
   if (authLoading) {
     return (
       <div style={{ maxWidth: "800px", margin: "0 auto", padding: "40px 20px", textAlign: "center" }}>
@@ -183,6 +333,7 @@ export default function AccountPage() {
   const tabs: { key: Tab; label: string; icon: string }[] = [
     { key: "osobni", label: "Osobní údaje", icon: "👤" },
     { key: "adresy", label: "Adresy", icon: "🏠" },
+    { key: "dodaci", label: "Dodací adresy", icon: "📦" },
     { key: "heslo", label: "Změna hesla", icon: "🔒" },
     { key: "objednavky", label: "Objednávky", icon: "📋" },
   ];
@@ -265,16 +416,7 @@ export default function AccountPage() {
             <button
               onClick={savePersonal}
               disabled={saving}
-              style={{
-                padding: "10px 24px",
-                border: "none",
-                borderRadius: "8px",
-                fontSize: "14px",
-                fontWeight: 600,
-                background: saving ? "var(--border-hover)" : "var(--accent)",
-                color: saving ? "var(--text-dimmer)" : "var(--accent-text-on)",
-                cursor: saving ? "not-allowed" : "pointer",
-              }}
+              style={btnStyle(saving)}
             >
               {saving ? "Ukládám..." : "💾 Uložit"}
             </button>
@@ -283,7 +425,7 @@ export default function AccountPage() {
         </div>
       )}
 
-      {/* === ADRESY === */}
+      {/* === ADRESY (Fakturační) === */}
       {tab === "adresy" && (
         <div style={{ maxWidth: "500px" }}>
           <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "16px" }}>
@@ -293,8 +435,8 @@ export default function AccountPage() {
             <div>
               <label style={labelStyle}>Ulice a číslo popisné</label>
               <input
-                value={addressForm.billing_street}
-                onChange={(e) => setAddressForm(f => ({ ...f, billing_street: e.target.value }))}
+                value={billingForm.billing_street}
+                onChange={(e) => setBillingForm(f => ({ ...f, billing_street: e.target.value }))}
                 style={inputStyle}
               />
             </div>
@@ -302,16 +444,16 @@ export default function AccountPage() {
               <div>
                 <label style={labelStyle}>Město</label>
                 <input
-                  value={addressForm.billing_city}
-                  onChange={(e) => setAddressForm(f => ({ ...f, billing_city: e.target.value }))}
+                  value={billingForm.billing_city}
+                  onChange={(e) => setBillingForm(f => ({ ...f, billing_city: e.target.value }))}
                   style={inputStyle}
                 />
               </div>
               <div>
                 <label style={labelStyle}>PSČ</label>
                 <input
-                  value={addressForm.billing_zip}
-                  onChange={(e) => setAddressForm(f => ({ ...f, billing_zip: e.target.value }))}
+                  value={billingForm.billing_zip}
+                  onChange={(e) => setBillingForm(f => ({ ...f, billing_zip: e.target.value }))}
                   style={inputStyle}
                 />
               </div>
@@ -319,8 +461,8 @@ export default function AccountPage() {
             <div>
               <label style={labelStyle}>Země</label>
               <input
-                value={addressForm.billing_country}
-                onChange={(e) => setAddressForm(f => ({ ...f, billing_country: e.target.value }))}
+                value={billingForm.billing_country}
+                onChange={(e) => setBillingForm(f => ({ ...f, billing_country: e.target.value }))}
                 style={inputStyle}
               />
             </div>
@@ -333,8 +475,8 @@ export default function AccountPage() {
             <div>
               <label style={labelStyle}>Název firmy</label>
               <input
-                value={addressForm.billing_company}
-                onChange={(e) => setAddressForm(f => ({ ...f, billing_company: e.target.value }))}
+                value={billingForm.billing_company}
+                onChange={(e) => setBillingForm(f => ({ ...f, billing_company: e.target.value }))}
                 style={inputStyle}
               />
             </div>
@@ -342,16 +484,16 @@ export default function AccountPage() {
               <div>
                 <label style={labelStyle}>IČO</label>
                 <input
-                  value={addressForm.billing_ico}
-                  onChange={(e) => setAddressForm(f => ({ ...f, billing_ico: e.target.value }))}
+                  value={billingForm.billing_ico}
+                  onChange={(e) => setBillingForm(f => ({ ...f, billing_ico: e.target.value }))}
                   style={inputStyle}
                 />
               </div>
               <div>
                 <label style={labelStyle}>DIČ</label>
                 <input
-                  value={addressForm.billing_dic}
-                  onChange={(e) => setAddressForm(f => ({ ...f, billing_dic: e.target.value }))}
+                  value={billingForm.billing_dic}
+                  onChange={(e) => setBillingForm(f => ({ ...f, billing_dic: e.target.value }))}
                   style={inputStyle}
                 />
               </div>
@@ -360,23 +502,230 @@ export default function AccountPage() {
 
           <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "20px" }}>
             <button
-              onClick={saveAddress}
+              onClick={saveBilling}
               disabled={saving}
-              style={{
-                padding: "10px 24px",
-                border: "none",
-                borderRadius: "8px",
-                fontSize: "14px",
-                fontWeight: 600,
-                background: saving ? "var(--border-hover)" : "var(--accent)",
-                color: saving ? "var(--text-dimmer)" : "var(--accent-text-on)",
-                cursor: saving ? "not-allowed" : "pointer",
-              }}
+              style={btnStyle(saving)}
             >
               {saving ? "Ukládám..." : "💾 Uložit"}
             </button>
             {saveMsg && <span style={{ fontSize: "13px", color: saveMsg.startsWith("✅") ? "#22c55e" : "#ef4444" }}>{saveMsg}</span>}
           </div>
+        </div>
+      )}
+
+      {/* === DODACÍ ADRESY === */}
+      {tab === "dodaci" && (
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+            <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>
+              📦 Dodací adresy
+            </h3>
+            {!newAddress && !editingAddress && (
+              <button
+                onClick={startNewAddress}
+                style={{
+                  padding: "8px 16px",
+                  border: "none",
+                  borderRadius: "8px",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  background: "var(--accent)",
+                  color: "var(--accent-text-on)",
+                  cursor: "pointer",
+                }}
+              >
+                ➕ Přidat adresu
+              </button>
+            )}
+          </div>
+
+          {/* Address form (new or edit) */}
+          {(newAddress || editingAddress) && (
+            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "20px", marginBottom: "20px" }}>
+              <h4 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)", marginTop: 0, marginBottom: "12px" }}>
+                {editingAddress ? "✏️ Upravit adresu" : "➕ Nová dodací adresa"}
+              </h4>
+              <div style={{ display: "grid", gap: "12px", maxWidth: "500px" }}>
+                <div>
+                  <label style={labelStyle}>Pojmenování (např. Domů, Práce)</label>
+                  <input
+                    value={addressForm.label}
+                    onChange={(e) => setAddressForm(f => ({ ...f, label: e.target.value }))}
+                    style={inputStyle}
+                    placeholder="Domů"
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Jméno příjemce *</label>
+                  <input
+                    value={addressForm.full_name}
+                    onChange={(e) => setAddressForm(f => ({ ...f, full_name: e.target.value }))}
+                    style={inputStyle}
+                    placeholder="Jan Novák"
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Ulice a číslo *</label>
+                  <input
+                    value={addressForm.street}
+                    onChange={(e) => setAddressForm(f => ({ ...f, street: e.target.value }))}
+                    style={inputStyle}
+                  />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "12px" }}>
+                  <div>
+                    <label style={labelStyle}>Město *</label>
+                    <input
+                      value={addressForm.city}
+                      onChange={(e) => setAddressForm(f => ({ ...f, city: e.target.value }))}
+                      style={inputStyle}
+                    />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>PSČ *</label>
+                    <input
+                      value={addressForm.zip}
+                      onChange={(e) => setAddressForm(f => ({ ...f, zip: e.target.value }))}
+                      style={inputStyle}
+                    />
+                  </div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div>
+                    <label style={labelStyle}>Země</label>
+                    <input
+                      value={addressForm.country}
+                      onChange={(e) => setAddressForm(f => ({ ...f, country: e.target.value }))}
+                      style={inputStyle}
+                    />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Telefon</label>
+                    <input
+                      value={addressForm.phone}
+                      onChange={(e) => setAddressForm(f => ({ ...f, phone: e.target.value }))}
+                      style={inputStyle}
+                      placeholder="+420 ..."
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "16px" }}>
+                <button
+                  onClick={saveDeliveryAddress}
+                  disabled={addressSaving}
+                  style={btnStyle(addressSaving)}
+                >
+                  {addressSaving ? "Ukládám..." : "💾 Uložit adresu"}
+                </button>
+                <button
+                  onClick={cancelAddressForm}
+                  style={{
+                    padding: "10px 20px",
+                    border: "1px solid var(--border)",
+                    borderRadius: "8px",
+                    fontSize: "14px",
+                    fontWeight: 600,
+                    background: "var(--bg-card)",
+                    color: "var(--text-muted)",
+                    cursor: "pointer",
+                  }}
+                >
+                  Zrušit
+                </button>
+                {addressMsg && <span style={{ fontSize: "13px", color: addressMsg.startsWith("✅") ? "#22c55e" : "#ef4444" }}>{addressMsg}</span>}
+              </div>
+            </div>
+          )}
+
+          {/* Addresses list */}
+          {addressesLoading ? (
+            <p style={{ color: "var(--text-muted)", textAlign: "center", padding: "24px 0" }}>Načítám adresy...</p>
+          ) : deliveryAddresses.length === 0 && !newAddress ? (
+            <div style={{ textAlign: "center", padding: "40px 0" }}>
+              <div style={{ fontSize: "48px", marginBottom: "16px" }}>📦</div>
+              <p style={{ color: "var(--text-muted)", marginBottom: "16px" }}>Zatím nemáte uložené dodací adresy.</p>
+              <button
+                onClick={startNewAddress}
+                style={{
+                  padding: "10px 24px",
+                  border: "none",
+                  borderRadius: "8px",
+                  fontSize: "14px",
+                  fontWeight: 600,
+                  background: "var(--accent)",
+                  color: "var(--accent-text-on)",
+                  cursor: "pointer",
+                }}
+              >
+                ➕ Přidat první adresu
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: "grid", gap: "12px" }}>
+              {deliveryAddresses.map((a) => (
+                <div
+                  key={a.id}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    padding: "16px 20px",
+                    background: "var(--bg-card)",
+                    border: a.is_default ? "2px solid var(--accent)" : "1px solid var(--border)",
+                    borderRadius: "10px",
+                    flexWrap: "wrap",
+                    gap: "12px",
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: "200px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                      <span style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>
+                        {a.is_default && "⭐ "}{a.label}
+                      </span>
+                      {a.is_default && (
+                        <span style={{ padding: "2px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: 600, background: "rgba(59,130,246,0.15)", color: "var(--accent)" }}>
+                          Výchozí
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: "13px", color: "var(--text-body)", lineHeight: 1.5 }}>
+                      <div>{a.full_name}</div>
+                      <div>{a.street}</div>
+                      <div>{a.zip} {a.city}, {a.country}</div>
+                      {a.phone && <div style={{ color: "var(--text-dimmer)" }}>📱 {a.phone}</div>}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                    {!a.is_default && (
+                      <button
+                        onClick={() => setDefaultAddress(a.id)}
+                        title="Nastavit jako výchozí"
+                        style={smallBtnStyle}
+                      >
+                        ⭐
+                      </button>
+                    )}
+                    <button
+                      onClick={() => startEditAddress(a)}
+                      title="Upravit"
+                      style={smallBtnStyle}
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      onClick={() => deleteAddress(a.id)}
+                      title="Smazat"
+                      style={{ ...smallBtnStyle, color: "#ef4444" }}
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -410,16 +759,7 @@ export default function AccountPage() {
             <button
               onClick={changePassword}
               disabled={passwordSaving || !passwordForm.newPassword}
-              style={{
-                padding: "10px 24px",
-                border: "none",
-                borderRadius: "8px",
-                fontSize: "14px",
-                fontWeight: 600,
-                background: passwordSaving || !passwordForm.newPassword ? "var(--border-hover)" : "var(--accent)",
-                color: passwordSaving || !passwordForm.newPassword ? "var(--text-dimmer)" : "var(--accent-text-on)",
-                cursor: passwordSaving || !passwordForm.newPassword ? "not-allowed" : "pointer",
-              }}
+              style={btnStyle(passwordSaving || !passwordForm.newPassword)}
             >
               {passwordSaving ? "Měním..." : "🔒 Změnit heslo"}
             </button>
@@ -467,6 +807,8 @@ export default function AccountPage() {
                         borderRadius: "10px",
                         transition: "border-color 0.2s",
                         cursor: "pointer",
+                        flexWrap: "wrap",
+                        gap: "8px",
                       }}
                       onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
                       onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
@@ -504,6 +846,29 @@ export default function AccountPage() {
   );
 }
 
+function btnStyle(disabled: boolean): React.CSSProperties {
+  return {
+    padding: "10px 24px",
+    border: "none",
+    borderRadius: "8px",
+    fontSize: "14px",
+    fontWeight: 600,
+    background: disabled ? "var(--border-hover)" : "var(--accent)",
+    color: disabled ? "var(--text-dimmer)" : "var(--accent-text-on)",
+    cursor: disabled ? "not-allowed" : "pointer",
+  };
+}
+
+const smallBtnStyle: React.CSSProperties = {
+  padding: "6px 10px",
+  border: "1px solid var(--border)",
+  borderRadius: "6px",
+  background: "var(--bg-card)",
+  cursor: "pointer",
+  fontSize: "14px",
+  color: "var(--text-body)",
+};
+
 const labelStyle: React.CSSProperties = {
   display: "block",
   fontSize: "13px",
@@ -521,4 +886,5 @@ const inputStyle: React.CSSProperties = {
   color: "var(--text-body)",
   fontSize: "14px",
   outline: "none",
+  boxSizing: "border-box",
 };

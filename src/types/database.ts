@@ -26,6 +26,23 @@ export interface Profile {
   volume_discount_percent: number;
   volume_discount_threshold: number;
   volume_discount_period_days: number;
+  admin_note: string | null;
+  is_blocked: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserAddress {
+  id: string;
+  user_id: string;
+  label: string;
+  full_name: string;
+  street: string;
+  city: string;
+  zip: string;
+  country: string;
+  phone: string | null;
+  is_default: boolean;
   created_at: string;
   updated_at: string;
 }
