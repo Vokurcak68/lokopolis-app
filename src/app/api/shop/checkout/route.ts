@@ -5,6 +5,7 @@ import { verifyTurnstile } from "@/lib/turnstile";
 import { getClientIp, honeypotValid, isValidEmail, minFillTimeValid, normalizeText, payloadDigest, rateLimit, replayGuard } from "@/lib/security";
 import { sendEmail } from "@/lib/email";
 import { orderConfirmation, newOrderAdmin } from "@/lib/email-templates";
+import { getSettings } from "@/lib/shop-settings";
 
 // Lazy env check - only validate at runtime, not at build time
 function getEnvConfig() {
@@ -446,9 +447,10 @@ export async function POST(req: NextRequest) {
       // Fire and forget — don't block the response
       const emailPromise = (async () => {
         try {
+          const shopSettings = await getSettings() as Record<string, any>;
           await Promise.all([
-            sendEmail(safeEmail, `Potvrzení objednávky ${orderNumber}`, orderConfirmation(emailOrder)),
-            sendEmail("info@lokopolis.cz", `🛒 Nová objednávka ${orderNumber}`, newOrderAdmin(emailOrder)),
+            sendEmail(safeEmail, `Potvrzení objednávky ${orderNumber}`, orderConfirmation(emailOrder, shopSettings)),
+            sendEmail("info@lokopolis.cz", `🛒 Nová objednávka ${orderNumber}`, newOrderAdmin(emailOrder, shopSettings)),
           ]);
         } catch (emailErr) {
           console.error("Checkout email error:", emailErr);

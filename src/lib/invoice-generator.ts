@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import jsPDF from "jspdf";
 import type { ShopOrderWithDetails } from "@/types/database";
 
@@ -27,8 +28,25 @@ function formatDate(date: Date): string {
   return `${d}. ${m}. ${y}`;
 }
 
-export function generateInvoicePdf(order: ShopOrderWithDetails): jsPDF {
+export function generateInvoicePdf(order: ShopOrderWithDetails, settings?: Record<string, any>): jsPDF {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+  // Supplier info from settings or defaults
+  const company = settings?.company as Record<string, any> | undefined;
+  const supplierName = company?.name || "Lokopolis.cz";
+  const supplierEmail = company?.email || "info@lokopolis.cz";
+  const supplierIco = company?.ico || "";
+  const supplierDic = company?.dic || "";
+  const supplierStreet = company?.street || "";
+  const supplierCity = company?.city || "";
+  const supplierZip = company?.zip || "";
+  const supplierPhone = company?.phone || "";
+  const supplierBankAccount = company?.bank_account || "XXXX/XXXX";
+
+  const invoiceNote = (typeof settings?.invoice_note === "string") ? settings.invoice_note : "";
+  const supplierNote = (typeof settings?.invoice_supplier_note === "string")
+    ? settings.invoice_supplier_note
+    : "Nejsme platci DPH.";
 
   const pageWidth = 210;
   const margin = 20;
@@ -86,11 +104,35 @@ export function generateInvoicePdf(order: ShopOrderWithDetails): jsPDF {
   doc.setFontSize(12);
   doc.setTextColor(...textColor);
   doc.setFont("Helvetica", "bold");
-  doc.text("Lokopolis.cz", leftX, y + 6);
+  doc.text(removeDiacritics(supplierName), leftX, y + 6);
   doc.setFont("Helvetica", "normal");
   doc.setFontSize(9);
   doc.setTextColor(...mutedColor);
-  doc.text("info@lokopolis.cz", leftX, y + 12);
+
+  let sy = y + 12;
+  if (supplierStreet) {
+    doc.text(removeDiacritics(supplierStreet), leftX, sy);
+    sy += 4.5;
+  }
+  const supplierCityZip = [supplierZip, supplierCity].filter(Boolean).join(" ");
+  if (supplierCityZip) {
+    doc.text(removeDiacritics(supplierCityZip), leftX, sy);
+    sy += 4.5;
+  }
+  if (supplierIco) {
+    doc.text(removeDiacritics(`IC: ${supplierIco}`), leftX, sy);
+    sy += 4.5;
+  }
+  if (supplierDic) {
+    doc.text(removeDiacritics(`DIC: ${supplierDic}`), leftX, sy);
+    sy += 4.5;
+  }
+  doc.text(removeDiacritics(supplierEmail), leftX, sy);
+  sy += 4.5;
+  if (supplierPhone) {
+    doc.text(removeDiacritics(`Tel: ${supplierPhone}`), leftX, sy);
+    sy += 4.5;
+  }
 
   // Customer
   doc.setFontSize(9);
@@ -129,7 +171,7 @@ export function generateInvoicePdf(order: ShopOrderWithDetails): jsPDF {
     cy += 4.5;
   }
 
-  y = Math.max(y + 28, cy + 6);
+  y = Math.max(sy + 6, cy + 6);
 
   // === ITEMS TABLE ===
   doc.setDrawColor(200, 200, 200);
@@ -143,7 +185,6 @@ export function generateInvoicePdf(order: ShopOrderWithDetails): jsPDF {
   const col1 = margin + 2;
   const col2 = margin + 95;
   const col3 = margin + 115;
-  const col4 = margin + 140;
   const col5 = margin + contentWidth - 2;
 
   doc.text(removeDiacritics("Nazev"), col1, y + 5.5);
@@ -261,10 +302,18 @@ export function generateInvoicePdf(order: ShopOrderWithDetails): jsPDF {
   doc.setTextColor(...mutedColor);
 
   const vs = orderNum.replace(/\D/g, "");
-  doc.text(removeDiacritics(`Cislo uctu: XXXX/XXXX    |    Variabilni symbol: ${vs}`), margin + 4, y + 9);
+  doc.text(removeDiacritics(`Cislo uctu: ${supplierBankAccount}    |    Variabilni symbol: ${vs}`), margin + 4, y + 9);
   doc.text(removeDiacritics(`Castka k uhrade: ${formatPrice(totalPrice)}`), margin + 4, y + 14);
 
   y += 28;
+
+  // === INVOICE NOTE ===
+  if (invoiceNote) {
+    doc.setFontSize(9);
+    doc.setTextColor(...textColor);
+    doc.text(removeDiacritics(invoiceNote), margin, y);
+    y += 6;
+  }
 
   // === FOOTER ===
   doc.setDrawColor(...accentColor);
@@ -275,7 +324,7 @@ export function generateInvoicePdf(order: ShopOrderWithDetails): jsPDF {
   doc.setFontSize(8);
   doc.setTextColor(...mutedColor);
   doc.setFont("Helvetica", "italic");
-  doc.text(removeDiacritics("Faktura slouzi jako danovy doklad."), margin, y);
+  doc.text(removeDiacritics(supplierNote || "Faktura slouzi jako danovy doklad."), margin, y);
   doc.text(removeDiacritics(`Vystaveno: ${formatDate(createdDate)}`), pageWidth - margin, y, { align: "right" });
 
   // Bottom accent bar

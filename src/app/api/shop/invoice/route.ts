@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { generateInvoicePdf } from "@/lib/invoice-generator";
+import { getSettings } from "@/lib/shop-settings";
 import type { ShopOrderWithDetails, OrderItem, ShopProduct, ShippingMethod, PaymentMethod } from "@/types/database";
 
 function getEnvConfig() {
@@ -136,7 +137,8 @@ export async function GET(req: NextRequest) {
     };
 
     // Generate PDF
-    const doc = generateInvoicePdf(fullOrder);
+    const shopSettings = await getSettings() as Record<string, any>;
+    const doc = generateInvoicePdf(fullOrder, shopSettings);
     const pdfBuffer = Buffer.from(doc.output("arraybuffer"));
 
     return new NextResponse(pdfBuffer, {

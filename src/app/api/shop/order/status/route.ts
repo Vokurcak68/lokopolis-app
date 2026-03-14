@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendEmail } from "@/lib/email";
 import { orderStatusChanged, orderShipped } from "@/lib/email-templates";
+import { getSettings } from "@/lib/shop-settings";
 
 function getEnvConfig() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -102,17 +103,18 @@ export async function PUT(req: NextRequest) {
     if (order?.billing_email) {
       const emailPromise = (async () => {
         try {
+          const shopSettings = await getSettings() as Record<string, any>;
           if (newStatus === "shipped") {
             await sendEmail(
               order.billing_email,
               `Objednávka ${order.order_number} byla odeslána 📦`,
-              orderShipped(order)
+              orderShipped(order, shopSettings)
             );
           } else {
             await sendEmail(
               order.billing_email,
               `Objednávka ${order.order_number} — ${newStatus === "paid" ? "zaplaceno" : newStatus === "delivered" ? "doručeno" : "změna stavu"}`,
-              orderStatusChanged(order, newStatus)
+              orderStatusChanged(order, newStatus, shopSettings)
             );
           }
         } catch (emailErr) {

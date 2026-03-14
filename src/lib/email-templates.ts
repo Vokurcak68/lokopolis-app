@@ -2,7 +2,19 @@
 
 // ─── Shared wrapper ──────────────────────────────────────────────────────────
 
-function emailWrapper(content: string): string {
+function emailWrapper(content: string, settings?: Record<string, any>): string {
+  const footer = typeof settings?.email_footer === "string"
+    ? settings.email_footer
+    : 'Tento e-mail byl odeslán automaticky, neodpovídejte na něj.';
+
+  const signature = typeof settings?.email_signature === "string"
+    ? settings.email_signature.replace(/\n/g, "<br>")
+    : '';
+
+  const signatureHtml = signature
+    ? `<div style="margin-top:24px;padding-top:16px;border-top:1px solid #2a2a4e;color:#999;font-size:13px;">${signature}</div>`
+    : '';
+
   return `<!DOCTYPE html>
 <html lang="cs">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -18,12 +30,13 @@ function emailWrapper(content: string): string {
   <!-- Content -->
   <tr><td style="padding:32px;color:#e0e0e0;font-size:15px;line-height:1.6;">
     ${content}
+    ${signatureHtml}
   </td></tr>
   <!-- Footer -->
   <tr><td style="padding:20px 32px;text-align:center;border-top:1px solid #2a2a4e;font-size:12px;color:#666;">
     <a href="https://lokopolis.cz" style="color:#f0a030;text-decoration:none;">lokopolis.cz</a>
     &nbsp;·&nbsp; info@lokopolis.cz
-    <br>Tento e-mail byl odeslán automaticky, neodpovídejte na něj.
+    <br>${esc(footer)}
   </td></tr>
 </table>
 </td></tr>
@@ -109,13 +122,17 @@ function addressBlock(label: string, order: any, prefix: string = "billing"): st
 
 // ─── Templates ───────────────────────────────────────────────────────────────
 
-export function orderConfirmation(order: any): string {
+export function orderConfirmation(order: any, settings?: Record<string, any>): string {
+  const introText = (typeof settings?.email_order_confirmation_intro === "string")
+    ? settings.email_order_confirmation_intro
+    : "Děkujeme za vaši objednávku! 🎉";
+
   const shippingAddr = order.shipping_name
     ? addressBlock("Doručovací adresa", order, "shipping")
     : addressBlock("Fakturační adresa", order, "billing");
 
   return emailWrapper(`
-    <h2 style="color:#f0a030;margin:0 0 20px;">Děkujeme za vaši objednávku! 🎉</h2>
+    <h2 style="color:#f0a030;margin:0 0 20px;">${esc(introText)}</h2>
     <p>Vaše objednávka <strong style="color:#f0a030;">${esc(order.order_number)}</strong> byla úspěšně přijata.</p>
     
     <table width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;">
@@ -153,10 +170,10 @@ export function orderConfirmation(order: any): string {
     ${addressBlock("Fakturační adresa", order, "billing")}
 
     <p style="margin-top:24px;color:#888;">O dalším průběhu objednávky vás budeme informovat e-mailem.</p>
-  `);
+  `, settings);
 }
 
-export function orderStatusChanged(order: any, newStatus: string): string {
+export function orderStatusChanged(order: any, newStatus: string, settings?: Record<string, any>): string {
   return emailWrapper(`
     <h2 style="color:#f0a030;margin:0 0 20px;">Změna stavu objednávky</h2>
     <p>Vaše objednávka <strong style="color:#f0a030;">${esc(order.order_number)}</strong> má nový stav:</p>
@@ -175,12 +192,16 @@ export function orderStatusChanged(order: any, newStatus: string): string {
     </div>` : ""}
 
     <p style="color:#888;">Pokud máte jakékoli dotazy, neváhejte nás kontaktovat na info@lokopolis.cz.</p>
-  `);
+  `, settings);
 }
 
-export function orderShipped(order: any): string {
+export function orderShipped(order: any, settings?: Record<string, any>): string {
+  const introText = (typeof settings?.email_order_shipped_intro === "string")
+    ? settings.email_order_shipped_intro
+    : "Vaše objednávka byla odeslána! 📦";
+
   return emailWrapper(`
-    <h2 style="color:#f0a030;margin:0 0 20px;">Vaše objednávka byla odeslána! 📦</h2>
+    <h2 style="color:#f0a030;margin:0 0 20px;">${esc(introText)}</h2>
     <p>Objednávka <strong style="color:#f0a030;">${esc(order.order_number)}</strong> je na cestě k vám.</p>
     
     ${order.tracking_number ? `
@@ -203,10 +224,10 @@ export function orderShipped(order: any): string {
 
     <p style="margin-top:24px;color:#888;">Předpokládaná doba doručení je obvykle 1–3 pracovní dny.</p>
     <p style="color:#888;">Pokud máte jakékoli dotazy, kontaktujte nás na info@lokopolis.cz.</p>
-  `);
+  `, settings);
 }
 
-export function newOrderAdmin(order: any): string {
+export function newOrderAdmin(order: any, settings?: Record<string, any>): string {
   const customerEmail = order.billing_email || order.email || "";
   const customerName = order.billing_name || order.name || "Neznámý";
 
@@ -240,12 +261,16 @@ export function newOrderAdmin(order: any): string {
     <div style="margin-top:24px;text-align:center;">
       <a href="https://lokopolis.cz/admin/shop" style="display:inline-block;padding:12px 28px;background:#f0a030;color:#1a1a2e;font-weight:700;border-radius:8px;text-decoration:none;">Otevřít admin panel →</a>
     </div>
-  `);
+  `, settings);
 }
 
-export function welcomeEmail(username: string): string {
+export function welcomeEmail(username: string, settings?: Record<string, any>): string {
+  const introText = (typeof settings?.email_welcome_intro === "string")
+    ? settings.email_welcome_intro
+    : "Vítejte na Lokopolis! 🚂";
+
   return emailWrapper(`
-    <h2 style="color:#f0a030;margin:0 0 20px;">Vítejte na Lokopolis! 🚂</h2>
+    <h2 style="color:#f0a030;margin:0 0 20px;">${esc(introText)}</h2>
     <p>Ahoj <strong style="color:#f0a030;">${esc(username)}</strong>,</p>
     <p>Děkujeme za registraci v komunitě Lokopolis — místě pro všechny nadšence do modelové železnice.</p>
     
@@ -264,5 +289,5 @@ export function welcomeEmail(username: string): string {
     </div>
 
     <p style="color:#888;">Pokud máte jakékoli dotazy, neváhejte nás kontaktovat na info@lokopolis.cz.</p>
-  `);
+  `, settings);
 }

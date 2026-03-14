@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sendEmail } from "@/lib/email";
 import { welcomeEmail } from "@/lib/email-templates";
+import { getSettings } from "@/lib/shop-settings";
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,10 +11,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Chybí email nebo username" }, { status: 400 });
     }
 
+    const shopSettings = await getSettings() as Record<string, any>;
+
     await sendEmail(
       email,
       "Vítejte na Lokopolis! 🚂",
-      welcomeEmail(username)
+      welcomeEmail(username, shopSettings)
     );
 
     return NextResponse.json({ ok: true });
