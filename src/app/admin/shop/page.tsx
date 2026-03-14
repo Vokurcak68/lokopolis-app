@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -99,6 +99,11 @@ export default function AdminShopPage() {
   // Orders
   const [orders, setOrders] = useState<OrderWithDetails[]>([]);
   const [orderFilter, setOrderFilter] = useState<string>("pending");
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const [orderTrackingNumber, setOrderTrackingNumber] = useState("");
+  const [orderTrackingUrl, setOrderTrackingUrl] = useState("");
+  const [orderAdminNote, setOrderAdminNote] = useState("");
+  const [orderSaving, setOrderSaving] = useState(false);
 
   // Add/Edit form
   const [editProduct, setEditProduct] = useState<ShopProduct | null>(null);
@@ -471,6 +476,28 @@ export default function AdminShopPage() {
     fetchOrders();
   }
 
+  function toggleOrderExpand(order: OrderWithDetails) {
+    if (expandedOrderId === order.id) {
+      setExpandedOrderId(null);
+    } else {
+      setExpandedOrderId(order.id);
+      setOrderTrackingNumber(order.tracking_number || "");
+      setOrderTrackingUrl(order.tracking_url || "");
+      setOrderAdminNote(order.admin_order_note || "");
+    }
+  }
+
+  async function saveOrderDetails(orderId: string) {
+    setOrderSaving(true);
+    await supabase.from("shop_orders").update({
+      tracking_number: orderTrackingNumber || null,
+      tracking_url: orderTrackingUrl || null,
+      admin_order_note: orderAdminNote || null,
+    }).eq("id", orderId);
+    setOrderSaving(false);
+    fetchOrders();
+  }
+
   async function deleteProduct(id: string) {
     if (!confirm("Opravdu smazat tento produkt?")) return;
     await supabase.from("shop_products").delete().eq("id", id);
@@ -726,38 +753,93 @@ export default function AdminShopPage() {
               </thead>
               <tbody>
                 {orders.map((o) => (
-                  <tr key={o.id}>
-                    <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "14px", fontWeight: 600, color: "var(--accent)" }}>{o.order_number}</td>
-                    <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "13px", color: "var(--text-body)" }}>{o.product?.title || "—"}</td>
-                    <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "13px", color: "var(--text-body)" }}>{o.user?.display_name || o.user?.username || "—"}</td>
-                    <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>{o.total_price || o.price} Kč</td>
-                    <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)" }}>
-                      <span style={{ padding: "2px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: 600, background: `${ORDER_STATUS_COLORS[o.status] || "#6b7280"}20`, color: ORDER_STATUS_COLORS[o.status] || "#6b7280" }}>{ORDER_STATUS_LABELS[o.status] || o.status}</span>
-                    </td>
-                    <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", fontSize: "13px", color: "var(--text-dimmer)" }}>
-                      {new Date(o.created_at).toLocaleDateString("cs-CZ")}
-                      {o.billing_email && <div style={{ fontSize: "11px", color: "var(--text-dimmer)" }}>{o.billing_email}</div>}
-                    </td>
-                    <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)" }}>
-                      <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
-                        {o.status === "pending" && (
-                          <button onClick={() => updateOrderStatus(o.id, "paid")} style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "1px solid rgba(34,197,94,0.4)", background: "rgba(34,197,94,0.1)", color: "#22c55e" }}>✅ Zaplaceno</button>
-                        )}
-                        {o.status === "paid" && (
-                          <button onClick={() => updateOrderStatus(o.id, "processing")} style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "1px solid rgba(59,130,246,0.4)", background: "rgba(59,130,246,0.1)", color: "#3b82f6" }}>📦 Zpracovat</button>
-                        )}
-                        {o.status === "processing" && (
-                          <button onClick={() => updateOrderStatus(o.id, "shipped")} style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "1px solid rgba(139,92,246,0.4)", background: "rgba(139,92,246,0.1)", color: "#8b5cf6" }}>🚚 Odesláno</button>
-                        )}
-                        {o.status === "shipped" && (
-                          <button onClick={() => updateOrderStatus(o.id, "delivered")} style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "1px solid rgba(34,197,94,0.4)", background: "rgba(34,197,94,0.1)", color: "#22c55e" }}>✓ Doručeno</button>
-                        )}
-                        {(o.status === "pending" || o.status === "paid") && (
-                          <button onClick={() => updateOrderStatus(o.id, "cancelled")} style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.08)", color: "#ef4444" }}>✕ Zrušit</button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
+                  <React.Fragment key={o.id}>
+                    <tr style={{ cursor: "pointer" }} onClick={() => toggleOrderExpand(o)}>
+                      <td style={{ padding: "10px 12px", borderBottom: expandedOrderId === o.id ? "none" : "1px solid var(--border)", fontSize: "14px", fontWeight: 600, color: "var(--accent)" }}>
+                        <span style={{ marginRight: "6px", fontSize: "10px" }}>{expandedOrderId === o.id ? "▼" : "▶"}</span>
+                        {o.order_number}
+                      </td>
+                      <td style={{ padding: "10px 12px", borderBottom: expandedOrderId === o.id ? "none" : "1px solid var(--border)", fontSize: "13px", color: "var(--text-body)" }}>{o.product?.title || "—"}</td>
+                      <td style={{ padding: "10px 12px", borderBottom: expandedOrderId === o.id ? "none" : "1px solid var(--border)", fontSize: "13px", color: "var(--text-body)" }}>{o.user?.display_name || o.user?.username || "—"}</td>
+                      <td style={{ padding: "10px 12px", borderBottom: expandedOrderId === o.id ? "none" : "1px solid var(--border)", fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>{o.total_price || o.price} Kč</td>
+                      <td style={{ padding: "10px 12px", borderBottom: expandedOrderId === o.id ? "none" : "1px solid var(--border)" }}>
+                        <span style={{ padding: "2px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: 600, background: `${ORDER_STATUS_COLORS[o.status] || "#6b7280"}20`, color: ORDER_STATUS_COLORS[o.status] || "#6b7280" }}>{ORDER_STATUS_LABELS[o.status] || o.status}</span>
+                      </td>
+                      <td style={{ padding: "10px 12px", borderBottom: expandedOrderId === o.id ? "none" : "1px solid var(--border)", fontSize: "13px", color: "var(--text-dimmer)" }}>
+                        {new Date(o.created_at).toLocaleDateString("cs-CZ")}
+                        {o.billing_email && <div style={{ fontSize: "11px", color: "var(--text-dimmer)" }}>{o.billing_email}</div>}
+                      </td>
+                      <td style={{ padding: "10px 12px", borderBottom: expandedOrderId === o.id ? "none" : "1px solid var(--border)" }} onClick={(e) => e.stopPropagation()}>
+                        <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
+                          {o.status === "pending" && (
+                            <button onClick={() => updateOrderStatus(o.id, "paid")} style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "1px solid rgba(34,197,94,0.4)", background: "rgba(34,197,94,0.1)", color: "#22c55e" }}>✅ Zaplaceno</button>
+                          )}
+                          {o.status === "paid" && (
+                            <button onClick={() => updateOrderStatus(o.id, "processing")} style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "1px solid rgba(59,130,246,0.4)", background: "rgba(59,130,246,0.1)", color: "#3b82f6" }}>📦 Zpracovat</button>
+                          )}
+                          {o.status === "processing" && (
+                            <button onClick={() => updateOrderStatus(o.id, "shipped")} style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "1px solid rgba(139,92,246,0.4)", background: "rgba(139,92,246,0.1)", color: "#8b5cf6" }}>🚚 Odesláno</button>
+                          )}
+                          {o.status === "shipped" && (
+                            <button onClick={() => updateOrderStatus(o.id, "delivered")} style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "1px solid rgba(34,197,94,0.4)", background: "rgba(34,197,94,0.1)", color: "#22c55e" }}>✓ Doručeno</button>
+                          )}
+                          {(o.status === "pending" || o.status === "paid") && (
+                            <button onClick={() => updateOrderStatus(o.id, "cancelled")} style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.08)", color: "#ef4444" }}>✕ Zrušit</button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                    {expandedOrderId === o.id && (
+                      <tr>
+                        <td colSpan={7} style={{ padding: "0 12px 16px", borderBottom: "1px solid var(--border)", background: "var(--bg-page)" }}>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", maxWidth: "600px", padding: "16px", background: "var(--bg-card)", borderRadius: "10px", border: "1px solid var(--border)" }}>
+                            <div>
+                              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "var(--text-dimmer)", marginBottom: "4px" }}>Tracking číslo</label>
+                              <input
+                                value={orderTrackingNumber}
+                                onChange={(e) => setOrderTrackingNumber(e.target.value)}
+                                placeholder="např. DR123456789CZ"
+                                style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-input)", borderRadius: "6px", color: "var(--text-body)", fontSize: "13px", outline: "none", boxSizing: "border-box" }}
+                              />
+                            </div>
+                            <div>
+                              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "var(--text-dimmer)", marginBottom: "4px" }}>Tracking URL</label>
+                              <input
+                                value={orderTrackingUrl}
+                                onChange={(e) => setOrderTrackingUrl(e.target.value)}
+                                placeholder="https://tracking.example.com/..."
+                                style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-input)", borderRadius: "6px", color: "var(--text-body)", fontSize: "13px", outline: "none", boxSizing: "border-box" }}
+                              />
+                            </div>
+                            <div style={{ gridColumn: "1 / -1" }}>
+                              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "var(--text-dimmer)", marginBottom: "4px" }}>Poznámka k objednávce (interní)</label>
+                              <textarea
+                                value={orderAdminNote}
+                                onChange={(e) => setOrderAdminNote(e.target.value)}
+                                placeholder="Interní poznámka — zákazník ji neuvidí"
+                                rows={2}
+                                style={{ width: "100%", padding: "8px 12px", background: "var(--bg-input)", border: "1px solid var(--border-input)", borderRadius: "6px", color: "var(--text-body)", fontSize: "13px", outline: "none", boxSizing: "border-box", resize: "vertical" }}
+                              />
+                            </div>
+                            <div style={{ gridColumn: "1 / -1", display: "flex", gap: "8px", alignItems: "center" }}>
+                              <button
+                                onClick={() => saveOrderDetails(o.id)}
+                                disabled={orderSaving}
+                                style={{ padding: "6px 16px", borderRadius: "6px", fontSize: "13px", fontWeight: 600, cursor: orderSaving ? "not-allowed" : "pointer", border: "none", background: "var(--accent)", color: "var(--accent-text-on)" }}
+                              >
+                                {orderSaving ? "Ukládám..." : "💾 Uložit"}
+                              </button>
+                              {o.tracking_number && (
+                                <span style={{ fontSize: "12px", color: "var(--text-dimmer)" }}>
+                                  📦 {o.tracking_number}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>

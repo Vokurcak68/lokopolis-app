@@ -264,6 +264,8 @@ export async function POST(req: NextRequest) {
     const safeCountry = normalizeText(billing?.country || "CZ", 2).toUpperCase() || "CZ";
     const safeIco = normalizeText(billing?.ico || "", 20) || null;
     const safeDic = normalizeText(billing?.dic || "", 30) || null;
+    const safeShippingName = normalizeText(billing?.shippingName || "", 160) || null;
+    const safeShippingCompany = normalizeText(billing?.shippingCompany || "", 160) || null;
     const safeShippingStreet = normalizeText(billing?.shippingStreet || "", 160) || null;
     const safeShippingCity = normalizeText(billing?.shippingCity || "", 120) || null;
     const safeShippingZip = normalizeText(billing?.shippingZip || "", 20) || null;
@@ -299,6 +301,8 @@ export async function POST(req: NextRequest) {
         loyalty_discount: loyaltyDiscount,
         billing_ico: billing.isBusiness ? safeIco : null,
         billing_dic: billing.isBusiness ? safeDic : null,
+        shipping_name: billing.differentShipping ? safeShippingName : safeName,
+        shipping_company: billing.differentShipping ? safeShippingCompany : null,
         shipping_street: billing.differentShipping ? safeShippingStreet : safeStreet,
         shipping_city: billing.differentShipping ? safeShippingCity : safeCity,
         shipping_zip: billing.differentShipping ? safeShippingZip : safeZip,

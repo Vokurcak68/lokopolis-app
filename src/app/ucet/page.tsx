@@ -827,11 +827,21 @@ export default function AccountPage() {
                       onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
                       onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
                     >
-                      <div>
+                      <div style={{ flex: 1 }}>
                         <div style={{ fontWeight: 600, fontSize: "15px", color: "var(--text-primary)", marginBottom: "4px" }}>
                           {order.order_number}
                         </div>
                         <div style={{ fontSize: "13px", color: "var(--text-muted)" }}>{date}</div>
+                        {order.tracking_number && (order.status === "shipped" || order.status === "delivered") && (
+                          <div style={{ fontSize: "12px", color: "var(--accent)", marginTop: "4px" }}>
+                            📦 Tracking: {order.tracking_number}
+                            {order.shipped_at && (
+                              <span style={{ color: "var(--text-dimmer)", marginLeft: "8px" }}>
+                                (odesláno {new Date(order.shipped_at).toLocaleDateString("cs-CZ")})
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
                         <span style={{

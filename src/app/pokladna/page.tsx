@@ -7,7 +7,7 @@ import { useAuth } from "@/components/Auth/AuthProvider";
 import { useCart } from "@/components/Shop/CartProvider";
 import { supabase } from "@/lib/supabase";
 import Turnstile from "@/components/Turnstile";
-import type { ShippingMethod, PaymentMethod } from "@/types/database";
+import type { ShippingMethod, PaymentMethod, UserAddress } from "@/types/database";
 
 interface BillingData {
   name: string;
@@ -21,6 +21,8 @@ interface BillingData {
   ico: string;
   dic: string;
   differentShipping: boolean;
+  shippingName: string;
+  shippingCompany: string;
   shippingStreet: string;
   shippingCity: string;
   shippingZip: string;
@@ -40,8 +42,12 @@ export default function CheckoutPage() {
   const [billing, setBilling] = useState<BillingData>({
     name: "", email: "", phone: "", street: "", city: "", zip: "", country: "CZ",
     isBusiness: false, ico: "", dic: "",
-    differentShipping: false, shippingStreet: "", shippingCity: "", shippingZip: "", shippingCountry: "CZ",
+    differentShipping: false, shippingName: "", shippingCompany: "", shippingStreet: "", shippingCity: "", shippingZip: "", shippingCountry: "CZ",
   });
+
+  // Saved delivery addresses
+  const [savedAddresses, setSavedAddresses] = useState<UserAddress[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState<string>("");
 
   const [shippingMethods, setShippingMethods] = useState<ShippingMethod[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
@@ -70,6 +76,20 @@ export default function CheckoutPage() {
       }));
     }
   }, [user, profile]);
+
+  // Load saved delivery addresses
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const { data } = await supabase
+        .from("user_addresses")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("is_default", { ascending: false })
+        .order("created_at", { ascending: false });
+      if (data) setSavedAddresses(data as UserAddress[]);
+    })();
+  }, [user]);
 
   // Load loyalty info
   useEffect(() => {
@@ -136,6 +156,35 @@ export default function CheckoutPage() {
     if (selectedShippingObj?.digital_only && p.slug === "cash-on-delivery") return false;
     return true;
   });
+
+  function handleAddressSelect(addressId: string) {
+    setSelectedAddressId(addressId);
+    if (addressId === "" || addressId === "manual") {
+      // Clear shipping fields for manual entry
+      setBilling((b) => ({
+        ...b,
+        shippingName: "",
+        shippingCompany: "",
+        shippingStreet: "",
+        shippingCity: "",
+        shippingZip: "",
+        shippingCountry: "CZ",
+      }));
+      return;
+    }
+    const addr = savedAddresses.find((a) => a.id === addressId);
+    if (addr) {
+      setBilling((b) => ({
+        ...b,
+        shippingName: addr.full_name || "",
+        shippingCompany: addr.company || "",
+        shippingStreet: addr.street || "",
+        shippingCity: addr.city || "",
+        shippingZip: addr.zip || "",
+        shippingCountry: addr.country || "CZ",
+      }));
+    }
+  }
 
   if (items.length === 0) {
     return (
@@ -385,11 +434,43 @@ export default function CheckoutPage() {
           {!isAllDigital && (
             <>
               <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "14px", color: "var(--text-muted)" }}>
-                <input type="checkbox" checked={billing.differentShipping} onChange={(e) => setBilling({ ...billing, differentShipping: e.target.checked })} />
+                <input type="checkbox" checked={billing.differentShipping} onChange={(e) => {
+                  setBilling({ ...billing, differentShipping: e.target.checked });
+                  if (!e.target.checked) setSelectedAddressId("");
+                }} />
                 Doručovací adresa je jiná
               </label>
               {billing.differentShipping && (
                 <div style={{ padding: "16px", background: "var(--bg-page)", borderRadius: "10px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                  {/* Address picker for logged-in users with saved addresses */}
+                  {user && savedAddresses.length > 0 && (
+                    <div>
+                      <label style={labelStyle}>Uložené adresy</label>
+                      <select
+                        style={inputStyle}
+                        value={selectedAddressId}
+                        onChange={(e) => handleAddressSelect(e.target.value)}
+                      >
+                        <option value="">— Vyberte uloženou adresu —</option>
+                        {savedAddresses.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.is_default ? "⭐ " : ""}{a.label} — {a.full_name}, {a.street}, {a.city}
+                          </option>
+                        ))}
+                        <option value="manual">+ Zadat novou adresu ručně</option>
+                      </select>
+                    </div>
+                  )}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                    <div>
+                      <label style={labelStyle}>Jméno příjemce</label>
+                      <input style={inputStyle} value={billing.shippingName} onChange={(e) => setBilling({ ...billing, shippingName: e.target.value })} />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Firma</label>
+                      <input style={inputStyle} value={billing.shippingCompany} onChange={(e) => setBilling({ ...billing, shippingCompany: e.target.value })} />
+                    </div>
+                  </div>
                   <div>
                     <label style={labelStyle}>Ulice *</label>
                     <input style={inputStyle} value={billing.shippingStreet} onChange={(e) => setBilling({ ...billing, shippingStreet: e.target.value })} />

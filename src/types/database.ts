@@ -482,11 +482,15 @@ export interface ShopOrder {
   billing_country: string | null;
   billing_ico: string | null;
   billing_dic: string | null;
+  shipping_name: string | null;
+  shipping_company: string | null;
   shipping_street: string | null;
   shipping_city: string | null;
   shipping_zip: string | null;
   shipping_country: string | null;
   tracking_number: string | null;
+  tracking_url: string | null;
+  admin_order_note: string | null;
   coupon_id: string | null;
   coupon_code: string | null;
   coupon_discount: number;

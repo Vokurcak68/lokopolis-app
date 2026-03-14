@@ -236,6 +236,64 @@ export default function OrderConfirmationPage() {
         </div>
       </div>
 
+      {/* Tracking & Timeline */}
+      {(order.status === "shipped" || order.status === "delivered" || order.tracking_number) && (
+        <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "16px", marginBottom: "16px" }}>
+          <h3 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-muted)", marginBottom: "16px" }}>📦 Sledování zásilky</h3>
+
+          {/* Tracking number */}
+          {order.tracking_number && (
+            <div style={{ marginBottom: "16px", fontSize: "14px", color: "var(--text-primary)" }}>
+              <span style={{ color: "var(--text-muted)" }}>Tracking číslo: </span>
+              {order.tracking_url ? (
+                <a href={order.tracking_url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>
+                  {order.tracking_number} ↗
+                </a>
+              ) : (
+                <strong>{order.tracking_number}</strong>
+              )}
+            </div>
+          )}
+
+          {/* Timeline */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "0" }}>
+            {[
+              { key: "pending", label: "Přijata", date: order.created_at, done: true },
+              { key: "paid", label: "Zaplacena", date: order.paid_at, done: !!order.paid_at },
+              { key: "shipped", label: "Odesláno", date: order.shipped_at, done: !!order.shipped_at },
+              { key: "delivered", label: "Doručeno", date: order.delivered_at, done: !!order.delivered_at },
+            ].map((step, i, arr) => (
+              <div key={step.key} style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: "24px" }}>
+                  <div style={{
+                    width: "20px", height: "20px", borderRadius: "50%",
+                    background: step.done ? "var(--accent)" : "var(--border)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: "11px", color: step.done ? "var(--accent-text-on)" : "var(--text-dimmer)",
+                    fontWeight: 700, flexShrink: 0,
+                  }}>
+                    {step.done ? "✓" : (i + 1)}
+                  </div>
+                  {i < arr.length - 1 && (
+                    <div style={{ width: "2px", height: "24px", background: step.done ? "var(--accent)" : "var(--border)" }} />
+                  )}
+                </div>
+                <div style={{ paddingBottom: i < arr.length - 1 ? "8px" : "0" }}>
+                  <div style={{ fontSize: "14px", fontWeight: step.done ? 600 : 400, color: step.done ? "var(--text-primary)" : "var(--text-dimmer)" }}>
+                    {step.label}
+                  </div>
+                  {step.done && step.date && (
+                    <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+                      {new Date(step.date).toLocaleDateString("cs-CZ", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Download links for paid digital orders */}
       {isPaid && order.items.some((i) => i.product?.file_url) && (
         <div style={{ background: "rgba(34, 197, 94, 0.08)", border: "1px solid rgba(34, 197, 94, 0.3)", borderRadius: "10px", padding: "16px", marginBottom: "16px" }}>
