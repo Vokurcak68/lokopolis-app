@@ -420,13 +420,29 @@ export default function AdminShopPage() {
     await updateOrderStatus(orderId, "paid");
   }
 
-  async function updateOrderStatus(orderId: string, newStatus: string) {
-    const updates: Record<string, unknown> = { status: newStatus };
-    if (newStatus === "paid") updates.paid_at = new Date().toISOString();
-    if (newStatus === "shipped") updates.shipped_at = new Date().toISOString();
-    if (newStatus === "delivered") updates.delivered_at = new Date().toISOString();
+  async function updateOrderStatus(orderId: string, newStatus: string, order?: OrderWithDetails) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
 
-    await supabase.from("shop_orders").update(updates).eq("id", orderId);
+    const res = await fetch("/api/shop/order/status", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        orderId,
+        newStatus,
+        trackingNumber: orderTrackingNumber || order?.tracking_number || null,
+        trackingUrl: orderTrackingUrl || order?.tracking_url || null,
+      }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data?.error || "Nepodařilo se změnit stav objednávky.");
+      return;
+    }
 
     // Auto-grant purchases + confirm stock sale when marking as paid
     if (newStatus === "paid") {

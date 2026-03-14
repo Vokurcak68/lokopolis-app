@@ -62,6 +62,7 @@ export default function CheckoutPage() {
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [checkoutStartedAt] = useState<number>(() => Date.now());
   const [website] = useState("");
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   // Determine if cart is all-digital
   const isAllDigital = items.every((i) => !!i.product.file_url);
@@ -764,6 +765,40 @@ export default function CheckoutPage() {
 
       {step === 3 && (
         <div style={{ marginTop: "16px" }}>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: "10px",
+              cursor: "pointer",
+              fontSize: "13px",
+              color: "var(--text-muted)",
+              lineHeight: 1.5,
+              marginBottom: "16px",
+              padding: "12px 16px",
+              background: "var(--bg-card)",
+              borderRadius: "8px",
+              border: "1px solid var(--border)",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={agreedToTerms}
+              onChange={(e) => setAgreedToTerms(e.target.checked)}
+              style={{ marginTop: "3px", accentColor: "var(--accent, #f0a030)" }}
+            />
+            <span>
+              Souhlasím s{" "}
+              <Link href="/obchodni-podminky" target="_blank" style={{ color: "var(--accent)", textDecoration: "underline" }}>
+                obchodními podmínkami
+              </Link>{" "}
+              a beru na vědomí zpracování osobních údajů dle{" "}
+              <Link href="/ochrana-udaju" target="_blank" style={{ color: "var(--accent)", textDecoration: "underline" }}>
+                zásad ochrany osobních údajů
+              </Link>
+            </span>
+          </label>
+
           <div style={{ fontSize: "13px", color: "var(--text-muted)", marginBottom: "6px" }}>
             Ověření proti botům
           </div>
@@ -847,16 +882,16 @@ export default function CheckoutPage() {
         ) : (
           <button
             onClick={handleSubmit}
-            disabled={submitting || !turnstileToken}
+            disabled={submitting || !turnstileToken || !agreedToTerms}
             style={{
               padding: "14px 32px",
               border: "none",
               borderRadius: "10px",
-              background: (submitting || !turnstileToken) ? "var(--text-muted)" : "#22c55e",
+              background: (submitting || !turnstileToken || !agreedToTerms) ? "var(--text-muted)" : "#22c55e",
               color: "#fff",
               fontSize: "16px",
               fontWeight: 700,
-              cursor: (submitting || !turnstileToken) ? "not-allowed" : "pointer",
+              cursor: (submitting || !turnstileToken || !agreedToTerms) ? "not-allowed" : "pointer",
             }}
           >
             {submitting ? "Odesílám..." : "✓ Dokončit objednávku"}

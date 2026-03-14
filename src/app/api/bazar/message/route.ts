@@ -138,12 +138,10 @@ export async function POST(req: NextRequest) {
           .replace(/>/g, "&gt;")
           .replace(/\n/g, "<br />");
 
-        await sendEmail({
-          to: recipientEmail,
-          subject: `[Lokopolis] Nová zpráva k inzerátu „${listingTitle}"`,
-          text: `${senderName} vám napsal/a zprávu k inzerátu „${listingTitle}":\n\n${content.trim()}\n\nOdpovězte na: ${listingUrl}\nVšechny zprávy: ${messagesUrl}`,
-          html: `
-            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto;">
+        await sendEmail(
+          recipientEmail,
+          `[Lokopolis] Nová zpráva k inzerátu „${listingTitle}"`,
+          `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto;">
               <div style="background: #0f1117; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
                 <h2 style="color: #f0a030; margin: 0; font-size: 20px;">📩 Nová zpráva v bazaru</h2>
               </div>
@@ -173,9 +171,8 @@ export async function POST(req: NextRequest) {
                   Tento email byl odeslán z <a href="https://www.lokopolis.cz" style="color: #f0a030; text-decoration: none;">Lokopolis.cz</a>
                 </p>
               </div>
-            </div>
-          `,
-        });
+            </div>`
+        );
       }
     } catch (emailErr) {
       // Email notification is best-effort — don't fail the message send

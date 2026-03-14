@@ -18,6 +18,7 @@ export default function RegisterForm({
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -36,6 +37,13 @@ export default function RegisterForm({
       setError(
         "Uživatelské jméno musí mít 3–30 znaků a obsahovat pouze písmena, čísla, - nebo _"
       );
+      setLoading(false);
+      return;
+    }
+
+    // Check terms agreement
+    if (!agreedToTerms) {
+      setError("Musíte souhlasit s obchodními podmínkami a ochranou osobních údajů.");
       setLoading(false);
       return;
     }
@@ -79,6 +87,13 @@ export default function RegisterForm({
       setLoading(false);
       return;
     }
+
+    // Send welcome email (non-blocking)
+    fetch("/api/auth/welcome", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, username }),
+    }).catch(() => {});
 
     setSuccess(true);
     setLoading(false);
@@ -181,6 +196,35 @@ export default function RegisterForm({
         />
       </div>
 
+      <label
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          gap: "10px",
+          cursor: "pointer",
+          fontSize: "13px",
+          color: "var(--text-muted)",
+          lineHeight: 1.5,
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={agreedToTerms}
+          onChange={(e) => setAgreedToTerms(e.target.checked)}
+          style={{ marginTop: "3px", accentColor: "var(--accent, #f0a030)" }}
+        />
+        <span>
+          Souhlasím s{" "}
+          <Link href="/obchodni-podminky" target="_blank" className="text-primary hover:underline">
+            obchodními podmínkami
+          </Link>{" "}
+          a{" "}
+          <Link href="/ochrana-udaju" target="_blank" className="text-primary hover:underline">
+            ochranou osobních údajů
+          </Link>
+        </span>
+      </label>
+
       <Turnstile
         onVerify={(token) => setTurnstileToken(token)}
         onExpire={() => setTurnstileToken(null)}
@@ -188,7 +232,7 @@ export default function RegisterForm({
 
       <button
         type="submit"
-        disabled={loading || !turnstileToken}
+        disabled={loading || !turnstileToken || !agreedToTerms}
         className="mt-2 px-6 py-2.5 rounded-lg bg-primary text-bg-dark font-semibold hover:bg-primary-light transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {loading ? "Registrace…" : "Vytvořit účet"}

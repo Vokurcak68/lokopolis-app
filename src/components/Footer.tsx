@@ -115,6 +115,12 @@ export default function Footer() {
             <Link href="/podporte-nas" style={{ display: "block", fontSize: "13px", color: "var(--text-dimmer)", padding: "4px 0", textDecoration: "none" }}>
               Podpořte nás
             </Link>
+            <Link href="/obchodni-podminky" style={{ display: "block", fontSize: "13px", color: "var(--text-dimmer)", padding: "4px 0", textDecoration: "none" }}>
+              Obchodní podmínky
+            </Link>
+            <Link href="/ochrana-udaju" style={{ display: "block", fontSize: "13px", color: "var(--text-dimmer)", padding: "4px 0", textDecoration: "none" }}>
+              Ochrana osobních údajů
+            </Link>
           </div>
         </div>
 

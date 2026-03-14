@@ -3,6 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 import { grantOrderPoints, redeemPoints, applyPointsToOrder } from "@/lib/loyalty";
 import { verifyTurnstile } from "@/lib/turnstile";
 import { getClientIp, honeypotValid, isValidEmail, minFillTimeValid, normalizeText, payloadDigest, rateLimit, replayGuard } from "@/lib/security";
+import { sendEmail } from "@/lib/email";
+import { orderConfirmation, newOrderAdmin } from "@/lib/email-templates";
 
 // Lazy env check - only validate at runtime, not at build time
 function getEnvConfig() {
@@ -398,6 +400,48 @@ export async function POST(req: NextRequest) {
       if (cart) {
         await supabase.from("cart_items").delete().eq("cart_id", cart.id);
       }
+    }
+
+    // Send email notifications (non-blocking)
+    {
+      const emailOrder = {
+        order_number: orderNumber,
+        items: orderItems.map((item) => {
+          const product = products.find((p) => p.id === item.productId);
+          return { ...item, product: product ? { title: product.title } : null };
+        }),
+        price: itemsTotal,
+        total_price: totalPrice,
+        shipping_price: shippingPrice,
+        payment_surcharge: paymentSurcharge,
+        payment_method: payment.slug,
+        coupon_code: appliedCouponCode,
+        coupon_discount: couponDiscount,
+        loyalty_discount: loyaltyDiscount,
+        billing_name: safeName,
+        billing_email: safeEmail,
+        billing_phone: safePhone,
+        billing_street: safeStreet,
+        billing_city: safeCity,
+        billing_zip: safeZip,
+        shipping_name: billing.differentShipping ? safeShippingName : safeName,
+        shipping_street: billing.differentShipping ? safeShippingStreet : safeStreet,
+        shipping_city: billing.differentShipping ? safeShippingCity : safeCity,
+        shipping_zip: billing.differentShipping ? safeShippingZip : safeZip,
+      };
+
+      // Fire and forget — don't block the response
+      const emailPromise = (async () => {
+        try {
+          await Promise.all([
+            sendEmail(safeEmail, `Potvrzení objednávky ${orderNumber}`, orderConfirmation(emailOrder)),
+            sendEmail("info@lokopolis.cz", `🛒 Nová objednávka ${orderNumber}`, newOrderAdmin(emailOrder)),
+          ]);
+        } catch (emailErr) {
+          console.error("Checkout email error:", emailErr);
+        }
+      })();
+      void emailPromise;
     }
 
     // Generate QR payment data for bank transfer / QR payment

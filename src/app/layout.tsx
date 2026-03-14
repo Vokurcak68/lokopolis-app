@@ -7,6 +7,7 @@ import AuthProvider from "@/components/Auth/AuthProvider";
 import ThemeProvider from "@/components/ThemeProvider";
 import { CartProvider } from "@/components/Shop/CartProvider";
 import { WishlistProvider } from "@/components/Shop/WishlistProvider";
+import CookieConsent from "@/components/CookieConsent";
 
 const inter = Inter({
   subsets: ["latin", "latin-ext"],
@@ -72,6 +73,7 @@ export default function RootLayout({
                 <Header />
                 <main className="flex-1">{children}</main>
                 <Footer />
+                <CookieConsent />
               </WishlistProvider>
             </CartProvider>
           </AuthProvider>
