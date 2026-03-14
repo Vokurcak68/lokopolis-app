@@ -14,6 +14,18 @@ export interface Profile {
   role: UserRole;
   loyalty_points: number;
   loyalty_level_id: string | null;
+  phone: string | null;
+  billing_street: string | null;
+  billing_city: string | null;
+  billing_zip: string | null;
+  billing_country: string | null;
+  billing_ico: string | null;
+  billing_dic: string | null;
+  billing_company: string | null;
+  permanent_discount_percent: number;
+  volume_discount_percent: number;
+  volume_discount_threshold: number;
+  volume_discount_period_days: number;
   created_at: string;
   updated_at: string;
 }
