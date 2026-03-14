@@ -7,6 +7,7 @@ import type { ShopProduct } from "@/types/database";
 import { type ShopCategory, getFullCategoryLabel, getCategoryColor } from "@/lib/shop-categories";
 import { useCart } from "./CartProvider";
 import { getStockLabel } from "@/lib/inventory";
+import { getImageVariant } from "@/lib/image-variants";
 
 const SCALE_COLORS: Record<string, string> = {
   TT: "#3b82f6",
@@ -14,13 +15,6 @@ const SCALE_COLORS: Record<string, string> = {
   N: "#a855f7",
   universal: "#6b7280",
 };
-
-function optimizeImageUrl(url: string, width: number = 400): string {
-  if (!url) return "";
-  return url
-    .replace("/object/public/", "/render/image/public/")
-    .concat(`?width=${width}&quality=75`);
-}
 
 interface ProductCardProps {
   product: ShopProduct;
@@ -75,16 +69,16 @@ export default function ProductCard({ product, featured, categories = [] }: Prod
             position: "relative",
             width: "100%",
             paddingBottom: "75%",
-            background: "var(--bg-card)",
+            background: "var(--bg-page)",
             overflow: "hidden",
           }}
         >
           {product.cover_image_url ? (
             <Image
-              src={optimizeImageUrl(product.cover_image_url)}
+              src={getImageVariant(product.cover_image_url, "card")}
               alt={product.title}
               fill
-              style={{ objectFit: "contain" }}
+              style={{ objectFit: "cover" }}
               sizes={featured ? "(max-width: 768px) 100vw, 50vw" : "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"}
             />
           ) : (

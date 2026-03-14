@@ -7,6 +7,7 @@ import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import type { ShopProduct, ShopOrder, ShippingMethod, PaymentMethod, Coupon, LoyaltyLevel } from "@/types/database";
 import { type ShopCategory, buildCategoryTree, type ShopCategoryTreeNode } from "@/lib/shop-categories";
+import { getImageVariant } from "@/lib/image-variants";
 
 const STATUS_LABELS: Record<string, string> = {
   active: "Aktivní",
@@ -177,10 +178,107 @@ export default function AdminShopPage() {
   }, [isAdmin, fetchCategories, fetchProducts, fetchOrders]);
 
   // Upload file
+  // Resize image with different modes
+  async function resizeImage(
+    file: File,
+    targetWidth: number,
+    targetHeight: number,
+    mode: "contain" | "cover"
+  ): Promise<Blob> {
+    return new Promise((resolve, reject) => {
+      const img = new window.Image();
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d")!;
+
+      img.onload = () => {
+        let { width, height } = img;
+        let sx = 0, sy = 0, sw = width, sh = height;
+
+        if (mode === "cover") {
+          // Cover: fill target dimensions, crop excess
+          const targetRatio = targetWidth / targetHeight;
+          const imgRatio = width / height;
+
+          if (imgRatio > targetRatio) {
+            // Image is wider → crop sides
+            sw = height * targetRatio;
+            sx = (width - sw) / 2;
+          } else {
+            // Image is taller → crop top/bottom
+            sh = width / targetRatio;
+            sy = (height - sh) / 2;
+          }
+        } else {
+          // Contain: fit inside, preserve aspect
+          const ratio = Math.min(targetWidth / width, targetHeight / height);
+          targetWidth = Math.round(width * ratio);
+          targetHeight = Math.round(height * ratio);
+        }
+
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, targetWidth, targetHeight);
+
+        canvas.toBlob((blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error("Canvas toBlob failed"));
+        }, "image/jpeg", 0.85);
+      };
+
+      img.onerror = () => reject(new Error("Image load failed"));
+      img.src = URL.createObjectURL(file);
+    });
+  }
+
+  // Upload cover image → create 3 variants (thumb, card, full)
+  async function uploadCoverImage(file: File): Promise<string | null> {
+    if (!file.type.startsWith("image/")) return null;
+
+    try {
+      const timestamp = Date.now();
+      const rand = Math.random().toString(36).slice(2);
+
+      // 1. Thumbnail (200×200, cover crop)
+      const thumbBlob = await resizeImage(file, 200, 200, "cover");
+      const thumbPath = `covers/thumb_${timestamp}_${rand}.jpg`;
+      const { error: thumbErr } = await supabase.storage.from("shop").upload(thumbPath, thumbBlob);
+      if (thumbErr) throw thumbErr;
+
+      // 2. Card (600×450, contain - full image visible)
+      const cardBlob = await resizeImage(file, 600, 450, "contain");
+      const cardPath = `covers/card_${timestamp}_${rand}.jpg`;
+      const { error: cardErr } = await supabase.storage.from("shop").upload(cardPath, cardBlob);
+      if (cardErr) throw cardErr;
+
+      // 3. Full (1200×800, contain)
+      const fullBlob = await resizeImage(file, 1200, 800, "contain");
+      const fullPath = `covers/full_${timestamp}_${rand}.jpg`;
+      const { error: fullErr } = await supabase.storage.from("shop").upload(fullPath, fullBlob);
+      if (fullErr) throw fullErr;
+
+      // Return card_ path (default for display)
+      return cardPath;
+    } catch (err) {
+      console.error("Cover upload error:", err);
+      return null;
+    }
+  }
+
   async function uploadFile(file: File, folder: string): Promise<string | null> {
+    // For cover images, use multi-variant upload
+    if (folder === "covers" && file.type.startsWith("image/")) {
+      return uploadCoverImage(file);
+    }
+
+    // For previews/downloads, keep simple resize
+    let fileToUpload: Blob = file;
+    if (file.type.startsWith("image/")) {
+      fileToUpload = await resizeImage(file, 800, 600, "contain");
+    }
+
     const ext = file.name.split(".").pop() || "bin";
     const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const { error } = await supabase.storage.from("shop").upload(path, file);
+    const { error } = await supabase.storage.from("shop").upload(path, fileToUpload);
     if (error) { console.error("Upload error:", error); return null; }
     return path;
   }
@@ -201,6 +299,7 @@ export default function AdminShopPage() {
         const path = await uploadFile(coverFile, "covers");
         if (path) {
           const { data: { publicUrl } } = supabase.storage.from("shop").getPublicUrl(path);
+          console.log("📸 Cover upload:", { path, publicUrl });
           cover_image_url = publicUrl;
         }
       }
@@ -244,6 +343,8 @@ export default function AdminShopPage() {
         max_per_order: formData.max_per_order,
         cover_image_url, preview_images, file_url, file_name, file_size, file_type,
       };
+
+      console.log("💾 Product data before save:", { cover_image_url, preview_images });
 
       if (editProduct) {
         const { error } = await supabase.from("shop_products").update(productData).eq("id", editProduct.id);
@@ -499,8 +600,8 @@ export default function AdminShopPage() {
                   <tr key={p.id}>
                     <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)" }}>
                       {p.cover_image_url ? (
-                        <div style={{ width: "48px", height: "36px", borderRadius: "4px", overflow: "hidden", position: "relative", background: "var(--bg-card)" }}>
-                          <Image src={p.cover_image_url} alt="" fill style={{ objectFit: "contain" }} sizes="48px" />
+                        <div style={{ width: "48px", height: "36px", borderRadius: "4px", overflow: "hidden", position: "relative" }}>
+                          <Image src={getImageVariant(p.cover_image_url, "thumb")} alt="" fill style={{ objectFit: "cover" }} sizes="48px" />
                         </div>
                       ) : (
                         <div style={{ width: "48px", height: "36px", borderRadius: "4px", background: "var(--bg-page)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px" }}>📦</div>

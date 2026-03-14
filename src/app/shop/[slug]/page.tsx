@@ -11,26 +11,14 @@ import OrderModal from "@/components/Shop/OrderModal";
 import { useCart } from "@/components/Shop/CartProvider";
 import type { ShopProduct } from "@/types/database";
 import { getShopCategories, type ShopCategory } from "@/lib/shop-categories";
+import { getImageVariant } from "@/lib/image-variants";
+
 const SCALE_COLORS: Record<string, string> = {
   TT: "#3b82f6",
   H0: "#22c55e",
   N: "#a855f7",
   universal: "#6b7280",
 };
-
-function optimizeImageUrl(url: string, width: number = 800): string {
-  if (!url) return "";
-  return url
-    .replace("/object/public/", "/render/image/public/")
-    .concat(`?width=${width}&quality=85`);
-}
-
-function thumbUrl(url: string): string {
-  if (!url) return "";
-  return url
-    .replace("/object/public/", "/render/image/public/")
-    .concat("?width=150&quality=75");
-}
 
 function formatSize(bytes: number | null): string {
   if (!bytes) return "";
@@ -207,7 +195,7 @@ export default function ShopProductDetailPage() {
             style={{
               position: "relative",
               width: "100%",
-              paddingBottom: "75%",
+              height: "400px",
               borderRadius: "12px",
               overflow: "hidden",
               background: "var(--bg-card)",
@@ -217,7 +205,7 @@ export default function ShopProductDetailPage() {
           >
             {allImages.length > 0 ? (
               <Image
-                src={optimizeImageUrl(allImages[selectedImage])}
+                src={getImageVariant(allImages[selectedImage], "full")}
                 alt={product.title}
                 fill
                 style={{ objectFit: "contain" }}
@@ -253,7 +241,7 @@ export default function ShopProductDetailPage() {
                     background: "var(--bg-card)",
                   }}
                 >
-                  <Image src={thumbUrl(img)} alt="" fill style={{ objectFit: "cover" }} sizes="64px" />
+                  <Image src={getImageVariant(img, "thumb")} alt="" fill style={{ objectFit: "cover" }} sizes="64px" />
                 </button>
               ))}
             </div>
