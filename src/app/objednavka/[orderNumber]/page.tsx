@@ -45,6 +45,36 @@ export default function OrderConfirmationPage() {
       .catch(() => {});
   }, []);
 
+  // Convert Czech account number (123456789/0800) to IBAN (CZ__0800...)
+  function czechToIBAN(account: string): string {
+    // If already IBAN format
+    if (/^[A-Z]{2}\d{2}/.test(account.replace(/\s/g, ""))) {
+      return account.replace(/\s/g, "");
+    }
+
+    // Parse prefix-number/bankCode
+    const match = account.replace(/\s/g, "").match(/^(?:(\d{1,6})-)?(\d{2,10})\/(\d{4})$/);
+    if (!match) return account; // can't parse, return as-is
+
+    const prefix = (match[1] || "").padStart(6, "0");
+    const number = match[2].padStart(10, "0");
+    const bankCode = match[3];
+
+    // BBAN = bankCode (4) + prefix (6) + number (10) = 20 digits
+    const bban = bankCode + prefix + number;
+
+    // IBAN check: move CZ00 to end → bban + "1235" (C=12, Z=35) + "00"
+    const numStr = bban + "123500";
+    // BigInt modulo 97
+    let remainder = 0n;
+    for (const ch of numStr) {
+      remainder = (remainder * 10n + BigInt(ch)) % 97n;
+    }
+    const checkDigits = (98n - remainder).toString().padStart(2, "0");
+
+    return `CZ${checkDigits}${bban}`;
+  }
+
   // Generate QR code for SPD payment
   useEffect(() => {
     if (!order || !bankAccount) return;
@@ -53,9 +83,8 @@ export default function OrderConfirmationPage() {
 
     const totalPrice = order.total_price || order.price;
     const vs = order.order_number.replace(/\D/g, "");
-    // IBAN format: remove spaces, slashes from Czech account number
-    const acc = bankAccount.replace(/\s/g, "");
-    const spd = `SPD*1.0*ACC:${acc}*AM:${totalPrice.toFixed(2)}*CC:CZK*MSG:${order.order_number}*X-VS:${vs}`;
+    const iban = czechToIBAN(bankAccount);
+    const spd = `SPD*1.0*ACC:${iban}*AM:${totalPrice.toFixed(2)}*CC:CZK*MSG:${order.order_number}*X-VS:${vs}`;
 
     QRCode.toDataURL(spd, { width: 200, margin: 2 })
       .then((url: string) => setQrDataUrl(url))
