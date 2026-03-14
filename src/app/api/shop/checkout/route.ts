@@ -444,19 +444,16 @@ export async function POST(req: NextRequest) {
         shipping_zip: billing.differentShipping ? safeShippingZip : safeZip,
       };
 
-      // Fire and forget — don't block the response
-      const emailPromise = (async () => {
-        try {
-          const shopSettings = await getSettings() as Record<string, any>;
-          await Promise.all([
-            sendEmail(safeEmail, `Potvrzení objednávky ${orderNumber}`, orderConfirmation(emailOrder, shopSettings)),
-            sendEmail("info@lokopolis.cz", `🛒 Nová objednávka ${orderNumber}`, newOrderAdmin(emailOrder, shopSettings)),
-          ]);
-        } catch (emailErr) {
-          console.error("Checkout email error:", emailErr);
-        }
-      })();
-      void emailPromise;
+      // Send emails before returning response (Vercel kills runtime after response)
+      try {
+        const shopSettings = await getSettings() as Record<string, any>;
+        await Promise.all([
+          sendEmail(safeEmail, `Potvrzení objednávky ${orderNumber}`, orderConfirmation(emailOrder, shopSettings)),
+          sendEmail("info@lokopolis.cz", `🛒 Nová objednávka ${orderNumber}`, newOrderAdmin(emailOrder, shopSettings)),
+        ]);
+      } catch (emailErr) {
+        console.error("Checkout email error:", emailErr);
+      }
     }
 
     // Generate QR payment data for bank transfer / QR payment
