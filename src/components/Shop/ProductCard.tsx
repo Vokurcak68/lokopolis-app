@@ -78,7 +78,7 @@ export default function ProductCard({ product, featured, categories = [] }: Prod
               src={getImageVariant(product.cover_image_url, "card")}
               alt={product.title}
               fill
-              style={{ objectFit: "cover" }}
+              style={{ objectFit: "contain" }}
               sizes={featured ? "(max-width: 768px) 100vw, 50vw" : "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"}
             />
           ) : (

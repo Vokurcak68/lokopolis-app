@@ -601,7 +601,7 @@ export default function AdminShopPage() {
                     <td style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)" }}>
                       {p.cover_image_url ? (
                         <div style={{ width: "48px", height: "36px", borderRadius: "4px", overflow: "hidden", position: "relative" }}>
-                          <Image src={getImageVariant(p.cover_image_url, "thumb")} alt="" fill style={{ objectFit: "cover" }} sizes="48px" />
+                          <Image src={getImageVariant(p.cover_image_url, "thumb")} alt="" fill style={{ objectFit: "contain" }} sizes="48px" />
                         </div>
                       ) : (
                         <div style={{ width: "48px", height: "36px", borderRadius: "4px", background: "var(--bg-page)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px" }}>📦</div>
