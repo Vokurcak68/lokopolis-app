@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import BadgeLogo from "./BadgeLogo";
 import UserMenu from "./Auth/UserMenu";
 import { useAuth } from "./Auth/AuthProvider";
@@ -10,17 +10,141 @@ import { useCart } from "./Shop/CartProvider";
 import { supabase } from "@/lib/supabase";
 import AdminNotifications from "./AdminNotifications";
 
-const navItems = [
-  { label: "Domů", href: "/", active: true },
+interface NavLink {
+  label: string;
+  href: string;
+}
+
+interface NavGroup {
+  label: string;
+  children: NavLink[];
+}
+
+type NavItem = NavLink | NavGroup;
+
+function isGroup(item: NavItem): item is NavGroup {
+  return "children" in item;
+}
+
+const navItems: NavItem[] = [
+  { label: "Domů", href: "/" },
   { label: "Články", href: "/clanky" },
-  { label: "Galerie", href: "/galerie" },
-  { label: "Ke stažení", href: "/ke-stazeni" },
-  { label: "Akce", href: "/akce" },
+  {
+    label: "Komunita",
+    children: [
+      { label: "Fórum", href: "/forum" },
+      { label: "Galerie", href: "/galerie" },
+      { label: "Akce", href: "/akce" },
+      { label: "Soutěž", href: "/soutez" },
+    ],
+  },
+  {
+    label: "Obchod",
+    children: [
+      { label: "Shop", href: "/shop" },
+      { label: "Bazar", href: "/bazar" },
+      { label: "Ke stažení", href: "/ke-stazeni" },
+    ],
+  },
+];
+
+// All links flattened (for mobile menu)
+const allLinks: NavLink[] = [
+  { label: "Domů", href: "/" },
+  { label: "Články", href: "/clanky" },
   { label: "Fórum", href: "/forum" },
+  { label: "Galerie", href: "/galerie" },
+  { label: "Akce", href: "/akce" },
+  { label: "Soutěž", href: "/soutez" },
   { label: "Shop", href: "/shop" },
   { label: "Bazar", href: "/bazar" },
-  { label: "Soutěž", href: "/soutez" },
+  { label: "Ke stažení", href: "/ke-stazeni" },
 ];
+
+function NavDropdown({ item }: { item: NavGroup }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  const handleEnter = useCallback(() => {
+    clearTimeout(timeoutRef.current);
+    setOpen(true);
+  }, []);
+
+  const handleLeave = useCallback(() => {
+    timeoutRef.current = setTimeout(() => setOpen(false), 150);
+  }, []);
+
+  useEffect(() => {
+    return () => clearTimeout(timeoutRef.current);
+  }, []);
+
+  return (
+    <div
+      ref={ref}
+      onMouseEnter={handleEnter}
+      onMouseLeave={handleLeave}
+      style={{ position: "relative" }}
+    >
+      <button
+        className="nav-link"
+        onClick={() => setOpen((p) => !p)}
+        style={{
+          background: "none",
+          border: "none",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          gap: "3px",
+          font: "inherit",
+        }}
+      >
+        {item.label}
+        <span style={{ fontSize: "10px", opacity: 0.6 }}>▾</span>
+      </button>
+      {open && (
+        <div
+          style={{
+            position: "absolute",
+            top: "100%",
+            left: "50%",
+            transform: "translateX(-50%)",
+            marginTop: "4px",
+            background: "var(--bg-card)",
+            border: "1px solid var(--border)",
+            borderRadius: "10px",
+            padding: "6px 0",
+            minWidth: "160px",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
+            zIndex: 200,
+          }}
+        >
+          {item.children.map((child) => (
+            <Link
+              key={child.href}
+              href={child.href}
+              onClick={() => setOpen(false)}
+              style={{
+                display: "block",
+                padding: "9px 20px",
+                color: "var(--text-body)",
+                fontSize: "14px",
+                fontWeight: 500,
+                textDecoration: "none",
+                whiteSpace: "nowrap",
+                transition: "background 0.15s",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-page)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+            >
+              {child.label}
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();
@@ -136,16 +260,20 @@ export default function Header() {
           <BadgeLogo size="sm" />
         </Link>
 
-        <nav className="desktop-nav" style={{ gap: 0 }}>
-          {navItems.map((item) => (
-            <Link
-              key={item.href + item.label}
-              href={item.href}
-              className={`nav-link${item.active ? " active" : ""}`}
-            >
-              {item.label}
-            </Link>
-          ))}
+        <nav className="desktop-nav" style={{ gap: 0, alignItems: "center" }}>
+          {navItems.map((item) =>
+            isGroup(item) ? (
+              <NavDropdown key={item.label} item={item} />
+            ) : (
+              <Link
+                key={item.href + item.label}
+                href={item.href}
+                className="nav-link"
+              >
+                {item.label}
+              </Link>
+            )
+          )}
         </nav>
 
         <div className="desktop-actions" style={{ alignItems: "center", gap: "12px" }}>
@@ -267,7 +395,7 @@ export default function Header() {
       {mobileMenuOpen && (
         <nav className="mobile-menu" style={{ padding: "0 20px 16px", borderTop: "1px solid var(--border)" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: "4px", paddingTop: "12px" }}>
-            {navItems.map((item) => (
+            {allLinks.map((item) => (
               <Link
                 key={item.href + item.label}
                 href={item.href}
