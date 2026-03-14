@@ -8,6 +8,7 @@ import { useAuth } from "./Auth/AuthProvider";
 import { useTheme } from "./ThemeProvider";
 import { useCart } from "./Shop/CartProvider";
 import { supabase } from "@/lib/supabase";
+import AdminNotifications from "./AdminNotifications";
 
 const navItems = [
   { label: "Domů", href: "/", active: true },
@@ -152,6 +153,7 @@ export default function Header() {
           <ThemeToggle />
           {user ? (
             <>
+              {isAdmin && <AdminNotifications />}
               {isAdmin && pendingCount > 0 && (
                 <Link
                   href="/admin/clanky"
@@ -284,6 +286,7 @@ export default function Header() {
             <div style={{ paddingTop: "12px", borderTop: "1px solid var(--border)", marginTop: "8px" }}>
               {user ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {isAdmin && <AdminNotifications />}
                   {isAdmin && pendingCount > 0 && (
                     <Link
                       href="/admin/clanky"

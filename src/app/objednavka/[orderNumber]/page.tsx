@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/components/Auth/AuthProvider";
 import type { ShopOrder, OrderItem, ShopProduct, ShippingMethod, PaymentMethod } from "@/types/database";
 
 interface OrderDetail extends ShopOrder {
@@ -27,6 +28,24 @@ export default function OrderConfirmationPage() {
   const orderNumber = params.orderNumber as string;
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+
+  async function downloadInvoice(orderId: string, orderNum: string) {
+    const session = await supabase.auth.getSession();
+    const token = session.data.session?.access_token;
+    if (!token) return;
+    const res = await fetch(`/api/shop/invoice?orderId=${orderId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return;
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `faktura-${orderNum}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   useEffect(() => {
     (async () => {
@@ -307,6 +326,33 @@ export default function OrderConfirmationPage() {
               📥 {item.product?.title}
             </Link>
           ))}
+        </div>
+      )}
+
+      {/* Invoice download */}
+      {user && (
+        <div style={{ marginTop: "16px" }}>
+          <button
+            onClick={() => downloadInvoice(order.id, order.order_number)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "10px 20px",
+              background: "var(--bg-card)",
+              border: "1px solid var(--border)",
+              borderRadius: "8px",
+              color: "var(--text-primary)",
+              fontSize: "14px",
+              fontWeight: 600,
+              cursor: "pointer",
+              transition: "border-color 0.2s",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
+          >
+            📄 Stáhnout fakturu
+          </button>
         </div>
       )}
 

@@ -15,6 +15,9 @@ const csp = [
 ].join('; ');
 
 const nextConfig: NextConfig = {
+  turbopack: {
+    root: process.cwd(),
+  },
   images: {
     loader: "custom",
     loaderFile: "./src/lib/supabase-image-loader.ts",

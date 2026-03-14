@@ -72,6 +72,23 @@ export default function AccountPage() {
   const [passwordMsg, setPasswordMsg] = useState("");
   const [passwordSaving, setPasswordSaving] = useState(false);
 
+  async function downloadInvoice(orderId: string, orderNum: string) {
+    const session = await supabase.auth.getSession();
+    const token = session.data.session?.access_token;
+    if (!token) return;
+    const res = await fetch(`/api/shop/invoice?orderId=${orderId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return;
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `faktura-${orderNum}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   // Load profile data into forms
   useEffect(() => {
     if (!profile) return;
@@ -843,7 +860,7 @@ export default function AccountPage() {
                           </div>
                         )}
                       </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                         <span style={{
                           padding: "4px 10px",
                           borderRadius: "6px",
@@ -857,6 +874,28 @@ export default function AccountPage() {
                         <span style={{ fontWeight: 700, fontSize: "16px", color: "var(--text-primary)", minWidth: "80px", textAlign: "right" }}>
                           {total === 0 ? "Zdarma" : `${total} Kč`}
                         </span>
+                        <button
+                          title="Stáhnout fakturu"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            downloadInvoice(order.id, order.order_number);
+                          }}
+                          style={{
+                            background: "none",
+                            border: "1px solid var(--border)",
+                            borderRadius: "6px",
+                            padding: "4px 8px",
+                            cursor: "pointer",
+                            fontSize: "14px",
+                            lineHeight: 1,
+                            color: "var(--text-muted)",
+                            transition: "border-color 0.2s",
+                            flexShrink: 0,
+                          }}
+                        >
+                          📄
+                        </button>
                       </div>
                     </div>
                   </Link>

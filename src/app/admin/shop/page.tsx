@@ -492,6 +492,23 @@ export default function AdminShopPage() {
     fetchOrders();
   }
 
+  async function downloadInvoice(orderId: string, orderNum: string) {
+    const session = await supabase.auth.getSession();
+    const token = session.data.session?.access_token;
+    if (!token) return;
+    const res = await fetch(`/api/shop/invoice?orderId=${orderId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return;
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `faktura-${orderNum}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   function toggleOrderExpand(order: OrderWithDetails) {
     if (expandedOrderId === order.id) {
       setExpandedOrderId(null);
@@ -802,6 +819,7 @@ export default function AdminShopPage() {
                           {(o.status === "pending" || o.status === "paid") && (
                             <button onClick={() => updateOrderStatus(o.id, "cancelled", o)} style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.08)", color: "#ef4444" }}>✕ Zrušit</button>
                           )}
+                          <button onClick={() => downloadInvoice(o.id, o.order_number)} style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-body)" }}>📄 Faktura</button>
                         </div>
                       </td>
                     </tr>

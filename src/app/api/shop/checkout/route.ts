@@ -402,6 +402,19 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Create admin notification (non-blocking, ignore errors)
+    try {
+      await supabase.from("admin_notifications").insert({
+        type: "new_order",
+        title: `Nova objednavka ${orderNumber}`,
+        message: `${safeName} — ${totalPrice} Kc`,
+        link: "/admin/shop?tab=objednavky",
+      });
+    } catch { /* ignore */ }
+
+    // TODO: new_review notification — reviews are created client-side via supabase,
+    // so notification should be added via database trigger or moved to an API route
+
     // Send email notifications (non-blocking)
     {
       const emailOrder = {
