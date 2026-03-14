@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/components/Auth/AuthProvider";
@@ -67,23 +67,25 @@ export default function CheckoutPage() {
   // Determine if cart is all-digital
   const isAllDigital = items.every((i) => !!i.product.file_url);
 
-  // Pre-fill from profile (name, email, phone, billing address, IČ/DIČ)
+  // Pre-fill from profile (billing_name has priority over display_name)
+  const profileFilledRef = useRef(false);
   useEffect(() => {
-    if (user && profile) {
-      setBilling((b) => ({
-        ...b,
-        name: b.name || profile.billing_name || profile.display_name || "",
-        email: b.email || user.email || "",
-        phone: b.phone || profile.phone || "",
-        street: b.street || profile.billing_street || "",
-        city: b.city || profile.billing_city || "",
-        zip: b.zip || profile.billing_zip || "",
-        country: b.country || profile.billing_country || "CZ",
-        isBusiness: b.isBusiness || !!(profile.billing_ico),
-        ico: b.ico || profile.billing_ico || "",
-        dic: b.dic || profile.billing_dic || "",
-      }));
-    }
+    if (!user || !profile || profileFilledRef.current) return;
+    profileFilledRef.current = true;
+
+    setBilling((b) => ({
+      ...b,
+      name: profile.billing_name || profile.display_name || "",
+      email: user.email || "",
+      phone: profile.phone || "",
+      street: profile.billing_street || "",
+      city: profile.billing_city || "",
+      zip: profile.billing_zip || "",
+      country: profile.billing_country || "CZ",
+      isBusiness: !!(profile.billing_ico),
+      ico: profile.billing_ico || "",
+      dic: profile.billing_dic || "",
+    }));
   }, [user, profile]);
 
   // Load saved delivery addresses
