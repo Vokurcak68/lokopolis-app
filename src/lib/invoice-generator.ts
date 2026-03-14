@@ -70,9 +70,15 @@ export async function generateInvoicePdf(order: ShopOrderWithDetails, settings?:
 
   const invoiceNote = (typeof settings?.invoice_note === "string") ? settings.invoice_note : "";
   // "Nejsme plátci DPH" only when DIČ is empty
-  const supplierNote = supplierDic
-    ? ((typeof settings?.invoice_supplier_note === "string") ? settings.invoice_supplier_note : "Faktura slouží jako daňový doklad.")
-    : "Nejsme plátci DPH.";
+  let supplierNote: string;
+  if (supplierDic) {
+    // Has DIČ → never show "Nejsme plátci DPH" even if stored in DB
+    const customNote = (typeof settings?.invoice_supplier_note === "string") ? settings.invoice_supplier_note : "";
+    const isDefaultNonVat = customNote.toLowerCase().includes("nejsme") && customNote.toLowerCase().includes("dph");
+    supplierNote = isDefaultNonVat ? "Faktura slouží jako daňový doklad." : (customNote || "Faktura slouží jako daňový doklad.");
+  } else {
+    supplierNote = "Nejsme plátci DPH.";
+  }
 
   const pageWidth = 210;
   const margin = 20;
@@ -161,6 +167,7 @@ export async function generateInvoicePdf(order: ShopOrderWithDetails, settings?:
 
   // Customer
   const customerLines: string[] = [];
+  if (order.billing_company) customerLines.push(order.billing_company);
   if (order.billing_street) customerLines.push(order.billing_street);
   const cityZip = [order.billing_zip, order.billing_city].filter(Boolean).join(" ");
   if (cityZip) customerLines.push(cityZip);
