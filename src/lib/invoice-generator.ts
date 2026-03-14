@@ -167,7 +167,9 @@ export async function generateInvoicePdf(order: ShopOrderWithDetails, settings?:
 
   // Customer
   const customerLines: string[] = [];
-  if (order.billing_company) customerLines.push(order.billing_company);
+  const hasCompany = !!order.billing_company;
+  // If company: company is the bold heading, name goes into lines
+  if (hasCompany && order.billing_name) customerLines.push(order.billing_name);
   if (order.billing_street) customerLines.push(order.billing_street);
   const cityZip = [order.billing_zip, order.billing_city].filter(Boolean).join(" ");
   if (cityZip) customerLines.push(cityZip);
@@ -175,7 +177,8 @@ export async function generateInvoicePdf(order: ShopOrderWithDetails, settings?:
   if (order.billing_ico) customerLines.push(`IČ: ${order.billing_ico}`);
   if (order.billing_dic) customerLines.push(`DIČ: ${order.billing_dic}`);
 
-  const cy = drawAddressBlock(midX, "Odběratel", order.billing_name || "", customerLines, y);
+  const customerHeading = hasCompany ? order.billing_company! : (order.billing_name || "");
+  const cy = drawAddressBlock(midX, "Odběratel", customerHeading, customerLines, y);
 
   // Delivery address (only if shipping_street is filled)
   let dy = cy;

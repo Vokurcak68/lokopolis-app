@@ -11,6 +11,7 @@ import type { ShippingMethod, PaymentMethod, UserAddress } from "@/types/databas
 
 interface BillingData {
   name: string;
+  company: string;
   email: string;
   phone: string;
   street: string;
@@ -40,7 +41,7 @@ export default function CheckoutPage() {
   const [error, setError] = useState("");
 
   const [billing, setBilling] = useState<BillingData>({
-    name: "", email: "", phone: "", street: "", city: "", zip: "", country: "CZ",
+    name: "", company: "", email: "", phone: "", street: "", city: "", zip: "", country: "CZ",
     isBusiness: false, ico: "", dic: "",
     differentShipping: false, shippingName: "", shippingCompany: "", shippingStreet: "", shippingCity: "", shippingZip: "", shippingCountry: "CZ",
   });
@@ -76,6 +77,7 @@ export default function CheckoutPage() {
     setBilling((b) => ({
       ...b,
       name: profile.billing_name || "",
+      company: profile.billing_company || "",
       email: user.email || "",
       phone: profile.phone || "",
       street: profile.billing_street || "",
@@ -429,16 +431,22 @@ export default function CheckoutPage() {
             Nakupuji na firmu
           </label>
           {billing.isBusiness && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+            <>
               <div>
-                <label style={labelStyle}>IČ *</label>
-                <input style={inputStyle} value={billing.ico} onChange={(e) => setBilling({ ...billing, ico: e.target.value })} />
+                <label style={labelStyle}>Název firmy *</label>
+                <input style={inputStyle} value={billing.company} onChange={(e) => setBilling({ ...billing, company: e.target.value })} />
               </div>
-              <div>
-                <label style={labelStyle}>DIČ</label>
-                <input style={inputStyle} value={billing.dic} onChange={(e) => setBilling({ ...billing, dic: e.target.value })} />
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                <div>
+                  <label style={labelStyle}>IČ *</label>
+                  <input style={inputStyle} value={billing.ico} onChange={(e) => setBilling({ ...billing, ico: e.target.value })} />
+                </div>
+                <div>
+                  <label style={labelStyle}>DIČ</label>
+                  <input style={inputStyle} value={billing.dic} onChange={(e) => setBilling({ ...billing, dic: e.target.value })} />
+                </div>
               </div>
-            </div>
+            </>
           )}
 
           {/* Different shipping address */}
