@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
@@ -67,11 +67,16 @@ interface CatFormState {
 
 type AdminTab = "products" | "orders" | "categories" | "shipping" | "payments" | "coupons" | "loyalty" | "reviews" | "settings" | "add" | "edit";
 
+const VALID_TABS: AdminTab[] = ["products", "orders", "categories", "shipping", "payments", "coupons", "loyalty", "reviews", "settings", "add"];
+
 export default function AdminShopPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<AdminTab>("products");
+
+  const initialTab = (searchParams.get("tab") || "products") as AdminTab;
+  const [tab, setTab] = useState<AdminTab>(VALID_TABS.includes(initialTab) ? initialTab : "products");
 
   // Categories from DB (flat + all including inactive)
   const [categories, setCategories] = useState<ShopCategory[]>([]);
