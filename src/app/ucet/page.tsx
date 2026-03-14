@@ -21,6 +21,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
 const EMPTY_ADDRESS = {
   label: "Domů",
   full_name: "",
+  company: "",
   street: "",
   city: "",
   zip: "",
@@ -209,6 +210,7 @@ export default function AccountPage() {
     setAddressForm({
       label: a.label,
       full_name: a.full_name,
+      company: a.company || "",
       street: a.street,
       city: a.city,
       zip: a.zip,
@@ -241,6 +243,7 @@ export default function AccountPage() {
         .update({
           label: addressForm.label,
           full_name: addressForm.full_name,
+          company: addressForm.company || null,
           street: addressForm.street,
           city: addressForm.city,
           zip: addressForm.zip,
@@ -265,6 +268,7 @@ export default function AccountPage() {
           user_id: user.id,
           label: addressForm.label,
           full_name: addressForm.full_name,
+          company: addressForm.company || null,
           street: addressForm.street,
           city: addressForm.city,
           zip: addressForm.zip,
@@ -565,6 +569,15 @@ export default function AccountPage() {
                   />
                 </div>
                 <div>
+                  <label style={labelStyle}>Firma / Název</label>
+                  <input
+                    value={addressForm.company}
+                    onChange={(e) => setAddressForm(f => ({ ...f, company: e.target.value }))}
+                    style={inputStyle}
+                    placeholder="Nepovinné — např. název firmy"
+                  />
+                </div>
+                <div>
                   <label style={labelStyle}>Ulice a číslo *</label>
                   <input
                     value={addressForm.street}
@@ -692,6 +705,7 @@ export default function AccountPage() {
                     </div>
                     <div style={{ fontSize: "13px", color: "var(--text-body)", lineHeight: 1.5 }}>
                       <div>{a.full_name}</div>
+                      {a.company && <div style={{ color: "var(--text-dimmer)" }}>{a.company}</div>}
                       <div>{a.street}</div>
                       <div>{a.zip} {a.city}, {a.country}</div>
                       {a.phone && <div style={{ color: "var(--text-dimmer)" }}>📱 {a.phone}</div>}

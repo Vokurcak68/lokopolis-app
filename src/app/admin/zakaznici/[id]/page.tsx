@@ -312,6 +312,7 @@ export default function AdminCustomerDetailPage() {
                   </div>
                   <div style={{ fontSize: "13px", color: "var(--text-body)", lineHeight: 1.5 }}>
                     <div>{a.full_name}</div>
+                    {a.company && <div style={{ color: "var(--text-dimmer)" }}>{a.company}</div>}
                     <div>{a.street}</div>
                     <div>{a.zip} {a.city}</div>
                     <div>{a.country}</div>

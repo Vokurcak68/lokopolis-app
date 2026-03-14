@@ -38,6 +38,7 @@ export interface UserAddress {
   user_id: string;
   label: string;
   full_name: string;
+  company: string | null;
   street: string;
   city: string;
   zip: string;
