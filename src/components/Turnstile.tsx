@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
@@ -23,13 +23,35 @@ declare global {
 export default function Turnstile({ onVerify, onExpire }: TurnstileProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
+  const onVerifyRef = useRef(onVerify);
+  const onExpireRef = useRef(onExpire);
   const [scriptLoaded, setScriptLoaded] = useState(false);
+  const renderedRef = useRef(false);
+
+  // Keep refs up to date without re-triggering render effect
+  onVerifyRef.current = onVerify;
+  onExpireRef.current = onExpire;
+
+  const handleVerify = useCallback((token: string) => {
+    onVerifyRef.current(token);
+  }, []);
+
+  const handleExpire = useCallback(() => {
+    onExpireRef.current?.();
+  }, []);
 
   useEffect(() => {
     // Load Turnstile script if not already loaded
-    if (document.querySelector('script[src*="turnstile"]')) {
-      if (window.turnstile) setScriptLoaded(true);
+    if (window.turnstile) {
+      setScriptLoaded(true);
       return;
+    }
+    if (document.querySelector('script[src*="turnstile"]')) {
+      // Script tag exists but not loaded yet — wait for it
+      const check = setInterval(() => {
+        if (window.turnstile) { setScriptLoaded(true); clearInterval(check); }
+      }, 100);
+      return () => clearInterval(check);
     }
 
     window.onTurnstileLoad = () => setScriptLoaded(true);
@@ -47,26 +69,24 @@ export default function Turnstile({ onVerify, onExpire }: TurnstileProps) {
   useEffect(() => {
     if (!TURNSTILE_SITE_KEY) return;
     if (!scriptLoaded || !containerRef.current || !window.turnstile) return;
-
-    // Remove old widget if re-rendering
-    if (widgetIdRef.current) {
-      window.turnstile.remove(widgetIdRef.current);
-    }
+    if (renderedRef.current) return; // Already rendered — don't re-render
 
     widgetIdRef.current = window.turnstile.render(containerRef.current, {
       sitekey: TURNSTILE_SITE_KEY,
       theme: "dark",
-      callback: (token: string) => onVerify(token),
-      "expired-callback": () => onExpire?.(),
+      callback: handleVerify,
+      "expired-callback": handleExpire,
     });
+    renderedRef.current = true;
 
     return () => {
       if (widgetIdRef.current && window.turnstile) {
-        try { window.turnstile.remove(widgetIdRef.current); } catch {}
+        try { window.turnstile.remove(widgetIdRef.current); } catch { /* ignore */ }
         widgetIdRef.current = null;
+        renderedRef.current = false;
       }
     };
-  }, [scriptLoaded, onVerify, onExpire]);
+  }, [scriptLoaded, handleVerify, handleExpire]);
 
   if (!TURNSTILE_SITE_KEY) {
     return (
