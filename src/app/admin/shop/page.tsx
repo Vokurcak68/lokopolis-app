@@ -852,7 +852,7 @@ export default function AdminShopPage() {
                         })()}
                       </td>
                       <td style={{ padding: "10px 12px", borderBottom: expandedOrderId === o.id ? "none" : "1px solid var(--border)", fontSize: "13px", color: "var(--text-dimmer)" }}>
-                        {new Date(o.created_at).toLocaleDateString("cs-CZ")}
+                        {new Date(o.created_at).toLocaleDateString("cs-CZ")}{" "}{new Date(o.created_at).toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" })}
                         {o.billing_email && <div style={{ fontSize: "11px", color: "var(--text-dimmer)" }}>{o.billing_email}</div>}
                       </td>
                       <td style={{ padding: "10px 12px", borderBottom: expandedOrderId === o.id ? "none" : "1px solid var(--border)" }} onClick={(e) => e.stopPropagation()}>
