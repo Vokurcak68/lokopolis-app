@@ -112,7 +112,7 @@ export async function generateInvoicePdf(order: ShopOrderWithDetails, settings?:
   const mainTextW = lokoW + polisW;
 
   // Badge rozměry
-  const padX = 8;
+  const padX = 4;
   const logoW = mainTextW + padX * 2;
   const logoH = 19;
   const centerX = logoX + logoW / 2;
