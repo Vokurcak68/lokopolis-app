@@ -112,6 +112,8 @@ function addressBlock(label: string, order: any, prefix: string = "billing"): st
   const street = order[`${prefix}_street`];
   const city = order[`${prefix}_city`];
   const zip = order[`${prefix}_zip`];
+  const email = order[`${prefix}_email`];
+  const phone = order[`${prefix}_phone`];
   if (!name && !street) return "";
   return `
     <div style="margin-top:16px;">
@@ -119,6 +121,8 @@ function addressBlock(label: string, order: any, prefix: string = "billing"): st
       ${esc(name)}<br>
       ${street ? esc(street) + "<br>" : ""}
       ${city ? esc(city) : ""} ${zip ? esc(zip) : ""}
+      ${email ? `<br>${esc(email)}` : ""}
+      ${phone ? `<br>Tel: ${esc(phone)}` : ""}
     </div>`;
 }
 
