@@ -124,10 +124,10 @@ export async function generateInvoicePdf(order: ShopOrderWithDetails, settings?:
   doc.roundedRect(logoX, logoY, logoW, logoH, 2.5, 2.5, "S");
 
   // · EST. 2026 · — těsně nad LOKOPOLIS
-  doc.setFontSize(7);
+  doc.setFontSize(8.5);
   doc.setFont("Roboto", "normal");
   doc.setTextColor(...accentColor);
-  doc.text("\u00B7  EST. 2026  \u00B7", centerX, midY - 5.5, { align: "center" });
+  doc.text("\u00B7  EST. 2026  \u00B7", centerX, midY - 4, { align: "center" });
 
   // LOKO (tmavá) + POLIS (accent) — velké, tučné, centrované
   doc.setFontSize(mainFs);
@@ -139,10 +139,10 @@ export async function generateInvoicePdf(order: ShopOrderWithDetails, settings?:
   doc.text("POLIS", textStartX + lokoW, midY + 3);
 
   // MODELOVÁ ŽELEZNICE — těsně pod LOKOPOLIS
-  doc.setFontSize(5.5);
+  doc.setFontSize(7);
   doc.setFont("Roboto", "normal");
   doc.setTextColor(...mutedColor);
-  doc.text("MODELOV\u00C1 \u017DELEZNICE", centerX, midY + 8.5, { align: "center" });
+  doc.text("MODELOV\u00C1 \u017DELEZNICE", centerX, midY + 7.5, { align: "center" });
 
   // FAKTURA — vedle loga
   y = midY + 3;
