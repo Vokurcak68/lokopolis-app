@@ -502,14 +502,17 @@ export default function AdminShopPage() {
     // Auto-grant purchases + confirm stock sale when marking as paid
     if (newStatus === "paid") {
       const { data: order } = await supabase.from("shop_orders").select("*").eq("id", orderId).single();
-      if (order?.user_id) {
+      if (order) {
         // Grant from order_items (new multi-product flow)
         const { data: items } = await supabase.from("order_items").select("product_id, quantity").eq("order_id", orderId);
         if (items && items.length > 0) {
           for (const item of items) {
-            await supabase.from("user_purchases").upsert({ user_id: order.user_id, product_id: item.product_id, order_id: orderId }, { onConflict: "user_id,product_id" }).select();
+            // Grant user_purchases only for registered users
+            if (order.user_id) {
+              await supabase.from("user_purchases").upsert({ user_id: order.user_id, product_id: item.product_id, order_id: orderId }, { onConflict: "user_id,product_id" }).select();
+            }
             
-            // Confirm stock sale (deduct quantity + reserved)
+            // Confirm stock sale (deduct quantity + reserved) — for all orders
             await supabase.rpc("confirm_sale", {
               p_product_id: item.product_id,
               p_quantity: item.quantity,
@@ -518,7 +521,9 @@ export default function AdminShopPage() {
           }
         } else if (order.product_id) {
           // Legacy single-product order
-          await supabase.from("user_purchases").upsert({ user_id: order.user_id, product_id: order.product_id, order_id: orderId }, { onConflict: "user_id,product_id" }).select();
+          if (order.user_id) {
+            await supabase.from("user_purchases").upsert({ user_id: order.user_id, product_id: order.product_id, order_id: orderId }, { onConflict: "user_id,product_id" }).select();
+          }
           
           // Confirm stock sale for legacy
           await supabase.rpc("confirm_sale", {
@@ -850,7 +855,9 @@ export default function AdminShopPage() {
                         <span style={{ marginRight: "6px", fontSize: "10px" }}>{expandedOrderId === o.id ? "▼" : "▶"}</span>
                         {o.order_number}
                       </td>
-                      <td style={{ padding: "10px 12px", borderBottom: expandedOrderId === o.id ? "none" : "1px solid var(--border)", fontSize: "13px", color: "var(--text-body)" }}>{o.user?.display_name || o.user?.username || "—"}</td>
+                      <td style={{ padding: "10px 12px", borderBottom: expandedOrderId === o.id ? "none" : "1px solid var(--border)", fontSize: "13px", color: "var(--text-body)" }}>
+                        {o.user?.display_name || o.user?.username || (o.guest_name ? <span title={o.guest_email || ""}>{o.guest_name} <span style={{ fontSize: "10px", padding: "1px 5px", borderRadius: "3px", background: "rgba(245,158,11,0.15)", color: "#f59e0b", fontWeight: 600, verticalAlign: "middle" }}>host</span></span> : o.billing_name || "—")}
+                      </td>
                       <td style={{ padding: "10px 12px", borderBottom: expandedOrderId === o.id ? "none" : "1px solid var(--border)", fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>{o.total_price || o.price} Kč</td>
                       <td style={{ padding: "10px 12px", borderBottom: expandedOrderId === o.id ? "none" : "1px solid var(--border)" }}>
                         {(() => {
@@ -951,6 +958,16 @@ export default function AdminShopPage() {
                                 </div>
                               </div>
                             </div>
+
+                            {/* === Guest info === */}
+                            {!o.user_id && o.guest_email && (
+                              <div style={{ padding: "10px 14px", background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: "8px" }}>
+                                <span style={{ fontWeight: 700, fontSize: "13px", color: "#f59e0b" }}>👤 Host: </span>
+                                <span style={{ fontSize: "13px", color: "var(--text-body)" }}>{o.guest_name || o.billing_name || "—"}</span>
+                                <span style={{ fontSize: "13px", color: "var(--text-muted)" }}> · {o.guest_email}</span>
+                                {o.guest_phone && <span style={{ fontSize: "13px", color: "var(--text-muted)" }}> · {o.guest_phone}</span>}
+                              </div>
+                            )}
 
                             {/* === Výdejní místo === */}
                             {(o as any).pickup_point_name && (

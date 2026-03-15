@@ -406,6 +406,33 @@ export default function CheckoutPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <h2 style={{ fontSize: "20px", fontWeight: 600, color: "var(--text-primary)" }}>Fakturační údaje</h2>
 
+          {/* Guest checkout notice */}
+          {!user && (
+            <div style={{
+              padding: "12px 16px",
+              background: "rgba(59,130,246,0.06)",
+              border: "1px solid rgba(59,130,246,0.2)",
+              borderRadius: "10px",
+              fontSize: "13px",
+              color: "var(--text-body)",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+            }}>
+              <span style={{ fontSize: "16px" }}>🛒</span>
+              <span>
+                Nakupujete jako host. Chcete využít věrnostní body a mít přehled objednávek?{" "}
+                <Link href="/registrace" style={{ color: "var(--accent)", fontWeight: 600, textDecoration: "none" }}>
+                  Vytvořte si účet
+                </Link>{" "}
+                nebo se{" "}
+                <Link href="/prihlaseni" style={{ color: "var(--accent)", fontWeight: 600, textDecoration: "none" }}>
+                  přihlaste
+                </Link>.
+              </span>
+            </div>
+          )}
+
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
             <div>
               <label style={labelStyle}>Jméno a příjmení *</label>

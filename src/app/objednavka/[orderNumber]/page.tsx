@@ -94,22 +94,55 @@ export default function OrderConfirmationPage() {
   async function downloadInvoice(orderId: string, orderNum: string) {
     const session = await supabase.auth.getSession();
     const token = session.data.session?.access_token;
-    if (!token) return;
-    const res = await fetch(`/api/shop/invoice?orderId=${orderId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+
+    // Build URL — for guests, pass email for verification
+    let url = `/api/shop/invoice?orderId=${orderId}`;
+    if (!token && order?.guest_email) {
+      url += `&email=${encodeURIComponent(order.guest_email)}`;
+    }
+
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const res = await fetch(url, { headers });
     if (!res.ok) return;
     const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
+    const blobUrl = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url;
+    a.href = blobUrl;
     a.download = `faktura-${orderNum}.pdf`;
     a.click();
-    URL.revokeObjectURL(url);
+    URL.revokeObjectURL(blobUrl);
   }
 
   useEffect(() => {
     (async () => {
+      // Try API route first (works for both guests and logged-in users)
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      const apiRes = await fetch(`/api/shop/order?orderNumber=${encodeURIComponent(orderNumber)}`, { headers });
+
+      if (apiRes.ok) {
+        const data = await apiRes.json();
+        setOrder({
+          ...data,
+          items: data.items || [],
+          shipping: data.shipping || null,
+          paymentObj: data.paymentObj || null,
+        } as OrderDetail);
+        setLoading(false);
+        return;
+      }
+
+      // Fallback: direct Supabase query (logged-in users with RLS)
       const { data: orderData } = await supabase
         .from("shop_orders")
         .select("*")
@@ -140,7 +173,6 @@ export default function OrderConfirmationPage() {
           product: (products?.find((p) => p.id === item.product_id) as ShopProduct) || null,
         }));
       } else if (orderData.product_id) {
-        // Legacy single-product order
         const { data: product } = await supabase
           .from("shop_products")
           .select("*")
@@ -162,7 +194,6 @@ export default function OrderConfirmationPage() {
         }
       }
 
-      // Load shipping/payment
       let shipping: ShippingMethod | null = null;
       let paymentObj: PaymentMethod | null = null;
 
@@ -402,29 +433,64 @@ export default function OrderConfirmationPage() {
       )}
 
       {/* Invoice download */}
-      {user && (
-        <div style={{ marginTop: "16px" }}>
-          <button
-            onClick={() => downloadInvoice(order.id, order.order_number)}
+      <div style={{ marginTop: "16px" }}>
+        <button
+          onClick={() => downloadInvoice(order.id, order.order_number)}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px",
+            padding: "10px 20px",
+            background: "var(--bg-card)",
+            border: "1px solid var(--border)",
+            borderRadius: "8px",
+            color: "var(--text-primary)",
+            fontSize: "14px",
+            fontWeight: 600,
+            cursor: "pointer",
+            transition: "border-color 0.2s",
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
+        >
+          📄 Stáhnout fakturu
+        </button>
+      </div>
+
+      {/* Guest: CTA to create account */}
+      {!user && order.guest_email && (
+        <div
+          style={{
+            marginTop: "24px",
+            padding: "20px",
+            background: "rgba(139,92,246,0.06)",
+            border: "1px solid rgba(139,92,246,0.25)",
+            borderRadius: "12px",
+            textAlign: "center",
+          }}
+        >
+          <p style={{ fontSize: "15px", color: "var(--text-primary)", marginBottom: "12px", fontWeight: 600 }}>
+            🎉 Chcete si vytvořit účet?
+          </p>
+          <p style={{ fontSize: "13px", color: "var(--text-muted)", marginBottom: "16px" }}>
+            Získáte přehled objednávek, věrnostní body a rychlejší nákupy příště.
+          </p>
+          <Link
+            href={`/registrace?email=${encodeURIComponent(order.guest_email)}`}
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              padding: "10px 20px",
-              background: "var(--bg-card)",
-              border: "1px solid var(--border)",
+              display: "inline-block",
+              padding: "10px 24px",
+              background: "var(--accent)",
+              color: "var(--accent-text-on)",
               borderRadius: "8px",
-              color: "var(--text-primary)",
               fontSize: "14px",
               fontWeight: 600,
-              cursor: "pointer",
-              transition: "border-color 0.2s",
+              textDecoration: "none",
+              transition: "opacity 0.2s",
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
           >
-            📄 Stáhnout fakturu
-          </button>
+            Vytvořit účet
+          </Link>
         </div>
       )}
 
@@ -433,9 +499,11 @@ export default function OrderConfirmationPage() {
         <Link href="/shop" style={{ color: "var(--accent)", textDecoration: "none", fontSize: "14px", fontWeight: 600 }}>
           ← Zpět do shopu
         </Link>
-        <Link href="/objednavky" style={{ color: "var(--text-muted)", textDecoration: "none", fontSize: "14px" }}>
-          Moje objednávky
-        </Link>
+        {user && (
+          <Link href="/objednavky" style={{ color: "var(--text-muted)", textDecoration: "none", fontSize: "14px" }}>
+            Moje objednávky
+          </Link>
+        )}
       </div>
     </div>
   );

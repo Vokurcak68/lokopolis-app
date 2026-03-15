@@ -481,6 +481,9 @@ export interface ShopOrder {
   shipping_price: number;
   payment_surcharge: number;
   total_price: number | null;
+  guest_email: string | null;
+  guest_name: string | null;
+  guest_phone: string | null;
   billing_name: string | null;
   billing_email: string | null;
   billing_phone: string | null;

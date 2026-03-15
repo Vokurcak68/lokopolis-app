@@ -1,184 +1,147 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { sendEmail } from "@/lib/email";
-import { verifyTurnstile } from "@/lib/turnstile";
-import { getClientIp, honeypotValid, minFillTimeValid, normalizeText, payloadDigest, rateLimit, replayGuard } from "@/lib/security";
 
 function getEnvConfig() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
   if (!supabaseUrl || !supabaseServiceKey) {
-    throw new Error("Missing required env vars: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY");
+    throw new Error("Missing required env vars");
   }
-
   return { supabaseUrl, supabaseServiceKey };
 }
 
-export async function POST(req: NextRequest) {
+/**
+ * GET /api/shop/order?orderNumber=LKP-2026-12345
+ *
+ * For guest orders: returns order details without auth (order number is the secret).
+ * For logged-in users: validates ownership or admin role.
+ */
+export async function GET(req: NextRequest) {
   try {
     const config = getEnvConfig();
+    const { searchParams } = new URL(req.url);
+    const orderNumber = searchParams.get("orderNumber");
 
-    const ip = getClientIp(req);
-    const rl = rateLimit(`shop-order:${ip}`, 10, 60_000);
-    if (!rl.ok) {
-      return NextResponse.json({ error: "Příliš mnoho pokusů, zkus to za chvíli." }, { status: 429 });
-    }
-
-    const body = await req.json();
-    const { productId, notes, turnstileToken, website, startedAt } = body;
-
-    if (!honeypotValid(website)) {
-      return NextResponse.json({ error: "Požadavek byl zablokován." }, { status: 400 });
-    }
-
-    if (!minFillTimeValid(startedAt, 2500)) {
-      return NextResponse.json({ error: "Formulář byl odeslán příliš rychle." }, { status: 400 });
-    }
-
-    if (!turnstileToken) {
-      return NextResponse.json({ error: "Chybí anti-bot ověření." }, { status: 400 });
-    }
-
-    const turnstileOk = await verifyTurnstile(turnstileToken, ip);
-    if (!turnstileOk) {
-      return NextResponse.json({ error: "Anti-bot ověření selhalo." }, { status: 403 });
-    }
-
-    if (!productId) {
-      return NextResponse.json({ error: "Chybí productId" }, { status: 400 });
-    }
-
-    const safeNotes = normalizeText(notes || "", 1000) || null;
-
-    const replayKey = `shop-order:${ip}:${payloadDigest({ productId, safeNotes })}`;
-    if (!replayGuard(replayKey, 120000)) {
-      return NextResponse.json({ error: "Duplicitní objednávka. Zkus to za chvíli znovu." }, { status: 409 });
-    }
-
-    // Get auth token
-    const authHeader = req.headers.get("authorization");
-    const token = authHeader?.replace("Bearer ", "");
-
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!anonKey) {
-      return NextResponse.json({ error: "Server config error" }, { status: 500 });
-    }
-
-    const userClient = createClient(config.supabaseUrl, anonKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-      global: token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
-    });
-
-    const { data: { user } } = await userClient.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: "Nepřihlášen" }, { status: 401 });
+    if (!orderNumber) {
+      return NextResponse.json({ error: "Chybí orderNumber" }, { status: 400 });
     }
 
     const supabase = createClient(config.supabaseUrl, config.supabaseServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    // Get product
-    const { data: product, error: productError } = await supabase
-      .from("shop_products")
-      .select("*")
-      .eq("id", productId)
-      .eq("status", "active")
-      .single();
-
-    if (productError || !product) {
-      return NextResponse.json({ error: "Produkt nenalezen" }, { status: 404 });
-    }
-
-    // Check for existing pending order or purchase
-    const { data: existingPurchase } = await supabase
-      .from("user_purchases")
-      .select("id")
-      .eq("user_id", user.id)
-      .eq("product_id", productId)
-      .maybeSingle();
-
-    if (existingPurchase) {
-      return NextResponse.json({ error: "Tento produkt již vlastníte" }, { status: 400 });
-    }
-
-    // Generate order number
-    const { data: orderNumData, error: orderNumError } = await supabase.rpc("generate_order_number");
-    if (orderNumError || !orderNumData) {
-      return NextResponse.json({ error: "Nepodařilo se vytvořit číslo objednávky" }, { status: 500 });
-    }
-
-    const orderNumber = orderNumData as string;
-    const isFree = product.price === 0;
-
-    // Create order
-    const { data: order, error: orderError } = await supabase
+    // Fetch order with items, shipping, payment
+    const { data: order, error } = await supabase
       .from("shop_orders")
-      .insert({
-        order_number: orderNumber,
-        user_id: user.id,
-        product_id: productId,
-        price: product.price,
-        status: isFree ? "paid" : "pending",
-        payment_method: isFree ? "free" : "bank_transfer",
-        notes: safeNotes,
-        paid_at: isFree ? new Date().toISOString() : null,
-      })
-      .select()
+      .select("*")
+      .eq("order_number", orderNumber)
       .single();
 
-    if (orderError || !order) {
-      return NextResponse.json({ error: "Nepodařilo se vytvořit objednávku" }, { status: 500 });
+    if (error || !order) {
+      return NextResponse.json({ error: "Objednávka nenalezena" }, { status: 404 });
     }
 
-    // If free, auto-create purchase
-    if (isFree) {
-      await supabase.from("user_purchases").insert({
-        user_id: user.id,
-        product_id: productId,
-        order_id: order.id,
+    // Auth check: if order has user_id, verify the requesting user
+    if (order.user_id) {
+      const authHeader = req.headers.get("authorization");
+      const token = authHeader?.replace("Bearer ", "") || "";
+
+      if (!token) {
+        return NextResponse.json({ error: "Nepřihlášen" }, { status: 401 });
+      }
+
+      const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      if (!anonKey) {
+        return NextResponse.json({ error: "Server config error" }, { status: 500 });
+      }
+
+      const userClient = createClient(config.supabaseUrl, anonKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+        global: { headers: { Authorization: `Bearer ${token}` } },
       });
-    } else {
-      // Send email notification for paid orders
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("username, display_name")
-        .eq("id", user.id)
-        .single();
+      const { data: { user } } = await userClient.auth.getUser(token);
 
-      const username = profile?.display_name || profile?.username || user.email || "Neznámý";
+      if (!user) {
+        return NextResponse.json({ error: "Nepřihlášen" }, { status: 401 });
+      }
 
-      try {
-        await sendEmail(
-          "info@lokopolis.cz",
-          `Nová objednávka ${orderNumber}`,
-          `
-            <h2>Nová objednávka ${orderNumber}</h2>
-            <p><strong>Produkt:</strong> ${String(product.title).replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>
-            <p><strong>Cena:</strong> ${product.price} Kč</p>
-            <p><strong>Od:</strong> ${String(username).replace(/</g, "&lt;").replace(/>/g, "&gt;")} (${String(user.email || "").replace(/</g, "&lt;").replace(/>/g, "&gt;")})</p>
-            ${safeNotes ? `<p><strong>Poznámka:</strong> ${safeNotes.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>` : ""}
-            <p><a href="https://lokopolis.cz/admin/shop">Otevřít admin panel</a></p>
-          `,
-          {
-            text: `Nová objednávka ${orderNumber}\n\nProdukt: ${product.title}\nCena: ${product.price} Kč\nOd: ${username} (${user.email})\n${safeNotes ? `Poznámka: ${safeNotes}\n` : ""}\nPro potvrzení platby jděte do admin panelu: /admin/shop`,
-            from: '"Lokopolis Shop" <info@lokopolis.cz>',
-          }
-        );
-      } catch (emailError) {
-        console.error("Email send error:", emailError);
-        // Objednávka se nevyhází kvůli chybě emailu
+      // Check ownership or admin
+      if (user.id !== order.user_id) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .single();
+        if (profile?.role !== "admin") {
+          return NextResponse.json({ error: "Nemáte oprávnění" }, { status: 403 });
+        }
       }
     }
 
+    // Guest orders (user_id is null) are accessible by order_number alone
+    // The order number is only shared with the customer via email
+
+    // Load items
+    const { data: items } = await supabase
+      .from("order_items")
+      .select("*")
+      .eq("order_id", order.id);
+
+    let enrichedItems: any[] = [];
+    if (items && items.length > 0) {
+      const productIds = items.map((i: any) => i.product_id);
+      const { data: products } = await supabase
+        .from("shop_products")
+        .select("id, title, slug, file_url, vat_rate")
+        .in("id", productIds);
+
+      enrichedItems = items.map((item: any) => ({
+        ...item,
+        product: products?.find((p: any) => p.id === item.product_id) || null,
+      }));
+    } else if (order.product_id) {
+      const { data: product } = await supabase
+        .from("shop_products")
+        .select("id, title, slug, file_url, vat_rate, price")
+        .eq("id", order.product_id)
+        .single();
+
+      if (product) {
+        enrichedItems = [{
+          id: "legacy",
+          order_id: order.id,
+          product_id: order.product_id,
+          quantity: 1,
+          unit_price: order.price,
+          total_price: order.price,
+          vat_rate: product.vat_rate ?? 21,
+          created_at: order.created_at,
+          product,
+        }];
+      }
+    }
+
+    // Load shipping/payment
+    let shipping = null;
+    let paymentObj = null;
+
+    if (order.shipping_method_id) {
+      const { data } = await supabase.from("shipping_methods").select("*").eq("id", order.shipping_method_id).single();
+      shipping = data;
+    }
+    if (order.payment_method_id) {
+      const { data } = await supabase.from("payment_methods").select("*").eq("id", order.payment_method_id).single();
+      paymentObj = data;
+    }
+
     return NextResponse.json({
-      orderNumber,
-      orderId: order.id,
-      status: isFree ? "paid" : "pending",
+      ...order,
+      items: enrichedItems,
+      shipping,
+      paymentObj,
     });
-  } catch (error) {
-    console.error("Order error:", error);
-    return NextResponse.json({ error: "Chyba serveru" }, { status: 500 });
+  } catch (err) {
+    console.error("Order fetch error:", err);
+    return NextResponse.json({ error: "Interní chyba serveru" }, { status: 500 });
   }
 }

@@ -25,42 +25,42 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Chybí orderId" }, { status: 400 });
     }
 
-    // Authenticate user
-    const authHeader = req.headers.get("authorization");
-    const token = authHeader?.replace("Bearer ", "") || "";
-
-    if (!token) {
-      return NextResponse.json({ error: "Nepřihlášen" }, { status: 401 });
-    }
-
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!anonKey) {
-      return NextResponse.json({ error: "Server config error" }, { status: 500 });
-    }
-
-    const userClient = createClient(config.supabaseUrl, anonKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-      global: { headers: { Authorization: `Bearer ${token}` } },
-    });
-
-    const { data: { user } } = await userClient.auth.getUser(token);
-    if (!user) {
-      return NextResponse.json({ error: "Nepřihlášen" }, { status: 401 });
-    }
-
     // Use service role for data fetching
     const supabase = createClient(config.supabaseUrl, config.supabaseServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    // Check if admin
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
+    // Authenticate user (optional — guest can use email verification)
+    const authHeader = req.headers.get("authorization");
+    const token = authHeader?.replace("Bearer ", "") || "";
+    const guestEmail = searchParams.get("email")?.toLowerCase().trim() || "";
 
-    const isAdmin = profile?.role === "admin";
+    let userId: string | null = null;
+    let isAdmin = false;
+
+    if (token) {
+      const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      if (!anonKey) {
+        return NextResponse.json({ error: "Server config error" }, { status: 500 });
+      }
+
+      const userClient = createClient(config.supabaseUrl, anonKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+        global: { headers: { Authorization: `Bearer ${token}` } },
+      });
+
+      const { data: { user } } = await userClient.auth.getUser(token);
+      userId = user?.id || null;
+
+      if (userId) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", userId)
+          .single();
+        isAdmin = profile?.role === "admin";
+      }
+    }
 
     // Get order
     const { data: order, error: orderErr } = await supabase
@@ -73,8 +73,10 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Objednávka nenalezena" }, { status: 404 });
     }
 
-    // Authorization check: owner or admin
-    if (!isAdmin && order.user_id !== user.id) {
+    // Authorization check: owner, admin, or guest with matching email
+    const isOwner = userId && order.user_id === userId;
+    const isGuestWithEmail = !order.user_id && guestEmail && order.guest_email === guestEmail;
+    if (!isAdmin && !isOwner && !isGuestWithEmail) {
       return NextResponse.json({ error: "Nemáte oprávnění" }, { status: 403 });
     }
 

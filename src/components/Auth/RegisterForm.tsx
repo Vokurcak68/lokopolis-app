@@ -7,10 +7,12 @@ import Turnstile from "@/components/Turnstile";
 
 export default function RegisterForm({
   onSuccess,
+  defaultEmail,
 }: {
   onSuccess?: () => void;
+  defaultEmail?: string;
 }) {
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(defaultEmail || "");
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [username, setUsername] = useState("");

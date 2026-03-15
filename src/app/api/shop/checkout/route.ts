@@ -287,6 +287,7 @@ export async function POST(req: NextRequest) {
 
     // Create order
     const orderNumber = generateOrderNumber();
+    const isGuest = !userId;
     const { data: order, error: orderErr } = await supabase
       .from("shop_orders")
       .insert({
@@ -301,6 +302,10 @@ export async function POST(req: NextRequest) {
         shipping_price: shippingPrice,
         payment_surcharge: paymentSurcharge,
         total_price: totalPrice,
+        // Guest fields — stored only when no user account
+        guest_email: isGuest ? safeEmail : null,
+        guest_name: isGuest ? safeName : null,
+        guest_phone: isGuest ? safePhone : null,
         billing_name: safeName,
         billing_email: safeEmail,
         billing_phone: safePhone,
