@@ -151,11 +151,23 @@ export async function generateInvoicePdf(order: ShopOrderWithDetails, settings?:
   doc.setFont("Roboto", "bold");
   doc.text("FAKTURA", logoX + logoW + 10, y);
 
-  doc.setTextColor(...textColor);
   doc.setFontSize(11);
-  doc.setFont("Roboto", "normal");
   const orderNum = order.order_number || "";
-  doc.text(`Číslo: ${orderNum}`, pageWidth - margin, y - 8, { align: "right" });
+  // Label normální, číslo tučně
+  doc.setTextColor(...mutedColor);
+  doc.setFont("Roboto", "normal");
+  const labelText = "Číslo faktury: ";
+  const labelW = doc.getTextWidth(labelText);
+  doc.setFont("Roboto", "bold");
+  const numW = doc.getTextWidth(orderNum);
+  const totalW = labelW + numW;
+  const numStartX = pageWidth - margin - totalW;
+  doc.setFont("Roboto", "normal");
+  doc.setTextColor(...mutedColor);
+  doc.text(labelText, numStartX, y - 8);
+  doc.setFont("Roboto", "bold");
+  doc.setTextColor(...textColor);
+  doc.text(orderNum, numStartX + labelW, y - 8);
 
   const createdDate = new Date(order.created_at);
   const dueDate = new Date(createdDate);
