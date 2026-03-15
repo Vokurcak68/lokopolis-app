@@ -274,15 +274,29 @@ export function orderShipped(order: any, settings?: Record<string, any>): string
 export function newOrderAdmin(order: any, settings?: Record<string, any>): string {
   const customerEmail = order.billing_email || order.email || "";
   const customerName = order.billing_name || order.name || "Neznámý";
+  const totalAmount = Number(order.total_price || order.price);
+
+  // Delivery block — pickup point has priority
+  const adminDeliveryBlock = order.pickup_point_name
+    ? `<div style="margin:16px 0;padding:16px;background:#16162b;border-radius:8px;">
+        <strong style="color:#f0a030;">📍 Výdejní místo${order.pickup_point_carrier ? ` (${esc(order.pickup_point_carrier)})` : ""}</strong><br>
+        <span style="color:#ccc;">${esc(order.pickup_point_name)}</span><br>
+        ${order.pickup_point_address ? `<span style="color:#ccc;">${esc(order.pickup_point_address)}</span>` : ""}
+      </div>`
+    : order.shipping_name
+      ? addressBlock("Doručovací adresa", order, "shipping")
+      : "";
 
   return emailWrapper(`
     <h2 style="color:#f0a030;margin:0 0 20px;">🛒 Nová objednávka ${esc(order.order_number)}</h2>
     
     <div style="margin:16px 0;padding:16px;background:#16162b;border-radius:8px;">
       <strong style="color:#f0a030;">Zákazník</strong><br>
+      ${order.billing_company ? `<span style="color:#ccc;font-weight:700;">${esc(order.billing_company)}</span><br>` : ""}
       <span style="color:#ccc;">${esc(customerName)}</span><br>
       <span style="color:#ccc;">${esc(customerEmail)}</span>
       ${order.billing_phone ? `<br><span style="color:#ccc;">Tel: ${esc(order.billing_phone)}</span>` : ""}
+      ${!order.user_id ? `<br><span style="color:#f59e0b;font-size:12px;">⚠️ Neregistrovaný zákazník</span>` : ""}
     </div>
 
     <table width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0;">
@@ -294,16 +308,23 @@ export function newOrderAdmin(order: any, settings?: Record<string, any>): strin
       ${itemRows(order)}
     </table>
 
-    <div style="margin:16px 0;padding:16px;background:#16162b;border-radius:8px;border-left:3px solid #f0a030;">
-      <strong style="font-size:18px;color:#f0a030;">Celkem: ${formatPrice(Number(order.total_price || order.price))}</strong>
-      <br><span style="color:#ccc;font-size:13px;">Platba: ${esc(order.payment_method || "neuvedeno")}</span>
+    ${order.coupon_discount > 0 ? `<div style="color:#22c55e;font-size:14px;margin:4px 16px;">Sleva (${esc(order.coupon_code)}): -${formatPrice(order.coupon_discount)}</div>` : ""}
+    ${order.loyalty_discount > 0 ? `<div style="color:#a855f7;font-size:14px;margin:4px 16px;">Věrnostní sleva: -${formatPrice(order.loyalty_discount)}</div>` : ""}
+
+    <div style="margin:8px 16px;font-size:14px;color:#ccc;">
+      ${order.shipping_method_name ? `🚚 Doprava: ${esc(order.shipping_method_name)}${order.shipping_price > 0 ? ` — ${formatPrice(order.shipping_price)}` : " — zdarma"}<br>` : (order.shipping_price > 0 ? `🚚 Doprava: ${formatPrice(order.shipping_price)}<br>` : "")}
+      ${order.payment_method_name ? `💳 Platba: ${esc(order.payment_method_name)}${order.payment_surcharge > 0 ? ` — příplatek ${formatPrice(order.payment_surcharge)}` : ""}<br>` : `💳 Platba: ${esc(order.payment_method || "neuvedeno")}<br>`}
     </div>
 
-    ${addressBlock("Doručovací adresa", order, order.shipping_name ? "shipping" : "billing")}
+    <div style="margin:16px 0;padding:16px;background:#16162b;border-radius:8px;border-left:3px solid #f0a030;">
+      <strong style="font-size:18px;color:#f0a030;">Celkem: ${formatPrice(totalAmount)}</strong>
+    </div>
+
+    ${adminDeliveryBlock}
     ${addressBlock("Fakturační adresa", order, "billing")}
 
     <div style="margin-top:24px;text-align:center;">
-      <a href="https://lokopolis.cz/admin/shop" style="display:inline-block;padding:12px 28px;background:#f0a030;color:#1a1a2e;font-weight:700;border-radius:8px;text-decoration:none;">Otevřít admin panel →</a>
+      <a href="https://lokopolis.cz/admin/shop?tab=orders" style="display:inline-block;padding:12px 28px;background:#f0a030;color:#1a1a2e;font-weight:700;border-radius:8px;text-decoration:none;">Otevřít objednávky →</a>
     </div>
   `, settings);
 }
