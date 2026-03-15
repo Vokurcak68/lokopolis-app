@@ -127,7 +127,7 @@ export async function generateInvoicePdf(order: ShopOrderWithDetails, settings?:
   doc.setFontSize(8.5);
   doc.setFont("Roboto", "normal");
   doc.setTextColor(...accentColor);
-  doc.text("\u00B7  EST. 2026  \u00B7", centerX, midY - 1.5, { align: "center" });
+  doc.text("\u00B7  EST. 2026  \u00B7", centerX, midY - 3.5, { align: "center" });
 
   // LOKO (tmavá) + POLIS (accent) — velké, tučné, centrované
   doc.setFontSize(mainFs);
@@ -142,7 +142,7 @@ export async function generateInvoicePdf(order: ShopOrderWithDetails, settings?:
   doc.setFontSize(7);
   doc.setFont("Roboto", "normal");
   doc.setTextColor(...mutedColor);
-  doc.text("MODELOV\u00C1 \u017DELEZNICE", centerX, midY + 7.5, { align: "center" });
+  doc.text("MODELOV\u00C1 \u017DELEZNICE", centerX, midY + 9.5, { align: "center" });
 
   // FAKTURA — vedle loga
   y = midY + 3;
