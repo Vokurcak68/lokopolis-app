@@ -80,6 +80,12 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Nemáte oprávnění" }, { status: 403 });
     }
 
+    // Faktura jen pro zaplacené objednávky (admin může vždy)
+    const paidStatuses = ["paid", "processing", "shipped", "delivered"];
+    if (!isAdmin && !paidStatuses.includes(order.status)) {
+      return NextResponse.json({ error: "Faktura je dostupná až po zaplacení objednávky." }, { status: 403 });
+    }
+
     // Load items
     const { data: itemsData } = await supabase
       .from("order_items")

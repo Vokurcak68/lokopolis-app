@@ -432,29 +432,35 @@ export default function OrderConfirmationPage() {
         </div>
       )}
 
-      {/* Invoice download */}
+      {/* Invoice download — only after payment */}
       <div style={{ marginTop: "16px" }}>
-        <button
-          onClick={() => downloadInvoice(order.id, order.order_number)}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "6px",
-            padding: "10px 20px",
-            background: "var(--bg-card)",
-            border: "1px solid var(--border)",
-            borderRadius: "8px",
-            color: "var(--text-primary)",
-            fontSize: "14px",
-            fontWeight: 600,
-            cursor: "pointer",
-            transition: "border-color 0.2s",
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
-        >
-          📄 Stáhnout fakturu
-        </button>
+        {isPaid ? (
+          <button
+            onClick={() => downloadInvoice(order.id, order.order_number)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "10px 20px",
+              background: "var(--bg-card)",
+              border: "1px solid var(--border)",
+              borderRadius: "8px",
+              color: "var(--text-primary)",
+              fontSize: "14px",
+              fontWeight: 600,
+              cursor: "pointer",
+              transition: "border-color 0.2s",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
+          >
+            📄 Stáhnout fakturu
+          </button>
+        ) : (
+          <p style={{ fontSize: "13px", color: "var(--text-muted)" }}>
+            📄 Faktura bude dostupná po zaplacení objednávky.
+          </p>
+        )}
       </div>
 
       {/* Guest: CTA to create account */}

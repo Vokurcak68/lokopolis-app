@@ -886,6 +886,7 @@ export default function AccountPage() {
                         <span style={{ fontWeight: 700, fontSize: "16px", color: "var(--text-primary)", minWidth: "80px", textAlign: "right" }}>
                           {total === 0 ? "Zdarma" : `${total} Kč`}
                         </span>
+                        {["paid","processing","shipped","delivered"].includes(order.status) && (
                         <button
                           title="Stáhnout fakturu"
                           onClick={(e) => {
@@ -908,6 +909,7 @@ export default function AccountPage() {
                         >
                           📄
                         </button>
+                        )}
                       </div>
                     </div>
                   </Link>
