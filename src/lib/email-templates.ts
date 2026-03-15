@@ -247,12 +247,19 @@ export function orderShipped(order: any, settings?: Record<string, any>): string
       <span style="color:#ccc;">Zásilka byla předána přepravci.</span>
     </div>`}
 
-    <div style="margin:16px 0;color:#ccc;">
-      <strong style="color:#f0a030;">Doručovací adresa:</strong><br>
-      ${esc(order.shipping_name || order.billing_name)}<br>
-      ${order.shipping_street || order.billing_street ? esc(order.shipping_street || order.billing_street) + "<br>" : ""}
-      ${esc(order.shipping_city || order.billing_city || "")} ${esc(order.shipping_zip || order.billing_zip || "")}
-    </div>
+    ${order.pickup_point_name
+      ? `<div style="margin:16px 0;color:#ccc;">
+          <strong style="color:#f0a030;">📍 Výdejní místo${order.pickup_point_carrier ? ` (${esc(order.pickup_point_carrier)})` : ""}:</strong><br>
+          ${esc(order.pickup_point_name)}<br>
+          ${order.pickup_point_address ? esc(order.pickup_point_address) : ""}
+        </div>`
+      : `<div style="margin:16px 0;color:#ccc;">
+          <strong style="color:#f0a030;">Doručovací adresa:</strong><br>
+          ${esc(order.shipping_name || order.billing_name)}<br>
+          ${order.shipping_street || order.billing_street ? esc(order.shipping_street || order.billing_street) + "<br>" : ""}
+          ${esc(order.shipping_city || order.billing_city || "")} ${esc(order.shipping_zip || order.billing_zip || "")}
+        </div>`
+    }
 
     ${invoiceLink ? `
     <div style="margin:16px 0;text-align:center;">
