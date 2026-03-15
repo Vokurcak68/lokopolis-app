@@ -127,7 +127,7 @@ export async function generateInvoicePdf(order: ShopOrderWithDetails, settings?:
   doc.setFontSize(8.5);
   doc.setFont("Roboto", "normal");
   doc.setTextColor(...accentColor);
-  doc.text("\u00B7  EST. 2026  \u00B7", centerX, midY - 4, { align: "center" });
+  doc.text("\u00B7  EST. 2026  \u00B7", centerX, midY - 1.5, { align: "center" });
 
   // LOKO (tmavá) + POLIS (accent) — velké, tučné, centrované
   doc.setFontSize(mainFs);
