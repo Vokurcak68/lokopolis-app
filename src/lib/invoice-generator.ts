@@ -102,7 +102,7 @@ export async function generateInvoicePdf(order: ShopOrderWithDetails, settings?:
   const logoY = y;
 
   // LOKOPOLIS velké a tučné — dominantní prvek
-  const mainFs = 18;
+  const mainFs = 22;
 
   // Změříme šířku
   doc.setFontSize(mainFs);
@@ -111,40 +111,41 @@ export async function generateInvoicePdf(order: ShopOrderWithDetails, settings?:
   const polisW = doc.getTextWidth("POLIS");
   const mainTextW = lokoW + polisW;
 
-  // Badge rozměry — štědrý padding
+  // Badge rozměry
   const padX = 8;
   const logoW = mainTextW + padX * 2;
   const logoH = 22;
   const centerX = logoX + logoW / 2;
+  const midY = logoY + logoH / 2; // vertikální střed badge
 
   // Rámeček
   doc.setDrawColor(...accentColor);
   doc.setLineWidth(0.6);
   doc.roundedRect(logoX, logoY, logoW, logoH, 2.5, 2.5, "S");
 
-  // · EST. 2026 · — VELKÁ PÍSMENA, blízko nad LOKOPOLIS
-  doc.setFontSize(5.5);
+  // · EST. 2026 · — těsně nad LOKOPOLIS
+  doc.setFontSize(7);
   doc.setFont("Roboto", "normal");
   doc.setTextColor(...accentColor);
-  doc.text("\u00B7  EST. 2026  \u00B7", centerX, logoY + 5.5, { align: "center" });
+  doc.text("\u00B7  EST. 2026  \u00B7", centerX, midY - 5.5, { align: "center" });
 
   // LOKO (tmavá) + POLIS (accent) — velké, tučné, centrované
   doc.setFontSize(mainFs);
   doc.setFont("Roboto", "bold");
   const textStartX = logoX + padX;
   doc.setTextColor(...textColor);
-  doc.text("LOKO", textStartX, logoY + 14);
+  doc.text("LOKO", textStartX, midY + 3);
   doc.setTextColor(...accentColor);
-  doc.text("POLIS", textStartX + lokoW, logoY + 14);
+  doc.text("POLIS", textStartX + lokoW, midY + 3);
 
-  // MODELOVÁ ŽELEZNICE — VELKÁ PÍSMENA, blízko pod LOKOPOLIS
-  doc.setFontSize(4.5);
+  // MODELOVÁ ŽELEZNICE — těsně pod LOKOPOLIS
+  doc.setFontSize(5.5);
   doc.setFont("Roboto", "normal");
   doc.setTextColor(...mutedColor);
-  doc.text("MODELOV\u00C1 \u017DELEZNICE", centerX, logoY + 19, { align: "center" });
+  doc.text("MODELOV\u00C1 \u017DELEZNICE", centerX, midY + 8.5, { align: "center" });
 
-  // FAKTURA — vedle loga, baseline zarovnaná s LOKOPOLIS
-  y = logoY + 14;
+  // FAKTURA — vedle loga
+  y = midY + 3;
   doc.setTextColor(...accentColor);
   doc.setFontSize(28);
   doc.setFont("Roboto", "bold");
