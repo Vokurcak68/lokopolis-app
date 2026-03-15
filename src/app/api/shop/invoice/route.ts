@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { generateInvoicePdf } from "@/lib/invoice-generator";
 import { getSettings } from "@/lib/shop-settings";
+import { verifyInvoiceToken } from "@/lib/invoice-token";
 import type { ShopOrderWithDetails, OrderItem, ShopProduct, ShippingMethod, PaymentMethod } from "@/types/database";
 
 function getEnvConfig() {
@@ -73,10 +74,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Objednávka nenalezena" }, { status: 404 });
     }
 
-    // Authorization check: owner, admin, or guest with matching email
+    // Authorization check: owner, admin, or guest with token/email
     const isOwner = userId && order.user_id === userId;
+    const invoiceToken = searchParams.get("token") || "";
+    const billingEmail = order.billing_email || order.guest_email || "";
+    const isGuestWithToken = invoiceToken && billingEmail && verifyInvoiceToken(order.id, billingEmail, invoiceToken);
     const isGuestWithEmail = !order.user_id && guestEmail && order.guest_email === guestEmail;
-    if (!isAdmin && !isOwner && !isGuestWithEmail) {
+    if (!isAdmin && !isOwner && !isGuestWithToken && !isGuestWithEmail) {
       return NextResponse.json({ error: "Nemáte oprávnění" }, { status: 403 });
     }
 

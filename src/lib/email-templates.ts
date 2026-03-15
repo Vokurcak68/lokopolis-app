@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { czechToIBAN } from "./invoice-generator";
+import { invoiceUrl } from "./invoice-token";
 
 // ─── Shared wrapper ──────────────────────────────────────────────────────────
 
@@ -193,6 +194,10 @@ export function orderConfirmation(order: any, settings?: Record<string, any>): s
 }
 
 export function orderStatusChanged(order: any, newStatus: string, settings?: Record<string, any>): string {
+  const paidStatuses = ["paid", "processing", "shipped", "delivered"];
+  const showInvoice = paidStatuses.includes(newStatus) && order.id && (order.billing_email || order.guest_email);
+  const invoiceLink = showInvoice ? invoiceUrl(order.id, order.billing_email || order.guest_email) : "";
+
   return emailWrapper(`
     <h2 style="color:#f0a030;margin:0 0 20px;">Změna stavu objednávky</h2>
     <p>Vaše objednávka <strong style="color:#f0a030;">${esc(order.order_number)}</strong> má nový stav:</p>
@@ -210,6 +215,11 @@ export function orderStatusChanged(order: any, newStatus: string, settings?: Rec
       ${order.tracking_url ? `<br><a href="${esc(order.tracking_url)}" style="color:#f0a030;text-decoration:none;">Sledovat zásilku →</a>` : ""}
     </div>` : ""}
 
+    ${invoiceLink ? `
+    <div style="margin:16px 0;text-align:center;">
+      <a href="${esc(invoiceLink)}" style="display:inline-block;padding:12px 28px;background:#f0a030;color:#1a1a2e;font-weight:700;border-radius:8px;text-decoration:none;">📄 Stáhnout fakturu</a>
+    </div>` : ""}
+
     <p style="color:#888;">Pokud máte jakékoli dotazy, neváhejte nás kontaktovat na info@lokopolis.cz.</p>
   `, settings);
 }
@@ -218,6 +228,9 @@ export function orderShipped(order: any, settings?: Record<string, any>): string
   const introText = (typeof settings?.email_order_shipped_intro === "string")
     ? settings.email_order_shipped_intro
     : "Vaše objednávka byla odeslána! 📦";
+
+  const email = order.billing_email || order.guest_email || "";
+  const invoiceLink = order.id && email ? invoiceUrl(order.id, email) : "";
 
   return emailWrapper(`
     <h2 style="color:#f0a030;margin:0 0 20px;">${esc(introText)}</h2>
@@ -240,6 +253,11 @@ export function orderShipped(order: any, settings?: Record<string, any>): string
       ${order.shipping_street || order.billing_street ? esc(order.shipping_street || order.billing_street) + "<br>" : ""}
       ${esc(order.shipping_city || order.billing_city || "")} ${esc(order.shipping_zip || order.billing_zip || "")}
     </div>
+
+    ${invoiceLink ? `
+    <div style="margin:16px 0;text-align:center;">
+      <a href="${esc(invoiceLink)}" style="display:inline-block;padding:12px 28px;background:#f0a030;color:#1a1a2e;font-weight:700;border-radius:8px;text-decoration:none;">📄 Stáhnout fakturu</a>
+    </div>` : ""}
 
     <p style="margin-top:24px;color:#888;">Předpokládaná doba doručení je obvykle 1–3 pracovní dny.</p>
     <p style="color:#888;">Pokud máte jakékoli dotazy, kontaktujte nás na info@lokopolis.cz.</p>
