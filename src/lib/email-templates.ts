@@ -99,7 +99,7 @@ function itemRows(order: any): string {
       return `<tr>
       <td style="padding:8px 0;border-bottom:1px solid #2a2a4e;color:#e0e0e0;">${esc(title)}</td>
       <td style="padding:8px 0;border-bottom:1px solid #2a2a4e;color:#ccc;text-align:center;">${item.quantity}</td>
-      <td style="padding:8px 0;border-bottom:1px solid #2a2a4e;color:#f0a030;text-align:right;">${formatPrice(Number(item.total_price || item.unit_price * item.quantity))}</td>
+      <td style="padding:8px 0;border-bottom:1px solid #2a2a4e;color:#f0a030;text-align:right;">${formatPrice(Number(item.totalPrice || item.total_price || (item.unitPrice || item.unit_price || 0) * item.quantity))}</td>
     </tr>`;
     })
     .join("");
