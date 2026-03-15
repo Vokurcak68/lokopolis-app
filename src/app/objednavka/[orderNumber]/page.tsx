@@ -155,6 +155,7 @@ export default function OrderConfirmationPage() {
             quantity: 1,
             unit_price: orderData.price,
             total_price: orderData.price,
+            vat_rate: (product as ShopProduct)?.vat_rate ?? 21,
             created_at: orderData.created_at,
             product: product as ShopProduct,
           }];
