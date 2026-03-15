@@ -165,6 +165,7 @@ export default function AdminShopPage() {
     stock_reserved: 0,
     stock_alert_threshold: 5,
     max_per_order: null as number | null,
+    ean: "",
   });
   // Attachments
   const [attachments, setAttachments] = useState<ProductAttachment[]>([]);
@@ -393,6 +394,7 @@ export default function AdminShopPage() {
         stock_reserved: formData.stock_reserved || 0,
         stock_alert_threshold: formData.stock_alert_threshold || 5,
         max_per_order: formData.max_per_order,
+        ean: formData.ean.trim() || null,
         cover_image_url, preview_images, file_url, file_name, file_size, file_type,
       };
 
@@ -432,6 +434,7 @@ export default function AdminShopPage() {
       stock_reserved: 0,
       stock_alert_threshold: 5,
       max_per_order: null,
+      ean: "",
     });
     setCoverFile(null);
     setPreviewFiles([]);
@@ -452,6 +455,7 @@ export default function AdminShopPage() {
       stock_reserved: product.stock_reserved || 0,
       stock_alert_threshold: product.stock_alert_threshold || 5,
       max_per_order: product.max_per_order,
+      ean: product.ean || "",
     });
     setTab("edit");
     fetchAttachments(product.id);
@@ -1493,10 +1497,16 @@ export default function AdminShopPage() {
               <textarea value={formData.long_description} onChange={(e) => setFormData((f) => ({ ...f, long_description: e.target.value }))} style={{ ...inputStyle, minHeight: "120px", resize: "vertical" }} rows={6} />
             </div>
 
-            {/* Tags */}
-            <div>
-              <label style={labelStyle}>Tagy (čárkou oddělené)</label>
-              <input type="text" value={formData.tags} onChange={(e) => setFormData((f) => ({ ...f, tags: e.target.value }))} style={inputStyle} placeholder="TT, Tillig, kolejový plán" />
+            {/* Tags + EAN */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              <div>
+                <label style={labelStyle}>Tagy (čárkou oddělené)</label>
+                <input type="text" value={formData.tags} onChange={(e) => setFormData((f) => ({ ...f, tags: e.target.value }))} style={inputStyle} placeholder="TT, Tillig, kolejový plán" />
+              </div>
+              <div>
+                <label style={labelStyle}>EAN</label>
+                <input type="text" value={formData.ean} onChange={(e) => setFormData((f) => ({ ...f, ean: e.target.value }))} style={inputStyle} placeholder="8590000000000" maxLength={13} />
+              </div>
             </div>
 
             {/* Status + Featured */}

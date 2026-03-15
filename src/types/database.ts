@@ -394,6 +394,7 @@ export interface ShopProduct {
   stock_reserved: number | null;
   stock_alert_threshold: number | null;
   max_per_order: number | null;
+  ean: string | null;
   created_at: string;
   updated_at: string;
 }
