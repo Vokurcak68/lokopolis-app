@@ -946,7 +946,9 @@ export default function AdminShopPage() {
                             {/* === Výdejní místo === */}
                             {(o as any).pickup_point_name && (
                               <div style={{ padding: "10px 14px", background: "rgba(240, 160, 48, 0.06)", border: "1px solid var(--accent)", borderRadius: "8px" }}>
-                                <span style={{ fontWeight: 700, fontSize: "13px", color: "var(--text-primary)" }}>📍 Výdejní místo: </span>
+                                <span style={{ fontWeight: 700, fontSize: "13px", color: "var(--text-primary)" }}>
+                                  📍 {(o as any).pickup_point_carrier === "zasilkovna" ? "Zásilkovna" : "Balíkovna"}:{" "}
+                                </span>
                                 <span style={{ fontSize: "13px", color: "var(--text-body)" }}>{(o as any).pickup_point_name}</span>
                                 {(o as any).pickup_point_address && (
                                   <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>, {(o as any).pickup_point_address}</span>

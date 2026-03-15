@@ -151,6 +151,16 @@ export default function CheckoutPage() {
   }, [isAllDigital, shippingMethods]);
 
   const selectedShippingObj = shippingMethods.find((s) => s.id === selectedShipping);
+
+  // Odvodit carrier z vybraného shipping method slugu
+  const pickupCarrier: "balikovna" | "zasilkovna" | null = (() => {
+    const slug = selectedShippingObj?.slug || "";
+    if (slug.startsWith("zasilkovna")) return "zasilkovna";
+    if (slug.startsWith("balikovna")) return "balikovna";
+    // Fallback: všechny pickup_point metody bez specifického prefixu = balíkovna
+    if (selectedShippingObj?.shipping_type === "pickup_point") return "balikovna";
+    return null;
+  })();
   const selectedPaymentObj = paymentMethods.find((p) => p.id === selectedPayment);
   const shippingPrice = selectedShippingObj
     ? (selectedShippingObj.free_from && cartTotal >= selectedShippingObj.free_from ? 0 : selectedShippingObj.price)
@@ -301,6 +311,7 @@ export default function CheckoutPage() {
           shippingMethodId: selectedShipping,
           paymentMethodId: selectedPayment,
           pickupPoint: selectedShippingObj?.shipping_type === "pickup_point" ? pickupPoint : null,
+          pickupPointCarrier: selectedShippingObj?.shipping_type === "pickup_point" ? pickupCarrier : null,
           couponCode: couponApplied?.code || null,
           loyaltyPointsToUse: loyaltyPointsToUse > 0 ? loyaltyPointsToUse : null,
           turnstileToken,
@@ -546,7 +557,7 @@ export default function CheckoutPage() {
                   type="radio"
                   name="shipping"
                   checked={selectedShipping === s.id}
-                  onChange={() => { setSelectedShipping(s.id); if (s.shipping_type !== "pickup_point") setPickupPoint(null); }}
+                  onChange={() => { setSelectedShipping(s.id); setPickupPoint(null); }}
                   style={{ marginTop: "3px" }}
                 />
                 <div style={{ flex: 1 }}>
@@ -575,11 +586,12 @@ export default function CheckoutPage() {
             );
           })}
 
-          {/* Výběr výdejního místa pro Balíkovnu */}
-          {selectedShippingObj?.shipping_type === "pickup_point" && (
+          {/* Výběr výdejního místa (Balíkovna / Zásilkovna) */}
+          {selectedShippingObj?.shipping_type === "pickup_point" && pickupCarrier && (
             <PickupPointSelector
               onSelect={(point) => setPickupPoint(point.id ? point : null)}
               selectedPoint={pickupPoint}
+              carrier={pickupCarrier}
             />
           )}
         </div>

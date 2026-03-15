@@ -496,6 +496,7 @@ export interface ShopOrder {
   pickup_point_id: string | null;
   pickup_point_name: string | null;
   pickup_point_address: string | null;
+  pickup_point_carrier: "balikovna" | "zasilkovna" | null;
   tracking_number: string | null;
   tracking_url: string | null;
   admin_order_note: string | null;

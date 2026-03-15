@@ -183,10 +183,11 @@ export async function generateInvoicePdf(order: ShopOrderWithDetails, settings?:
   // Delivery address — výdejní místo nebo klasická dodací adresa
   let dy = cy;
   if ((order as any).pickup_point_name) {
-    // Výdejní místo (Balíkovna apod.)
+    // Výdejní místo (Balíkovna / Zásilkovna)
+    const carrierLabel = (order as any).pickup_point_carrier === "zasilkovna" ? "Zásilkovna" : "Balíkovna";
     const pickupLines: string[] = [];
     if ((order as any).pickup_point_address) pickupLines.push((order as any).pickup_point_address);
-    dy = drawAddressBlock(rightX, "Výdejní místo", (order as any).pickup_point_name, pickupLines, y);
+    dy = drawAddressBlock(rightX, `Výdejní místo (${carrierLabel})`, (order as any).pickup_point_name, pickupLines, y);
   } else if (order.shipping_street) {
     const deliveryName = order.shipping_name || order.billing_name || "";
     const deliveryLines: string[] = [];
