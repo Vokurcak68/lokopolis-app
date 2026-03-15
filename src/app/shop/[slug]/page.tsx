@@ -423,24 +423,6 @@ export default function ShopProductDetailPage() {
               >
                 {downloading ? "Stahuji..." : "📥 Stáhnout zdarma"}
               </button>
-            ) : !user ? (
-              <Link
-                href="/prihlaseni"
-                style={{
-                  display: "block",
-                  textAlign: "center",
-                  padding: "14px 24px",
-                  background: "var(--bg-card)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "10px",
-                  color: "var(--text-muted)",
-                  fontSize: "15px",
-                  fontWeight: 600,
-                  textDecoration: "none",
-                }}
-              >
-                Přihlaste se pro objednávku
-              </Link>
             ) : hasPurchase ? (
               <button
                 onClick={handleDownload}
