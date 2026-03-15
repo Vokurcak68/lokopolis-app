@@ -110,6 +110,7 @@ export async function GET(req: NextRequest) {
         quantity: 1,
         unit_price: order.price,
         total_price: order.price,
+        vat_rate: (product as ShopProduct)?.vat_rate ?? 21,
         created_at: order.created_at,
         product: (product as ShopProduct) || null,
       }];
