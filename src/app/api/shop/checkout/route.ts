@@ -467,6 +467,9 @@ export async function POST(req: NextRequest) {
         shipping_street: billing.differentShipping ? safeShippingStreet : safeStreet,
         shipping_city: billing.differentShipping ? safeShippingCity : safeCity,
         shipping_zip: billing.differentShipping ? safeShippingZip : safeZip,
+        pickup_point_name: pickupPoint?.name ? normalizeText(pickupPoint.name, 200) : null,
+        pickup_point_address: pickupPoint?.address ? normalizeText(pickupPoint.address, 300) : null,
+        pickup_point_carrier: pickupPointCarrier === "zasilkovna" ? "Zásilkovna" : pickupPointCarrier === "balikovna" ? "Balíkovna" : null,
       };
 
       // Send emails before returning response (Vercel kills runtime after response)

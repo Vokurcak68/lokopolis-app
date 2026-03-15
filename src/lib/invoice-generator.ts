@@ -20,7 +20,7 @@ function formatDate(date: Date): string {
 }
 
 /** Convert Czech bank account (e.g. 123456-1234567890/0100) to IBAN */
-function czechToIBAN(account: string): string {
+export function czechToIBAN(account: string): string {
   const clean = account.replace(/\s/g, "");
   if (/^[A-Z]{2}\d{2}/.test(clean)) return clean;
   const match = clean.match(/^(?:(\d{1,6})-)?(\d{2,10})\/(\d{4})$/);

@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { czechToIBAN } from "./invoice-generator";
+
 // ─── Shared wrapper ──────────────────────────────────────────────────────────
 
 function emailWrapper(content: string, settings?: Record<string, any>): string {
@@ -127,9 +129,23 @@ export function orderConfirmation(order: any, settings?: Record<string, any>): s
     ? settings.email_order_confirmation_intro
     : "Děkujeme za vaši objednávku! 🎉";
 
-  const shippingAddr = order.shipping_name
-    ? addressBlock("Doručovací adresa", order, "shipping")
-    : addressBlock("Fakturační adresa", order, "billing");
+  const vs = order.order_number?.replace(/\D/g, "") || "";
+  const totalAmount = Number(order.total_price || order.price);
+  const companySettings = (settings?.company && typeof settings.company === "object") ? settings.company as any : {};
+  const bankAccount = companySettings.bank_account || "";
+  const iban = bankAccount ? czechToIBAN(bankAccount) : "";
+  const qrUrl = vs && iban ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`SPD*1.0*ACC:${iban}*AM:${totalAmount.toFixed(2)}*CC:CZK*X-VS:${vs}*MSG:Objednavka ${order.order_number}`)}` : "";
+
+  // Doručovací adresa — pickup point má přednost
+  const deliveryBlock = order.pickup_point_name
+    ? `<div style="margin-top:16px;">
+        <strong style="color:#f0a030;">📍 Výdejní místo${order.pickup_point_carrier ? ` (${esc(order.pickup_point_carrier)})` : ""}</strong><br>
+        ${esc(order.pickup_point_name)}<br>
+        ${order.pickup_point_address ? esc(order.pickup_point_address) : ""}
+      </div>`
+    : order.shipping_name
+      ? addressBlock("Doručovací adresa", order, "shipping")
+      : "";
 
   return emailWrapper(`
     <h2 style="color:#f0a030;margin:0 0 20px;">${esc(introText)}</h2>
@@ -154,19 +170,18 @@ export function orderConfirmation(order: any, settings?: Record<string, any>): s
     ${order.payment_surcharge > 0 ? `<div style="color:#ccc;font-size:14px;margin:4px 0;">Příplatek za platbu: ${formatPrice(order.payment_surcharge)}</div>` : ""}
 
     <div style="margin:16px 0;padding:16px;background:#16162b;border-radius:8px;border-left:3px solid #f0a030;">
-      <strong style="font-size:18px;color:#f0a030;">Celkem: ${formatPrice(Number(order.total_price || order.price))}</strong>
+      <strong style="font-size:18px;color:#f0a030;">Celkem: ${formatPrice(totalAmount)}</strong>
     </div>
 
-    ${order.payment_method === "bank_transfer" || order.payment_method === "bank-transfer"
-      ? `<div style="margin:16px 0;padding:16px;background:#16162b;border-radius:8px;">
-          <strong style="color:#f0a030;">💳 Platební údaje</strong><br>
-          <span style="color:#ccc;">Způsob platby: Bankovní převod</span><br>
-          <span style="color:#ccc;">Variabilní symbol: ${esc(order.order_number?.replace(/\D/g, ""))}</span>
-        </div>`
-      : `<div style="margin:16px 0;color:#ccc;">Způsob platby: ${esc(order.payment_method || "")}</div>`
-    }
+    <div style="margin:16px 0;padding:16px;background:#16162b;border-radius:8px;">
+      <strong style="color:#f0a030;">💳 Platební údaje</strong><br>
+      <span style="color:#ccc;">Variabilní symbol: <strong>${esc(vs)}</strong></span><br>
+      <span style="color:#ccc;">Částka: <strong>${formatPrice(totalAmount)}</strong></span>
+      ${qrUrl ? `<br><br><img src="${qrUrl}" alt="QR platba" width="180" height="180" style="border-radius:8px;" />
+      <br><span style="color:#888;font-size:12px;">Naskenujte QR kód v bankovní aplikaci</span>` : ""}
+    </div>
 
-    ${shippingAddr}
+    ${deliveryBlock}
     ${addressBlock("Fakturační adresa", order, "billing")}
 
     <p style="margin-top:24px;color:#888;">O dalším průběhu objednávky vás budeme informovat e-mailem.</p>
