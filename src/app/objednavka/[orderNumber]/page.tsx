@@ -254,9 +254,11 @@ export default function OrderConfirmationPage() {
           marginBottom: "32px",
         }}
       >
-        <div style={{ fontSize: "40px", marginBottom: "8px" }}>{isPaid ? "✅" : "📋"}</div>
+        <div style={{ fontSize: "40px", marginBottom: "8px" }}>
+          {order.status === "delivered" ? "✅" : order.status === "shipped" ? "📦" : order.status === "cancelled" ? "❌" : isPaid ? "💳" : "📋"}
+        </div>
         <h1 style={{ fontSize: "24px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "8px" }}>
-          {isPaid ? "Objednávka dokončena!" : "Objednávka přijata"}
+          {status.label}
         </h1>
         <p style={{ fontSize: "16px", color: "var(--text-muted)" }}>
           Číslo objednávky: <strong style={{ color: "var(--accent)" }}>{order.order_number}</strong>
@@ -354,6 +356,65 @@ export default function OrderConfirmationPage() {
           <div style={{ display: "flex", justifyContent: "space-between", paddingTop: "8px", borderTop: "1px solid var(--border)", fontWeight: 700, fontSize: "18px", color: "var(--accent)" }}>
             <span>Celkem</span>
             <span>{totalPrice} Kč</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Shipping & Payment info */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "16px" }}>
+        {/* Billing address */}
+        <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "16px" }}>
+          <h3 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-muted)", marginBottom: "12px" }}>🧾 Fakturační adresa</h3>
+          <div style={{ fontSize: "14px", color: "var(--text-primary)", lineHeight: 1.7 }}>
+            {order.billing_company && <div style={{ fontWeight: 600 }}>{order.billing_company}</div>}
+            <div>{order.billing_name}</div>
+            {order.billing_street && <div>{order.billing_street}</div>}
+            {(order.billing_city || order.billing_zip) && <div>{order.billing_city} {order.billing_zip}</div>}
+            {order.billing_email && <div style={{ color: "var(--text-muted)", fontSize: "13px", marginTop: "4px" }}>{order.billing_email}</div>}
+            {order.billing_phone && <div style={{ color: "var(--text-muted)", fontSize: "13px" }}>Tel: {order.billing_phone}</div>}
+          </div>
+        </div>
+
+        {/* Delivery address / Pickup point */}
+        <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "16px" }}>
+          <h3 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-muted)", marginBottom: "12px" }}>
+            {order.pickup_point_name ? "📍 Výdejní místo" : "📦 Doručovací adresa"}
+          </h3>
+          <div style={{ fontSize: "14px", color: "var(--text-primary)", lineHeight: 1.7 }}>
+            {order.pickup_point_name ? (
+              <>
+                {order.pickup_point_carrier && <div style={{ fontWeight: 600 }}>{order.pickup_point_carrier}</div>}
+                <div>{order.pickup_point_name}</div>
+                {order.pickup_point_address && <div>{order.pickup_point_address}</div>}
+              </>
+            ) : order.shipping_name ? (
+              <>
+                <div>{order.shipping_name}</div>
+                {order.shipping_street && <div>{order.shipping_street}</div>}
+                {(order.shipping_city || order.shipping_zip) && <div>{order.shipping_city} {order.shipping_zip}</div>}
+              </>
+            ) : (
+              <div style={{ color: "var(--text-muted)" }}>Shodná s fakturační</div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Shipping & Payment methods */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "16px" }}>
+        <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "16px" }}>
+          <h3 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-muted)", marginBottom: "8px" }}>🚚 Doprava</h3>
+          <div style={{ fontSize: "14px", color: "var(--text-primary)" }}>
+            {order.shipping?.name || "—"}
+            {order.shipping_price > 0 && <span style={{ color: "var(--text-muted)", marginLeft: "8px" }}>{order.shipping_price} Kč</span>}
+            {order.shipping_price === 0 && <span style={{ color: "#22c55e", marginLeft: "8px" }}>Zdarma</span>}
+          </div>
+        </div>
+        <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "16px" }}>
+          <h3 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-muted)", marginBottom: "8px" }}>💳 Platba</h3>
+          <div style={{ fontSize: "14px", color: "var(--text-primary)" }}>
+            {order.paymentObj?.name || order.payment_method || "—"}
+            {order.payment_surcharge > 0 && <span style={{ color: "var(--text-muted)", marginLeft: "8px" }}>+{order.payment_surcharge} Kč</span>}
           </div>
         </div>
       </div>
