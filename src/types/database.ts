@@ -395,6 +395,7 @@ export interface ShopProduct {
   stock_alert_threshold: number | null;
   max_per_order: number | null;
   ean: string | null;
+  vat_rate: number;
   created_at: string;
   updated_at: string;
 }
@@ -439,6 +440,7 @@ export interface ShippingMethod {
   active: boolean;
   sort_order: number;
   shipping_type: "standard" | "pickup_point";
+  vat_rate: number;
   created_at: string;
 }
 
@@ -461,6 +463,7 @@ export interface OrderItem {
   quantity: number;
   unit_price: number;
   total_price: number;
+  vat_rate: number;
   created_at: string;
   product?: ShopProduct | null;
 }
@@ -507,6 +510,8 @@ export interface ShopOrder {
   loyalty_points_earned: number;
   loyalty_points_used: number;
   loyalty_discount: number;
+  total_vat: number;
+  total_without_vat: number;
   notes: string | null;
   admin_notes: string | null;
   paid_at: string | null;

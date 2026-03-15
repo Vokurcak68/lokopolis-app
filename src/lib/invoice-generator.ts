@@ -4,6 +4,7 @@ import QRCode from "qrcode";
 import type { ShopOrderWithDetails } from "@/types/database";
 import { robotoRegularBase64 } from "@/lib/fonts/roboto-regular";
 import { robotoBoldBase64 } from "@/lib/fonts/roboto-bold";
+import { priceWithoutVat, vatAmount, calculateVatSummary, formatPrice as formatVatPrice } from "@/lib/vat";
 
 // ── Helpers ──────────────────────────────────────────────────────
 
@@ -69,10 +70,11 @@ export async function generateInvoicePdf(order: ShopOrderWithDetails, settings?:
   const supplierBankAccount = company?.bank_account || "XXXX/XXXX";
 
   const invoiceNote = (typeof settings?.invoice_note === "string") ? settings.invoice_note : "";
-  // "Nejsme plátci DPH" only when DIČ is empty
+  // Plátce DPH = má DIČ
+  const isVatPayer = !!supplierDic;
+
   let supplierNote: string;
-  if (supplierDic) {
-    // Has DIČ → never show "Nejsme plátci DPH" even if stored in DB
+  if (isVatPayer) {
     const customNote = (typeof settings?.invoice_supplier_note === "string") ? settings.invoice_supplier_note : "";
     const isDefaultNonVat = customNote.toLowerCase().includes("nejsme") && customNote.toLowerCase().includes("dph");
     supplierNote = isDefaultNonVat ? "Faktura slouží jako daňový doklad." : (customNote || "Faktura slouží jako daňový doklad.");
@@ -168,7 +170,6 @@ export async function generateInvoicePdf(order: ShopOrderWithDetails, settings?:
   // Customer
   const customerLines: string[] = [];
   const hasCompany = !!order.billing_company;
-  // If company: company is the bold heading, name goes into lines
   if (hasCompany && order.billing_name) customerLines.push(order.billing_name);
   if (order.billing_street) customerLines.push(order.billing_street);
   const cityZip = [order.billing_zip, order.billing_city].filter(Boolean).join(" ");
@@ -180,10 +181,9 @@ export async function generateInvoicePdf(order: ShopOrderWithDetails, settings?:
   const customerHeading = hasCompany ? order.billing_company! : (order.billing_name || "");
   const cy = drawAddressBlock(midX, "Odběratel", customerHeading, customerLines, y);
 
-  // Delivery address — výdejní místo nebo klasická dodací adresa
+  // Delivery address
   let dy = cy;
   if ((order as any).pickup_point_name) {
-    // Výdejní místo (Balíkovna / Zásilkovna)
     const carrierLabel = (order as any).pickup_point_carrier === "zasilkovna" ? "Zásilkovna" : "Balíkovna";
     const pickupLines: string[] = [];
     if ((order as any).pickup_point_address) pickupLines.push((order as any).pickup_point_address);
@@ -218,46 +218,101 @@ export async function generateInvoicePdf(order: ShopOrderWithDetails, settings?:
   }
 
   // === ITEMS TABLE ===
-  doc.setDrawColor(200, 200, 200);
-  doc.setFillColor(245, 245, 245);
-  doc.rect(margin, y, contentWidth, 8, "F");
-
-  doc.setFontSize(8);
-  doc.setFont("Roboto", "bold");
-  doc.setTextColor(...textColor);
-
-  const col1 = margin + 2;
-  const col2 = margin + 95;
-  const col3 = margin + 115;
-  const col5 = margin + contentWidth - 2;
-
-  doc.text("Název", col1, y + 5.5);
-  doc.text("Množství", col2, y + 5.5);
-  doc.text("Cena/ks", col3, y + 5.5);
-  doc.text("Celkem", col5, y + 5.5, { align: "right" });
-
-  y += 10;
-
-  doc.setFont("Roboto", "normal");
-  doc.setFontSize(9);
-
   const items = order.items || [];
-  for (const item of items) {
-    const productName = item.product?.title || "Produkt";
-    const truncatedName = productName.length > 50 ? productName.substring(0, 47) + "..." : productName;
 
+  if (isVatPayer) {
+    // ── DPH plátce: rozšířená tabulka se sloupci DPH ──
+    doc.setDrawColor(200, 200, 200);
+    doc.setFillColor(245, 245, 245);
+    doc.rect(margin, y, contentWidth, 8, "F");
+
+    doc.setFontSize(7);
+    doc.setFont("Roboto", "bold");
     doc.setTextColor(...textColor);
-    doc.text(truncatedName, col1, y + 4);
-    doc.text(String(item.quantity) + "x", col2, y + 4);
-    doc.text(formatPrice(item.unit_price), col3, y + 4);
-    doc.text(formatPrice(item.total_price), col5, y + 4, { align: "right" });
 
-    y += 7;
+    const tCol1 = margin + 2;                         // Název
+    const tCol2 = margin + 72;                        // Ks
+    const tCol3 = margin + 85;                        // Cena/ks bez DPH
+    const tCol4 = margin + 113;                       // DPH %
+    const tCol5 = margin + 127;                       // DPH
+    const tCol6 = margin + contentWidth - 2;          // Celkem s DPH
 
-    doc.setDrawColor(230, 230, 230);
-    doc.setLineWidth(0.2);
-    doc.line(margin, y, pageWidth - margin, y);
-    y += 1;
+    doc.text("Název", tCol1, y + 5.5);
+    doc.text("Ks", tCol2, y + 5.5);
+    doc.text("Cena/ks bez DPH", tCol3, y + 5.5);
+    doc.text("DPH %", tCol4, y + 5.5);
+    doc.text("DPH", tCol5, y + 5.5);
+    doc.text("Celkem s DPH", tCol6, y + 5.5, { align: "right" });
+
+    y += 10;
+
+    doc.setFont("Roboto", "normal");
+    doc.setFontSize(8);
+
+    for (const item of items) {
+      const productName = item.product?.title || "Produkt";
+      const truncatedName = productName.length > 38 ? productName.substring(0, 35) + "..." : productName;
+      const itemVatRate = (item as any).vat_rate ?? 21;
+      const unitWithoutVat = priceWithoutVat(item.unit_price, itemVatRate);
+      const totalVatAmt = vatAmount(item.total_price, itemVatRate);
+
+      doc.setTextColor(...textColor);
+      doc.text(truncatedName, tCol1, y + 4);
+      doc.text(String(item.quantity) + "x", tCol2, y + 4);
+      doc.text(formatVatPrice(unitWithoutVat), tCol3, y + 4);
+      doc.text(itemVatRate + " %", tCol4, y + 4);
+      doc.text(formatVatPrice(totalVatAmt), tCol5, y + 4);
+      doc.text(formatPrice(item.total_price), tCol6, y + 4, { align: "right" });
+
+      y += 7;
+
+      doc.setDrawColor(230, 230, 230);
+      doc.setLineWidth(0.2);
+      doc.line(margin, y, pageWidth - margin, y);
+      y += 1;
+    }
+  } else {
+    // ── Neplátce DPH: jednoduchá tabulka (jako předtím) ──
+    doc.setDrawColor(200, 200, 200);
+    doc.setFillColor(245, 245, 245);
+    doc.rect(margin, y, contentWidth, 8, "F");
+
+    doc.setFontSize(8);
+    doc.setFont("Roboto", "bold");
+    doc.setTextColor(...textColor);
+
+    const col1 = margin + 2;
+    const col2 = margin + 95;
+    const col3 = margin + 115;
+    const col5 = margin + contentWidth - 2;
+
+    doc.text("Název", col1, y + 5.5);
+    doc.text("Množství", col2, y + 5.5);
+    doc.text("Cena/ks", col3, y + 5.5);
+    doc.text("Celkem", col5, y + 5.5, { align: "right" });
+
+    y += 10;
+
+    doc.setFont("Roboto", "normal");
+    doc.setFontSize(9);
+
+    for (const item of items) {
+      const productName = item.product?.title || "Produkt";
+      const truncatedName = productName.length > 50 ? productName.substring(0, 47) + "..." : productName;
+
+      doc.setTextColor(...textColor);
+      doc.text(truncatedName, col1, y + 4);
+      doc.text(String(item.quantity) + "x", col2, y + 4);
+      doc.text(formatPrice(item.unit_price), col3, y + 4);
+      doc.text(formatPrice(item.total_price), col5, y + 4, { align: "right" });
+
+      y += 7;
+
+      doc.setDrawColor(230, 230, 230);
+      doc.setLineWidth(0.2);
+      doc.line(margin, y, pageWidth - margin, y);
+      y += 1;
+    }
   }
 
   y += 6;
@@ -308,7 +363,81 @@ export async function generateInvoicePdf(order: ShopOrderWithDetails, settings?:
     y += 5;
   }
 
-  // Total
+  const totalPrice = order.total_price ?? subtotal;
+
+  // === DPH REKAPITULACE (pouze plátce DPH) ===
+  if (isVatPayer) {
+    y += 4;
+
+    // Vypočítáme DPH summary z položek + doprava + příplatek
+    const shippingVatRate = (order.shipping as any)?.vat_rate ?? 21;
+    const vatSummaryItems = items.map(item => ({
+      totalPrice: item.total_price,
+      vatRate: (item as any).vat_rate ?? 21,
+    }));
+    const vatSummary = calculateVatSummary(
+      vatSummaryItems,
+      order.shipping_price || 0,
+      shippingVatRate,
+      order.payment_surcharge || 0,
+    );
+
+    // Rekapitulace DPH — mini tabulka
+    doc.setFontSize(9);
+    doc.setFont("Roboto", "bold");
+    doc.setTextColor(...textColor);
+    doc.text("Rekapitulace DPH", summaryX, y);
+    y += 5;
+
+    doc.setFontSize(8);
+    doc.setFont("Roboto", "normal");
+    doc.setTextColor(...mutedColor);
+
+    // Hlavička
+    const vatLabelX = summaryX;
+    const vatBaseX = summaryX + 25;
+    const vatAmtX = summaryValX;
+
+    doc.text("Sazba", vatLabelX, y);
+    doc.text("Základ", vatBaseX, y);
+    doc.text("DPH", vatAmtX, y, { align: "right" });
+    y += 4;
+
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.2);
+    doc.line(summaryX, y, summaryValX, y);
+    y += 3;
+
+    doc.setTextColor(...textColor);
+    for (const row of vatSummary.rows) {
+      doc.text(`${row.rate} %`, vatLabelX, y);
+      doc.text(formatVatPrice(row.base), vatBaseX, y);
+      doc.text(formatVatPrice(row.vat), vatAmtX, y, { align: "right" });
+      y += 4;
+    }
+
+    y += 2;
+    doc.setDrawColor(200, 200, 200);
+    doc.line(summaryX, y, summaryValX, y);
+    y += 5;
+
+    // Celkem bez DPH
+    doc.setFontSize(9);
+    doc.setTextColor(...mutedColor);
+    doc.text("Celkem bez DPH:", summaryX, y);
+    doc.setTextColor(...textColor);
+    doc.text(formatVatPrice(vatSummary.totalBase), summaryValX, y, { align: "right" });
+    y += 5;
+
+    // Celkem DPH
+    doc.setTextColor(...mutedColor);
+    doc.text("Celkem DPH:", summaryX, y);
+    doc.setTextColor(...textColor);
+    doc.text(formatVatPrice(vatSummary.totalVat), summaryValX, y, { align: "right" });
+    y += 5;
+  }
+
+  // Total — CELKEM S DPH (nebo CELKEM pro neplátce)
   y += 2;
   doc.setDrawColor(...accentColor);
   doc.setLineWidth(0.5);
@@ -318,8 +447,7 @@ export async function generateInvoicePdf(order: ShopOrderWithDetails, settings?:
   doc.setFontSize(13);
   doc.setFont("Roboto", "bold");
   doc.setTextColor(...accentColor);
-  const totalPrice = order.total_price ?? subtotal;
-  doc.text("CELKEM:", summaryX, y);
+  doc.text(isVatPayer ? "CELKEM S DPH:" : "CELKEM:", summaryX, y);
   doc.text(formatPrice(totalPrice), summaryValX, y, { align: "right" });
 
   y += 16;

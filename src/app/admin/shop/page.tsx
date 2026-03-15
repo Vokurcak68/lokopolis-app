@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase";
 import type { ShopProduct, ShopOrder, ShippingMethod, PaymentMethod, Coupon, LoyaltyLevel, ProductAttachment, ProductReview } from "@/types/database";
 import { type ShopCategory, buildCategoryTree, type ShopCategoryTreeNode } from "@/lib/shop-categories";
 import { getImageVariant } from "@/lib/image-variants";
+import { priceWithoutVat } from "@/lib/vat";
 
 const STATUS_LABELS: Record<string, string> = {
   active: "Aktivní",
@@ -166,6 +167,7 @@ export default function AdminShopPage() {
     stock_alert_threshold: 5,
     max_per_order: null as number | null,
     ean: "",
+    vat_rate: 21,
   });
   // Attachments
   const [attachments, setAttachments] = useState<ProductAttachment[]>([]);
@@ -395,6 +397,7 @@ export default function AdminShopPage() {
         stock_alert_threshold: formData.stock_alert_threshold || 5,
         max_per_order: formData.max_per_order,
         ean: formData.ean.trim() || null,
+        vat_rate: formData.vat_rate,
         cover_image_url, preview_images, file_url, file_name, file_size, file_type,
       };
 
@@ -435,6 +438,7 @@ export default function AdminShopPage() {
       stock_alert_threshold: 5,
       max_per_order: null,
       ean: "",
+      vat_rate: 21,
     });
     setCoverFile(null);
     setPreviewFiles([]);
@@ -456,6 +460,7 @@ export default function AdminShopPage() {
       stock_alert_threshold: product.stock_alert_threshold || 5,
       max_per_order: product.max_per_order,
       ean: product.ean || "",
+      vat_rate: product.vat_rate ?? 21,
     });
     setTab("edit");
     fetchAttachments(product.id);
@@ -1404,15 +1409,28 @@ export default function AdminShopPage() {
               </div>
             </div>
 
-            {/* Price + Original price */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+            {/* Price + Original price + DPH */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
               <div>
                 <label style={labelStyle}>Cena (Kč) — 0 = zdarma</label>
                 <input type="number" value={formData.price} onChange={(e) => setFormData((f) => ({ ...f, price: parseInt(e.target.value) || 0 }))} style={inputStyle} min={0} />
+                {formData.price > 0 && formData.vat_rate > 0 && (
+                  <span style={{ fontSize: "12px", color: "var(--text-dimmer)" }}>
+                    Základ: {priceWithoutVat(formData.price, formData.vat_rate).toFixed(2)} Kč bez DPH
+                  </span>
+                )}
               </div>
               <div>
                 <label style={labelStyle}>Původní cena (pro slevu)</label>
                 <input type="number" value={formData.original_price} onChange={(e) => setFormData((f) => ({ ...f, original_price: e.target.value }))} style={inputStyle} min={0} placeholder="Prázdné = bez slevy" />
+              </div>
+              <div>
+                <label style={labelStyle}>Sazba DPH</label>
+                <select value={formData.vat_rate} onChange={(e) => setFormData((f) => ({ ...f, vat_rate: parseInt(e.target.value) }))} style={inputStyle}>
+                  <option value={21}>21 % (základní)</option>
+                  <option value={12}>12 % (snížená)</option>
+                  <option value={0}>0 % (osvobozeno)</option>
+                </select>
               </div>
             </div>
 
@@ -1656,7 +1674,7 @@ function ShippingAdmin() {
   const [methods, setMethods] = useState<ShippingMethod[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<ShippingMethod | null>(null);
-  const [form, setForm] = useState({ name: "", slug: "", description: "", price: 0, free_from: "" as string, delivery_days: "", digital_only: false, physical_only: false, active: true, sort_order: 0, shipping_type: "standard" as "standard" | "pickup_point" });
+  const [form, setForm] = useState({ name: "", slug: "", description: "", price: 0, free_from: "" as string, delivery_days: "", digital_only: false, physical_only: false, active: true, sort_order: 0, shipping_type: "standard" as "standard" | "pickup_point", vat_rate: 21 });
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -1668,7 +1686,7 @@ function ShippingAdmin() {
   useEffect(() => { load(); }, [load]);
 
   function resetForm() {
-    setForm({ name: "", slug: "", description: "", price: 0, free_from: "", delivery_days: "", digital_only: false, physical_only: false, active: true, sort_order: 0, shipping_type: "standard" });
+    setForm({ name: "", slug: "", description: "", price: 0, free_from: "", delivery_days: "", digital_only: false, physical_only: false, active: true, sort_order: 0, shipping_type: "standard", vat_rate: 21 });
     setEditing(null);
   }
 
@@ -1679,6 +1697,7 @@ function ShippingAdmin() {
       free_from: m.free_from?.toString() || "", delivery_days: m.delivery_days || "",
       digital_only: m.digital_only, physical_only: m.physical_only, active: m.active, sort_order: m.sort_order,
       shipping_type: m.shipping_type || "standard",
+      vat_rate: m.vat_rate ?? 21,
     });
   }
 
@@ -1692,6 +1711,7 @@ function ShippingAdmin() {
       delivery_days: form.delivery_days || null, digital_only: form.digital_only,
       physical_only: form.physical_only, active: form.active, sort_order: form.sort_order,
       shipping_type: form.shipping_type,
+      vat_rate: form.vat_rate,
     };
     if (editing) {
       await supabase.from("shipping_methods").update(payload).eq("id", editing.id);
@@ -1776,6 +1796,14 @@ function ShippingAdmin() {
             <select style={fStyle} value={form.shipping_type} onChange={(e) => setForm({ ...form, shipping_type: e.target.value as "standard" | "pickup_point" })}>
               <option value="standard">Na adresu</option>
               <option value="pickup_point">Výdejní místo</option>
+            </select>
+          </div>
+          <div>
+            <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>Sazba DPH</label>
+            <select style={fStyle} value={form.vat_rate} onChange={(e) => setForm({ ...form, vat_rate: parseInt(e.target.value) })}>
+              <option value={21}>21 % (základní)</option>
+              <option value={12}>12 % (snížená)</option>
+              <option value={0}>0 % (osvobozeno)</option>
             </select>
           </div>
         </div>

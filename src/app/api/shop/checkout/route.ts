@@ -6,6 +6,7 @@ import { getClientIp, honeypotValid, isValidEmail, minFillTimeValid, normalizeTe
 import { sendEmail } from "@/lib/email";
 import { orderConfirmation, newOrderAdmin } from "@/lib/email-templates";
 import { getSettings } from "@/lib/shop-settings";
+import { calculateVatSummary } from "@/lib/vat";
 
 // Lazy env check - only validate at runtime, not at build time
 function getEnvConfig() {
@@ -167,7 +168,7 @@ export async function POST(req: NextRequest) {
 
     // Calculate totals
     let itemsTotal = 0;
-    const orderItems: { productId: string; quantity: number; unitPrice: number; totalPrice: number }[] = [];
+    const orderItems: { productId: string; quantity: number; unitPrice: number; totalPrice: number; vatRate: number }[] = [];
 
     for (const item of items) {
       const product = products.find((p) => p.id === item.productId);
@@ -181,7 +182,7 @@ export async function POST(req: NextRequest) {
 
       const total = Number(product.price) * finalQty;
       itemsTotal += total;
-      orderItems.push({ productId: product.id, quantity: finalQty, unitPrice: Number(product.price), totalPrice: total });
+      orderItems.push({ productId: product.id, quantity: finalQty, unitPrice: Number(product.price), totalPrice: total, vatRate: product.vat_rate ?? 21 });
     }
 
     const shippingPrice = shipping.free_from && itemsTotal >= shipping.free_from ? 0 : shipping.price;
@@ -260,6 +261,15 @@ export async function POST(req: NextRequest) {
     const totalPrice = Math.max(0, itemsTotal - couponDiscount - loyaltyDiscount + shippingPrice + paymentSurcharge);
     const allFree = totalPrice === 0;
 
+    // DPH výpočet
+    const shippingVatRate = shipping.vat_rate ?? 21;
+    const vatSummary = calculateVatSummary(
+      orderItems.map(i => ({ totalPrice: i.totalPrice, vatRate: i.vatRate })),
+      shippingPrice,
+      shippingVatRate,
+      paymentSurcharge,
+    );
+
     const safePhone = normalizeText(billing?.phone || "", 40) || null;
     const safeStreet = normalizeText(billing?.street || "", 160) || null;
     const safeCity = normalizeText(billing?.city || "", 120) || null;
@@ -316,6 +326,8 @@ export async function POST(req: NextRequest) {
         pickup_point_name: pickupPoint?.name ? normalizeText(pickupPoint.name, 200) : null,
         pickup_point_address: pickupPoint?.address ? normalizeText(pickupPoint.address, 300) : null,
         pickup_point_carrier: pickupPointCarrier === "zasilkovna" ? "zasilkovna" : pickupPointCarrier === "balikovna" ? "balikovna" : null,
+        total_vat: vatSummary.totalVat,
+        total_without_vat: vatSummary.totalBase,
         paid_at: allFree ? new Date().toISOString() : null,
       })
       .select("id")
@@ -355,6 +367,7 @@ export async function POST(req: NextRequest) {
         quantity: item.quantity,
         unit_price: item.unitPrice,
         total_price: item.totalPrice,
+        vat_rate: item.vatRate,
       });
     }
 
