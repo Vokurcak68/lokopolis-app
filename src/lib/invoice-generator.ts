@@ -239,6 +239,8 @@ export async function generateInvoicePdf(order: ShopOrderWithDetails, settings?:
   if (order.billing_country && order.billing_country !== "CZ") customerLines.push(order.billing_country);
   if (order.billing_ico) customerLines.push(`IČ: ${order.billing_ico}`);
   if (order.billing_dic) customerLines.push(`DIČ: ${order.billing_dic}`);
+  if (order.billing_email) customerLines.push(order.billing_email);
+  if (order.billing_phone) customerLines.push(`Tel: ${order.billing_phone}`);
 
   const customerHeading = hasCompany ? order.billing_company! : (order.billing_name || "");
   const cy = drawAddressBlock(midX, "Odběratel", customerHeading, customerLines, y);
