@@ -95,11 +95,49 @@ export async function generateInvoicePdf(order: ShopOrderWithDetails, settings?:
   doc.setFillColor(...accentColor);
   doc.rect(0, 0, pageWidth, 12, "F");
 
-  y = 24;
+  y = 16;
+
+  // Badge logo (vlevo nahoře)
+  const logoX = margin;
+  const logoY = y;
+  const logoW = 36;
+  const logoH = 16;
+  doc.setDrawColor(...accentColor);
+  doc.setLineWidth(0.8);
+  doc.roundedRect(logoX, logoY, logoW, logoH, 2, 2, "S");
+
+  // "· est. 2026 ·"
+  doc.setFontSize(4.5);
+  doc.setFont("Roboto", "normal");
+  doc.setTextColor(...accentColor);
+  doc.text("· est. 2026 ·", logoX + logoW / 2, logoY + 4, { align: "center" });
+
+  // "LOKO" (dark) + "POLIS" (accent)
+  doc.setFontSize(13);
+  doc.setFont("Roboto", "bold");
+  const lokoText = "LOKO";
+  const polisText = "POLIS";
+  const lokoW = doc.getTextWidth(lokoText);
+  const polisW = doc.getTextWidth(polisText);
+  const fullLogoTextW = lokoW + polisW;
+  const logoTextStartX = logoX + (logoW - fullLogoTextW) / 2;
+  doc.setTextColor(...textColor);
+  doc.text(lokoText, logoTextStartX, logoY + 11);
+  doc.setTextColor(...accentColor);
+  doc.text(polisText, logoTextStartX + lokoW, logoY + 11);
+
+  // "modelová železnice"
+  doc.setFontSize(3.8);
+  doc.setFont("Roboto", "normal");
+  doc.setTextColor(...mutedColor);
+  doc.text("modelová železnice", logoX + logoW / 2, logoY + 14.5, { align: "center" });
+
+  // "FAKTURA" (vedle loga)
+  y = logoY + 11;
   doc.setTextColor(...accentColor);
   doc.setFontSize(28);
   doc.setFont("Roboto", "bold");
-  doc.text("FAKTURA", margin, y);
+  doc.text("FAKTURA", logoX + logoW + 8, y);
 
   doc.setTextColor(...textColor);
   doc.setFontSize(11);
