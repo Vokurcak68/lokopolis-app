@@ -97,59 +97,56 @@ export async function generateInvoicePdf(order: ShopOrderWithDetails, settings?:
 
   y = 15;
 
-  // Badge logo (vlevo nahoře) — proporce z webu (sm): est 6px, LOKOPOLIS 14px/800, železnice 5px
+  // Badge logo — replika CSS badge z webu (BadgeLogo.tsx "sm" varianta)
+  // Web poměry: est=6px, LOKOPOLIS=14px/800, železnice=5px → škálováno na PDF mm
   const logoX = margin;
   const logoY = y;
-  // Poměr font velikostí z webu: 6:14:5 → v PDF scale ×1.5 → 9:21:7.5
-  const mainFontSize = 20;
-  const estFontSize = 7;
-  const subFontSize = 6;
 
-  // Nejdřív změříme šířku LOKOPOLIS abychom mohli nakreslit rámeček
-  doc.setFontSize(mainFontSize);
+  // Změříme hlavní text LOKOPOLIS
+  doc.setFontSize(16);
   doc.setFont("Roboto", "bold");
-  const lokoText = "LOKO";
-  const polisText = "POLIS";
-  const lokoW = doc.getTextWidth(lokoText);
-  const polisW = doc.getTextWidth(polisText);
-  const fullLogoTextW = lokoW + polisW;
+  const lokoW = doc.getTextWidth("LOKO");
+  const polisW = doc.getTextWidth("POLIS");
+  const mainTextW = lokoW + polisW;
 
-  const logoPadX = 6;
-  const logoPadTop = 4;
-  const logoW = fullLogoTextW + logoPadX * 2;
-  const logoH = 23;
+  // Badge rozměry odvozené od textu
+  const padX = 5;
+  const logoW = mainTextW + padX * 2;
+  const logoH = 18;
+  const centerX = logoX + logoW / 2;
 
+  // Rámeček
   doc.setDrawColor(...accentColor);
-  doc.setLineWidth(1);
-  doc.roundedRect(logoX, logoY, logoW, logoH, 3, 3, "S");
+  doc.setLineWidth(0.8);
+  doc.roundedRect(logoX, logoY, logoW, logoH, 2.5, 2.5, "S");
 
-  // "· est. 2026 ·"
-  doc.setFontSize(estFontSize);
+  // Řádek 1: · est. 2026 ·
+  doc.setFontSize(5);
   doc.setFont("Roboto", "normal");
   doc.setTextColor(...accentColor);
-  doc.text("\u00B7 est. 2026 \u00B7", logoX + logoW / 2, logoY + logoPadTop + 2, { align: "center", charSpace: 0.8 });
+  doc.text("· est. 2026 ·", centerX, logoY + 4.5, { align: "center" });
 
-  // "LOKO" (dark) + "POLIS" (accent) — obě stejný font, stejná velikost
-  doc.setFontSize(mainFontSize);
+  // Řádek 2: LOKO (tmavá) + POLIS (accent) — centrováno
+  doc.setFontSize(16);
   doc.setFont("Roboto", "bold");
-  const logoTextStartX = logoX + logoPadX;
+  const textStartX = logoX + padX;
   doc.setTextColor(...textColor);
-  doc.text(lokoText, logoTextStartX, logoY + logoPadTop + 13);
+  doc.text("LOKO", textStartX, logoY + 12.5);
   doc.setTextColor(...accentColor);
-  doc.text(polisText, logoTextStartX + lokoW, logoY + logoPadTop + 13);
+  doc.text("POLIS", textStartX + lokoW, logoY + 12.5);
 
-  // "modelová železnice"
-  doc.setFontSize(subFontSize);
+  // Řádek 3: modelová železnice
+  doc.setFontSize(4.2);
   doc.setFont("Roboto", "normal");
   doc.setTextColor(...mutedColor);
-  doc.text("modelov\u00E1 \u017Eeleznice", logoX + logoW / 2, logoY + logoPadTop + 18, { align: "center", charSpace: 0.6 });
+  doc.text("modelov\u00E1 \u017Eeleznice", centerX, logoY + 16.5, { align: "center" });
 
-  // "FAKTURA" (vedle loga s mezerou)
-  y = logoY + logoPadTop + 13;
+  // FAKTURA — vedle loga, vertikálně zarovnáno se středem badge
+  y = logoY + 12.5;
   doc.setTextColor(...accentColor);
   doc.setFontSize(28);
   doc.setFont("Roboto", "bold");
-  doc.text("FAKTURA", logoX + logoW + 12, y);
+  doc.text("FAKTURA", logoX + logoW + 10, y);
 
   doc.setTextColor(...textColor);
   doc.setFontSize(11);
