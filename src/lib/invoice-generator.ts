@@ -97,43 +97,55 @@ export async function generateInvoicePdf(order: ShopOrderWithDetails, settings?:
 
   y = 15;
 
-  // Badge logo (vlevo nahoře)
+  // Badge logo (vlevo nahoře) — proporce z webu (sm): est 6px, LOKOPOLIS 14px/800, železnice 5px
   const logoX = margin;
   const logoY = y;
-  const logoW = 48;
-  const logoH = 22;
-  doc.setDrawColor(...accentColor);
-  doc.setLineWidth(1);
-  doc.roundedRect(logoX, logoY, logoW, logoH, 3, 3, "S");
+  // Poměr font velikostí z webu: 6:14:5 → v PDF scale ×1.5 → 9:21:7.5
+  const mainFontSize = 20;
+  const estFontSize = 7;
+  const subFontSize = 6;
 
-  // "· est. 2026 ·"
-  doc.setFontSize(5.5);
-  doc.setFont("Roboto", "normal");
-  doc.setTextColor(...accentColor);
-  doc.text("· est. 2026 ·", logoX + logoW / 2, logoY + 5.5, { align: "center" });
-
-  // "LOKO" (dark) + "POLIS" (accent)
-  doc.setFontSize(18);
+  // Nejdřív změříme šířku LOKOPOLIS abychom mohli nakreslit rámeček
+  doc.setFontSize(mainFontSize);
   doc.setFont("Roboto", "bold");
   const lokoText = "LOKO";
   const polisText = "POLIS";
   const lokoW = doc.getTextWidth(lokoText);
   const polisW = doc.getTextWidth(polisText);
   const fullLogoTextW = lokoW + polisW;
-  const logoTextStartX = logoX + (logoW - fullLogoTextW) / 2;
-  doc.setTextColor(...textColor);
-  doc.text(lokoText, logoTextStartX, logoY + 14.5);
+
+  const logoPadX = 6;
+  const logoPadTop = 4;
+  const logoW = fullLogoTextW + logoPadX * 2;
+  const logoH = 23;
+
+  doc.setDrawColor(...accentColor);
+  doc.setLineWidth(1);
+  doc.roundedRect(logoX, logoY, logoW, logoH, 3, 3, "S");
+
+  // "· est. 2026 ·"
+  doc.setFontSize(estFontSize);
+  doc.setFont("Roboto", "normal");
   doc.setTextColor(...accentColor);
-  doc.text(polisText, logoTextStartX + lokoW, logoY + 14.5);
+  doc.text("\u00B7 est. 2026 \u00B7", logoX + logoW / 2, logoY + logoPadTop + 2, { align: "center", charSpace: 0.8 });
+
+  // "LOKO" (dark) + "POLIS" (accent) — obě stejný font, stejná velikost
+  doc.setFontSize(mainFontSize);
+  doc.setFont("Roboto", "bold");
+  const logoTextStartX = logoX + logoPadX;
+  doc.setTextColor(...textColor);
+  doc.text(lokoText, logoTextStartX, logoY + logoPadTop + 13);
+  doc.setTextColor(...accentColor);
+  doc.text(polisText, logoTextStartX + lokoW, logoY + logoPadTop + 13);
 
   // "modelová železnice"
-  doc.setFontSize(5);
+  doc.setFontSize(subFontSize);
   doc.setFont("Roboto", "normal");
   doc.setTextColor(...mutedColor);
-  doc.text("modelová železnice", logoX + logoW / 2, logoY + 19.5, { align: "center" });
+  doc.text("modelov\u00E1 \u017Eeleznice", logoX + logoW / 2, logoY + logoPadTop + 18, { align: "center", charSpace: 0.6 });
 
-  // "FAKTURA" (vedle loga)
-  y = logoY + 15;
+  // "FAKTURA" (vedle loga s mezerou)
+  y = logoY + logoPadTop + 13;
   doc.setTextColor(...accentColor);
   doc.setFontSize(28);
   doc.setFont("Roboto", "bold");
