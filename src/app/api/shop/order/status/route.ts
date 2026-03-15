@@ -100,18 +100,19 @@ export async function PUT(req: NextRequest) {
       .single();
 
     // Send email notification to customer (must await on Vercel serverless)
-    if (order?.billing_email) {
+    const customerEmail = order?.billing_email || order?.guest_email;
+    if (customerEmail) {
       try {
         const shopSettings = await getSettings() as Record<string, any>;
         if (newStatus === "shipped") {
           await sendEmail(
-            order.billing_email,
+            customerEmail,
             `Objednávka ${order.order_number} byla odeslána 📦`,
             orderShipped(order, shopSettings)
           );
         } else {
           await sendEmail(
-            order.billing_email,
+            customerEmail,
             `Objednávka ${order.order_number} — ${newStatus === "paid" ? "zaplaceno" : newStatus === "delivered" ? "doručeno" : "změna stavu"}`,
             orderStatusChanged(order, newStatus, shopSettings)
           );
