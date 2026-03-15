@@ -943,6 +943,17 @@ export default function AdminShopPage() {
                               </div>
                             </div>
 
+                            {/* === Výdejní místo === */}
+                            {(o as any).pickup_point_name && (
+                              <div style={{ padding: "10px 14px", background: "rgba(240, 160, 48, 0.06)", border: "1px solid var(--accent)", borderRadius: "8px" }}>
+                                <span style={{ fontWeight: 700, fontSize: "13px", color: "var(--text-primary)" }}>📍 Výdejní místo: </span>
+                                <span style={{ fontSize: "13px", color: "var(--text-body)" }}>{(o as any).pickup_point_name}</span>
+                                {(o as any).pickup_point_address && (
+                                  <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>, {(o as any).pickup_point_address}</span>
+                                )}
+                              </div>
+                            )}
+
                             {/* === Section 3: Doprava a platba === */}
                             <div style={{ display: "flex", gap: "24px", flexWrap: "wrap", fontSize: "13px", color: "var(--text-body)" }}>
                               <div>
@@ -1633,7 +1644,7 @@ function ShippingAdmin() {
   const [methods, setMethods] = useState<ShippingMethod[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<ShippingMethod | null>(null);
-  const [form, setForm] = useState({ name: "", slug: "", description: "", price: 0, free_from: "" as string, delivery_days: "", digital_only: false, physical_only: false, active: true, sort_order: 0 });
+  const [form, setForm] = useState({ name: "", slug: "", description: "", price: 0, free_from: "" as string, delivery_days: "", digital_only: false, physical_only: false, active: true, sort_order: 0, shipping_type: "standard" as "standard" | "pickup_point" });
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -1645,7 +1656,7 @@ function ShippingAdmin() {
   useEffect(() => { load(); }, [load]);
 
   function resetForm() {
-    setForm({ name: "", slug: "", description: "", price: 0, free_from: "", delivery_days: "", digital_only: false, physical_only: false, active: true, sort_order: 0 });
+    setForm({ name: "", slug: "", description: "", price: 0, free_from: "", delivery_days: "", digital_only: false, physical_only: false, active: true, sort_order: 0, shipping_type: "standard" });
     setEditing(null);
   }
 
@@ -1655,6 +1666,7 @@ function ShippingAdmin() {
       name: m.name, slug: m.slug, description: m.description || "", price: m.price,
       free_from: m.free_from?.toString() || "", delivery_days: m.delivery_days || "",
       digital_only: m.digital_only, physical_only: m.physical_only, active: m.active, sort_order: m.sort_order,
+      shipping_type: m.shipping_type || "standard",
     });
   }
 
@@ -1667,6 +1679,7 @@ function ShippingAdmin() {
       free_from: form.free_from ? parseFloat(form.free_from) : null,
       delivery_days: form.delivery_days || null, digital_only: form.digital_only,
       physical_only: form.physical_only, active: form.active, sort_order: form.sort_order,
+      shipping_type: form.shipping_type,
     };
     if (editing) {
       await supabase.from("shipping_methods").update(payload).eq("id", editing.id);
@@ -1701,6 +1714,7 @@ function ShippingAdmin() {
               <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>
                 {m.price} Kč · {m.delivery_days || "—"} {m.digital_only ? " · Jen digitální" : ""}{m.physical_only ? " · Jen fyzické" : ""}
                 {m.free_from ? ` · Zdarma od ${m.free_from} Kč` : ""}
+                {m.shipping_type === "pickup_point" ? " · 📍 Výdejní místo" : ""}
               </div>
             </div>
             <div style={{ display: "flex", gap: "8px" }}>
@@ -1744,6 +1758,13 @@ function ShippingAdmin() {
           <div>
             <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>Pořadí</label>
             <input style={fStyle} type="number" value={form.sort_order} onChange={(e) => setForm({ ...form, sort_order: parseInt(e.target.value) || 0 })} />
+          </div>
+          <div>
+            <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>Typ dopravy</label>
+            <select style={fStyle} value={form.shipping_type} onChange={(e) => setForm({ ...form, shipping_type: e.target.value as "standard" | "pickup_point" })}>
+              <option value="standard">Na adresu</option>
+              <option value="pickup_point">Výdejní místo</option>
+            </select>
           </div>
         </div>
         <div style={{ display: "flex", gap: "16px", marginTop: "12px", flexWrap: "wrap" }}>

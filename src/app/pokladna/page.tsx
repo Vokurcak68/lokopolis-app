@@ -7,6 +7,8 @@ import { useAuth } from "@/components/Auth/AuthProvider";
 import { useCart } from "@/components/Shop/CartProvider";
 import { supabase } from "@/lib/supabase";
 import Turnstile from "@/components/Turnstile";
+import PickupPointSelector from "@/components/Shop/PickupPointSelector";
+import type { PickupPoint } from "@/components/Shop/PickupPointSelector";
 import type { ShippingMethod, PaymentMethod, UserAddress } from "@/types/database";
 
 interface BillingData {
@@ -53,6 +55,7 @@ export default function CheckoutPage() {
   const [shippingMethods, setShippingMethods] = useState<ShippingMethod[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [selectedShipping, setSelectedShipping] = useState<string>("");
+  const [pickupPoint, setPickupPoint] = useState<PickupPoint | null>(null);
   const [selectedPayment, setSelectedPayment] = useState<string>("");
   const [couponCode, setCouponCode] = useState("");
   const [couponApplied, setCouponApplied] = useState<{ code: string; discount: number; description: string } | null>(null);
@@ -225,6 +228,7 @@ export default function CheckoutPage() {
       if (billing.isBusiness && !billing.ico.trim()) { setError("Vyplňte IČ"); return false; }
     }
     if (step === 1 && !selectedShipping) { setError("Vyberte způsob dopravy"); return false; }
+    if (step === 1 && selectedShippingObj?.shipping_type === "pickup_point" && !pickupPoint) { setError("Vyberte výdejní místo"); return false; }
     if (step === 2 && !selectedPayment) { setError("Vyberte způsob platby"); return false; }
     return true;
   }
@@ -296,6 +300,7 @@ export default function CheckoutPage() {
           billing,
           shippingMethodId: selectedShipping,
           paymentMethodId: selectedPayment,
+          pickupPoint: selectedShippingObj?.shipping_type === "pickup_point" ? pickupPoint : null,
           couponCode: couponApplied?.code || null,
           loyaltyPointsToUse: loyaltyPointsToUse > 0 ? loyaltyPointsToUse : null,
           turnstileToken,
@@ -541,7 +546,7 @@ export default function CheckoutPage() {
                   type="radio"
                   name="shipping"
                   checked={selectedShipping === s.id}
-                  onChange={() => setSelectedShipping(s.id)}
+                  onChange={() => { setSelectedShipping(s.id); if (s.shipping_type !== "pickup_point") setPickupPoint(null); }}
                   style={{ marginTop: "3px" }}
                 />
                 <div style={{ flex: 1 }}>
@@ -569,6 +574,14 @@ export default function CheckoutPage() {
               </label>
             );
           })}
+
+          {/* Výběr výdejního místa pro Balíkovnu */}
+          {selectedShippingObj?.shipping_type === "pickup_point" && (
+            <PickupPointSelector
+              onSelect={(point) => setPickupPoint(point.id ? point : null)}
+              selectedPoint={pickupPoint}
+            />
+          )}
         </div>
       )}
 

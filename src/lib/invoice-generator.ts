@@ -180,9 +180,14 @@ export async function generateInvoicePdf(order: ShopOrderWithDetails, settings?:
   const customerHeading = hasCompany ? order.billing_company! : (order.billing_name || "");
   const cy = drawAddressBlock(midX, "Odběratel", customerHeading, customerLines, y);
 
-  // Delivery address (only if shipping_street is filled)
+  // Delivery address — výdejní místo nebo klasická dodací adresa
   let dy = cy;
-  if (order.shipping_street) {
+  if ((order as any).pickup_point_name) {
+    // Výdejní místo (Balíkovna apod.)
+    const pickupLines: string[] = [];
+    if ((order as any).pickup_point_address) pickupLines.push((order as any).pickup_point_address);
+    dy = drawAddressBlock(rightX, "Výdejní místo", (order as any).pickup_point_name, pickupLines, y);
+  } else if (order.shipping_street) {
     const deliveryName = order.shipping_name || order.billing_name || "";
     const deliveryLines: string[] = [];
     if ((order as any).shipping_company) deliveryLines.push((order as any).shipping_company);

@@ -437,6 +437,7 @@ export interface ShippingMethod {
   physical_only: boolean;
   active: boolean;
   sort_order: number;
+  shipping_type: "standard" | "pickup_point";
   created_at: string;
 }
 
@@ -492,6 +493,9 @@ export interface ShopOrder {
   shipping_city: string | null;
   shipping_zip: string | null;
   shipping_country: string | null;
+  pickup_point_id: string | null;
+  pickup_point_name: string | null;
+  pickup_point_address: string | null;
   tracking_number: string | null;
   tracking_url: string | null;
   admin_order_note: string | null;

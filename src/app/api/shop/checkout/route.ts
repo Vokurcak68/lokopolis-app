@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { items, billing, shippingMethodId, paymentMethodId, couponCode, loyaltyPointsToUse, turnstileToken, website, startedAt } = body;
+    const { items, billing, shippingMethodId, paymentMethodId, pickupPoint, couponCode, loyaltyPointsToUse, turnstileToken, website, startedAt } = body;
 
     if (!honeypotValid(website)) {
       return NextResponse.json({ error: "Požadavek byl zablokován." }, { status: 400 });
@@ -312,6 +312,9 @@ export async function POST(req: NextRequest) {
         shipping_city: billing.differentShipping ? safeShippingCity : safeCity,
         shipping_zip: billing.differentShipping ? safeShippingZip : safeZip,
         shipping_country: billing.differentShipping ? safeShippingCountry : safeCountry,
+        pickup_point_id: pickupPoint?.id ? normalizeText(pickupPoint.id, 120) : null,
+        pickup_point_name: pickupPoint?.name ? normalizeText(pickupPoint.name, 200) : null,
+        pickup_point_address: pickupPoint?.address ? normalizeText(pickupPoint.address, 300) : null,
         paid_at: allFree ? new Date().toISOString() : null,
       })
       .select("id")
