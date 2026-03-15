@@ -1,35 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import nodemailer from "nodemailer";
+import { sendEmail } from "@/lib/email";
 import { verifyTurnstile } from "@/lib/turnstile";
 import { getClientIp, honeypotValid, minFillTimeValid, normalizeText, payloadDigest, rateLimit, replayGuard } from "@/lib/security";
 
-// Lazy env check - only validate at runtime, not at build time
 function getEnvConfig() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const smtpHost = process.env.SMTP_HOST;
-  const smtpPort = process.env.SMTP_PORT;
-  const smtpUser = process.env.SMTP_USER;
-  const smtpPass = process.env.SMTP_PASS;
 
   if (!supabaseUrl || !supabaseServiceKey) {
     throw new Error("Missing required env vars: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY");
   }
 
-  if (!smtpHost || !smtpPort || !smtpUser || !smtpPass) {
-    throw new Error("Missing required SMTP env vars: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS");
-  }
-
-  return {
-    supabaseUrl,
-    supabaseServiceKey,
-    smtpHost,
-    smtpPort: Number(smtpPort),
-    smtpUser,
-    smtpPass,
-    smtpSecure: process.env.SMTP_SECURE ? process.env.SMTP_SECURE === "true" : true,
-  };
+  return { supabaseUrl, supabaseServiceKey };
 }
 
 export async function POST(req: NextRequest) {
@@ -166,34 +149,26 @@ export async function POST(req: NextRequest) {
 
       const username = profile?.display_name || profile?.username || user.email || "Neznámý";
 
-      const transporter = nodemailer.createTransport({
-        host: config.smtpHost,
-        port: config.smtpPort,
-        secure: config.smtpSecure,
-        auth: {
-          user: config.smtpUser,
-          pass: config.smtpPass,
-        },
-      });
-
       try {
-        await transporter.sendMail({
-          from: '"Lokopolis Shop" <info@lokopolis.cz>',
-          to: "info@lokopolis.cz",
-          subject: `Nová objednávka ${orderNumber}`,
-          text: `Nová objednávka ${orderNumber}\n\nProdukt: ${product.title}\nCena: ${product.price} Kč\nOd: ${username} (${user.email})\n${safeNotes ? `Poznámka: ${safeNotes}\n` : ""}\nPro potvrzení platby jděte do admin panelu: /admin/shop`,
-          html: `
+        await sendEmail(
+          "info@lokopolis.cz",
+          `Nová objednávka ${orderNumber}`,
+          `
             <h2>Nová objednávka ${orderNumber}</h2>
             <p><strong>Produkt:</strong> ${String(product.title).replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>
             <p><strong>Cena:</strong> ${product.price} Kč</p>
             <p><strong>Od:</strong> ${String(username).replace(/</g, "&lt;").replace(/>/g, "&gt;")} (${String(user.email || "").replace(/</g, "&lt;").replace(/>/g, "&gt;")})</p>
             ${safeNotes ? `<p><strong>Poznámka:</strong> ${safeNotes.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>` : ""}
-            <p><a href="https://lokopolis-app.vercel.app/admin/shop">Otevřít admin panel</a></p>
+            <p><a href="https://lokopolis.cz/admin/shop">Otevřít admin panel</a></p>
           `,
-        });
+          {
+            text: `Nová objednávka ${orderNumber}\n\nProdukt: ${product.title}\nCena: ${product.price} Kč\nOd: ${username} (${user.email})\n${safeNotes ? `Poznámka: ${safeNotes}\n` : ""}\nPro potvrzení platby jděte do admin panelu: /admin/shop`,
+            from: '"Lokopolis Shop" <info@lokopolis.cz>',
+          }
+        );
       } catch (emailError) {
         console.error("Email send error:", emailError);
-        // Don't fail the order if email fails
+        // Objednávka se nevyhází kvůli chybě emailu
       }
     }
 

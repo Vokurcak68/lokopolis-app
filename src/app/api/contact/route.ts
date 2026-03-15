@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import nodemailer from "nodemailer";
+import { sendEmail, isEmailConfigured } from "@/lib/email";
 import { verifyTurnstile } from "@/lib/turnstile";
 
 // In-memory rate limiting (per Vercel instance)
@@ -90,15 +90,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true }); // silent accept
     }
 
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || "smtp.cesky-hosting.cz",
-      port: parseInt(process.env.SMTP_PORT || "465"),
-      secure: true,
-      auth: {
-        user: process.env.SMTP_USER || "info@lokopolis.cz",
-        pass: process.env.SMTP_PASS || ["01Vok", "412@@"].join(""),
-      },
-    });
+    if (!isEmailConfigured()) {
+      return NextResponse.json({ error: "Email není nakonfigurovaný." }, { status: 500 });
+    }
 
     // Sanitize HTML in message
     const sanitized = message
@@ -112,15 +106,10 @@ export async function POST(req: NextRequest) {
       ? subject.replace(/</g, "&lt;").replace(/>/g, "&gt;")
       : "(bez předmětu)";
 
-    await transporter.sendMail({
-      from: `"Lokopolis kontakt" <info@lokopolis.cz>`,
-      replyTo: `"${name}" <${email}>`,
-      to: "info@lokopolis.cz",
-      subject: subject
-        ? `[Lokopolis] ${subject}`
-        : `[Lokopolis] Zpráva od ${name}`,
-      text: `Jméno: ${name}\nEmail: ${email}\nPředmět: ${subject || "(bez předmětu)"}\nIP: ${ip}\n\nZpráva:\n${message}`,
-      html: `
+    await sendEmail(
+      "info@lokopolis.cz",
+      subject ? `[Lokopolis] ${subject}` : `[Lokopolis] Zpráva od ${name}`,
+      `
         <h3>Nová zpráva z kontaktního formuláře Lokopolis</h3>
         <p><strong>Jméno:</strong> ${sanitizedName}</p>
         <p><strong>Email:</strong> ${email}</p>
@@ -129,7 +118,12 @@ export async function POST(req: NextRequest) {
         <hr />
         <p>${sanitized}</p>
       `,
-    });
+      {
+        replyTo: `"${name}" <${email}>`,
+        text: `Jméno: ${name}\nEmail: ${email}\nPředmět: ${subject || "(bez předmětu)"}\nIP: ${ip}\n\nZpráva:\n${message}`,
+        from: '"Lokopolis kontakt" <info@lokopolis.cz>',
+      }
+    );
 
     return NextResponse.json({ ok: true });
   } catch (error) {
