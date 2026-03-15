@@ -170,8 +170,8 @@ export function orderConfirmation(order: any, settings?: Record<string, any>): s
     ${order.loyalty_discount > 0 ? `<div style="color:#a855f7;font-size:14px;margin:4px 0;">
       Věrnostní sleva: -${formatPrice(order.loyalty_discount)}
     </div>` : ""}
-    ${order.shipping_price > 0 ? `<div style="color:#ccc;font-size:14px;margin:4px 0;">Doprava: ${formatPrice(order.shipping_price)}</div>` : ""}
-    ${order.payment_surcharge > 0 ? `<div style="color:#ccc;font-size:14px;margin:4px 0;">Příplatek za platbu: ${formatPrice(order.payment_surcharge)}</div>` : ""}
+    ${order.shipping_method_name ? `<div style="color:#ccc;font-size:14px;margin:4px 0;">Doprava: ${esc(order.shipping_method_name)}${order.shipping_price > 0 ? ` — ${formatPrice(order.shipping_price)}` : " — zdarma"}</div>` : (order.shipping_price > 0 ? `<div style="color:#ccc;font-size:14px;margin:4px 0;">Doprava: ${formatPrice(order.shipping_price)}</div>` : "")}
+    ${order.payment_method_name ? `<div style="color:#ccc;font-size:14px;margin:4px 0;">Platba: ${esc(order.payment_method_name)}${order.payment_surcharge > 0 ? ` — příplatek ${formatPrice(order.payment_surcharge)}` : ""}</div>` : (order.payment_surcharge > 0 ? `<div style="color:#ccc;font-size:14px;margin:4px 0;">Příplatek za platbu: ${formatPrice(order.payment_surcharge)}</div>` : "")}
 
     <div style="margin:16px 0;padding:16px;background:#16162b;border-radius:8px;border-left:3px solid #f0a030;">
       <strong style="font-size:18px;color:#f0a030;">Celkem: ${formatPrice(totalAmount)}</strong>

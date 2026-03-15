@@ -453,6 +453,8 @@ export async function POST(req: NextRequest) {
         shipping_price: shippingPrice,
         payment_surcharge: paymentSurcharge,
         payment_method: payment.slug,
+        payment_method_name: payment.name,
+        shipping_method_name: shipping.name,
         coupon_code: appliedCouponCode,
         coupon_discount: couponDiscount,
         loyalty_discount: loyaltyDiscount,
