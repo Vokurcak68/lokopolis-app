@@ -9,10 +9,8 @@ export function getImageVariant(
 ): string {
   if (!coverUrl) return "";
 
-  // Always use Supabase render API with resize=contain (no crop)
-  // Strip any existing variant prefix to get the original image
-  const originalUrl = coverUrl.replace(/covers\/(thumb|card|full)_/, "covers/");
-
+  // Use Supabase render API with resize=contain (no crop)
+  // Keep the original URL as-is (don't strip prefixes — files are stored with them)
   const sizes = {
     thumb: { width: 200, height: 200 },
     card: { width: 600, height: 450 },
@@ -20,7 +18,7 @@ export function getImageVariant(
   };
   const { width, height } = sizes[variant];
 
-  return originalUrl
+  return coverUrl
     .replace("/object/public/", "/render/image/public/")
     .concat(`?width=${width}&height=${height}&resize=contain&quality=85`);
 }
