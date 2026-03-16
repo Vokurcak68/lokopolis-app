@@ -20,7 +20,8 @@ import type {
 
 function optimizeImageUrl(url: string, width: number = 400): string {
   if (!url) return "";
-  return url.replace("/object/public/", "/render/image/public/").concat(`?width=${width}&quality=75`);
+  const height = Math.round(width * 0.75);
+  return url.replace("/object/public/", "/render/image/public/").concat(`?width=${width}&height=${height}&resize=contain&quality=75`);
 }
 
 /* ============================================================
@@ -177,8 +178,8 @@ function CompetitionBanner({ competition }: { competition: CompetitionHomeData }
       <div style={{ background: "var(--bg-card)", border: "1px solid var(--accent-border)", borderRadius: "16px", padding: "24px", display: "flex", gap: "20px", alignItems: "center", flexWrap: "wrap", position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "3px", background: "var(--accent)" }} />
         {winnerImage && (
-          <div style={{ width: "120px", height: "90px", borderRadius: "10px", overflow: "hidden", flexShrink: 0, position: "relative" }}>
-            <Image src={optimizeImageUrl(winnerImage, 200)} alt={winner.title} fill style={{ objectFit: "cover" }} sizes="120px" />
+          <div style={{ width: "120px", height: "90px", borderRadius: "10px", overflow: "hidden", flexShrink: 0, position: "relative", background: "var(--bg-page)" }}>
+            <Image src={optimizeImageUrl(winnerImage, 200)} alt={winner.title} fill style={{ objectFit: "contain" }} sizes="120px" />
           </div>
         )}
         <div style={{ flex: 1, minWidth: "200px" }}>
@@ -217,9 +218,9 @@ function CompetitionBanner({ competition }: { competition: CompetitionHomeData }
               return (
                 <Link key={entry.id} href={`/soutez/${entry.id}`} style={{ textDecoration: "none", flexShrink: 0 }}>
                   <div style={{ width: "180px", background: "var(--bg-page)", border: "1px solid var(--border)", borderRadius: "10px", overflow: "hidden" }}>
-                    <div style={{ width: "100%", height: "100px", position: "relative", background: "var(--bg-card)" }}>
+                    <div style={{ width: "100%", height: "100px", position: "relative", background: "var(--bg-page)" }}>
                       {entryImage ? (
-                        <Image src={optimizeImageUrl(entryImage, 200)} alt={entry.title} fill style={{ objectFit: "cover" }} sizes="180px" />
+                        <Image src={optimizeImageUrl(entryImage, 200)} alt={entry.title} fill style={{ objectFit: "contain" }} sizes="180px" />
                       ) : (
                         <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "28px", color: "var(--border-hover)" }}>🚂</div>
                       )}
@@ -478,9 +479,9 @@ export default function HomeContent({ data }: { data: HomePageData }) {
                           onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent-border)"; }}
                           onMouseLeave={(e) => { e.currentTarget.style.borderColor = "transparent"; }}
                         >
-                          <div style={{ width: "48px", height: "48px", borderRadius: "6px", overflow: "hidden", flexShrink: 0, position: "relative", background: "var(--bg-card)" }}>
+                          <div style={{ width: "48px", height: "48px", borderRadius: "6px", overflow: "hidden", flexShrink: 0, position: "relative", background: "var(--bg-page)" }}>
                             {firstImage ? (
-                              <Image src={optimizeImageUrl(firstImage, 100)} alt={listing.title} fill style={{ objectFit: "cover" }} sizes="48px" />
+                              <Image src={optimizeImageUrl(firstImage, 100)} alt={listing.title} fill style={{ objectFit: "contain" }} sizes="48px" />
                             ) : (
                               <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px" }}>🚂</div>
                             )}
@@ -617,7 +618,7 @@ export default function HomeContent({ data }: { data: HomePageData }) {
                   <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px", overflow: "hidden", transition: "all 0.2s", height: "100%" }} onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.transform = "translateY(0)"; }}>
                     <div style={{ position: "relative", width: "100%", paddingBottom: "75%", background: "var(--bg-page)" }}>
                       {firstImage ? (
-                        <Image src={optimizeImageUrl(firstImage)} alt={listing.title} fill style={{ objectFit: "cover" }} sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw" />
+                        <Image src={optimizeImageUrl(firstImage)} alt={listing.title} fill style={{ objectFit: "contain" }} sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw" />
                       ) : (
                         <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "32px", color: "var(--text-dimmer)" }}>🚂</div>
                       )}
