@@ -726,10 +726,7 @@ export default function HomeContent({ data }: { data: HomePageData }) {
               const condLabel: Record<string, string> = { new: "Nový", opened: "Rozbalený", used: "Použitý", parts: "Na díly" };
               const condColor: Record<string, string> = { new: "#22c55e", opened: "#3b82f6", used: "#f59e0b", parts: "#ef4444" };
               const scaleColor: Record<string, string> = { TT: "#3b82f6", H0: "#22c55e", N: "#a855f7", Z: "#ec4899", G: "#f59e0b" };
-              // Insert native bazar banner after 3rd listing
-              const showBazarBanner = idx === 2 && bazarBanners.length > 0;
               return (
-                <>{showBazarBanner && <NativeBannerCard key="bazar-native" banner={bazarBanners[0]} />}
                 <Link key={listing.id} href={`/bazar/${listing.id}`} style={{ textDecoration: "none" }}>
                   <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px", overflow: "hidden", transition: "all 0.2s", height: "100%" }} onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.transform = "translateY(0)"; }}>
                     <div style={{ position: "relative", width: "100%", paddingBottom: "75%", background: "var(--bg-page)" }}>
@@ -749,7 +746,6 @@ export default function HomeContent({ data }: { data: HomePageData }) {
                     </div>
                   </div>
                 </Link>
-                </>
               );
             })}
           </div>
@@ -858,8 +854,7 @@ export default function HomeContent({ data }: { data: HomePageData }) {
                 </Link>
               );
             })}
-            {/* Native article banner as extra card */}
-            {articleBanners.length > 0 && <NativeBannerCard banner={articleBanners[0]} />}
+
           </div>
         </section>
       )}
