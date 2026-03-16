@@ -250,10 +250,10 @@ export default function ShopProductDetailPage() {
                     cursor: "pointer",
                     position: "relative",
                     padding: 0,
-                    background: "var(--bg-card)",
+                    background: "var(--bg-page)",
                   }}
                 >
-                  <Image src={getImageVariant(img, "thumb")} alt="" fill style={{ objectFit: "cover" }} sizes="64px" />
+                  <Image src={getImageVariant(img, "thumb")} alt="" fill style={{ objectFit: "contain" }} sizes="64px" />
                 </button>
               ))}
             </div>
