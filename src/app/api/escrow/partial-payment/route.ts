@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Transakce nenalezena" }, { status: 404 });
     }
 
-    if (transaction.status !== "created") {
+    if (transaction.status !== "created" && transaction.status !== "partial_paid") {
       return NextResponse.json({ error: `Nelze označit neúplnou platbu ve stavu "${transaction.status}"` }, { status: 400 });
     }
 
