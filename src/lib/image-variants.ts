@@ -31,7 +31,7 @@ export function getImageVariant(
 
   return coverUrl
     .replace("/object/public/", "/render/image/public/")
-    .concat(`?width=${width}&height=${height}&resize=cover&quality=85`);
+    .concat(`?width=${width}&height=${height}&resize=contain&quality=85`);
 }
 
 /**

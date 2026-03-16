@@ -27,7 +27,7 @@ function optimizeThumb(url: string): string {
   if (!url) return "";
   return url
     .replace("/object/public/", "/render/image/public/")
-    .concat("?width=200&quality=75");
+    .concat("?width=200&height=150&resize=contain&quality=75");
 }
 
 export default function MyListingsPage() {
@@ -267,7 +267,7 @@ export default function MyListingsPage() {
                     src={optimizeThumb(listing.images[0])}
                     alt={listing.title}
                     fill
-                    style={{ objectFit: "cover" }}
+                    style={{ objectFit: "contain" }}
                     sizes="64px"
                   />
                 ) : (
