@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { createClient } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 
 export default function AdminCameraPage() {
@@ -15,8 +15,8 @@ export default function AdminCameraPage() {
   // Check admin
   useEffect(() => {
     async function checkAdmin() {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
+      const sb = supabase;
+      const { data: { user } } = await sb.auth.getUser();
       if (!user) { setIsAdmin(false); return; }
       const { data: profile } = await supabase
         .from("profiles")
