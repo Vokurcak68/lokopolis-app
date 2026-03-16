@@ -39,7 +39,7 @@ type RoleFilter = "all" | "buyer" | "seller";
 export default function TransactionsPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const [transactions, setTransactions] = useState<(EscrowTransaction & { listing_title?: string; other_name?: string })[]>([]);
+  const [transactions, setTransactions] = useState<(EscrowTransaction & { listing_title?: string; listing_image?: string | null; other_name?: string })[]>([]);
   const [loading, setLoading] = useState(true);
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
   const [statusFilter, setStatusFilter] = useState("");
@@ -79,16 +79,17 @@ export default function TransactionsPage() {
         const otherIds = [...new Set(data.map(t => t.buyer_id === userId ? t.seller_id : t.buyer_id))];
 
         const [listingsRes, profilesRes] = await Promise.all([
-          supabase.from("listings").select("id, title").in("id", listingIds),
+          supabase.from("listings").select("id, title, images").in("id", listingIds),
           supabase.from("profiles").select("id, display_name, username").in("id", otherIds),
         ]);
 
-        const listingsMap = new Map((listingsRes.data || []).map((l: { id: string; title: string }) => [l.id, l.title]));
+        const listingsMap = new Map((listingsRes.data || []).map((l: { id: string; title: string; images?: string[] | null }) => [l.id, l]));
         const profilesMap = new Map((profilesRes.data || []).map((p: { id: string; display_name: string | null; username: string }) => [p.id, p.display_name || p.username]));
 
         setTransactions(data.map(t => ({
           ...t,
-          listing_title: listingsMap.get(t.listing_id) || "Neznámý inzerát",
+          listing_title: listingsMap.get(t.listing_id)?.title || "Neznámý inzerát",
+          listing_image: listingsMap.get(t.listing_id)?.images?.[0] || null,
           other_name: profilesMap.get(t.buyer_id === userId ? t.seller_id : t.buyer_id) || "Anonym",
         })));
       } else {
@@ -192,6 +193,16 @@ export default function TransactionsPage() {
                     transition: "border-color 0.2s",
                   }}
                 >
+                  <div style={{ width: "110px", flexShrink: 0 }}>
+                    <div style={{ position: "relative", width: "100%", paddingBottom: "75%", borderRadius: "8px", overflow: "hidden", border: "1px solid var(--border)", background: "var(--bg-soft)" }}>
+                      {t.listing_image ? (
+                        <Image src={getImageVariant(t.listing_image, "thumb")} alt={t.listing_title || "Inzerát"} fill style={{ objectFit: "contain" }} sizes="110px" />
+                      ) : (
+                        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dimmer)", fontSize: "22px" }}>📦</div>
+                      )}
+                    </div>
+                  </div>
+
                   <div style={{ flex: 1 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
                       <span style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)" }}>

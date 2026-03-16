@@ -3,9 +3,11 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/components/Auth/AuthProvider";
 import { formatCzechDate } from "@/lib/timeAgo";
+import { getImageVariant } from "@/lib/image-variants";
 import EscrowTimeline from "@/components/Escrow/EscrowTimeline";
 import EscrowActions from "@/components/Escrow/EscrowActions";
 import type { EscrowTransaction, EscrowDispute, Profile, Listing } from "@/types/database";
@@ -99,9 +101,20 @@ export default function TransactionDetailPage() {
       </h1>
 
       {listing && (
-        <Link href={`/bazar/${listing.id}`} style={{ color: "var(--accent)", textDecoration: "none", fontSize: "15px" }}>
-          {listing.title} →
-        </Link>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
+          <div style={{ width: "96px", flexShrink: 0 }}>
+            <div style={{ position: "relative", width: "100%", paddingBottom: "75%", borderRadius: "8px", overflow: "hidden", border: "1px solid var(--border)", background: "var(--bg-soft)" }}>
+              {listing.images?.[0] ? (
+                <Image src={getImageVariant(listing.images[0], "thumb")} alt={listing.title} fill style={{ objectFit: "contain" }} sizes="96px" />
+              ) : (
+                <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dimmer)", fontSize: "20px" }}>📦</div>
+              )}
+            </div>
+          </div>
+          <Link href={`/bazar/${listing.id}`} style={{ color: "var(--accent)", textDecoration: "none", fontSize: "15px" }}>
+            {listing.title} →
+          </Link>
+        </div>
       )}
 
       {/* Timeline */}
