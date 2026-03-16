@@ -171,6 +171,47 @@ export default function BazarPage() {
         </div>
       </div>
 
+      {/* Bezpečná platba banner */}
+      <Link
+        href="/bazar/bezpecna-platba"
+        style={{ textDecoration: "none", display: "block", marginBottom: "24px" }}
+      >
+        <div
+          style={{
+            background: "linear-gradient(135deg, rgba(240,160,48,0.12) 0%, rgba(34,197,94,0.10) 100%)",
+            border: "1px solid rgba(240,160,48,0.25)",
+            borderRadius: "14px",
+            padding: "20px 24px",
+            display: "flex",
+            alignItems: "center",
+            gap: "16px",
+            cursor: "pointer",
+            transition: "border-color 0.2s, transform 0.2s",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = "var(--accent)";
+            e.currentTarget.style.transform = "translateY(-1px)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = "rgba(240,160,48,0.25)";
+            e.currentTarget.style.transform = "translateY(0)";
+          }}
+        >
+          <div style={{ fontSize: "36px", flexShrink: 0 }}>🛡️</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "4px" }}>
+              Bezpečná platba — nakupujte bez rizika
+            </div>
+            <div style={{ fontSize: "13px", color: "var(--text-muted)", lineHeight: 1.5 }}>
+              Peníze držíme v úschově, dokud nepotvrdíte, že je vše OK. Ochrana pro kupující i prodávající.
+            </div>
+          </div>
+          <div style={{ color: "var(--accent)", fontWeight: 600, fontSize: "14px", flexShrink: 0, whiteSpace: "nowrap" }}>
+            Jak to funguje →
+          </div>
+        </div>
+      </Link>
+
       {/* Filters */}
       <ListingFilters
         filters={filters}
@@ -236,6 +277,42 @@ export default function BazarPage() {
           ))}
         </div>
       )}
+
+      {/* Bottom CTA */}
+      <div
+        style={{
+          marginTop: "48px",
+          padding: "28px",
+          borderRadius: "14px",
+          background: "var(--bg-card)",
+          border: "1px solid var(--border)",
+          textAlign: "center",
+        }}
+      >
+        <div style={{ fontSize: "28px", marginBottom: "10px" }}>🛡️</div>
+        <h3 style={{ fontSize: "17px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "8px" }}>
+          Bojíte se podvodníků?
+        </h3>
+        <p style={{ fontSize: "13px", color: "var(--text-muted)", marginBottom: "16px", maxWidth: "500px", margin: "0 auto 16px", lineHeight: 1.6 }}>
+          S Bezpečnou platbou kupujete bez rizika. Peníze uvolníme prodejci až když potvrdíte, že je vše v pořádku.
+          Žádní podvodníci, žádné starosti.
+        </p>
+        <Link
+          href="/bazar/bezpecna-platba"
+          style={{
+            display: "inline-block",
+            padding: "10px 24px",
+            background: "var(--accent)",
+            color: "var(--accent-text-on)",
+            borderRadius: "10px",
+            fontSize: "14px",
+            fontWeight: 600,
+            textDecoration: "none",
+          }}
+        >
+          Zjistit více o Bezpečné platbě →
+        </Link>
+      </div>
     </div>
   );
 }

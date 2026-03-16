@@ -724,6 +724,21 @@ export default function ListingDetailPage() {
                   >
                     🛡️ {escrowLoading ? "Vytvářím..." : "Koupit s Bezpečnou platbou"}
                   </button>
+                  <Link
+                    href="/bazar/bezpecna-platba"
+                    style={{
+                      fontSize: "12px",
+                      color: "var(--text-dimmer)",
+                      textDecoration: "none",
+                      display: "block",
+                      textAlign: "center",
+                      marginTop: "6px",
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dimmer)"; }}
+                  >
+                    Jak funguje bezpečná platba? →
+                  </Link>
                 )}
               </>
             ) : (
