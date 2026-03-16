@@ -243,7 +243,7 @@ export default function ImageUpload({ images, onChange, listingId }: ImageUpload
                 src={url.replace("/object/public/", "/render/image/public/").concat("?width=200&quality=75")}
                 alt={`Fotka ${index + 1}`}
                 fill
-                style={{ objectFit: "contain" }}
+                style={{ objectFit: "cover" }}
                 sizes="120px"
               />
               {index === 0 && (
