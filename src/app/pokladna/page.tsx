@@ -68,6 +68,45 @@ export default function CheckoutPage() {
   const [website] = useState("");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
+  // ARES lookup
+  const [aresLoading, setAresLoading] = useState(false);
+  const [aresResult, setAresResult] = useState<{ ico: string; dic: string | null; company: string | null; street: string | null; city: string | null; zip: string | null } | null>(null);
+  const [aresError, setAresError] = useState("");
+
+  async function lookupAres(ico: string) {
+    const cleaned = ico.replace(/\s/g, "");
+    if (!/^\d{7,8}$/.test(cleaned)) { setAresResult(null); setAresError(""); return; }
+    setAresLoading(true);
+    setAresError("");
+    setAresResult(null);
+    try {
+      const res = await fetch(`/api/ares?ico=${cleaned}`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: "Chyba" }));
+        setAresError(data.error || "Subjekt nenalezen");
+        return;
+      }
+      setAresResult(await res.json());
+    } catch {
+      setAresError("Nepodařilo se spojit s ARES");
+    } finally {
+      setAresLoading(false);
+    }
+  }
+
+  function applyAresData() {
+    if (!aresResult) return;
+    setBilling((prev) => ({
+      ...prev,
+      company: aresResult.company || prev.company,
+      dic: aresResult.dic || prev.dic,
+      street: aresResult.street || prev.street,
+      city: aresResult.city || prev.city,
+      zip: aresResult.zip || prev.zip,
+    }));
+    setAresResult(null);
+  }
+
   // Determine if cart is all-digital
   const isAllDigital = items.every((i) => !!i.product.file_url);
 
@@ -482,13 +521,59 @@ export default function CheckoutPage() {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                 <div>
                   <label style={labelStyle}>IČ *</label>
-                  <input style={inputStyle} value={billing.ico} onChange={(e) => setBilling({ ...billing, ico: e.target.value })} />
+                  <input
+                    style={inputStyle}
+                    value={billing.ico}
+                    onChange={(e) => { setBilling({ ...billing, ico: e.target.value }); setAresResult(null); setAresError(""); }}
+                    onBlur={(e) => lookupAres(e.target.value)}
+                    placeholder="12345678"
+                  />
                 </div>
                 <div>
                   <label style={labelStyle}>DIČ</label>
                   <input style={inputStyle} value={billing.dic} onChange={(e) => setBilling({ ...billing, dic: e.target.value })} />
                 </div>
               </div>
+
+              {/* ARES result */}
+              {aresLoading && (
+                <div style={{ padding: "10px 14px", background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)", borderRadius: "8px", fontSize: "13px", color: "var(--text-muted)" }}>
+                  ⏳ Ověřuji IČO v ARES...
+                </div>
+              )}
+              {aresError && (
+                <div style={{ padding: "10px 14px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "8px", fontSize: "13px", color: "#ef4444" }}>
+                  ❌ {aresError}
+                </div>
+              )}
+              {aresResult && (
+                <div style={{ padding: "14px", background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.25)", borderRadius: "8px" }}>
+                  <div style={{ fontSize: "13px", color: "var(--text-muted)", marginBottom: "6px" }}>✅ Nalezeno v ARES:</div>
+                  <div style={{ fontSize: "14px", color: "var(--text-primary)", lineHeight: 1.6 }}>
+                    {aresResult.company && <div><strong>{aresResult.company}</strong></div>}
+                    {aresResult.street && <div>{aresResult.street}</div>}
+                    {(aresResult.city || aresResult.zip) && <div>{aresResult.city} {aresResult.zip}</div>}
+                    {aresResult.dic && <div style={{ fontSize: "13px", color: "var(--text-muted)" }}>DIČ: {aresResult.dic}</div>}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={applyAresData}
+                    style={{
+                      marginTop: "10px",
+                      padding: "8px 18px",
+                      background: "var(--accent)",
+                      color: "var(--accent-text-on)",
+                      border: "none",
+                      borderRadius: "6px",
+                      fontSize: "13px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Předvyplnit údaje z ARES
+                  </button>
+                </div>
+              )}
             </>
           )}
 
