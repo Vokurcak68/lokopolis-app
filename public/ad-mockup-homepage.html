@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lokopolis — Návrh reklam na homepage</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0f0f1a; color: #e0e0e0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  h1 { color: #f0a030; font-size: 22px; text-align: center; margin: 20px 0 6px; }
+  .subtitle { text-align: center; color: #888; font-size: 13px; margin-bottom: 30px; }
+
+  /* Section labels */
+  .section-label {
+    display: inline-block; padding: 4px 10px; border-radius: 6px;
+    font-size: 11px; font-weight: 600; margin-bottom: 10px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .label-pos { background: rgba(240,160,48,0.1); color: #f0a030; border: 1px dashed rgba(240,160,48,0.3); }
+  .label-note { background: rgba(34,197,94,0.1); color: #22c55e; border: 1px dashed rgba(34,197,94,0.3); }
+
+  /* Fake homepage sections */
+  .section { margin-bottom: 28px; }
+  .section-title {
+    font-size: 18px; font-weight: 700; margin-bottom: 14px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .section-title .emoji { font-size: 20px; }
+
+  /* Hero */
+  .hero {
+    background: linear-gradient(135deg, #1a1a2e 0%, #2a1a3a 100%);
+    border-radius: 16px; padding: 40px 30px; text-align: center;
+    border: 1px solid #2a2a3e; margin-bottom: 24px; position: relative;
+  }
+  .hero h2 { font-size: 26px; color: #f0a030; margin-bottom: 8px; }
+  .hero p { color: #999; font-size: 14px; }
+
+  /* Article cards */
+  .articles-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  @media (max-width: 768px) { .articles-grid { grid-template-columns: 1fr; } }
+  .article-card {
+    background: #16162b; border-radius: 12px; overflow: hidden;
+    border: 1px solid #2a2a3e; transition: border-color 0.2s;
+  }
+  .article-card:hover { border-color: rgba(240,160,48,0.3); }
+  .article-card .card-img {
+    height: 120px; background: linear-gradient(135deg, #2a2a4a, #3a3a5a);
+    display: flex; align-items: center; justify-content: center; font-size: 32px;
+  }
+  .article-card .card-body { padding: 12px; }
+  .article-card .card-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .article-card .card-meta { font-size: 11px; color: #666; }
+
+  /* Category buttons */
+  .categories { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .cat-btn {
+    padding: 8px 14px; border-radius: 8px; font-size: 13px;
+    background: #16162b; border: 1px solid #2a2a3e; color: #ccc; cursor: pointer;
+  }
+
+  /* Stats bar */
+  .stats-bar {
+    display: flex; gap: 16px; justify-content: center; padding: 14px;
+    background: #16162b; border-radius: 10px; border: 1px solid #2a2a3e;
+    font-size: 13px; color: #888; margin-bottom: 24px;
+  }
+  .stats-bar strong { color: #f0a030; }
+
+  /* Forum threads */
+  .forum-list { display: flex; flex-direction: column; gap: 6px; }
+  .forum-item {
+    display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+    background: #16162b; border-radius: 8px; border: 1px solid #2a2a3e; font-size: 13px;
+  }
+  .forum-item .forum-title { flex: 1; font-weight: 500; }
+  .forum-item .forum-meta { color: #666; font-size: 11px; }
+
+  /* Bazar cards */
+  .bazar-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  @media (max-width: 768px) { .bazar-grid { grid-template-columns: repeat(2, 1fr); } }
+  .bazar-card {
+    background: #16162b; border-radius: 10px; overflow: hidden;
+    border: 1px solid #2a2a3e;
+  }
+  .bazar-card .card-img {
+    height: 90px; background: linear-gradient(135deg, #2a2a4a, #3a3a5a);
+    display: flex; align-items: center; justify-content: center; font-size: 24px;
+  }
+  .bazar-card .card-body { padding: 8px 10px; }
+  .bazar-card .card-title { font-size: 12px; font-weight: 600; margin-bottom: 2px; }
+  .bazar-card .card-price { font-size: 13px; color: #f0a030; font-weight: 700; }
+
+  /* ═══════════════════════════════════════ */
+  /* AD STYLES */
+  /* ═══════════════════════════════════════ */
+
+  /* Pozice 1: Leaderboard pod hero */
+  .ad-leaderboard {
+    background: linear-gradient(90deg, #1a1a2e 0%, #1e2a1e 50%, #1a1a2e 100%);
+    border: 1px solid #2a2a3e; border-radius: 12px;
+    padding: 14px 20px; display: flex; align-items: center; gap: 16px;
+    position: relative; overflow: hidden; margin-bottom: 24px;
+  }
+  .ad-leaderboard:hover { border-color: rgba(240,160,48,0.2); }
+  .ad-leaderboard .ad-badge {
+    position: absolute; top: 6px; right: 10px; font-size: 9px; color: #444;
+    text-transform: uppercase; letter-spacing: 1px;
+  }
+  .ad-leaderboard .ad-logo {
+    width: 60px; height: 60px; border-radius: 10px;
+    background: linear-gradient(135deg, #2a4a2a, #3a5a3a);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px; flex-shrink: 0;
+  }
+  .ad-leaderboard .ad-content { flex: 1; }
+  .ad-leaderboard .ad-partner-name {
+    font-size: 10px; color: #22c55e; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.5px; margin-bottom: 2px;
+  }
+  .ad-leaderboard .ad-title { font-size: 15px; font-weight: 600; }
+  .ad-leaderboard .ad-text { font-size: 12px; color: #888; margin-top: 2px; }
+  .ad-leaderboard .ad-cta {
+    padding: 8px 18px; border-radius: 8px; background: #22c55e; color: #0f0f1a;
+    font-size: 13px; font-weight: 700; border: none; cursor: pointer; white-space: nowrap;
+  }
+
+  /* Pozice 2: Nativní karta mezi články */
+  .article-card.ad-native { border-color: rgba(240,160,48,0.15); }
+  .article-card.ad-native .card-img {
+    background: linear-gradient(135deg, #2a1a0a, #3a2a15);
+    position: relative;
+  }
+  .article-card.ad-native .card-img .ad-tag {
+    position: absolute; top: 6px; right: 6px; font-size: 9px; color: rgba(255,255,255,0.5);
+    background: rgba(0,0,0,0.5); padding: 2px 6px; border-radius: 4px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .article-card.ad-native .card-body .ad-source {
+    font-size: 10px; color: #f0a030; font-weight: 600; margin-bottom: 2px;
+  }
+
+  /* Pozice 3: Inline banner mezi sekcemi */
+  .ad-inline {
+    background: linear-gradient(135deg, #1a1a2e 0%, #2a1a30 100%);
+    border: 1px solid rgba(139,92,246,0.15); border-radius: 12px;
+    padding: 16px 20px; display: flex; align-items: center; gap: 14px;
+    margin: 6px 0 24px;
+  }
+  .ad-inline .ad-inline-icon { font-size: 32px; }
+  .ad-inline .ad-inline-content { flex: 1; }
+  .ad-inline .ad-inline-title { font-size: 14px; font-weight: 600; color: #c4b5fd; }
+  .ad-inline .ad-inline-text { font-size: 12px; color: #888; margin-top: 2px; }
+  .ad-inline .ad-inline-cta {
+    padding: 7px 16px; border-radius: 8px; background: rgba(139,92,246,0.15);
+    color: #a78bfa; font-size: 12px; font-weight: 600; border: 1px solid rgba(139,92,246,0.3);
+    cursor: pointer; white-space: nowrap;
+  }
+
+  /* Pozice 4: Nativní bazar karta */
+  .bazar-card.ad-shop { border-color: rgba(34,197,94,0.15); }
+  .bazar-card.ad-shop .card-img {
+    background: linear-gradient(135deg, #1a2a1a, #2a3a2a); position: relative;
+  }
+  .bazar-card.ad-shop .card-img .ad-tag {
+    position: absolute; top: 4px; right: 4px; font-size: 8px; color: rgba(255,255,255,0.5);
+    background: rgba(0,0,0,0.4); padding: 2px 5px; border-radius: 3px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .bazar-card.ad-shop .card-price { color: #22c55e; }
+
+  /* Pozice 5: CTA strip */
+  .ad-cta-strip {
+    background: linear-gradient(90deg, #f0a030, #e09020);
+    border-radius: 10px; padding: 12px 20px;
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+    margin: 6px 0 24px;
+  }
+  .ad-cta-strip .strip-text { color: #0f0f1a; font-size: 14px; font-weight: 600; }
+  .ad-cta-strip .strip-btn {
+    padding: 6px 16px; border-radius: 8px; background: #0f0f1a; color: #f0a030;
+    font-size: 13px; font-weight: 700; border: none; cursor: pointer;
+  }
+
+  .note {
+    background: #16162b; border-radius: 10px; padding: 14px; margin-top: 8px; margin-bottom: 20px;
+    border: 1px solid #2a2a3e; font-size: 12px; color: #888; line-height: 1.5;
+  }
+  .note strong { color: #e0e0e0; }
+  .note ul { margin-top: 6px; padding-left: 18px; }
+  .note li { margin-bottom: 3px; }
+
+  .divider { border: none; border-top: 1px dashed #2a2a3e; margin: 20px 0; }
+
+  .arrow-label {
+    display: flex; align-items: center; gap: 6px; margin: 16px 0 8px;
+    font-size: 11px; color: #f0a030; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .arrow-label::before { content: "▸"; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>📐 Návrh reklam — HOMEPAGE Lokopolis.cz</h1>
+  <p class="subtitle">5 pozic — nenápadné, kontextové, integrovány do existujícího layoutu</p>
+
+  <!-- ═══════ HERO ═══════ -->
+  <div class="hero">
+    <h2>🚂 Lokopolis</h2>
+    <p>Komunita modelové železnice · Články · Bazar · Eshop</p>
+  </div>
+
+  <!-- ═══ POZICE 1: Leaderboard pod hero ═══ -->
+  <div class="arrow-label">Pozice 1 — Partner leaderboard</div>
+  <div class="ad-leaderboard">
+    <span class="ad-badge">partner</span>
+    <div class="ad-logo">🚂</div>
+    <div class="ad-content">
+      <div class="ad-partner-name">Tillig — oficiální partner</div>
+      <div class="ad-title">Novinky 2026 — TT kolejový systém</div>
+      <div class="ad-text">Nové výhybky, flexikoleje a kompletní sety. Exkluzivní slevy pro členy Lokopolis.</div>
+    </div>
+    <button class="ad-cta">Prohlédnout →</button>
+  </div>
+  <div class="note">
+    <strong>💡 Pozice 1:</strong> Fullwidth banner hned pod hero. Prémiová pozice pro partnery.
+    <ul>
+      <li>Rotuje mezi partnery (max 1 najednou)</li>
+      <li>Alternativa: vlastní eshop promo ("Nejprodávanější kolejové plány")</li>
+      <li>Na mobilu: logo + text vertikálně, CTA pod textem</li>
+    </ul>
+  </div>
+
+  <!-- ═══ STATS BAR ═══ -->
+  <div class="stats-bar">
+    <span><strong>247</strong> členů</span>
+    <span><strong>89</strong> článků</span>
+    <span><strong>156</strong> inzerátů</span>
+    <span><strong>43</strong> produktů</span>
+  </div>
+
+  <!-- ═══ POPULÁRNÍ ČLÁNKY + POZICE 2 ═══ -->
+  <div class="section">
+    <div class="section-title"><span class="emoji">📰</span> Populární články</div>
+    <div class="arrow-label">Pozice 2 — Nativní karta v článcích</div>
+    <div class="articles-grid">
+      <div class="article-card">
+        <div class="card-img">🏔️</div>
+        <div class="card-body">
+          <div class="card-title">Jak vytvořit realistickou krajinu</div>
+          <div class="card-meta">Krajina & scenérie · 234 zobrazení</div>
+        </div>
+      </div>
+      <div class="article-card ad-native">
+        <div class="card-img">
+          📦
+          <span class="ad-tag">eshop</span>
+        </div>
+        <div class="card-body">
+          <div class="ad-source">Z našeho eshopu</div>
+          <div class="card-title">Kompletní balíček: Stavba krajiny</div>
+          <div class="card-meta" style="color:#22c55e; font-weight:600;">249 Kč · E-book + video</div>
+        </div>
+      </div>
+      <div class="article-card">
+        <div class="card-img">⚡</div>
+        <div class="card-body">
+          <div class="card-title">Digitalizace: První kroky s DCC</div>
+          <div class="card-meta">Digitalizace · 178 zobrazení</div>
+        </div>
+      </div>
+    </div>
+    <div class="note">
+      <strong>💡 Pozice 2:</strong> 1 eshop produkt vmíchaný mezi 3-6 článků. Tag "eshop" + "Z našeho eshopu".
+      <ul>
+        <li>Produkt se vybírá kontextově (podobná kategorie jako okolní články)</li>
+        <li>Na 2. nebo 3. pozici, nikdy první</li>
+        <li>Vypadá jako článek, ale odkazuje do eshopu</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ═══ KATEGORIE ═══ -->
+  <div class="section">
+    <div class="section-title"><span class="emoji">📂</span> Kategorie</div>
+    <div class="categories">
+      <span class="cat-btn">🛤️ Stavba kolejiště</span>
+      <span class="cat-btn">🚂 Recenze modelů</span>
+      <span class="cat-btn">🔧 Návody & tipy</span>
+      <span class="cat-btn">🏔️ Krajina</span>
+      <span class="cat-btn">⚡ Digitalizace</span>
+      <span class="cat-btn">🎨 Nátěry</span>
+    </div>
+  </div>
+
+  <!-- ═══ POZICE 3: CTA Strip ═══ -->
+  <div class="arrow-label">Pozice 3 — CTA strip (vlastní promo)</div>
+  <div class="ad-cta-strip">
+    <span class="strip-text">🛡️ Prodáváš na bazaru? Vyzkoušej Bezpečnou platbu — 0 % pro kupující!</span>
+    <button class="strip-btn">Zjistit víc</button>
+  </div>
+  <div class="note">
+    <strong>💡 Pozice 3:</strong> Úzký akční strip — vlastní promo. Rotuje:
+    <ul>
+      <li>Bezpečná platba promo</li>
+      <li>"Máš kolejiště? Přihlas se do soutěže!" (pokud běží)</li>
+      <li>"Přidej svůj první článek a získej badge!" (gamifikace)</li>
+      <li>Newsletter signup</li>
+      <li>Nikdy externí reklama — jen vlastní features</li>
+    </ul>
+  </div>
+
+  <!-- ═══ FÓRUM ═══ -->
+  <div class="section">
+    <div class="section-title"><span class="emoji">💬</span> Z fóra</div>
+    <div class="forum-list">
+      <div class="forum-item">
+        <span>💬</span>
+        <span class="forum-title">Jakou značku kolejí pro TT doporučujete?</span>
+        <span class="forum-meta">12 příspěvků · před 2h</span>
+      </div>
+      <div class="forum-item">
+        <span>💬</span>
+        <span class="forum-title">Problém s Roco dekodérem — reset nefunguje</span>
+        <span class="forum-meta">8 příspěvků · před 5h</span>
+      </div>
+      <div class="forum-item">
+        <span>💬</span>
+        <span class="forum-title">Soutěž kolejiště měsíce — hlasování březen</span>
+        <span class="forum-meta">24 příspěvků · před 1d</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ POZICE 4: Inline banner mezi sekcemi ═══ -->
+  <div class="arrow-label">Pozice 4 — Inline banner (akce/soutěž)</div>
+  <div class="ad-inline">
+    <div class="ad-inline-icon">🏆</div>
+    <div class="ad-inline-content">
+      <div class="ad-inline-title">Soutěž „Kolejiště měsíce" — zbývá 5 dní!</div>
+      <div class="ad-inline-text">Hlasujte o nejlepší kolejiště. Vítěz získá voucher 500 Kč do eshopu.</div>
+    </div>
+    <button class="ad-inline-cta">Hlasovat →</button>
+  </div>
+  <div class="note">
+    <strong>💡 Pozice 4:</strong> Kontextový banner mezi fórem a bazarem.
+    <ul>
+      <li>Soutěže, events, nové funkce — jen interní promo</li>
+      <li>Zobrazí se jen pokud probíhá nějaká akce</li>
+      <li>Jinak se pozice přeskočí (žádný fallback)</li>
+    </ul>
+  </div>
+
+  <!-- ═══ BAZAR + POZICE 5 ═══ -->
+  <div class="section">
+    <div class="section-title"><span class="emoji">🏪</span> Nejnovější v bazaru</div>
+    <div class="arrow-label">Pozice 5 — Nativní eshop karta v bazaru</div>
+    <div class="bazar-grid">
+      <div class="bazar-card">
+        <div class="card-img">🚂</div>
+        <div class="card-body">
+          <div class="card-title">Tillig BR 218 DB</div>
+          <div class="card-price">1 850 Kč</div>
+        </div>
+      </div>
+      <div class="bazar-card">
+        <div class="card-img">🚃</div>
+        <div class="card-body">
+          <div class="card-title">Set 3× osobní vůz ČD</div>
+          <div class="card-price">2 400 Kč</div>
+        </div>
+      </div>
+      <div class="bazar-card ad-shop">
+        <div class="card-img">
+          📥
+          <span class="ad-tag">eshop</span>
+        </div>
+        <div class="card-body">
+          <div class="card-title">🛒 Plán tratě: Horská trať TT</div>
+          <div class="card-price">149 Kč</div>
+        </div>
+      </div>
+      <div class="bazar-card">
+        <div class="card-img">🔧</div>
+        <div class="card-body">
+          <div class="card-title">ESU LokPilot V5 TT</div>
+          <div class="card-price">890 Kč</div>
+        </div>
+      </div>
+    </div>
+    <div class="note">
+      <strong>💡 Pozice 5:</strong> 1 eshop produkt vmíchaný mezi bazarové inzeráty.
+      <ul>
+        <li>Tag "eshop", zelená cena (odliší se od oranžové bazar ceny)</li>
+        <li>Na 3. pozici ze 4 (nikdy první)</li>
+        <li>Prodej digitálních produktů (plány, e-booky) = nulové náklady na dodání</li>
+      </ul>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ═══ SUMMARY ═══ -->
+  <div class="note" style="max-width:850px; margin: 0 auto; padding: 20px;">
+    <h3 style="color:#f0a030; margin-bottom:14px; font-size: 16px;">📋 Kompletní přehled — Homepage reklamy</h3>
+    <table style="width:100%; border-collapse:collapse; font-size:12px;">
+      <tr style="border-bottom:1px solid #2a2a3e;">
+        <td style="padding:8px; font-weight:600; color:#f0a030; width:80px;">Pozice 1</td>
+        <td style="padding:8px;">Partner leaderboard pod hero</td>
+        <td style="padding:8px; color:#22c55e;">Partneři / vlastní eshop</td>
+        <td style="padding:8px; color:#888;">Rotace, max 1, prémiová</td>
+      </tr>
+      <tr style="border-bottom:1px solid #2a2a3e;">
+        <td style="padding:8px; font-weight:600; color:#3b82f6;">Pozice 2</td>
+        <td style="padding:8px;">Nativní karta v článcích</td>
+        <td style="padding:8px; color:#22c55e;">Eshop produkty</td>
+        <td style="padding:8px; color:#888;">1 z 6, nikdy první</td>
+      </tr>
+      <tr style="border-bottom:1px solid #2a2a3e;">
+        <td style="padding:8px; font-weight:600; color:#e09020;">Pozice 3</td>
+        <td style="padding:8px;">CTA strip</td>
+        <td style="padding:8px; color:#22c55e;">Vlastní features</td>
+        <td style="padding:8px; color:#888;">Rotace, jen interní</td>
+      </tr>
+      <tr style="border-bottom:1px solid #2a2a3e;">
+        <td style="padding:8px; font-weight:600; color:#a78bfa;">Pozice 4</td>
+        <td style="padding:8px;">Inline banner (akce/soutěž)</td>
+        <td style="padding:8px; color:#22c55e;">Soutěže / events</td>
+        <td style="padding:8px; color:#888;">Jen pokud akce běží</td>
+      </tr>
+      <tr>
+        <td style="padding:8px; font-weight:600; color:#22c55e;">Pozice 5</td>
+        <td style="padding:8px;">Nativní karta v bazaru</td>
+        <td style="padding:8px; color:#22c55e;">Eshop produkty</td>
+        <td style="padding:8px; color:#888;">1 z 4, nikdy první</td>
+      </tr>
+    </table>
+
+    <div style="margin-top:16px; padding-top:12px; border-top:1px solid #2a2a3e;">
+      <strong style="color:#f0a030;">🎯 Klíčové principy:</strong>
+      <ul style="margin-top:6px;">
+        <li><strong>Vlastní obsah první</strong> — eshop produkty, bezpečná platba, soutěže</li>
+        <li><strong>Partnerské bannery</strong> — jen Pozice 1 (premium, rotace)</li>
+        <li><strong>Nativní integrace</strong> — reklamy vypadají jako obsah, ale jsou označené</li>
+        <li><strong>Max 5 pozic</strong> na celé homepage, žádné popupy/overlaye</li>
+        <li><strong>Kontextové</strong> — eshop produkty odpovídají okolnímu obsahu</li>
+        <li><strong>Mobile-friendly</strong> — strip + inline se přizpůsobí, leaderboard zúží</li>
+        <li><strong>Měřitelné</strong> — každá pozice = jeden DB záznam s impressions/clicks</li>
+      </ul>
+    </div>
+
+    <div style="margin-top:14px; padding-top:12px; border-top:1px solid #2a2a3e;">
+      <strong style="color:#a78bfa;">💰 Monetizační potenciál:</strong>
+      <ul style="margin-top:6px;">
+        <li><strong>Fáze 1 (teď):</strong> Vlastní eshop promo + soutěže/features — 0 Kč nákladů</li>
+        <li><strong>Fáze 2 (100+ aktivních uživatelů):</strong> Partnerské bannery (Tillig, Roco, modelářské obchody)</li>
+        <li><strong>Fáze 3:</strong> Self-serve reklamy pro prodejce na bazaru ("Zvýraznit inzerát")</li>
+      </ul>
+    </div>
+  </div>
+</div>
+</body>
+</html>

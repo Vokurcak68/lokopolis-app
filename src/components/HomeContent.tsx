@@ -67,6 +67,101 @@ function timeAgo(dateStr: string | null): string {
 }
 
 /* ============================================================
+   CTA STRIP (Pozice 3) — rotující vlastní promo
+   ============================================================ */
+
+const CTA_STRIPS = [
+  { emoji: "🛡️", text: "Prodáváš na bazaru? Vyzkoušej Bezpečnou platbu — 0 % pro kupující!", cta: "Zjistit víc", href: "/bazar/bezpecna-platba" },
+  { emoji: "📝", text: "Máš zajímavé kolejiště? Napiš o něm článek a inspiruj ostatní!", cta: "Napsat článek", href: "/novy-clanek" },
+  { emoji: "🛒", text: "Nepotřebuješ staré modely? Prodej je na bazaru — je to zdarma!", cta: "Přidat inzerát", href: "/bazar/novy" },
+  { emoji: "📥", text: "Podívej se na kolejové plány a návody ke stažení v našem eshopu!", cta: "Do eshopu", href: "/shop" },
+];
+
+function CtaStrip() {
+  // Rotate daily based on day of year
+  const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000);
+  const strip = CTA_STRIPS[dayOfYear % CTA_STRIPS.length];
+
+  return (
+    <section style={{ maxWidth: "1200px", margin: "32px auto 0", padding: "0 20px" }}>
+      <Link href={strip.href} style={{ textDecoration: "none" }}>
+        <div style={{
+          background: "linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 85%, #000))",
+          borderRadius: "12px", padding: "14px 24px",
+          display: "flex", alignItems: "center", justifyContent: "center", gap: "12px",
+          flexWrap: "wrap", transition: "opacity 0.2s", cursor: "pointer",
+        }}
+          onMouseEnter={(e) => { e.currentTarget.style.opacity = "0.9"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.opacity = "1"; }}
+        >
+          <span style={{ fontSize: "18px" }}>{strip.emoji}</span>
+          <span style={{ color: "var(--accent-text-on, #0f0f1a)", fontSize: "14px", fontWeight: 600 }}>
+            {strip.text}
+          </span>
+          <span style={{
+            padding: "6px 16px", borderRadius: "8px",
+            background: "var(--accent-text-on, #0f0f1a)", color: "var(--accent)",
+            fontSize: "13px", fontWeight: 700, flexShrink: 0,
+          }}>
+            {strip.cta}
+          </span>
+        </div>
+      </Link>
+    </section>
+  );
+}
+
+/* ============================================================
+   INLINE BANNER (Pozice 4) — soutěže, akce
+   ============================================================ */
+
+function InlineBanner({ competition }: { competition: CompetitionHomeData | null }) {
+  // Only show if there's an active competition
+  if (!competition || (competition.status !== "active" && competition.status !== "voting")) {
+    return null;
+  }
+
+  const isVoting = competition.status === "voting";
+
+  return (
+    <section style={{ maxWidth: "1200px", margin: "32px auto 0", padding: "0 20px" }}>
+      <Link href="/soutez" style={{ textDecoration: "none" }}>
+        <div style={{
+          background: "linear-gradient(135deg, var(--bg-card), color-mix(in srgb, var(--bg-card) 90%, #8b5cf6))",
+          border: "1px solid rgba(139,92,246,0.2)", borderRadius: "12px",
+          padding: "16px 24px", display: "flex", alignItems: "center", gap: "14px",
+          flexWrap: "wrap", transition: "border-color 0.2s",
+        }}
+          onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(139,92,246,0.5)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = "rgba(139,92,246,0.2)"; }}
+        >
+          <span style={{ fontSize: "32px" }}>🏆</span>
+          <div style={{ flex: 1, minWidth: "200px" }}>
+            <div style={{ fontSize: "15px", fontWeight: 600, color: "#c4b5fd" }}>
+              {competition.title} — {isVoting ? "hlasujte!" : "přihlaste se!"}
+            </div>
+            <div style={{ fontSize: "12px", color: "var(--text-dimmer)", marginTop: "2px" }}>
+              {isVoting
+                ? `${competition.topEntries.length} soutěžních kolejišť čeká na váš hlas`
+                : "Přihlaste své kolejiště do soutěže a vyhrajte voucher do eshopu!"
+              }
+            </div>
+          </div>
+          <span style={{
+            padding: "8px 18px", borderRadius: "8px",
+            background: "rgba(139,92,246,0.15)", color: "#a78bfa",
+            fontSize: "13px", fontWeight: 600, border: "1px solid rgba(139,92,246,0.3)",
+            flexShrink: 0,
+          }}>
+            {isVoting ? "Hlasovat →" : "Přihlásit se →"}
+          </span>
+        </div>
+      </Link>
+    </section>
+  );
+}
+
+/* ============================================================
    COMPETITION BANNER
    ============================================================ */
 
@@ -473,6 +568,9 @@ export default function HomeContent({ data }: { data: HomePageData }) {
         </div>
       </section>
 
+      {/* ===================== 🎯 CTA STRIP (Pozice 3) ===================== */}
+      <CtaStrip />
+
       {/* ===================== 📊 STATS BAR ===================== */}
       <div className="stats-bar" style={{ background: "var(--bg-header)", padding: "16px 0", marginTop: "40px" }}>
         <div
@@ -495,6 +593,9 @@ export default function HomeContent({ data }: { data: HomePageData }) {
           ))}
         </div>
       </div>
+
+      {/* ===================== 🏆 INLINE BANNER (Pozice 4) ===================== */}
+      <InlineBanner competition={competition} />
 
       {/* ===================== BAZAR (full) ===================== */}
       {latestListings && latestListings.length > 0 && (

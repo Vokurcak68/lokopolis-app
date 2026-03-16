@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lokopolis — Návrh reklam na detailu inzerátu</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0f0f1a; color: #e0e0e0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+
+  .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+  h1 { color: #f0a030; font-size: 24px; text-align: center; margin: 30px 0 10px; }
+  .subtitle { text-align: center; color: #888; font-size: 14px; margin-bottom: 40px; }
+
+  /* Layout */
+  .layout { display: grid; grid-template-columns: 1fr 300px; gap: 24px; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+
+  /* Main content */
+  .main { display: flex; flex-direction: column; gap: 16px; }
+
+  /* Fake listing content */
+  .listing-image {
+    width: 100%; height: 300px; background: linear-gradient(135deg, #1a1a2e, #2a2a4a);
+    border-radius: 12px; display: flex; align-items: center; justify-content: center;
+    font-size: 48px; border: 1px solid #2a2a3e;
+  }
+  .listing-info {
+    background: #16162b; border-radius: 12px; padding: 20px; border: 1px solid #2a2a3e;
+  }
+  .listing-title { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+  .listing-price { color: #f0a030; font-size: 28px; font-weight: 700; margin-bottom: 12px; }
+  .listing-meta { color: #888; font-size: 13px; display: flex; gap: 16px; flex-wrap: wrap; }
+  .listing-desc {
+    background: #16162b; border-radius: 12px; padding: 20px; border: 1px solid #2a2a3e;
+    font-size: 14px; line-height: 1.6; color: #bbb;
+  }
+  .listing-actions {
+    display: flex; gap: 10px; flex-wrap: wrap;
+  }
+  .btn {
+    padding: 12px 24px; border-radius: 10px; font-weight: 600; font-size: 14px;
+    border: none; cursor: pointer;
+  }
+  .btn-primary { background: #f0a030; color: #1a1a2e; }
+  .btn-secondary { background: rgba(240,160,48,0.1); color: #f0a030; border: 1px solid rgba(240,160,48,0.3); }
+  .btn-escrow { background: rgba(34,197,94,0.1); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); }
+
+  /* ═══════════════════════════════════════ */
+  /* AD STYLES */
+  /* ═══════════════════════════════════════ */
+
+  /* Pozice 1: Kontextový banner pod popisem */
+  .ad-contextual {
+    background: linear-gradient(135deg, #1a1a2e 0%, #1e1e35 100%);
+    border: 1px solid #2a2a3e; border-radius: 12px; padding: 16px;
+    display: flex; gap: 16px; align-items: center;
+    position: relative; overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .ad-contextual:hover { border-color: rgba(240,160,48,0.3); }
+  .ad-contextual .ad-badge {
+    position: absolute; top: 8px; right: 10px; font-size: 9px; color: #555;
+    text-transform: uppercase; letter-spacing: 1px;
+  }
+  .ad-contextual .ad-img {
+    width: 100px; height: 80px; border-radius: 8px;
+    background: linear-gradient(135deg, #2a2a4a, #3a3a5a);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 32px; flex-shrink: 0;
+  }
+  .ad-contextual .ad-content { flex: 1; }
+  .ad-contextual .ad-label {
+    font-size: 10px; color: #f0a030; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.5px; margin-bottom: 4px;
+  }
+  .ad-contextual .ad-title { font-size: 15px; font-weight: 600; color: #e0e0e0; margin-bottom: 4px; }
+  .ad-contextual .ad-text { font-size: 12px; color: #888; line-height: 1.4; }
+  .ad-contextual .ad-cta {
+    padding: 6px 14px; border-radius: 6px; background: rgba(240,160,48,0.15);
+    color: #f0a030; font-size: 12px; font-weight: 600; border: 1px solid rgba(240,160,48,0.2);
+    cursor: pointer; white-space: nowrap; flex-shrink: 0;
+  }
+
+  /* Pozice 2: Sidebar (pravý sloupec) */
+  .sidebar { display: flex; flex-direction: column; gap: 16px; }
+
+  .ad-sidebar {
+    background: #16162b; border: 1px solid #2a2a3e; border-radius: 12px;
+    overflow: hidden; transition: border-color 0.2s;
+  }
+  .ad-sidebar:hover { border-color: rgba(240,160,48,0.3); }
+  .ad-sidebar .ad-sidebar-img {
+    width: 100%; height: 160px;
+    background: linear-gradient(135deg, #1e3a1e, #2a4a2a);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 48px; position: relative;
+  }
+  .ad-sidebar .ad-sidebar-body { padding: 14px; }
+  .ad-sidebar .ad-sidebar-title { font-size: 14px; font-weight: 600; color: #e0e0e0; margin-bottom: 6px; }
+  .ad-sidebar .ad-sidebar-text { font-size: 12px; color: #888; line-height: 1.4; margin-bottom: 10px; }
+  .ad-sidebar .ad-sidebar-cta {
+    display: block; text-align: center; padding: 8px; border-radius: 8px;
+    background: #f0a030; color: #1a1a2e; font-weight: 600; font-size: 13px;
+    text-decoration: none;
+  }
+  .ad-sidebar .ad-sidebar-badge {
+    position: absolute; bottom: 6px; right: 8px; font-size: 9px; color: rgba(255,255,255,0.4);
+    text-transform: uppercase; letter-spacing: 1px;
+  }
+
+  /* Sticky sidebar ad */
+  .ad-sidebar-sticky {
+    background: linear-gradient(135deg, #1a1a2e, #201a30);
+    border: 1px solid #2a2a3e; border-radius: 12px; padding: 16px;
+    text-align: center;
+  }
+  .ad-sidebar-sticky .ad-icon { font-size: 36px; margin-bottom: 8px; }
+  .ad-sidebar-sticky .ad-sidebar-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .ad-sidebar-sticky .ad-sidebar-text { font-size: 12px; color: #888; margin-bottom: 10px; }
+
+  /* Pozice 3: Nativní karty mezi "Podobné inzeráty" */
+  .similar-section { margin-top: 24px; }
+  .similar-title { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
+  .similar-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+  .similar-card {
+    background: #16162b; border: 1px solid #2a2a3e; border-radius: 10px;
+    overflow: hidden; transition: border-color 0.2s;
+  }
+  .similar-card:hover { border-color: rgba(240,160,48,0.3); }
+  .similar-card .card-img {
+    height: 120px; background: linear-gradient(135deg, #2a2a4a, #3a3a5a);
+    display: flex; align-items: center; justify-content: center; font-size: 28px;
+  }
+  .similar-card .card-body { padding: 10px; }
+  .similar-card .card-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .similar-card .card-price { font-size: 14px; color: #f0a030; font-weight: 700; }
+
+  /* Ad card (looks like listing but marked) */
+  .similar-card.ad-card { border-color: rgba(240,160,48,0.15); }
+  .similar-card.ad-card .card-img {
+    background: linear-gradient(135deg, #2a1a0a, #3a2a1a);
+    position: relative;
+  }
+  .similar-card.ad-card .card-img .ad-tag {
+    position: absolute; top: 6px; right: 6px; font-size: 9px; color: rgba(255,255,255,0.5);
+    background: rgba(0,0,0,0.4); padding: 2px 6px; border-radius: 4px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+
+  /* Pozice 4: Komunitní banner (full-width) */
+  .ad-community {
+    background: linear-gradient(135deg, #1a1a2e 0%, #2a1a3a 100%);
+    border: 1px solid rgba(139,92,246,0.2); border-radius: 12px;
+    padding: 20px; display: flex; align-items: center; gap: 16px;
+    margin-top: 8px;
+  }
+  .ad-community .ad-community-icon { font-size: 40px; }
+  .ad-community .ad-community-content { flex: 1; }
+  .ad-community .ad-community-title { font-size: 15px; font-weight: 600; color: #c4b5fd; }
+  .ad-community .ad-community-text { font-size: 12px; color: #888; margin-top: 2px; }
+  .ad-community .ad-community-cta {
+    padding: 8px 16px; border-radius: 8px; background: rgba(139,92,246,0.15);
+    color: #a78bfa; font-size: 13px; font-weight: 600; border: 1px solid rgba(139,92,246,0.3);
+    cursor: pointer; white-space: nowrap;
+  }
+
+  /* Labels */
+  .section-label {
+    display: inline-block; padding: 4px 10px; border-radius: 6px;
+    font-size: 11px; font-weight: 600; margin-bottom: 12px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .label-1 { background: rgba(240,160,48,0.1); color: #f0a030; border: 1px dashed rgba(240,160,48,0.3); }
+  .label-2 { background: rgba(34,197,94,0.1); color: #22c55e; border: 1px dashed rgba(34,197,94,0.3); }
+  .label-3 { background: rgba(59,130,246,0.1); color: #3b82f6; border: 1px dashed rgba(59,130,246,0.3); }
+  .label-4 { background: rgba(139,92,246,0.1); color: #a78bfa; border: 1px dashed rgba(139,92,246,0.3); }
+
+  .note {
+    background: #16162b; border-radius: 10px; padding: 16px;
+    border: 1px solid #2a2a3e; font-size: 13px; color: #888; line-height: 1.6;
+    margin-top: 8px;
+  }
+  .note strong { color: #e0e0e0; }
+  .note ul { margin-top: 8px; padding-left: 20px; }
+  .note li { margin-bottom: 4px; }
+
+  .divider { border: none; border-top: 1px dashed #2a2a3e; margin: 32px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>📐 Návrh reklam — Detail bazarového inzerátu</h1>
+  <p class="subtitle">4 pozice, nenápadné, kontextové, nepřekáží obsahu</p>
+
+  <div class="layout">
+    <!-- ═══════ MAIN COLUMN ═══════ -->
+    <div class="main">
+
+      <!-- Fake listing -->
+      <div class="listing-image">🚂</div>
+      <div class="listing-info">
+        <div class="listing-title">Tillig TT BR 218 — výborný stav</div>
+        <div class="listing-price">1 850 Kč</div>
+        <div class="listing-meta">
+          <span>📍 Praha</span>
+          <span>🔧 Použitý</span>
+          <span>📏 TT (1:120)</span>
+          <span>👁 47 zobrazení</span>
+        </div>
+      </div>
+      <div class="listing-actions">
+        <button class="btn btn-primary">📩 Napsat prodejci</button>
+        <button class="btn btn-escrow">🛡️ Bezpečná platba</button>
+        <button class="btn btn-secondary">♡ Sledovat</button>
+      </div>
+      <div class="listing-desc">
+        Prodám lokomotivu Tillig TT BR 218 v DB barvách. Motor běží plynule, osvětlení funkční.
+        Jezdila málo, lehké stopy užívání na podvozku. Dekodér NEM 651 osazen, digitálně odzkouš eno.
+        Baleno v originální krabičce.
+      </div>
+
+      <!-- ═══ POZICE 1: Kontextový banner ═══ -->
+      <div>
+        <span class="section-label label-1">📍 Pozice 1 — Kontextový banner pod popisem</span>
+        <div class="ad-contextual">
+          <span class="ad-badge">sponzorováno</span>
+          <div class="ad-img">🛤️</div>
+          <div class="ad-content">
+            <div class="ad-label">Doporučený produkt pro TT</div>
+            <div class="ad-title">Kolejové plány pro TT — 15 návrhů</div>
+            <div class="ad-text">Detailní plány kolejišť v měřítku TT s Tillig kolejemi. PDF + interaktivní náhled.</div>
+          </div>
+          <button class="ad-cta">Zobrazit →</button>
+        </div>
+        <div class="note">
+          <strong>💡 Logika:</strong> Banner se vybere podle <strong>měřítka + kategorie</strong> inzerátu.
+          <ul>
+            <li>TT inzerát → TT produkty z eshopu / TT partneři</li>
+            <li>Lokomotiva → dekodéry, náhradní díly, údržba</li>
+            <li>Bez relevantního obsahu → obecný Lokopolis promo</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- ═══ POZICE 3: Podobné inzeráty + nativní reklama ═══ -->
+      <div class="similar-section">
+        <span class="section-label label-3">📍 Pozice 3 — Nativní reklama mezi "Podobné inzeráty"</span>
+        <div class="similar-title">Podobné inzeráty</div>
+        <div class="similar-grid">
+          <div class="similar-card">
+            <div class="card-img">🚃</div>
+            <div class="card-body">
+              <div class="card-title">Tillig TT set osobních vozů</div>
+              <div class="card-price">2 400 Kč</div>
+            </div>
+          </div>
+          <div class="similar-card ad-card">
+            <div class="card-img">
+              🏪
+              <span class="ad-tag">eshop</span>
+            </div>
+            <div class="card-body">
+              <div class="card-title">🛒 Kolejový plán „Horská trať TT"</div>
+              <div class="card-price" style="color:#22c55e;">149 Kč</div>
+            </div>
+          </div>
+          <div class="similar-card">
+            <div class="card-img">🚂</div>
+            <div class="card-body">
+              <div class="card-title">Tillig TT BR 185 Railion</div>
+              <div class="card-price">2 100 Kč</div>
+            </div>
+          </div>
+          <div class="similar-card">
+            <div class="card-img">🔧</div>
+            <div class="card-body">
+              <div class="card-title">ESU LokPilot micro V5</div>
+              <div class="card-price">890 Kč</div>
+            </div>
+          </div>
+        </div>
+        <div class="note">
+          <strong>💡 Logika:</strong> Mezi reálné inzeráty se vmíchá <strong>1 karta z eshopu</strong> (tag "eshop").
+          <ul>
+            <li>Vypadá jako inzerát, ale odkazuje na eshop produkt</li>
+            <li>Max 1 na 4–6 karet, nikdy první pozice</li>
+            <li>Relevantní podle měřítka/kategorie</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- ═══ POZICE 4: Komunitní banner ═══ -->
+      <div>
+        <span class="section-label label-4">📍 Pozice 4 — Komunitní / akční banner</span>
+        <div class="ad-community">
+          <div class="ad-community-icon">🏆</div>
+          <div class="ad-community-content">
+            <div class="ad-community-title">Soutěž „Kolejiště měsíce" — hlasujte!</div>
+            <div class="ad-community-text">5 soutěžních kolejišť čeká na váš hlas. Vítěz získá 500 Kč voucher.</div>
+          </div>
+          <button class="ad-community-cta">Hlasovat →</button>
+        </div>
+        <div class="note">
+          <strong>💡 Logika:</strong> Rotující bannery — <strong>soutěže, akce, nové články, newsletter</strong>.
+          <ul>
+            <li>Zobrazuje se jen pokud probíhá nějaká akce</li>
+            <li>Jinak se nezobrazí (žádný fallback)</li>
+            <li>Fialový akcent = odliší se od eshop reklam</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════ SIDEBAR ═══════ -->
+    <div class="sidebar">
+      <span class="section-label label-2">📍 Pozice 2 — Sidebar (desktop)</span>
+
+      <!-- Partner banner -->
+      <div class="ad-sidebar">
+        <div class="ad-sidebar-img">
+          🚂
+          <span class="ad-sidebar-badge">partner</span>
+        </div>
+        <div class="ad-sidebar-body">
+          <div class="ad-sidebar-title">Tillig — Novinky 2026</div>
+          <div class="ad-sidebar-text">Nové modely TT pro sezónu 2026. BR 218 v nových variantách, sety osobních vozů a rozšíření kolejového systému.</div>
+          <a href="#" class="ad-sidebar-cta">Prohlédnout →</a>
+        </div>
+      </div>
+
+      <!-- Shop promo -->
+      <div class="ad-sidebar-sticky">
+        <div class="ad-icon">📥</div>
+        <div class="ad-sidebar-title">Ke stažení zdarma</div>
+        <div class="ad-sidebar-text">3 kolejové plány TT pro začátečníky. PDF ke stažení ihned.</div>
+        <a href="#" class="ad-sidebar-cta" style="display:inline-block; text-decoration:none; margin-top:4px;">Stáhnout →</a>
+      </div>
+
+      <!-- Sticky info -->
+      <div class="ad-sidebar-sticky" style="border: 1px solid rgba(240,160,48,0.15);">
+        <div class="ad-icon">🛡️</div>
+        <div class="ad-sidebar-title" style="color:#f0a030;">Bezpečná platba</div>
+        <div class="ad-sidebar-text">Nakupujte bez rizika. Peníze uvolníme prodejci až po potvrzení doručení.</div>
+        <a href="#" class="ad-sidebar-cta" style="display:inline-block; text-decoration:none; margin-top:4px;">Jak to funguje? →</a>
+      </div>
+
+      <div class="note">
+        <strong>💡 Sidebar logika:</strong>
+        <ul>
+          <li>Na <strong>mobilu skrytý</strong> nebo pod hlavním obsahem</li>
+          <li>Sticky při scrollování (poslední box se drží)</li>
+          <li>Mix: partner, eshop promo, Bezpečná platba info</li>
+          <li>Max 3 boxy</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- Summary -->
+  <div class="note" style="max-width:800px; margin: 0 auto;">
+    <h3 style="color:#f0a030; margin-bottom:12px; font-size:16px;">📋 Shrnutí návrhu</h3>
+    <table style="width:100%; border-collapse:collapse; font-size:13px;">
+      <tr style="border-bottom:1px solid #2a2a3e;">
+        <td style="padding:8px; font-weight:600; color:#f0a030;">Pozice 1</td>
+        <td style="padding:8px;">Kontextový banner pod popisem</td>
+        <td style="padding:8px; color:#22c55e;">Vlastní eshop / partneři</td>
+        <td style="padding:8px; color:#888;">Podle měřítka + kategorie</td>
+      </tr>
+      <tr style="border-bottom:1px solid #2a2a3e;">
+        <td style="padding:8px; font-weight:600; color:#22c55e;">Pozice 2</td>
+        <td style="padding:8px;">Sidebar (jen desktop)</td>
+        <td style="padding:8px; color:#22c55e;">Partneři / eshop / info</td>
+        <td style="padding:8px; color:#888;">Sticky, max 3 boxy</td>
+      </tr>
+      <tr style="border-bottom:1px solid #2a2a3e;">
+        <td style="padding:8px; font-weight:600; color:#3b82f6;">Pozice 3</td>
+        <td style="padding:8px;">Nativní karta v "Podobné inzeráty"</td>
+        <td style="padding:8px; color:#22c55e;">Eshop produkty</td>
+        <td style="padding:8px; color:#888;">1 na 4–6 karet, nikdy první</td>
+      </tr>
+      <tr>
+        <td style="padding:8px; font-weight:600; color:#a78bfa;">Pozice 4</td>
+        <td style="padding:8px;">Komunitní banner</td>
+        <td style="padding:8px; color:#22c55e;">Soutěže / akce / články</td>
+        <td style="padding:8px; color:#888;">Jen pokud probíhá akce</td>
+      </tr>
+    </table>
+
+    <div style="margin-top:16px; padding-top:12px; border-top:1px solid #2a2a3e;">
+      <strong style="color:#f0a030;">🎯 Klíčové principy:</strong>
+      <ul style="margin-top:6px;">
+        <li><strong>Kontextové</strong> — reklamy odpovídají obsahu (měřítko, kategorie, značka)</li>
+        <li><strong>Nenápadné</strong> — respektují design, nepřekrývají obsah</li>
+        <li><strong>Vlastní obsah první</strong> — eshop produkty > externí partneři</li>
+        <li><strong>Označené</strong> — vždy „sponzorováno" / „eshop" / „partner" badge</li>
+        <li><strong>Limitované</strong> — max 4 reklamy na stránku, nikdy popup/overlay</li>
+        <li><strong>Mobile-friendly</strong> — sidebar zmizí, zůstane jen Pozice 1 + 3 + 4</li>
+      </ul>
+    </div>
+  </div>
+</div>
+</body>
+</html>
