@@ -15,6 +15,7 @@ import type {
   CompetitionHomeData,
   BazarListingHome,
   ShopProductHome,
+  RecentForumThread,
 } from "@/app/home-data";
 
 function optimizeImageUrl(url: string, width: number = 400): string {
@@ -46,6 +47,24 @@ function formatSize(bytes: number | null): string {
 const CZECH_MONTHS_SHORT = ["Led", "Úno", "Bře", "Dub", "Kvě", "Čvn", "Čvc", "Srp", "Zář", "Říj", "Lis", "Pro"];
 
 const defaultTags = ["Tillig", "DCC", "epocha IV", "3D tisk", "ČSD", "krajina", "patina", "ROCO", "výhybky", "LED osvětlení"];
+
+function timeAgo(dateStr: string | null): string {
+  if (!dateStr) return "";
+  const now = Date.now();
+  const then = new Date(dateStr).getTime();
+  const diff = now - then;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "právě teď";
+  if (mins < 60) return `před ${mins} min`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `před ${hours} hod`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return "včera";
+  if (days < 7) return `před ${days} dny`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 5) return `před ${weeks} týd`;
+  return new Date(dateStr).toLocaleDateString("cs-CZ", { day: "numeric", month: "short" });
+}
 
 /* ============================================================
    COMPETITION BANNER
@@ -151,6 +170,7 @@ export default function HomeContent({ data }: { data: HomePageData }) {
     popularArticles,
     popularTags,
     forumStats,
+    recentForumThreads,
     activeAuthors,
     competition,
     latestListings,
@@ -159,18 +179,18 @@ export default function HomeContent({ data }: { data: HomePageData }) {
 
   return (
     <div>
-      {/* ===================== HERO ===================== */}
-      <section className="hero-section">
+      {/* ===================== HERO (compact) ===================== */}
+      <section className="hero-section" style={{ paddingTop: "32px", paddingBottom: "32px", minHeight: "auto" }}>
         <div style={{ position: "relative", zIndex: 2, padding: "0 20px", textAlign: "center" }}>
           <BadgeLogo size="lg" />
-          <p style={{ fontSize: "20px", color: "var(--text-dim)", maxWidth: "560px", margin: "16px auto 32px" }}>
+          <p style={{ fontSize: "17px", color: "var(--text-dim)", maxWidth: "480px", margin: "12px auto 24px" }}>
             Návody, recenze, kolejové plány a komunita modelářů
           </p>
           <form
             onSubmit={handleSearch}
             style={{
               display: "flex",
-              maxWidth: "480px",
+              maxWidth: "460px",
               margin: "0 auto",
               background: "var(--bg-input)",
               border: "1px solid var(--border-input)",
@@ -185,18 +205,18 @@ export default function HomeContent({ data }: { data: HomePageData }) {
               placeholder="Hledej články, modely, kolejové plány..."
               style={{
                 flex: 1,
-                padding: "14px 20px",
+                padding: "12px 18px",
                 background: "transparent",
                 border: "none",
                 color: "var(--text-primary)",
-                fontSize: "15px",
+                fontSize: "14px",
                 outline: "none",
               }}
             />
             <button
               type="submit"
               style={{
-                padding: "14px 24px",
+                padding: "12px 22px",
                 background: "var(--accent)",
                 border: "none",
                 color: "var(--accent-text-on)",
@@ -211,32 +231,217 @@ export default function HomeContent({ data }: { data: HomePageData }) {
         </div>
       </section>
 
-      {/* ===================== STATS BAR ===================== */}
-      <div className="stats-bar" style={{ background: "var(--bg-header)", padding: "14px 0" }}>
-        <div
-          className="stats-bar-inner"
-          style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 20px", display: "flex", justifyContent: "center", gap: "48px" }}
-        >
-          {[
-            { num: stats.articles, label: "Článků" },
-            { num: stats.members, label: "Členů" },
-            { num: stats.downloads, label: "Ke stažení" },
-            { num: stats.photos, label: "V galerii" },
-          ].map((s) => (
-            <div key={s.label} style={{ textAlign: "center" }}>
-              <div className="stats-num" style={{ fontSize: "24px", fontWeight: 700, color: "var(--accent)" }}>{s.num}</div>
-              <div className="stats-label" style={{ fontSize: "12px", color: "var(--text-dimmer)", textTransform: "uppercase", letterSpacing: "1px", marginTop: "2px" }}>
-                {s.label}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ===================== CATEGORIES ===================== */}
-      <section style={{ maxWidth: "1200px", margin: "48px auto 0", padding: "0 20px" }}>
+      {/* ===================== 📰 NEJNOVĚJŠÍ Z KOMUNITY ===================== */}
+      <section style={{ maxWidth: "1200px", margin: "40px auto 0", padding: "0 20px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
-          <h2 style={{ fontSize: "24px", fontWeight: 700, color: "var(--text-primary)" }}>Kategorie</h2>
+          <h2 style={{ fontSize: "24px", fontWeight: 700, color: "var(--text-primary)" }}>📰 Nejnovější z komunity</h2>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px]" style={{ gap: "24px" }}>
+          {/* Left: Latest Articles */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            {latestArticles.map((a: LatestArticle, i: number) => {
+              const authorName = a.author?.display_name || a.author?.username || "Anonym";
+              const initials = authorName.charAt(0).toUpperCase();
+              const date = a.published_at
+                ? new Date(a.published_at).toLocaleDateString("cs-CZ", { day: "numeric", month: "long", year: "numeric" })
+                : "";
+              return (
+                <Link key={a.id} href={`/clanky/${a.slug}`} style={{ textDecoration: "none" }}>
+                  <div className="flex flex-col sm:flex-row" style={{
+                    gap: "16px",
+                    background: "var(--bg-card)",
+                    border: "1px solid var(--border)",
+                    borderRadius: "12px",
+                    overflow: "hidden",
+                    transition: "all 0.2s",
+                  }}
+                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.transform = "translateY(-1px)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.transform = "translateY(0)"; }}
+                  >
+                    {/* Article image */}
+                    <div className="w-full sm:w-[200px]" style={{ minHeight: "140px", position: "relative", flexShrink: 0 }}>
+                      {a.cover_image_url ? (
+                        <Image
+                          src={optimizeImageUrl(a.cover_image_url, 400)}
+                          alt={a.title}
+                          fill
+                          style={{ objectFit: "cover" }}
+                          sizes="200px"
+                          priority={i < 2}
+                        />
+                      ) : (
+                        <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-page)", fontSize: "32px", color: "var(--text-dimmer)" }}>
+                          {a.category?.icon || "📄"}
+                        </div>
+                      )}
+                    </div>
+                    {/* Article info */}
+                    <div style={{ padding: "14px 16px 14px 0", flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px", flexWrap: "wrap" }}>
+                        {a.category && (
+                          <span style={{
+                            display: "inline-flex", alignItems: "center", gap: "3px",
+                            padding: "2px 8px", borderRadius: "6px", fontSize: "11px", fontWeight: 600,
+                            background: "var(--accent-bg)", color: "var(--accent)",
+                          }}>
+                            <CategoryIcon slug={a.category.slug} emoji={a.category.icon} size={12} /> {a.category.name}
+                          </span>
+                        )}
+                        <span style={{ fontSize: "11px", color: "var(--text-faint)" }}>{date}</span>
+                      </div>
+                      <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary)", lineHeight: 1.4, marginBottom: "6px" }}>
+                        {a.title}
+                      </h3>
+                      <p style={{ fontSize: "13px", color: "var(--text-dim)", lineHeight: 1.5, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+                        {a.excerpt || ""}
+                      </p>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "8px" }}>
+                        {a.author?.avatar_url ? (
+                          <Image src={a.author.avatar_url} alt="" width={20} height={20} style={{ borderRadius: "50%", objectFit: "cover" }} />
+                        ) : (
+                          <div style={{ width: "20px", height: "20px", borderRadius: "50%", background: "var(--border-hover)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px", color: "var(--text-muted)" }}>
+                            {initials}
+                          </div>
+                        )}
+                        <span style={{ fontSize: "12px", color: "var(--text-dimmer)" }}>{authorName}</span>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
+            <Link href="/clanky" style={{ fontSize: "14px", color: "var(--accent)", textDecoration: "none", fontWeight: 600, textAlign: "center", display: "block", padding: "8px 0" }}>
+              Všechny články →
+            </Link>
+          </div>
+
+          {/* Right sidebar: Forum threads + Bazar listings */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            {/* Recent forum threads */}
+            {recentForumThreads && recentForumThreads.length > 0 && (
+              <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px", padding: "16px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                  <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary)" }}>💬 Z fóra</h3>
+                  <Link href="/forum" style={{ fontSize: "12px", color: "var(--accent)", textDecoration: "none" }}>Fórum →</Link>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  {recentForumThreads.map((t: RecentForumThread) => (
+                    <Link key={t.id} href={`/forum/${t.section_slug}/${t.id}`} style={{ textDecoration: "none" }}>
+                      <div style={{
+                        padding: "10px 12px",
+                        borderRadius: "8px",
+                        background: "var(--bg-page)",
+                        border: "1px solid transparent",
+                        transition: "border-color 0.2s",
+                      }}
+                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent-border)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = "transparent"; }}
+                      >
+                        <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", lineHeight: 1.3, marginBottom: "4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {t.title}
+                        </div>
+                        <div style={{ display: "flex", gap: "8px", alignItems: "center", fontSize: "11px", color: "var(--text-dimmer)" }}>
+                          <span>{t.author_display_name}</span>
+                          <span>·</span>
+                          <span>{t.section_name}</span>
+                          <span>·</span>
+                          <span>{t.post_count} přísp.</span>
+                          {t.last_post_at && (
+                            <>
+                              <span>·</span>
+                              <span>{timeAgo(t.last_post_at)}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Latest bazar items (mini) */}
+            {latestListings && latestListings.length > 0 && (
+              <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px", padding: "16px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                  <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary)" }}>🛒 Nové v bazaru</h3>
+                  <Link href="/bazar" style={{ fontSize: "12px", color: "var(--accent)", textDecoration: "none" }}>Bazar →</Link>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {latestListings.slice(0, 3).map((listing: BazarListingHome) => {
+                    const firstImage = listing.images && listing.images.length > 0 ? listing.images[0] : null;
+                    return (
+                      <Link key={listing.id} href={`/bazar/${listing.id}`} style={{ textDecoration: "none" }}>
+                        <div style={{
+                          display: "flex", gap: "10px", alignItems: "center",
+                          padding: "8px", borderRadius: "8px", background: "var(--bg-page)",
+                          border: "1px solid transparent", transition: "border-color 0.2s",
+                        }}
+                          onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent-border)"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.borderColor = "transparent"; }}
+                        >
+                          <div style={{ width: "48px", height: "48px", borderRadius: "6px", overflow: "hidden", flexShrink: 0, position: "relative", background: "var(--bg-card)" }}>
+                            {firstImage ? (
+                              <Image src={optimizeImageUrl(firstImage, 100)} alt={listing.title} fill style={{ objectFit: "cover" }} sizes="48px" />
+                            ) : (
+                              <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px" }}>🚂</div>
+                            )}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{listing.title}</div>
+                            <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--accent)" }}>{listing.price.toLocaleString("cs-CZ")} Kč</div>
+                          </div>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* ===================== 💬 AKTIVNÍ DISKUZE ===================== */}
+      <section style={{ maxWidth: "1200px", margin: "40px auto 0", padding: "0 20px" }}>
+        <div style={{
+          background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "14px",
+          padding: "20px 24px", display: "flex", justifyContent: "space-between", alignItems: "center",
+          flexWrap: "wrap", gap: "16px",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "24px", flexWrap: "wrap" }}>
+            <h2 style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>💬 Aktivní diskuze</h2>
+            <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
+              <span style={{ fontSize: "14px", color: "var(--text-dim)" }}>
+                <strong style={{ color: "var(--accent)" }}>{forumStats.thread_count}</strong> vláken
+              </span>
+              <span style={{ fontSize: "14px", color: "var(--text-dim)" }}>
+                <strong style={{ color: "var(--accent)" }}>{forumStats.post_count}</strong> příspěvků
+              </span>
+            </div>
+            {forumStats.last_thread_title && forumStats.last_thread_id && (
+              <Link
+                href={`/forum/${forumStats.last_thread_section_slug || "obecna-diskuze"}/${forumStats.last_thread_id}`}
+                style={{ fontSize: "13px", color: "var(--accent)", textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "300px" }}
+              >
+                Poslední: {forumStats.last_thread_title}
+              </Link>
+            )}
+          </div>
+          <Link href="/forum" style={{
+            padding: "8px 20px", background: "var(--accent)", color: "var(--accent-text-on)",
+            borderRadius: "8px", fontSize: "14px", fontWeight: 600, textDecoration: "none", flexShrink: 0,
+          }}>
+            Přejít na fórum →
+          </Link>
+        </div>
+      </section>
+
+      {/* ===================== 📂 KATEGORIE (compact) ===================== */}
+      <section style={{ maxWidth: "1200px", margin: "40px auto 0", padding: "0 20px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+          <h2 style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-primary)" }}>📂 Kategorie</h2>
           <Link href="#" style={{ fontSize: "13px", color: "var(--accent)", textDecoration: "none" }}>
             Zobrazit vše →
           </Link>
@@ -244,97 +449,98 @@ export default function HomeContent({ data }: { data: HomePageData }) {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))",
-            gap: "12px",
+            gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
+            gap: "10px",
           }}
         >
           {categories.map((cat) => (
             <Link key={cat.href} href={cat.href} style={{ textDecoration: "none" }}>
-              <div className="cat-card">
-                <div style={{ fontSize: "36px", marginBottom: "10px", display: "flex", justifyContent: "center", alignItems: "center", height: "40px" }}>
+              <div className="cat-card" style={{ padding: "12px 8px" }}>
+                <div style={{ fontSize: "28px", marginBottom: "6px", display: "flex", justifyContent: "center", alignItems: "center", height: "32px" }}>
                   {cat.iconUrl ? (
-                    <img src={cat.iconUrl} alt={cat.title} style={{ width: "52px", height: "52px", objectFit: "contain" }} />
+                    <img src={cat.iconUrl} alt={cat.title} style={{ width: "36px", height: "36px", objectFit: "contain" }} />
                   ) : (
                     cat.icon
                   )}
                 </div>
-                <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-body)" }}>{cat.title}</div>
-                <div style={{ fontSize: "12px", color: "var(--text-dimmer)", marginTop: "4px" }}>{cat.count} článků</div>
+                <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-body)" }}>{cat.title}</div>
+                <div style={{ fontSize: "10px", color: "var(--text-dimmer)", marginTop: "2px" }}>{cat.count} článků</div>
               </div>
             </Link>
           ))}
         </div>
       </section>
 
-      {/* ===================== LATEST ARTICLES ===================== */}
-      <section style={{ maxWidth: "1200px", margin: "48px auto 0", padding: "0 20px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
-          <h2 style={{ fontSize: "24px", fontWeight: 700, color: "var(--text-primary)" }}>Nejnovější články</h2>
-          <Link href="/clanky" style={{ fontSize: "13px", color: "var(--accent)", textDecoration: "none" }}>
-            Všechny články →
-          </Link>
-        </div>
+      {/* ===================== 📊 STATS BAR ===================== */}
+      <div className="stats-bar" style={{ background: "var(--bg-header)", padding: "16px 0", marginTop: "40px" }}>
         <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-            gap: "20px",
-          }}
+          className="stats-bar-inner"
+          style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 20px", display: "flex", justifyContent: "center", gap: "48px" }}
         >
-          {latestArticles.map((a: LatestArticle, i: number) => {
-            const authorName = a.author?.display_name || a.author?.username || "Anonym";
-            const initials = authorName.charAt(0).toUpperCase();
-            const date = a.published_at
-              ? new Date(a.published_at).toLocaleDateString("cs-CZ", { day: "numeric", month: "long", year: "numeric" })
-              : "";
-            return (
-              <Link key={a.id} href={`/clanky/${a.slug}`} style={{ textDecoration: "none" }}>
-                <div className="article-card">
-                  <div className="article-img">
-                    {a.cover_image_url ? (
-                      <Image src={a.cover_image_url} alt={a.title} fill style={{ objectFit: "cover" }} sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" priority={i < 3} />
-                    ) : (
-                      <div className="placeholder">{a.category?.icon || "📄"}</div>
-                    )}
-                    {a.category && <span className="article-badge" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}><CategoryIcon slug={a.category.slug} emoji={a.category.icon} size={14} /> {a.category.name}</span>}
-                  </div>
-                  <div style={{ padding: "16px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
-                      {a.author?.avatar_url ? (
-                        <Image src={a.author.avatar_url} alt="" width={24} height={24} style={{ borderRadius: "50%", objectFit: "cover" }} />
-                      ) : (
-                        <div
-                          style={{
-                            width: "24px",
-                            height: "24px",
-                            borderRadius: "50%",
-                            background: "var(--border-hover)",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: "11px",
-                            color: "var(--text-muted)",
-                          }}
-                        >
-                          {initials}
-                        </div>
-                      )}
-                      <span style={{ fontSize: "12px", color: "var(--text-dimmer)" }}>{authorName}</span>
-                      <span style={{ fontSize: "12px", color: "var(--text-faint)" }}>· {date}</span>
-                    </div>
-                    <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "8px", lineHeight: 1.4 }}>
-                      {a.title}
-                    </h3>
-                    <p style={{ fontSize: "13px", color: "var(--text-dim)", lineHeight: 1.5 }}>
-                      {a.excerpt || ""}
-                    </p>
-                  </div>
-                </div>
-              </Link>
-            );
-          })}
+          {[
+            { num: stats.articles, label: "Článků", sub: "publikovaných" },
+            { num: stats.members, label: "Členů", sub: "registrovaných" },
+            { num: stats.downloads, label: "Ke stažení", sub: "souborů" },
+            { num: stats.photos, label: "V galerii", sub: "fotek" },
+            { num: forumStats.thread_count.toLocaleString("cs-CZ"), label: "Diskuzí", sub: "na fóru" },
+          ].map((s) => (
+            <div key={s.label} style={{ textAlign: "center" }}>
+              <div className="stats-num" style={{ fontSize: "24px", fontWeight: 700, color: "var(--accent)" }}>{s.num}</div>
+              <div className="stats-label" style={{ fontSize: "11px", color: "var(--text-dimmer)", textTransform: "uppercase", letterSpacing: "1px", marginTop: "2px" }}>
+                {s.label}
+              </div>
+            </div>
+          ))}
         </div>
-      </section>
+      </div>
+
+      {/* ===================== BAZAR (full) ===================== */}
+      {latestListings && latestListings.length > 0 && (
+        <section style={{ maxWidth: "1200px", margin: "48px auto 0", padding: "0 20px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
+            <h2 style={{ fontSize: "24px", fontWeight: 700, color: "var(--text-primary)" }}>🛒 Nejnovější v bazaru</h2>
+            <Link href="/bazar" style={{ color: "var(--accent)", textDecoration: "none", fontSize: "14px", fontWeight: 600 }}>
+              Zobrazit vše →
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" style={{ gap: "16px" }}>
+            {latestListings.map((listing: BazarListingHome) => {
+              const firstImage = listing.images && listing.images.length > 0 ? listing.images[0] : null;
+              const condLabel: Record<string, string> = { new: "Nový", opened: "Rozbalený", used: "Použitý", parts: "Na díly" };
+              const condColor: Record<string, string> = { new: "#22c55e", opened: "#3b82f6", used: "#f59e0b", parts: "#ef4444" };
+              const scaleColor: Record<string, string> = { TT: "#3b82f6", H0: "#22c55e", N: "#a855f7", Z: "#ec4899", G: "#f59e0b" };
+              return (
+                <Link key={listing.id} href={`/bazar/${listing.id}`} style={{ textDecoration: "none" }}>
+                  <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px", overflow: "hidden", transition: "all 0.2s", height: "100%" }} onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.transform = "translateY(0)"; }}>
+                    <div style={{ position: "relative", width: "100%", paddingBottom: "75%", background: "var(--bg-page)" }}>
+                      {firstImage ? (
+                        <Image src={optimizeImageUrl(firstImage)} alt={listing.title} fill style={{ objectFit: "cover" }} sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw" />
+                      ) : (
+                        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "32px", color: "var(--text-dimmer)" }}>🚂</div>
+                      )}
+                    </div>
+                    <div style={{ padding: "12px" }}>
+                      <div style={{ fontSize: "18px", fontWeight: 700, color: "var(--accent)", marginBottom: "4px" }}>{listing.price.toLocaleString("cs-CZ")} Kč</div>
+                      <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "6px", lineHeight: 1.3, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{listing.title}</div>
+                      <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
+                        {listing.scale && <span style={{ padding: "1px 6px", borderRadius: "4px", fontSize: "10px", fontWeight: 600, background: `${scaleColor[listing.scale] || "#6b7280"}20`, color: scaleColor[listing.scale] || "#6b7280" }}>{listing.scale}</span>}
+                        <span style={{ padding: "1px 6px", borderRadius: "4px", fontSize: "10px", fontWeight: 600, background: `${condColor[listing.condition]}20`, color: condColor[listing.condition] }}>{condLabel[listing.condition] || listing.condition}</span>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* ===================== COMPETITION ===================== */}
+      {competition && (
+        <section style={{ maxWidth: "1200px", margin: "48px auto 0", padding: "0 20px" }}>
+          <CompetitionBanner competition={competition} />
+        </section>
+      )}
 
       {/* ===================== FEATURED SHOP PRODUCTS ===================== */}
       {featuredShopProducts && featuredShopProducts.length > 0 && (
@@ -479,54 +685,6 @@ export default function HomeContent({ data }: { data: HomePageData }) {
           </div>
         )}
       </section>
-
-      {/* ===================== BAZAR ===================== */}
-      {latestListings && latestListings.length > 0 && (
-        <section style={{ maxWidth: "1200px", margin: "48px auto 0", padding: "0 20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
-            <h2 style={{ fontSize: "24px", fontWeight: 700, color: "var(--text-primary)" }}>🛒 Nejnovější v bazaru</h2>
-            <Link href="/bazar" style={{ color: "var(--accent)", textDecoration: "none", fontSize: "14px", fontWeight: 600 }}>
-              Zobrazit vše →
-            </Link>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" style={{ gap: "16px" }}>
-            {latestListings.map((listing: BazarListingHome) => {
-              const firstImage = listing.images && listing.images.length > 0 ? listing.images[0] : null;
-              const condLabel: Record<string, string> = { new: "Nový", opened: "Rozbalený", used: "Použitý", parts: "Na díly" };
-              const condColor: Record<string, string> = { new: "#22c55e", opened: "#3b82f6", used: "#f59e0b", parts: "#ef4444" };
-              const scaleColor: Record<string, string> = { TT: "#3b82f6", H0: "#22c55e", N: "#a855f7", Z: "#ec4899", G: "#f59e0b" };
-              return (
-                <Link key={listing.id} href={`/bazar/${listing.id}`} style={{ textDecoration: "none" }}>
-                  <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px", overflow: "hidden", transition: "all 0.2s", height: "100%" }} onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.transform = "translateY(0)"; }}>
-                    <div style={{ position: "relative", width: "100%", paddingBottom: "75%", background: "var(--bg-page)" }}>
-                      {firstImage ? (
-                        <Image src={optimizeImageUrl(firstImage)} alt={listing.title} fill style={{ objectFit: "cover" }} sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw" />
-                      ) : (
-                        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "32px", color: "var(--text-dimmer)" }}>🚂</div>
-                      )}
-                    </div>
-                    <div style={{ padding: "12px" }}>
-                      <div style={{ fontSize: "18px", fontWeight: 700, color: "var(--accent)", marginBottom: "4px" }}>{listing.price.toLocaleString("cs-CZ")} Kč</div>
-                      <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "6px", lineHeight: 1.3, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{listing.title}</div>
-                      <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
-                        {listing.scale && <span style={{ padding: "1px 6px", borderRadius: "4px", fontSize: "10px", fontWeight: 600, background: `${scaleColor[listing.scale] || "#6b7280"}20`, color: scaleColor[listing.scale] || "#6b7280" }}>{listing.scale}</span>}
-                        <span style={{ padding: "1px 6px", borderRadius: "4px", fontSize: "10px", fontWeight: 600, background: `${condColor[listing.condition]}20`, color: condColor[listing.condition] }}>{condLabel[listing.condition] || listing.condition}</span>
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* ===================== COMPETITION ===================== */}
-      {competition && (
-        <section style={{ maxWidth: "1200px", margin: "48px auto 0", padding: "0 20px" }}>
-          <CompetitionBanner competition={competition} />
-        </section>
-      )}
 
       {/* ===================== MAIN + SIDEBAR ===================== */}
       <div

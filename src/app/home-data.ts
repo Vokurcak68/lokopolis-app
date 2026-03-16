@@ -57,6 +57,16 @@ export interface ForumStats {
   last_thread_section_slug: string | null;
 }
 
+export interface RecentForumThread {
+  id: string;
+  title: string;
+  section_slug: string;
+  section_name: string;
+  last_post_at: string | null;
+  post_count: number;
+  author_display_name: string;
+}
+
 export interface ActiveAuthor {
   name: string;
   count: number;
@@ -135,6 +145,7 @@ export interface HomePageData {
   popularArticles: PopularArticle[];
   popularTags: PopularTag[];
   forumStats: ForumStats;
+  recentForumThreads: RecentForumThread[];
   activeAuthors: ActiveAuthor[];
   competition: CompetitionHomeData | null;
   latestListings: BazarListingHome[];
@@ -179,6 +190,7 @@ async function fetchHomeDataInternal(): Promise<HomePageData> {
       popularArticles: [],
       popularTags: [],
       forumStats: { thread_count: 0, post_count: 0, last_thread_title: null, last_thread_id: null, last_thread_section_slug: null },
+      recentForumThreads: [],
       activeAuthors: [],
       competition: null,
       latestListings: [],
@@ -202,6 +214,7 @@ async function fetchHomeDataInternal(): Promise<HomePageData> {
     tagsRes,
     forumStatsRes,
     lastThreadRes,
+    recentThreadsRes,
   ] = await Promise.all([
     supabase.from("articles").select("*", { count: "exact", head: true }).eq("status", "published").eq("verified", true),
     supabase.from("profiles").select("*", { count: "exact", head: true }),
@@ -215,6 +228,7 @@ async function fetchHomeDataInternal(): Promise<HomePageData> {
     Promise.resolve(supabase.rpc("get_popular_tags", { max_results: 15 })).catch(() => ({ data: null })),
     Promise.resolve(supabase.rpc("get_forum_stats")).catch(() => ({ data: null })),
     supabase.from("forum_threads").select("id, title, section:forum_sections(slug)").order("last_post_at", { ascending: false }).limit(1),
+    supabase.from("forum_threads").select("id, title, post_count, last_post_at, section:forum_sections(slug, name), author:profiles!forum_threads_user_id_fkey(display_name, username)").eq("is_locked", false).order("last_post_at", { ascending: false }).limit(5),
   ]);
 
   // --- Stats ---
@@ -269,6 +283,22 @@ async function fetchHomeDataInternal(): Promise<HomePageData> {
       last_thread_section_slug: secSlug || null,
     };
   }
+
+  // --- Recent forum threads ---
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recentForumThreads: RecentForumThread[] = (recentThreadsRes.data || []).map((t: any) => {
+    const sec = Array.isArray(t.section) ? t.section[0] : t.section;
+    const auth = Array.isArray(t.author) ? t.author[0] : t.author;
+    return {
+      id: t.id,
+      title: t.title,
+      section_slug: sec?.slug || "obecna-diskuze",
+      section_name: sec?.name || "Fórum",
+      last_post_at: t.last_post_at,
+      post_count: t.post_count || 0,
+      author_display_name: auth?.display_name || auth?.username || "Anonym",
+    };
+  });
 
   // --- Popular articles ---
   let popularArticles: PopularArticle[] = [];
@@ -415,6 +445,7 @@ async function fetchHomeDataInternal(): Promise<HomePageData> {
     popularArticles,
     popularTags,
     forumStats,
+    recentForumThreads,
     activeAuthors,
     competition,
     latestListings,
