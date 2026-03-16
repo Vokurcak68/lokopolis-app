@@ -370,7 +370,9 @@ export default function OrderConfirmationPage() {
             <div>{order.billing_name}</div>
             {order.billing_street && <div>{order.billing_street}</div>}
             {(order.billing_city || order.billing_zip) && <div>{order.billing_city} {order.billing_zip}</div>}
-            {order.billing_email && <div style={{ color: "var(--text-muted)", fontSize: "13px", marginTop: "4px" }}>{order.billing_email}</div>}
+            {order.billing_ico && <div style={{ fontSize: "13px", color: "var(--text-muted)", marginTop: "4px" }}>IČO: {order.billing_ico}</div>}
+            {order.billing_dic && <div style={{ fontSize: "13px", color: "var(--text-muted)" }}>DIČ: {order.billing_dic}</div>}
+            {order.billing_email && <div style={{ color: "var(--text-muted)", fontSize: "13px", marginTop: order.billing_ico ? "0" : "4px" }}>{order.billing_email}</div>}
             {order.billing_phone && <div style={{ color: "var(--text-muted)", fontSize: "13px" }}>Tel: {order.billing_phone}</div>}
           </div>
         </div>

@@ -462,6 +462,8 @@ export async function POST(req: NextRequest) {
         billing_email: safeEmail,
         billing_phone: safePhone,
         billing_company: billing.isBusiness ? safeCompany : null,
+        billing_ico: billing.isBusiness ? safeIco : null,
+        billing_dic: billing.isBusiness ? safeDic : null,
         billing_street: safeStreet,
         billing_city: safeCity,
         billing_zip: safeZip,

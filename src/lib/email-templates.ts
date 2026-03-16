@@ -115,13 +115,19 @@ function addressBlock(label: string, order: any, prefix: string = "billing"): st
   const zip = order[`${prefix}_zip`];
   const email = order[`${prefix}_email`];
   const phone = order[`${prefix}_phone`];
+  const company = order[`${prefix}_company`];
+  const ico = order[`${prefix}_ico`];
+  const dic = order[`${prefix}_dic`];
   if (!name && !street) return "";
   return `
     <div style="margin-top:16px;">
       <strong style="color:#f0a030;">${label}</strong><br>
+      ${company ? `<span style="font-weight:700;">${esc(company)}</span><br>` : ""}
       ${esc(name)}<br>
       ${street ? esc(street) + "<br>" : ""}
       ${city ? esc(city) : ""} ${zip ? esc(zip) : ""}
+      ${ico ? `<br>IČO: ${esc(ico)}` : ""}
+      ${dic ? `<br>DIČ: ${esc(dic)}` : ""}
       ${email ? `<br>${esc(email)}` : ""}
       ${phone ? `<br>Tel: ${esc(phone)}` : ""}
     </div>`;
@@ -296,6 +302,8 @@ export function newOrderAdmin(order: any, settings?: Record<string, any>): strin
       <span style="color:#ccc;">${esc(customerName)}</span><br>
       <span style="color:#ccc;">${esc(customerEmail)}</span>
       ${order.billing_phone ? `<br><span style="color:#ccc;">Tel: ${esc(order.billing_phone)}</span>` : ""}
+      ${order.billing_ico ? `<br><span style="color:#ccc;">IČO: ${esc(order.billing_ico)}</span>` : ""}
+      ${order.billing_dic ? `<br><span style="color:#ccc;">DIČ: ${esc(order.billing_dic)}</span>` : ""}
       ${!order.user_id ? `<br><span style="color:#f59e0b;font-size:12px;">⚠️ Neregistrovaný zákazník</span>` : ""}
     </div>
 
