@@ -449,22 +449,22 @@ export default function HomeContent({ data }: { data: HomePageData }) {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
+            gridTemplateColumns: "repeat(6, 1fr)",
             gap: "10px",
           }}
         >
           {categories.map((cat) => (
             <Link key={cat.href} href={cat.href} style={{ textDecoration: "none" }}>
-              <div className="cat-card" style={{ padding: "12px 8px" }}>
-                <div style={{ fontSize: "28px", marginBottom: "6px", display: "flex", justifyContent: "center", alignItems: "center", height: "32px" }}>
+              <div className="cat-card" style={{ padding: "16px 10px" }}>
+                <div style={{ fontSize: "32px", marginBottom: "8px", display: "flex", justifyContent: "center", alignItems: "center", height: "44px" }}>
                   {cat.iconUrl ? (
-                    <img src={cat.iconUrl} alt={cat.title} style={{ width: "36px", height: "36px", objectFit: "contain" }} />
+                    <img src={cat.iconUrl} alt={cat.title} style={{ width: "44px", height: "44px", objectFit: "contain" }} />
                   ) : (
                     cat.icon
                   )}
                 </div>
-                <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-body)" }}>{cat.title}</div>
-                <div style={{ fontSize: "10px", color: "var(--text-dimmer)", marginTop: "2px" }}>{cat.count} článků</div>
+                <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-body)" }}>{cat.title}</div>
+                <div style={{ fontSize: "11px", color: "var(--text-dimmer)", marginTop: "3px" }}>{cat.count} článků</div>
               </div>
             </Link>
           ))}
