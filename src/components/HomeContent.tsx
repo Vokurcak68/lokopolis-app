@@ -260,13 +260,13 @@ export default function HomeContent({ data }: { data: HomePageData }) {
                     onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.transform = "translateY(0)"; }}
                   >
                     {/* Article image */}
-                    <div className="w-full sm:w-[200px]" style={{ minHeight: "140px", position: "relative", flexShrink: 0 }}>
+                    <div className="w-full sm:w-[200px]" style={{ minHeight: "140px", position: "relative", flexShrink: 0, background: "var(--bg-page)" }}>
                       {a.cover_image_url ? (
                         <Image
                           src={optimizeImageUrl(a.cover_image_url, 400)}
                           alt={a.title}
                           fill
-                          style={{ objectFit: "cover" }}
+                          style={{ objectFit: "contain" }}
                           sizes="200px"
                           priority={i < 2}
                         />
