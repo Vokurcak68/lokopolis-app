@@ -239,6 +239,19 @@ a:hover {
 }
 
 /* === CATEGORY CARDS === */
+.cat-grid {
+  grid-template-columns: repeat(6, 1fr);
+}
+@media (max-width: 768px) {
+  .cat-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (max-width: 480px) {
+  .cat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
 .cat-card {
   background: var(--bg-card);
   border: 1px solid var(--border);

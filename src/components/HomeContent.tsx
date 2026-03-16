@@ -545,9 +545,9 @@ export default function HomeContent({ data }: { data: HomePageData }) {
           </Link>
         </div>
         <div
+          className="cat-grid"
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(6, 1fr)",
             gap: "10px",
           }}
         >
