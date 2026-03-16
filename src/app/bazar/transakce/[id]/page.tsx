@@ -139,8 +139,12 @@ export default function TransactionDetailPage() {
         }}
       >
         <InfoCard label="Celková cena" value={`${Number(transaction.amount).toLocaleString("cs-CZ")} Kč`} />
-        <InfoCard label="Provize" value={`${Number(transaction.commission_amount).toLocaleString("cs-CZ")} Kč (${transaction.commission_rate}%)`} />
-        <InfoCard label="Výplata prodejci" value={`${Number(transaction.seller_payout).toLocaleString("cs-CZ")} Kč`} />
+        {(isSeller || isAdmin) && (
+          <InfoCard label="Provize" value={`${Number(transaction.commission_amount).toLocaleString("cs-CZ")} Kč (${transaction.commission_rate}%)`} />
+        )}
+        {(isSeller || isAdmin) && (
+          <InfoCard label="K vyplacení" value={`${Number(transaction.seller_payout).toLocaleString("cs-CZ")} Kč`} />
+        )}
         <InfoCard label="Platební reference" value={transaction.payment_reference} />
 
         {buyer && <InfoCard label="Kupující" value={buyer.display_name || buyer.username} />}
