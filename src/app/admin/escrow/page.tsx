@@ -183,6 +183,7 @@ export default function AdminEscrowPage() {
                           onClick={async () => {
                             const amt = Number(partialAmountInput);
                             if (!amt || amt <= 0 || amt >= Number(t.amount)) { alert("Zadejte platnou částku menší než celková cena"); return; }
+                            if (!window.confirm(`Opravdu oznámit neúplnou platbu ${amt.toLocaleString("cs-CZ")} Kč z ${Number(t.amount).toLocaleString("cs-CZ")} Kč?`)) return;
                             await callApi("partial-payment", { escrow_id: t.id, partial_amount: amt });
                             setPartialFormId(null);
                             setPartialAmountInput("");
