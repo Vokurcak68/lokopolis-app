@@ -102,36 +102,46 @@ export async function tuyaRequest(
 export async function getCameraStreamUrl(deviceId: string): Promise<{
   url: string;
   type: string;
-} | null> {
-  // Try WebRTC-compatible stream first (P2P/HLS)
-  const result = await tuyaRequest(
-    "POST",
-    `/v1.0/devices/${deviceId}/stream/actions/allocate`,
-    { type: "hls" }
-  );
+  debug?: string;
+}> {
+  const errors: string[] = [];
 
-  if (result.success && result.result) {
-    const r = result.result as Record<string, unknown>;
-    return {
-      url: (r.url as string) || "",
-      type: "hls",
-    };
+  // Try HLS first
+  try {
+    const result = await tuyaRequest(
+      "POST",
+      `/v1.0/devices/${deviceId}/stream/actions/allocate`,
+      { type: "hls" }
+    );
+    console.log("Tuya HLS response:", JSON.stringify(result));
+
+    if (result.success && result.result) {
+      const r = result.result as Record<string, unknown>;
+      return { url: (r.url as string) || "", type: "hls" };
+    }
+    errors.push(`HLS: ${result.code} ${result.msg}`);
+  } catch (e) {
+    errors.push(`HLS error: ${e instanceof Error ? e.message : String(e)}`);
   }
 
-  // Fallback: try RTSP
-  const rtspResult = await tuyaRequest(
-    "POST",
-    `/v1.0/devices/${deviceId}/stream/actions/allocate`,
-    { type: "rtsp" }
-  );
+  // Try RTSP
+  try {
+    const result = await tuyaRequest(
+      "POST",
+      `/v1.0/devices/${deviceId}/stream/actions/allocate`,
+      { type: "rtsp" }
+    );
+    console.log("Tuya RTSP response:", JSON.stringify(result));
 
-  if (rtspResult.success && rtspResult.result) {
-    const r = rtspResult.result as Record<string, unknown>;
-    return {
-      url: (r.url as string) || "",
-      type: "rtsp",
-    };
+    if (result.success && result.result) {
+      const r = result.result as Record<string, unknown>;
+      return { url: (r.url as string) || "", type: "rtsp" };
+    }
+    errors.push(`RTSP: ${result.code} ${result.msg}`);
+  } catch (e) {
+    errors.push(`RTSP error: ${e instanceof Error ? e.message : String(e)}`);
   }
 
-  return null;
+  // Return debug info instead of null
+  return { url: "", type: "error", debug: errors.join(" | ") };
 }

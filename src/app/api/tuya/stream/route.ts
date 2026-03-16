@@ -34,10 +34,10 @@ export async function GET() {
 
   try {
     const stream = await getCameraStreamUrl(DEVICE_ID);
-    if (!stream) {
-      return NextResponse.json({ error: "Nepodařilo se získat stream URL" }, { status: 502 });
+    if (!stream.url) {
+      return NextResponse.json({ error: stream.debug || "Nepodařilo se získat stream URL" }, { status: 502 });
     }
-    return NextResponse.json(stream);
+    return NextResponse.json({ url: stream.url, type: stream.type });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     console.error("Tuya stream error:", msg);
