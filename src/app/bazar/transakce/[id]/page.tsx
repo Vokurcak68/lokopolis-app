@@ -12,6 +12,19 @@ import EscrowTimeline from "@/components/Escrow/EscrowTimeline";
 import EscrowActions from "@/components/Escrow/EscrowActions";
 import type { EscrowTransaction, EscrowDispute, Profile, Listing } from "@/types/database";
 
+function czechToIBAN(account: string): string {
+  const parts = account.replace(/\s/g, "").split("/");
+  if (parts.length !== 2) return account;
+  const [acc, bankCode] = parts;
+  const [prefix, base] = acc.includes("-") ? acc.split("-") : ["", acc];
+  const bban = bankCode.padStart(4, "0") + (prefix || "").padStart(6, "0") + base.padStart(10, "0");
+  const numStr = bban + "123500";
+  let remainder = 0;
+  for (const ch of numStr) remainder = (remainder * 10 + parseInt(ch)) % 97;
+  const checkDigits = String(98 - remainder).padStart(2, "0");
+  return `CZ${checkDigits}${bban}`;
+}
+
 export default function TransactionDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -24,6 +37,9 @@ export default function TransactionDetailPage() {
   const [seller, setSeller] = useState<Profile | null>(null);
   const [dispute, setDispute] = useState<EscrowDispute | null>(null);
   const [loading, setLoading] = useState(true);
+  const [bankAccount, setBankAccount] = useState("");
+  const [bankIban, setBankIban] = useState("");
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!user) return;
@@ -54,12 +70,42 @@ export default function TransactionDetailPage() {
     if (disputeRes.data && disputeRes.data.length > 0) {
       setDispute(disputeRes.data[0] as EscrowDispute);
     }
+
+    // Fetch bank account for payment info
+    const { data: settings } = await supabase
+      .from("escrow_settings")
+      .select("key, value")
+      .in("key", ["bank_account", "bank_iban"]);
+    if (settings) {
+      const acc = settings.find(s => s.key === "bank_account")?.value || "";
+      const iban = settings.find(s => s.key === "bank_iban")?.value || "";
+      setBankAccount(acc);
+      setBankIban(iban || (acc ? czechToIBAN(acc) : ""));
+    }
+
     setLoading(false);
   }, [user, txId, router]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Generate QR code for SPD payment
+  useEffect(() => {
+    if (!transaction || !bankIban || transaction.status !== "created") {
+      setQrDataUrl(null);
+      return;
+    }
+    const vs = transaction.payment_reference.replace(/\D/g, "");
+    const amount = Number(transaction.amount).toFixed(2);
+    const spd = `SPD*1.0*ACC:${bankIban}*AM:${amount}*CC:CZK*MSG:${transaction.payment_reference}*X-VS:${vs}`;
+
+    import("qrcode").then((QRCode) => {
+      QRCode.toDataURL(spd, { width: 200, margin: 2 })
+        .then((url: string) => setQrDataUrl(url))
+        .catch(() => setQrDataUrl(null));
+    }).catch(() => setQrDataUrl(null));
+  }, [transaction, bankIban]);
 
   if (!user) {
     return (
@@ -157,6 +203,54 @@ export default function TransactionDetailPage() {
           <InfoCard label="Automatické dokončení" value={formatCzechDate(transaction.auto_complete_at)} />
         )}
       </div>
+
+      {/* Payment info — for buyer when status is "created" */}
+      {transaction.status === "created" && isBuyer && bankAccount && (
+        <div
+          style={{
+            padding: "20px",
+            borderRadius: "12px",
+            background: "linear-gradient(135deg, rgba(34,197,94,0.08) 0%, rgba(240,160,48,0.08) 100%)",
+            border: "1px solid rgba(34,197,94,0.25)",
+            marginBottom: "24px",
+          }}
+        >
+          <h3 style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px" }}>
+            💳 Platební údaje
+          </h3>
+          <div style={{ display: "flex", gap: "24px", alignItems: "flex-start", flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: "200px" }}>
+              <div style={{ marginBottom: "10px" }}>
+                <div style={{ fontSize: "12px", color: "var(--text-dimmer)", marginBottom: "2px" }}>Číslo účtu</div>
+                <div style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)", fontFamily: "monospace" }}>{bankAccount}</div>
+              </div>
+              {bankIban && (
+                <div style={{ marginBottom: "10px" }}>
+                  <div style={{ fontSize: "12px", color: "var(--text-dimmer)", marginBottom: "2px" }}>IBAN</div>
+                  <div style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-muted)", fontFamily: "monospace" }}>{bankIban}</div>
+                </div>
+              )}
+              <div style={{ marginBottom: "10px" }}>
+                <div style={{ fontSize: "12px", color: "var(--text-dimmer)", marginBottom: "2px" }}>Částka</div>
+                <div style={{ fontSize: "18px", fontWeight: 700, color: "#22c55e" }}>{Number(transaction.amount).toLocaleString("cs-CZ")} Kč</div>
+              </div>
+              <div style={{ marginBottom: "10px" }}>
+                <div style={{ fontSize: "12px", color: "var(--text-dimmer)", marginBottom: "2px" }}>Variabilní symbol / zpráva</div>
+                <div style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)", fontFamily: "monospace" }}>{transaction.payment_reference}</div>
+              </div>
+              <p style={{ fontSize: "12px", color: "var(--text-dimmer)", marginTop: "12px", lineHeight: 1.5 }}>
+                Po připsání platby na účet admin potvrdí přijetí a prodávající bude vyzván k odeslání zboží.
+              </p>
+            </div>
+            {qrDataUrl && (
+              <div style={{ textAlign: "center" }}>
+                <img src={qrDataUrl} alt="QR platba" style={{ width: "160px", height: "160px", borderRadius: "8px" }} />
+                <div style={{ fontSize: "11px", color: "var(--text-dimmer)", marginTop: "6px" }}>Naskenujte v bankovní aplikaci</div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Tracking info */}
       {transaction.tracking_number && (
