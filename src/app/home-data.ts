@@ -452,14 +452,25 @@ async function fetchHomeDataInternal(): Promise<HomePageData> {
   let banners: HomeBanner[] = [];
   try {
     const now = new Date().toISOString();
-    const { data: bannerData } = await supabase
+    const { data: bannerData, error: bannerError } = await supabase
       .from("homepage_banners")
-      .select("id, position, title, subtitle, image_url, link_url, badge_text, priority")
+      .select("id, position, title, subtitle, image_url, link_url, badge_text, priority, starts_at, ends_at")
       .eq("is_active", true)
-      .or(`starts_at.is.null,starts_at.lte.${now}`)
-      .or(`ends_at.is.null,ends_at.gt.${now}`)
       .order("priority", { ascending: false });
-    if (bannerData) banners = bannerData as HomeBanner[];
+    if (bannerError) {
+      console.error("Banner fetch error:", bannerError);
+    }
+    if (bannerData) {
+      // Filter by date range in JS (Supabase .or() chaining is unreliable)
+      banners = (bannerData as HomeBanner[]).filter(b => {
+        const rec = b as Record<string, unknown>;
+        const startsAt = rec.starts_at as string | null;
+        const endsAt = rec.ends_at as string | null;
+        if (startsAt && startsAt > now) return false;
+        if (endsAt && endsAt <= now) return false;
+        return true;
+      });
+    }
   } catch {
     // table may not exist yet
   }
