@@ -721,7 +721,8 @@ export default function HomeContent({ data }: { data: HomePageData }) {
             </Link>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" style={{ gap: "16px" }}>
-            {latestListings.map((listing: BazarListingHome, idx: number) => {
+            {/* Bazar listings — if native banner exists, replace last slot */}
+            {(bazarBanners.length > 0 && latestListings.length >= 4 ? latestListings.slice(0, 3) : latestListings).map((listing: BazarListingHome, idx: number) => {
               const firstImage = listing.images && listing.images.length > 0 ? listing.images[0] : null;
               const condLabel: Record<string, string> = { new: "Nový", opened: "Rozbalený", used: "Použitý", parts: "Na díly" };
               const condColor: Record<string, string> = { new: "#22c55e", opened: "#3b82f6", used: "#f59e0b", parts: "#ef4444" };
@@ -748,6 +749,28 @@ export default function HomeContent({ data }: { data: HomePageData }) {
                 </Link>
               );
             })}
+            {/* Native bazar banner — replaces 4th slot, same card design */}
+            {bazarBanners.length > 0 && (() => {
+              const b = bazarBanners[0];
+              return (
+                <a key="bazar-native" href={b.link_url} onClick={() => trackBannerClick(b.id)} style={{ textDecoration: "none" }}>
+                  <div style={{ background: "var(--bg-card)", border: "1px solid var(--accent-border)", borderRadius: "12px", overflow: "hidden", transition: "all 0.2s", height: "100%", position: "relative" }} onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--accent-border)"; e.currentTarget.style.transform = "translateY(0)"; }}>
+                    <div style={{ position: "relative", width: "100%", paddingBottom: "75%", background: "var(--bg-page)" }}>
+                      {b.image_url ? (
+                        <Image src={b.image_url} alt={b.title} fill style={{ objectFit: "contain" }} sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw" />
+                      ) : (
+                        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "32px", color: "var(--accent)" }}>🛡️</div>
+                      )}
+                    </div>
+                    <div style={{ padding: "12px" }}>
+                      {b.badge_text && <div style={{ fontSize: "10px", fontWeight: 600, padding: "2px 8px", borderRadius: "4px", background: "var(--accent)", color: "#000", display: "inline-block", marginBottom: "6px" }}>{b.badge_text}</div>}
+                      <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "4px", lineHeight: 1.3, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{b.title}</div>
+                      {b.subtitle && <div style={{ fontSize: "12px", color: "var(--text-muted)", lineHeight: 1.3, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{b.subtitle}</div>}
+                    </div>
+                  </div>
+                </a>
+              );
+            })()}
           </div>
         </section>
       )}
@@ -775,7 +798,7 @@ export default function HomeContent({ data }: { data: HomePageData }) {
               gap: "16px",
             }}
           >
-            {featuredShopProducts.map((p: ShopProductHome) => {
+            {(articleBanners.length > 0 && featuredShopProducts.length >= 4 ? featuredShopProducts.slice(0, 3) : featuredShopProducts).map((p: ShopProductHome) => {
               const catColors: Record<string, string> = {
                 "kolejovy-plan": "#3b82f6",
                 "stl-model": "#a855f7",
@@ -854,7 +877,30 @@ export default function HomeContent({ data }: { data: HomePageData }) {
                 </Link>
               );
             })}
-
+            {/* Native article banner — replaces 4th slot, same card design */}
+            {articleBanners.length > 0 && (() => {
+              const b = articleBanners[0];
+              return (
+                <a key="article-native" href={b.link_url} onClick={() => trackBannerClick(b.id)} style={{ textDecoration: "none" }}>
+                  <div style={{ background: "var(--bg-card)", border: "1px solid var(--accent-border)", borderRadius: "12px", overflow: "hidden", transition: "all 0.2s", height: "100%", display: "flex", flexDirection: "column" }} onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--accent-border)"; e.currentTarget.style.transform = "translateY(0)"; }}>
+                    <div style={{ position: "relative", width: "100%", paddingBottom: "75%", background: "var(--bg-page)" }}>
+                      {b.image_url ? (
+                        <Image src={b.image_url} alt={b.title} fill style={{ objectFit: "contain" }} sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw" />
+                      ) : (
+                        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "40px", color: "var(--accent)" }}>⭐</div>
+                      )}
+                      <div style={{ position: "absolute", top: "8px", left: "8px", padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, background: "var(--accent)", color: "#000" }}>
+                        {b.badge_text || "Sponzorováno"}
+                      </div>
+                    </div>
+                    <div style={{ padding: "16px", flex: 1, display: "flex", flexDirection: "column" }}>
+                      <h3 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)", lineHeight: 1.4, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", flex: 1 }}>{b.title}</h3>
+                      {b.subtitle && <div style={{ fontSize: "12px", color: "var(--text-dimmer)", marginTop: "8px" }}>{b.subtitle}</div>}
+                    </div>
+                  </div>
+                </a>
+              );
+            })()}
           </div>
         </section>
       )}
