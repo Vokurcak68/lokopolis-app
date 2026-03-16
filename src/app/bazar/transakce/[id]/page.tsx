@@ -10,7 +10,8 @@ import { formatCzechDate } from "@/lib/timeAgo";
 import { getImageVariant } from "@/lib/image-variants";
 import EscrowTimeline from "@/components/Escrow/EscrowTimeline";
 import EscrowActions from "@/components/Escrow/EscrowActions";
-import type { EscrowTransaction, EscrowDispute, Profile, Listing } from "@/types/database";
+import EscrowReviewForm from "@/components/Escrow/EscrowReviewForm";
+import type { EscrowTransaction, EscrowDispute, EscrowReview, Profile, Listing } from "@/types/database";
 
 function czechToIBAN(account: string): string {
   const parts = account.replace(/\s/g, "").split("/");
@@ -36,6 +37,7 @@ export default function TransactionDetailPage() {
   const [buyer, setBuyer] = useState<Profile | null>(null);
   const [seller, setSeller] = useState<Profile | null>(null);
   const [dispute, setDispute] = useState<EscrowDispute | null>(null);
+  const [reviews, setReviews] = useState<(EscrowReview & { reviewer?: Profile | null })[]>([]);
   const [loading, setLoading] = useState(true);
   const [bankAccount, setBankAccount] = useState("");
   const [bankIban, setBankIban] = useState("");
@@ -57,11 +59,12 @@ export default function TransactionDetailPage() {
 
     setTransaction(tx as EscrowTransaction);
 
-    const [listingRes, buyerRes, sellerRes, disputeRes] = await Promise.all([
+    const [listingRes, buyerRes, sellerRes, disputeRes, reviewsRes] = await Promise.all([
       supabase.from("listings").select("*").eq("id", tx.listing_id).single(),
       supabase.from("profiles").select("*").eq("id", tx.buyer_id).single(),
       supabase.from("profiles").select("*").eq("id", tx.seller_id).single(),
       supabase.from("escrow_disputes").select("*").eq("escrow_id", tx.id).order("created_at", { ascending: false }).limit(1),
+      supabase.from("escrow_reviews").select("*, reviewer:profiles!escrow_reviews_reviewer_id_fkey(id, username, display_name, avatar_url)").eq("escrow_id", tx.id),
     ]);
 
     setListing(listingRes.data as Listing | null);
@@ -69,6 +72,9 @@ export default function TransactionDetailPage() {
     setSeller(sellerRes.data as Profile | null);
     if (disputeRes.data && disputeRes.data.length > 0) {
       setDispute(disputeRes.data[0] as EscrowDispute);
+    }
+    if (reviewsRes.data) {
+      setReviews(reviewsRes.data as (EscrowReview & { reviewer?: Profile | null })[]);
     }
 
     // Fetch bank account for payment info
@@ -147,7 +153,7 @@ export default function TransactionDetailPage() {
       </h1>
 
       {listing && (
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px", padding: "12px", borderRadius: "10px", background: "var(--bg-card)", border: "1px solid var(--border)" }}>
           <div style={{ width: "96px", flexShrink: 0 }}>
             <div style={{ position: "relative", width: "100%", paddingBottom: "75%", borderRadius: "8px", overflow: "hidden", border: "1px solid var(--border)", background: "var(--bg-soft)" }}>
               {listing.images?.[0] ? (
@@ -157,9 +163,33 @@ export default function TransactionDetailPage() {
               )}
             </div>
           </div>
-          <Link href={`/bazar/${listing.id}`} style={{ color: "var(--accent)", textDecoration: "none", fontSize: "15px" }}>
-            {listing.title} →
-          </Link>
+          <div>
+            <Link href={`/bazar/${listing.id}`} style={{ color: "var(--accent)", textDecoration: "none", fontSize: "15px", fontWeight: 600 }}>
+              {listing.title} →
+            </Link>
+            <div style={{ fontSize: "12px", color: "var(--text-dimmer)", marginTop: "4px" }}>
+              ID inzerátu: {listing.id.slice(0, 8)}… · Ref: {transaction.payment_reference}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Partial payment info */}
+      {transaction.status === "partial_paid" && transaction.partial_amount != null && (
+        <div style={{
+          padding: "14px 16px",
+          borderRadius: "10px",
+          background: "rgba(249,115,22,0.08)",
+          border: "1px solid rgba(249,115,22,0.25)",
+          marginBottom: "12px",
+          fontSize: "14px",
+        }}>
+          <span style={{ fontWeight: 600, color: "#f97316" }}>⚠️ Neúplná platba</span>
+          <span style={{ color: "var(--text-body)", marginLeft: "8px" }}>
+            Přijato: <strong>{Number(transaction.partial_amount).toLocaleString("cs-CZ")} Kč</strong>
+            {" · "}
+            Chybí: <strong style={{ color: "#ef4444" }}>{(Number(transaction.amount) - Number(transaction.partial_amount)).toLocaleString("cs-CZ")} Kč</strong>
+          </span>
         </div>
       )}
 
@@ -326,7 +356,7 @@ export default function TransactionDetailPage() {
 
       {/* Admin notes */}
       {isAdmin && (
-        <div style={{ padding: "16px", borderRadius: "12px", background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+        <div style={{ padding: "16px", borderRadius: "12px", background: "var(--bg-card)", border: "1px solid var(--border)", marginBottom: "24px" }}>
           <h3 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "8px" }}>
             📝 Admin poznámky
           </h3>
@@ -335,6 +365,46 @@ export default function TransactionDetailPage() {
           </p>
         </div>
       )}
+
+      {/* Reviews section */}
+      {reviews.length > 0 && (
+        <div style={{ marginBottom: "24px" }}>
+          <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "12px" }}>
+            ⭐ Recenze
+          </h3>
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            {reviews.map((review) => (
+              <div key={review.id} style={{ padding: "14px 16px", borderRadius: "10px", background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                  <span style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-primary)" }}>
+                    {(review.reviewer as Profile | null | undefined)?.display_name || (review.reviewer as Profile | null | undefined)?.username || "Uživatel"}
+                  </span>
+                  <span style={{ fontSize: "16px" }}>
+                    {"⭐".repeat(review.rating)}{"☆".repeat(5 - review.rating)}
+                  </span>
+                </div>
+                {review.text && (
+                  <p style={{ fontSize: "14px", color: "var(--text-body)", margin: 0, lineHeight: 1.5 }}>
+                    {review.text}
+                  </p>
+                )}
+                <div style={{ fontSize: "12px", color: "var(--text-dimmer)", marginTop: "6px" }}>
+                  {formatCzechDate(review.created_at)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Review form — after transaction is completed */}
+      {(isBuyer || isSeller) &&
+        ["completed", "auto_completed", "payout_sent", "payout_confirmed"].includes(transaction.status) &&
+        !reviews.find((r) => r.reviewer_id === user.id) && (
+          <div style={{ marginBottom: "24px" }}>
+            <EscrowReviewForm escrowId={transaction.id} onSubmitted={fetchData} />
+          </div>
+        )}
     </div>
   );
 }

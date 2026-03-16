@@ -627,7 +627,7 @@ export interface CartItemData {
 }
 
 // Escrow types
-export type EscrowStatus = 'created' | 'paid' | 'shipped' | 'delivered' | 'completed' | 'disputed' | 'refunded' | 'auto_completed' | 'cancelled';
+export type EscrowStatus = 'created' | 'partial_paid' | 'paid' | 'shipped' | 'delivered' | 'completed' | 'disputed' | 'refunded' | 'auto_completed' | 'cancelled' | 'payout_sent' | 'payout_confirmed';
 export type EscrowDisputeStatus = 'open' | 'resolved_buyer' | 'resolved_seller' | 'resolved_split';
 
 export interface EscrowTransaction {
@@ -650,6 +650,7 @@ export interface EscrowTransaction {
   buyer_confirmed_at: string | null;
   auto_complete_at: string | null;
   payment_reference: string;
+  partial_amount: number | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -673,6 +674,20 @@ export interface EscrowDispute {
   resolved_at: string | null;
   status: EscrowDisputeStatus;
   created_at: string;
+}
+
+export interface EscrowReview {
+  id: string;
+  escrow_id: string;
+  reviewer_id: string;
+  reviewed_id: string;
+  rating: number;
+  text: string | null;
+  created_at: string;
+}
+
+export interface EscrowReviewWithAuthor extends EscrowReview {
+  reviewer?: Profile | null;
 }
 
 export interface EscrowSettings {

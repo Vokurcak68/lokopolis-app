@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import type { EscrowDispute, EscrowTransaction } from "@/types/database";
+import type { EscrowDispute, EscrowTransaction, Listing } from "@/types/database";
 
 type Tab = "transactions" | "disputes" | "settings" | "stats";
 
@@ -13,7 +13,10 @@ export default function AdminEscrowPage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("transactions");
   const [transactions, setTransactions] = useState<EscrowTransaction[]>([]);
+  const [listingMap, setListingMap] = useState<Record<string, Listing>>({});
   const [disputes, setDisputes] = useState<EscrowDispute[]>([]);
+  const [partialFormId, setPartialFormId] = useState<string | null>(null);
+  const [partialAmountInput, setPartialAmountInput] = useState("");
   const [settings, setSettings] = useState<Record<string, string>>({});
   const [statusFilter, setStatusFilter] = useState("");
 
@@ -33,8 +36,23 @@ export default function AdminEscrowPage() {
       supabase.from("escrow_transactions").select("*").order("created_at", { ascending: false }),
       supabase.from("escrow_disputes").select("*").order("created_at", { ascending: false }),
     ]);
-    setTransactions((tx || []) as EscrowTransaction[]);
+    const txList = (tx || []) as EscrowTransaction[];
+    setTransactions(txList);
     setDisputes((dsp || []) as EscrowDispute[]);
+
+    // Fetch listing titles for all transactions
+    const listingIds = [...new Set(txList.map(t => t.listing_id))];
+    if (listingIds.length > 0) {
+      const { data: listings } = await supabase
+        .from("listings")
+        .select("id, title")
+        .in("id", listingIds);
+      if (listings) {
+        const map: Record<string, Listing> = {};
+        for (const l of listings) map[l.id] = l as Listing;
+        setListingMap(map);
+      }
+    }
 
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token || "";
@@ -110,22 +128,77 @@ export default function AdminEscrowPage() {
           <div style={{ marginBottom: "12px" }}>
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ padding: "8px 10px", borderRadius: "8px", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-primary)" }}>
               <option value="">Všechny stavy</option>
-              {Array.from(new Set(transactions.map(t => t.status))).map(s => <option key={s} value={s}>{s}</option>)}
+              {["created", "partial_paid", "paid", "shipped", "delivered", "completed", "auto_completed", "payout_sent", "payout_confirmed", "disputed", "refunded", "cancelled"].filter(s => transactions.some(t => t.status === s)).map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
           <div style={{ display: "grid", gap: "10px" }}>
-            {transactions.filter(t => !statusFilter || t.status === statusFilter).map(t => (
-              <div key={t.id} style={{ border: "1px solid var(--border)", borderRadius: "10px", padding: "12px", display: "flex", justifyContent: "space-between", gap: "10px", flexWrap: "wrap" }}>
-                <div>
-                  <div style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: "14px" }}>{t.payment_reference}</div>
-                  <div style={{ color: "var(--text-muted)", fontSize: "12px" }}>{t.status} · {Number(t.amount).toLocaleString("cs-CZ")} Kč</div>
+            {transactions.filter(t => !statusFilter || t.status === statusFilter).map(t => {
+              const listing = listingMap[t.listing_id];
+              return (
+                <div key={t.id} style={{ border: "1px solid var(--border)", borderRadius: "10px", padding: "12px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", flexWrap: "wrap" }}>
+                    <div>
+                      <div style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: "14px" }}>
+                        {t.payment_reference}
+                        {listing && <span style={{ fontWeight: 400, color: "var(--text-muted)", marginLeft: "8px" }}>— {listing.title}</span>}
+                      </div>
+                      <div style={{ color: "var(--text-muted)", fontSize: "12px" }}>
+                        {t.status} · {Number(t.amount).toLocaleString("cs-CZ")} Kč
+                        {t.status === "partial_paid" && t.partial_amount != null && (
+                          <span style={{ color: "#f97316", marginLeft: "8px" }}>
+                            (přijato {Number(t.partial_amount).toLocaleString("cs-CZ")} Kč, chybí {(Number(t.amount) - Number(t.partial_amount)).toLocaleString("cs-CZ")} Kč)
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+                      {t.status === "created" && (
+                        <>
+                          <button onClick={async () => { if (!window.confirm(`Opravdu potvrdit úhradu ${Number(t.amount).toLocaleString("cs-CZ")} Kč pro ${t.payment_reference}?`)) return; await callApi("confirm-payment", { escrow_id: t.id }); await fetchAll(); }} style={btnSmall("#22c55e")}>💰 Potvrdit platbu</button>
+                          <button onClick={() => { setPartialFormId(partialFormId === t.id ? null : t.id); setPartialAmountInput(""); }} style={btnSmall("#f97316")}>⚠️ Neúplná platba</button>
+                        </>
+                      )}
+                      {t.status === "partial_paid" && (
+                        <button onClick={async () => { if (!window.confirm(`Potvrdit doplacení? Transakce ${t.payment_reference} přejde do stavu "zaplaceno".`)) return; await callApi("confirm-payment", { escrow_id: t.id }); await fetchAll(); }} style={btnSmall("#22c55e")}>💰 Potvrdit doplatek</button>
+                      )}
+                      {(t.status === "completed" || t.status === "auto_completed") && (
+                        <button onClick={async () => { if (!window.confirm(`Odeslat výplatu ${Number(t.seller_payout).toLocaleString("cs-CZ")} Kč prodávajícímu?`)) return; await callApi("send-payout", { escrow_id: t.id }); await fetchAll(); }} style={btnSmall("#8b5cf6")}>💸 Odeslat výplatu</button>
+                      )}
+                      <Link href={`/bazar/transakce/${t.id}`} style={{ ...btnLinkSmall(), textDecoration: "none" }}>Detail</Link>
+                    </div>
+                  </div>
+                  {partialFormId === t.id && (
+                    <div style={{ marginTop: "10px", padding: "12px", borderRadius: "8px", border: "1px solid var(--border)", background: "var(--bg-soft, var(--bg-card))" }}>
+                      <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                        <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>Přijatá částka (z {Number(t.amount).toLocaleString("cs-CZ")} Kč):</span>
+                        <input
+                          type="number"
+                          value={partialAmountInput}
+                          onChange={(e) => setPartialAmountInput(e.target.value)}
+                          placeholder="Kč"
+                          min="1"
+                          style={{ width: "120px", padding: "6px 10px", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-primary)", fontSize: "13px" }}
+                        />
+                        <button
+                          onClick={async () => {
+                            const amt = Number(partialAmountInput);
+                            if (!amt || amt <= 0 || amt >= Number(t.amount)) { alert("Zadejte platnou částku menší než celková cena"); return; }
+                            await callApi("partial-payment", { escrow_id: t.id, partial_amount: amt });
+                            setPartialFormId(null);
+                            setPartialAmountInput("");
+                            await fetchAll();
+                          }}
+                          style={btnSmall("#f97316")}
+                        >
+                          Potvrdit
+                        </button>
+                        <button onClick={() => { setPartialFormId(null); setPartialAmountInput(""); }} style={btnSmall("#6b7280")}>Zrušit</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div style={{ display: "flex", gap: "8px" }}>
-                  {t.status === "created" && <button onClick={async () => { if (!window.confirm(`Opravdu potvrdit úhradu ${Number(t.amount).toLocaleString("cs-CZ")} Kč pro ${t.payment_reference}?`)) return; await callApi("confirm-payment", { escrow_id: t.id }); await fetchAll(); }} style={btnSmall("#22c55e")}>Potvrdit platbu</button>}
-                  <Link href={`/bazar/transakce/${t.id}`} style={{ ...btnLinkSmall(), textDecoration: "none" }}>Detail</Link>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

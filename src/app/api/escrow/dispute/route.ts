@@ -61,14 +61,16 @@ export async function POST(req: NextRequest) {
       .eq("id", escrow_id);
 
     // Send emails
-    const [buyerRes, sellerRes] = await Promise.all([
+    const [buyerRes, sellerRes, listingRes] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", transaction.buyer_id).single(),
       supabase.from("profiles").select("*").eq("id", transaction.seller_id).single(),
+      supabase.from("listings").select("*").eq("id", transaction.listing_id).single(),
     ]);
 
     const buyer = buyerRes.data;
     const seller = sellerRes.data;
-    const html = escrowDisputed(seller, buyer, dispute, transaction);
+    const listing = listingRes.data;
+    const html = escrowDisputed(seller, buyer, dispute, transaction, listing || undefined);
 
     // Send to both parties
     const emailPromises = [];

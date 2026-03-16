@@ -8,21 +8,27 @@ const STEPS: { key: EscrowStatus | "start"; label: string; icon: string }[] = [
   { key: "shipped", label: "Odesláno", icon: "📦" },
   { key: "delivered", label: "Doručeno", icon: "🏠" },
   { key: "completed", label: "Dokončeno", icon: "✅" },
+  { key: "payout_sent", label: "Výplata", icon: "💸" },
+  { key: "payout_confirmed", label: "Uzavřeno", icon: "🏁" },
 ];
 
 const STATUS_INDEX: Record<string, number> = {
   created: 0,
+  partial_paid: 0,
   paid: 1,
   shipped: 2,
   delivered: 3,
   completed: 4,
   auto_completed: 4,
+  payout_sent: 5,
+  payout_confirmed: 6,
 };
 
 const TERMINAL_STATUSES: Record<string, { label: string; color: string; icon: string }> = {
   disputed: { label: "Spor", color: "#ef4444", icon: "⚠️" },
   refunded: { label: "Vráceno", color: "#f97316", icon: "↩️" },
   cancelled: { label: "Zrušeno", color: "#6b7280", icon: "❌" },
+  partial_paid: { label: "Neúplná platba", color: "#f97316", icon: "⚠️" },
 };
 
 export default function EscrowTimeline({ status }: { status: EscrowStatus }) {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticateUser, getServiceClient, isAdmin, getEscrowSettings } from "@/lib/escrow-helpers";
+import { authenticateUser, getServiceClient, isAdmin } from "@/lib/escrow-helpers";
 import { sendEmail } from "@/lib/email";
-import { escrowPaid, escrowPaidBuyer } from "@/lib/email-templates";
+import { escrowPayoutSent } from "@/lib/email-templates";
 
 export async function POST(req: NextRequest) {
   try {
@@ -33,13 +33,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Transakce nenalezena" }, { status: 404 });
     }
 
-    if (transaction.status !== "created" && transaction.status !== "partial_paid") {
-      return NextResponse.json({ error: `Nelze potvrdit platbu ve stavu "${transaction.status}"` }, { status: 400 });
+    if (!["completed", "auto_completed"].includes(transaction.status)) {
+      return NextResponse.json({ error: `Nelze odeslat výplatu ve stavu "${transaction.status}"` }, { status: 400 });
     }
 
     const { error: updateError } = await supabase
       .from("escrow_transactions")
-      .update({ status: "paid", partial_amount: null })
+      .update({ status: "payout_sent" })
       .eq("id", escrow_id);
 
     if (updateError) {
@@ -47,44 +47,26 @@ export async function POST(req: NextRequest) {
     }
 
     // Send email to seller
-    const settings = await getEscrowSettings();
-    const shippingDays = Number(settings.shipping_deadline_days || 5);
-
-    const [sellerRes, buyerRes, listingRes] = await Promise.all([
+    const [sellerRes, listingRes] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", transaction.seller_id).single(),
-      supabase.from("profiles").select("*").eq("id", transaction.buyer_id).single(),
       supabase.from("listings").select("*").eq("id", transaction.listing_id).single(),
     ]);
 
     const seller = sellerRes.data;
-    const buyer = buyerRes.data;
     const listing = listingRes.data;
 
-    if (listing) {
-      // Email prodávajícímu — odešlete zboží
-      if (seller?.email) {
-        try {
-          const html = escrowPaid(seller, listing, transaction, shippingDays);
-          await sendEmail(seller.email, `💰 Platba přijata — odešlete zboží (${transaction.payment_reference})`, html);
-        } catch (e) {
-          console.error("Escrow email (seller):", e);
-        }
-      }
-
-      // Email kupujícímu — platba připsána
-      if (buyer?.email) {
-        try {
-          const html = escrowPaidBuyer(buyer, listing, transaction, shippingDays);
-          await sendEmail(buyer.email, `✅ Platba připsána — ${transaction.payment_reference}`, html);
-        } catch (e) {
-          console.error("Escrow email (buyer):", e);
-        }
+    if (seller?.email && listing) {
+      try {
+        const html = escrowPayoutSent(seller, listing, transaction);
+        await sendEmail(seller.email, `💸 Výplata odeslána — ${transaction.payment_reference}`, html);
+      } catch (e) {
+        console.error("Escrow email (send-payout):", e);
       }
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Escrow confirm-payment error:", error);
+    console.error("Escrow send-payout error:", error);
     return NextResponse.json({ error: "Interní chyba serveru" }, { status: 500 });
   }
 }

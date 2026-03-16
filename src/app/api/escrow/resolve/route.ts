@@ -82,15 +82,17 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (transaction) {
-      const [buyerRes, sellerRes] = await Promise.all([
+      const [buyerRes, sellerRes, listingRes] = await Promise.all([
         supabase.from("profiles").select("*").eq("id", transaction.buyer_id).single(),
         supabase.from("profiles").select("*").eq("id", transaction.seller_id).single(),
+        supabase.from("listings").select("*").eq("id", transaction.listing_id).single(),
       ]);
 
       const buyer = buyerRes.data;
       const seller = sellerRes.data;
+      const listing = listingRes.data;
       const updatedDispute = { ...dispute, status: resolution_status };
-      const html = escrowResolved(buyer, seller, updatedDispute, resolution_text || "", transaction);
+      const html = escrowResolved(buyer, seller, updatedDispute, resolution_text || "", transaction, listing || undefined);
 
       const emailPromises = [];
       if (buyer?.email) emailPromises.push(sendEmail(buyer.email, `⚖️ Spor vyřešen (${transaction.payment_reference})`, html));
