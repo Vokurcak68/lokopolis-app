@@ -3,6 +3,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import { timeAgo } from "@/lib/timeAgo";
+import { getImageVariant } from "@/lib/image-variants";
+import EscrowBadge from "@/components/Escrow/EscrowBadge";
 import type { Listing } from "@/types/database";
 
 const CONDITION_LABELS: Record<string, string> = {
@@ -27,12 +29,6 @@ const SCALE_COLORS: Record<string, string> = {
   G: "#f59e0b",
 };
 
-function optimizeImageUrl(url: string, width: number = 400): string {
-  if (!url) return "";
-  return url
-    .replace("/object/public/", "/render/image/public/")
-    .concat(`?width=${width}&quality=75`);
-}
 
 interface ListingCardProps {
   listing: Listing;
@@ -79,10 +75,10 @@ export default function ListingCard({ listing, compact }: ListingCardProps) {
         >
           {firstImage ? (
             <Image
-              src={optimizeImageUrl(firstImage)}
+              src={getImageVariant(firstImage, "card")}
               alt={listing.title}
               fill
-              style={{ objectFit: "cover" }}
+              style={{ objectFit: "contain" }}
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
             />
           ) : (
@@ -209,6 +205,7 @@ export default function ListingCard({ listing, compact }: ListingCardProps) {
             >
               {CONDITION_LABELS[listing.condition]}
             </span>
+            {listing.shipping && listing.status === "active" && <EscrowBadge size="sm" />}
           </div>
 
           {/* Location + Date */}

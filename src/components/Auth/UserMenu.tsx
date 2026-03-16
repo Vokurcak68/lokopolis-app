@@ -114,6 +114,14 @@ export default function UserMenu() {
           </Link>
 
           <Link
+            href="/bazar/transakce"
+            onClick={() => setOpen(false)}
+            className="block w-full text-left px-4 py-2 text-sm text-text-muted hover:text-[var(--text-primary)] hover:bg-bg-card-hover transition-colors"
+          >
+            🛡️ Moje transakce
+          </Link>
+
+          <Link
             href="/shop/oblibene"
             onClick={() => setOpen(false)}
             className="block w-full text-left px-4 py-2 text-sm text-text-muted hover:text-[var(--text-primary)] hover:bg-bg-card-hover transition-colors"
@@ -166,6 +174,13 @@ export default function UserMenu() {
                 className="block w-full text-left px-4 py-2 text-sm text-primary hover:bg-bg-card-hover transition-colors"
               >
                 📝 Šablony
+              </Link>
+              <Link
+                href="/admin/escrow"
+                onClick={() => setOpen(false)}
+                className="block w-full text-left px-4 py-2 text-sm text-primary hover:bg-bg-card-hover transition-colors"
+              >
+                🛡️ Escrow
               </Link>
             </>
           )}

@@ -138,6 +138,20 @@ export default function BazarPage() {
                 💬 Zprávy
               </Link>
               <Link
+                href="/bazar/transakce"
+                style={{
+                  padding: "10px 20px",
+                  border: "1px solid var(--border)",
+                  borderRadius: "10px",
+                  color: "var(--text-muted)",
+                  fontSize: "14px",
+                  fontWeight: 600,
+                  textDecoration: "none",
+                }}
+              >
+                🛡️ Moje transakce
+              </Link>
+              <Link
                 href="/bazar/novy"
                 style={{
                   padding: "10px 20px",

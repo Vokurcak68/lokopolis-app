@@ -626,6 +626,61 @@ export interface CartItemData {
   quantity: number;
 }
 
+// Escrow types
+export type EscrowStatus = 'created' | 'paid' | 'shipped' | 'delivered' | 'completed' | 'disputed' | 'refunded' | 'auto_completed' | 'cancelled';
+export type EscrowDisputeStatus = 'open' | 'resolved_buyer' | 'resolved_seller' | 'resolved_split';
+
+export interface EscrowTransaction {
+  id: string;
+  listing_id: string;
+  buyer_id: string;
+  seller_id: string;
+  amount: number;
+  commission_rate: number;
+  commission_amount: number;
+  seller_payout: number;
+  status: EscrowStatus;
+  tracking_number: string | null;
+  carrier: string | null;
+  shipped_at: string | null;
+  delivered_at: string | null;
+  completed_at: string | null;
+  disputed_at: string | null;
+  cancelled_at: string | null;
+  buyer_confirmed_at: string | null;
+  auto_complete_at: string | null;
+  payment_reference: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EscrowTransactionWithRelations extends EscrowTransaction {
+  listing?: Listing | null;
+  buyer?: Profile | null;
+  seller?: Profile | null;
+  dispute?: EscrowDispute | null;
+}
+
+export interface EscrowDispute {
+  id: string;
+  escrow_id: string;
+  opened_by: string;
+  reason: string;
+  evidence_images: string[];
+  resolution: string | null;
+  resolved_by: string | null;
+  resolved_at: string | null;
+  status: EscrowDisputeStatus;
+  created_at: string;
+}
+
+export interface EscrowSettings {
+  key: string;
+  value: string;
+  updated_at: string;
+}
+
 // Supabase Database type pro type-safe klienta
 export interface Database {
   public: {

@@ -9,6 +9,7 @@ import { useAuth } from "@/components/Auth/AuthProvider";
 import { timeAgo, formatCzechDate } from "@/lib/timeAgo";
 import ListingCard from "@/components/Bazar/ListingCard";
 import MessageThread from "@/components/Bazar/MessageThread";
+import EscrowBadge from "@/components/Escrow/EscrowBadge";
 import type { Listing, Profile } from "@/types/database";
 
 const CONDITION_LABELS: Record<string, string> = {
@@ -79,6 +80,8 @@ export default function ListingDetailPage() {
   const [statusUpdating, setStatusUpdating] = useState(false);
   const [incomingUsers, setIncomingUsers] = useState<{ id: string; name: string; unread: number }[]>([]);
   const [selectedBuyer, setSelectedBuyer] = useState<{ id: string; name: string } | null>(null);
+  const [escrowEnabled, setEscrowEnabled] = useState(true);
+  const [escrowLoading, setEscrowLoading] = useState(false);
 
   const isOwner = user && listing && user.id === listing.seller_id;
   const isAdmin = profile?.role === "admin";
@@ -106,6 +109,16 @@ export default function ListingDetailPage() {
         .eq("id", l.seller_id)
         .single();
       setSeller(sellerData as Profile | null);
+
+      // Escrow settings
+      const { data: escrowSetting } = await supabase
+        .from("escrow_settings")
+        .select("value")
+        .eq("key", "escrow_enabled")
+        .maybeSingle();
+      if (escrowSetting?.value) {
+        setEscrowEnabled(escrowSetting.value === "true");
+      }
 
       // Increment view count (fire and forget)
       supabase
@@ -218,6 +231,30 @@ export default function ListingDetailPage() {
     }
   }
 
+  async function handleCreateEscrow() {
+    if (!listing) return;
+    setEscrowLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || "";
+      const res = await fetch("/api/escrow/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ listing_id: listing.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Nepodařilo se vytvořit transakci");
+      router.push(`/bazar/transakce/${data.transaction.id}`);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Chyba");
+    } finally {
+      setEscrowLoading(false);
+    }
+  }
+
   if (loading) {
     return (
       <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "48px 20px", textAlign: "center" }}>
@@ -230,6 +267,9 @@ export default function ListingDetailPage() {
   if (!listing) return null;
 
   const images = listing.images || [];
+  const canUseEscrow = Boolean(
+    user && !isOwner && listing.shipping && listing.status === "active" && escrowEnabled
+  );
 
   return (
     <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "48px 20px" }}>
@@ -441,6 +481,7 @@ export default function ListingDetailPage() {
                 🏭 {listing.brand}
               </span>
             )}
+            {listing.shipping && escrowEnabled && <EscrowBadge size="md" />}
           </div>
 
           {/* Description */}
@@ -649,21 +690,42 @@ export default function ListingDetailPage() {
                 </Link>
               </>
             ) : user ? (
-              <button
-                onClick={() => setShowMessages(!showMessages)}
-                style={{
-                  padding: "12px 24px",
-                  background: "var(--accent)",
-                  color: "var(--accent-text-on)",
-                  border: "none",
-                  borderRadius: "10px",
-                  fontSize: "14px",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                📩 {showMessages ? "Skrýt zprávy" : "Napsat prodejci"}
-              </button>
+              <>
+                <button
+                  onClick={() => setShowMessages(!showMessages)}
+                  style={{
+                    padding: "12px 24px",
+                    background: "var(--accent)",
+                    color: "var(--accent-text-on)",
+                    border: "none",
+                    borderRadius: "10px",
+                    fontSize: "14px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  📩 {showMessages ? "Skrýt zprávy" : "Napsat prodejci"}
+                </button>
+                {canUseEscrow && (
+                  <button
+                    onClick={handleCreateEscrow}
+                    disabled={escrowLoading}
+                    style={{
+                      padding: "12px 24px",
+                      background: "rgba(34,197,94,0.15)",
+                      color: "#22c55e",
+                      border: "1px solid rgba(34,197,94,0.3)",
+                      borderRadius: "10px",
+                      fontSize: "14px",
+                      fontWeight: 600,
+                      cursor: escrowLoading ? "not-allowed" : "pointer",
+                      opacity: escrowLoading ? 0.7 : 1,
+                    }}
+                  >
+                    🛡️ {escrowLoading ? "Vytvářím..." : "Koupit s Bezpečnou platbou"}
+                  </button>
+                )}
+              </>
             ) : (
               <Link
                 href="/prihlaseni"

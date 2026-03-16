@@ -364,3 +364,156 @@ export function welcomeEmail(username: string, settings?: Record<string, any>): 
     <p style="color:#888;">Pokud máte jakékoli dotazy, neváhejte nás kontaktovat na info@lokopolis.cz.</p>
   `, settings);
 }
+
+// ─── Escrow templates ────────────────────────────────────────────────────────
+
+export function escrowCreated(buyer: any, seller: any, listing: any, transaction: any, bankAccount: string, bankIban: string, settings?: Record<string, any>): string {
+  const vs = transaction.payment_reference?.replace(/\D/g, "") || "";
+  const iban = bankIban || (bankAccount ? czechToIBAN(bankAccount) : "");
+  const qrUrl = vs && iban ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`SPD*1.0*ACC:${iban}*AM:${Number(transaction.amount).toFixed(2)}*CC:CZK*X-VS:${vs}*MSG:Escrow ${transaction.payment_reference}`)}` : "";
+
+  return emailWrapper(`
+    <h2 style="color:#f0a030;margin:0 0 20px;">🛡️ Bezpečná platba vytvořena</h2>
+    <p>Dobrý den, <strong style="color:#f0a030;">${esc(buyer.display_name || buyer.username)}</strong>,</p>
+    <p>vaše bezpečná platba za inzerát <strong>"${esc(listing.title)}"</strong> od prodejce <strong>${esc(seller.display_name || seller.username)}</strong> byla vytvořena.</p>
+
+    <div style="margin:20px 0;padding:16px;background:#16162b;border-radius:8px;border-left:3px solid #f0a030;">
+      <strong style="font-size:18px;color:#f0a030;">Celkem: ${formatPrice(Number(transaction.amount))}</strong>
+      <br><span style="color:#888;font-size:13px;">z toho provize: ${formatPrice(Number(transaction.commission_amount))}</span>
+    </div>
+
+    <div style="margin:16px 0;padding:16px;background:#16162b;border-radius:8px;">
+      <strong style="color:#f0a030;">💳 Platební údaje</strong><br>
+      <span style="color:#ccc;">Variabilní symbol: <strong>${esc(vs)}</strong></span><br>
+      <span style="color:#ccc;">Částka: <strong>${formatPrice(Number(transaction.amount))}</strong></span><br>
+      <span style="color:#ccc;">Číslo účtu: <strong>${esc(bankAccount || iban)}</strong></span>
+      ${qrUrl ? `<br><br><img src="${qrUrl}" alt="QR platba" width="180" height="180" style="border-radius:8px;" />
+      <br><span style="color:#888;font-size:12px;">Naskenujte QR kód v bankovní aplikaci</span>` : ""}
+    </div>
+
+    <p style="color:#ccc;">Po přijetí platby bude prodejce vyzván k odeslání zboží. Peníze mu budou uvolněny až po vašem potvrzení doručení.</p>
+
+    <div style="margin-top:24px;text-align:center;">
+      <a href="https://lokopolis.cz/bazar/transakce/${esc(transaction.id)}" style="display:inline-block;padding:12px 28px;background:#f0a030;color:#1a1a2e;font-weight:700;border-radius:8px;text-decoration:none;">Zobrazit transakci →</a>
+    </div>
+  `, settings);
+}
+
+export function escrowPaid(seller: any, listing: any, transaction: any, shippingDeadlineDays: number, settings?: Record<string, any>): string {
+  return emailWrapper(`
+    <h2 style="color:#f0a030;margin:0 0 20px;">💰 Platba přijata — odešlete zboží</h2>
+    <p>Dobrý den, <strong style="color:#f0a030;">${esc(seller.display_name || seller.username)}</strong>,</p>
+    <p>kupující zaplatil za váš inzerát <strong>"${esc(listing.title)}"</strong> přes Bezpečnou platbu.</p>
+
+    <div style="margin:20px 0;padding:16px;background:#16162b;border-radius:8px;border-left:3px solid #22c55e;">
+      <strong style="color:#22c55e;">✅ Platba potvrzena</strong><br>
+      <span style="color:#ccc;">Částka: <strong>${formatPrice(Number(transaction.amount))}</strong></span><br>
+      <span style="color:#ccc;">Vaše výplata po provizi: <strong>${formatPrice(Number(transaction.seller_payout))}</strong></span>
+    </div>
+
+    <div style="margin:16px 0;padding:16px;background:#16162b;border-radius:8px;border-left:3px solid #f59e0b;">
+      <strong style="color:#f59e0b;">⏰ Odešlete zboží do ${shippingDeadlineDays} dnů</strong><br>
+      <span style="color:#ccc;">Po odeslání zadejte číslo zásilky v detailu transakce.</span>
+    </div>
+
+    <div style="margin-top:24px;text-align:center;">
+      <a href="https://lokopolis.cz/bazar/transakce/${esc(transaction.id)}" style="display:inline-block;padding:12px 28px;background:#f0a030;color:#1a1a2e;font-weight:700;border-radius:8px;text-decoration:none;">Zadat tracking →</a>
+    </div>
+  `, settings);
+}
+
+export function escrowShipped(buyer: any, listing: any, transaction: any, settings?: Record<string, any>): string {
+  return emailWrapper(`
+    <h2 style="color:#f0a030;margin:0 0 20px;">📦 Zboží odesláno</h2>
+    <p>Dobrý den, <strong style="color:#f0a030;">${esc(buyer.display_name || buyer.username)}</strong>,</p>
+    <p>prodejce odeslal zboží z inzerátu <strong>"${esc(listing.title)}"</strong>.</p>
+
+    ${transaction.tracking_number ? `
+    <div style="margin:20px 0;padding:16px;background:#16162b;border-radius:8px;border-left:3px solid #8b5cf6;">
+      <strong style="color:#f0a030;">📦 Sledování zásilky</strong><br>
+      <span style="color:#ccc;">Číslo zásilky: <strong>${esc(transaction.tracking_number)}</strong></span>
+      ${transaction.carrier ? `<br><span style="color:#ccc;">Dopravce: ${esc(transaction.carrier)}</span>` : ""}
+    </div>` : ""}
+
+    <p style="color:#ccc;">Až zboží obdržíte, potvrďte prosím přijetí v detailu transakce. Pokud nepotvrdíte do stanovené lhůty, peníze budou automaticky uvolněny prodejci.</p>
+
+    <div style="margin-top:24px;text-align:center;">
+      <a href="https://lokopolis.cz/bazar/transakce/${esc(transaction.id)}" style="display:inline-block;padding:12px 28px;background:#f0a030;color:#1a1a2e;font-weight:700;border-radius:8px;text-decoration:none;">Potvrdit přijetí →</a>
+    </div>
+  `, settings);
+}
+
+export function escrowDeliveryReminder(buyer: any, transaction: any, daysLeft: number, settings?: Record<string, any>): string {
+  return emailWrapper(`
+    <h2 style="color:#f0a030;margin:0 0 20px;">⏰ Potvrďte přijetí zboží</h2>
+    <p>Dobrý den, <strong style="color:#f0a030;">${esc(buyer.display_name || buyer.username)}</strong>,</p>
+    <p>zásilka z vaší bezpečné platby <strong>${esc(transaction.payment_reference)}</strong> byla odeslána. Potvrďte prosím přijetí zboží.</p>
+
+    <div style="margin:20px 0;padding:16px;background:#16162b;border-radius:8px;border-left:3px solid #f59e0b;">
+      <strong style="color:#f59e0b;">⏰ Zbývá ${daysLeft} dní</strong><br>
+      <span style="color:#ccc;">Pokud nepotvrdíte přijetí, peníze budou automaticky uvolněny prodejci.</span>
+    </div>
+
+    <div style="margin-top:24px;text-align:center;">
+      <a href="https://lokopolis.cz/bazar/transakce/${esc(transaction.id)}" style="display:inline-block;padding:12px 28px;background:#f0a030;color:#1a1a2e;font-weight:700;border-radius:8px;text-decoration:none;">Potvrdit přijetí →</a>
+    </div>
+  `, settings);
+}
+
+export function escrowCompleted(seller: any, transaction: any, settings?: Record<string, any>): string {
+  return emailWrapper(`
+    <h2 style="color:#f0a030;margin:0 0 20px;">✅ Peníze uvolněny</h2>
+    <p>Dobrý den, <strong style="color:#f0a030;">${esc(seller.display_name || seller.username)}</strong>,</p>
+    <p>kupující potvrdil přijetí zboží z bezpečné platby <strong>${esc(transaction.payment_reference)}</strong>.</p>
+
+    <div style="margin:20px 0;padding:16px;background:#16162b;border-radius:8px;border-left:3px solid #22c55e;">
+      <strong style="color:#22c55e;">💰 Výplata: ${formatPrice(Number(transaction.seller_payout))}</strong><br>
+      <span style="color:#888;font-size:13px;">Celková cena: ${formatPrice(Number(transaction.amount))} · Provize: ${formatPrice(Number(transaction.commission_amount))}</span>
+    </div>
+
+    <p style="color:#ccc;">Výplata bude odeslána na váš účet v nejbližším možném termínu.</p>
+  `, settings);
+}
+
+export function escrowDisputed(seller: any, buyer: any, dispute: any, transaction: any, settings?: Record<string, any>): string {
+  return emailWrapper(`
+    <h2 style="color:#ef4444;margin:0 0 20px;">⚠️ Otevřen spor</h2>
+    <p>U bezpečné platby <strong>${esc(transaction.payment_reference)}</strong> byl otevřen spor.</p>
+
+    <div style="margin:20px 0;padding:16px;background:#16162b;border-radius:8px;border-left:3px solid #ef4444;">
+      <strong style="color:#ef4444;">Důvod sporu:</strong><br>
+      <span style="color:#ccc;">${esc(dispute.reason)}</span>
+    </div>
+
+    <p style="color:#ccc;">Administrátor Lokopolis spor posoudí a rozhodne o dalším postupu. O výsledku budete informováni e-mailem.</p>
+
+    <div style="margin-top:24px;text-align:center;">
+      <a href="https://lokopolis.cz/bazar/transakce/${esc(transaction.id)}" style="display:inline-block;padding:12px 28px;background:#f0a030;color:#1a1a2e;font-weight:700;border-radius:8px;text-decoration:none;">Zobrazit transakci →</a>
+    </div>
+  `, settings);
+}
+
+export function escrowResolved(buyer: any, seller: any, dispute: any, resolution: string, transaction: any, settings?: Record<string, any>): string {
+  const resolutionLabels: Record<string, string> = {
+    resolved_buyer: "ve prospěch kupujícího — peníze budou vráceny",
+    resolved_seller: "ve prospěch prodávajícího — peníze budou uvolněny",
+    resolved_split: "kompromis — částka bude rozdělena",
+  };
+  const label = resolutionLabels[dispute.status] || dispute.status;
+
+  return emailWrapper(`
+    <h2 style="color:#f0a030;margin:0 0 20px;">⚖️ Spor vyřešen</h2>
+    <p>Spor u bezpečné platby <strong>${esc(transaction.payment_reference)}</strong> byl rozhodnut.</p>
+
+    <div style="margin:20px 0;padding:16px;background:#16162b;border-radius:8px;border-left:3px solid #22c55e;">
+      <strong style="color:#22c55e;">Rozhodnutí: ${esc(label)}</strong>
+      ${resolution ? `<br><br><span style="color:#ccc;">${esc(resolution)}</span>` : ""}
+    </div>
+
+    <p style="color:#ccc;">Pokud máte dotazy, kontaktujte nás na info@lokopolis.cz.</p>
+
+    <div style="margin-top:24px;text-align:center;">
+      <a href="https://lokopolis.cz/bazar/transakce/${esc(transaction.id)}" style="display:inline-block;padding:12px 28px;background:#f0a030;color:#1a1a2e;font-weight:700;border-radius:8px;text-decoration:none;">Zobrazit transakci →</a>
+    </div>
+  `, settings);
+}
