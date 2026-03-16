@@ -349,8 +349,25 @@ export default function MyListingsPage() {
                     textDecoration: "none",
                     fontWeight: 600,
                   }}
+                  title="Upravit"
                 >
                   ✏️
+                </Link>
+                <Link
+                  href={`/bazar/novy?copy=${listing.id}`}
+                  style={{
+                    padding: "6px 10px",
+                    borderRadius: "6px",
+                    fontSize: "12px",
+                    background: "rgba(59,130,246,0.1)",
+                    color: "#3b82f6",
+                    border: "1px solid rgba(59,130,246,0.3)",
+                    textDecoration: "none",
+                    fontWeight: 600,
+                  }}
+                  title="Vytvořit kopii"
+                >
+                  📋
                 </Link>
                 {listing.status === "active" && (
                   <button

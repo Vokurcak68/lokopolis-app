@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/components/Auth/AuthProvider";
@@ -47,6 +47,7 @@ const BRAND_SUGGESTIONS = [
 
 export default function NewListingPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, loading: authLoading } = useAuth();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,6 +81,32 @@ export default function NewListingPage() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Load data from existing listing (copy)
+  useEffect(() => {
+    const copyId = searchParams.get("copy");
+    if (!copyId) return;
+
+    supabase
+      .from("listings")
+      .select("*")
+      .eq("id", copyId)
+      .single()
+      .then(({ data }) => {
+        if (!data) return;
+        setTitle(data.title + " (kopie)");
+        setDescription(data.description || "");
+        setPrice(String(data.price || ""));
+        setCategory(data.category || "");
+        setScale(data.scale || "");
+        setBrand(data.brand || "");
+        setCondition(data.condition || "used");
+        setLocation(data.location || "");
+        setShipping(data.shipping ?? true);
+        setPersonalPickup(data.personal_pickup ?? true);
+        // Images are NOT copied — user should upload new ones
+      });
+  }, [searchParams]);
 
   const filteredBrands = brand
     ? BRAND_SUGGESTIONS.filter((b) =>
