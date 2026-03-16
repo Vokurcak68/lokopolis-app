@@ -237,13 +237,14 @@ export default function ImageUpload({ images, onChange, listingId }: ImageUpload
                 }`,
                 aspectRatio: "4/3",
                 cursor: "grab",
+                background: "var(--bg-page)",
               }}
             >
               <Image
-                src={url.replace("/object/public/", "/render/image/public/").concat("?width=200&quality=75")}
+                src={url.replace("/object/public/", "/render/image/public/").concat("?width=200&height=150&resize=contain&quality=75")}
                 alt={`Fotka ${index + 1}`}
                 fill
-                style={{ objectFit: "cover" }}
+                style={{ objectFit: "contain" }}
                 sizes="120px"
               />
               {index === 0 && (
