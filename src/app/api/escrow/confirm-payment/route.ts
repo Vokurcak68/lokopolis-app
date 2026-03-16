@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateUser, getServiceClient, isAdmin, getEscrowSettings } from "@/lib/escrow-helpers";
 import { sendEmail } from "@/lib/email";
-import { escrowPaid } from "@/lib/email-templates";
+import { escrowPaid, escrowPaidBuyer } from "@/lib/email-templates";
 
 export async function POST(req: NextRequest) {
   try {
@@ -50,20 +50,35 @@ export async function POST(req: NextRequest) {
     const settings = await getEscrowSettings();
     const shippingDays = Number(settings.shipping_deadline_days || 5);
 
-    const [sellerRes, listingRes] = await Promise.all([
+    const [sellerRes, buyerRes, listingRes] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", transaction.seller_id).single(),
+      supabase.from("profiles").select("*").eq("id", transaction.buyer_id).single(),
       supabase.from("listings").select("*").eq("id", transaction.listing_id).single(),
     ]);
 
     const seller = sellerRes.data;
+    const buyer = buyerRes.data;
     const listing = listingRes.data;
 
-    if (seller?.email && listing) {
-      try {
-        const html = escrowPaid(seller, listing, transaction, shippingDays);
-        await sendEmail(seller.email, `💰 Platba přijata — odešlete zboží (${transaction.payment_reference})`, html);
-      } catch (e) {
-        console.error("Escrow email error:", e);
+    if (listing) {
+      // Email prodávajícímu — odešlete zboží
+      if (seller?.email) {
+        try {
+          const html = escrowPaid(seller, listing, transaction, shippingDays);
+          await sendEmail(seller.email, `💰 Platba přijata — odešlete zboží (${transaction.payment_reference})`, html);
+        } catch (e) {
+          console.error("Escrow email (seller):", e);
+        }
+      }
+
+      // Email kupujícímu — platba připsána
+      if (buyer?.email) {
+        try {
+          const html = escrowPaidBuyer(buyer, listing, transaction, shippingDays);
+          await sendEmail(buyer.email, `✅ Platba připsána — ${transaction.payment_reference}`, html);
+        } catch (e) {
+          console.error("Escrow email (buyer):", e);
+        }
       }
     }
 

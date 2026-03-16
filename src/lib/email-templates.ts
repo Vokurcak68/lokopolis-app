@@ -422,6 +422,32 @@ export function escrowPaid(seller: any, listing: any, transaction: any, shipping
   `, settings);
 }
 
+export function escrowPaidBuyer(buyer: any, listing: any, transaction: any, shippingDeadlineDays: number, settings?: Record<string, any>): string {
+  return emailWrapper(`
+    <h2 style="color:#f0a030;margin:0 0 20px;">✅ Vaše platba byla připsána</h2>
+    <p>Dobrý den, <strong style="color:#f0a030;">${esc(buyer.display_name || buyer.username)}</strong>,</p>
+    <p>vaše platba za inzerát <strong>"${esc(listing.title)}"</strong> byla úspěšně připsána na escrow účet.</p>
+
+    <div style="margin:20px 0;padding:16px;background:#16162b;border-radius:8px;border-left:3px solid #22c55e;">
+      <strong style="color:#22c55e;">✅ Platba potvrzena</strong><br>
+      <span style="color:#ccc;">Částka: <strong>${formatPrice(Number(transaction.amount))}</strong></span><br>
+      <span style="color:#ccc;">Reference: <strong>${esc(transaction.payment_reference)}</strong></span>
+    </div>
+
+    <div style="margin:16px 0;padding:16px;background:#16162b;border-radius:8px;border-left:3px solid #3b82f6;">
+      <strong style="color:#3b82f6;">📦 Co bude dál?</strong><br>
+      <span style="color:#ccc;">Prodávající byl vyzván k odeslání zboží do <strong>${shippingDeadlineDays} dnů</strong>.</span><br>
+      <span style="color:#ccc;">Jakmile zboží odešle a zadá tracking číslo, dostanete další upozornění.</span>
+    </div>
+
+    <p style="color:#999;font-size:13px;margin-top:16px;">Peníze zůstávají v bezpečné úschově, dokud nepotvrdíte přijetí zboží.</p>
+
+    <div style="margin-top:24px;text-align:center;">
+      <a href="https://lokopolis.cz/bazar/transakce/${esc(transaction.id)}" style="display:inline-block;padding:12px 28px;background:#f0a030;color:#1a1a2e;font-weight:700;border-radius:8px;text-decoration:none;">Zobrazit transakci →</a>
+    </div>
+  `, settings);
+}
+
 export function escrowShipped(buyer: any, listing: any, transaction: any, settings?: Record<string, any>): string {
   return emailWrapper(`
     <h2 style="color:#f0a030;margin:0 0 20px;">📦 Zboží odesláno</h2>
