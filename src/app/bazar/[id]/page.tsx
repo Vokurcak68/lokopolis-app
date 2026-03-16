@@ -707,38 +707,40 @@ export default function ListingDetailPage() {
                   📩 {showMessages ? "Skrýt zprávy" : "Napsat prodejci"}
                 </button>
                 {canUseEscrow && (
-                  <button
-                    onClick={handleCreateEscrow}
-                    disabled={escrowLoading}
-                    style={{
-                      padding: "12px 24px",
-                      background: "rgba(34,197,94,0.15)",
-                      color: "#22c55e",
-                      border: "1px solid rgba(34,197,94,0.3)",
-                      borderRadius: "10px",
-                      fontSize: "14px",
-                      fontWeight: 600,
-                      cursor: escrowLoading ? "not-allowed" : "pointer",
-                      opacity: escrowLoading ? 0.7 : 1,
-                    }}
-                  >
-                    🛡️ {escrowLoading ? "Vytvářím..." : "Koupit s Bezpečnou platbou"}
-                  </button>
-                  <Link
-                    href="/bazar/bezpecna-platba"
-                    style={{
-                      fontSize: "12px",
-                      color: "var(--text-dimmer)",
-                      textDecoration: "none",
-                      display: "block",
-                      textAlign: "center",
-                      marginTop: "6px",
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dimmer)"; }}
-                  >
-                    Jak funguje bezpečná platba? →
-                  </Link>
+                  <>
+                    <button
+                      onClick={handleCreateEscrow}
+                      disabled={escrowLoading}
+                      style={{
+                        padding: "12px 24px",
+                        background: "rgba(34,197,94,0.15)",
+                        color: "#22c55e",
+                        border: "1px solid rgba(34,197,94,0.3)",
+                        borderRadius: "10px",
+                        fontSize: "14px",
+                        fontWeight: 600,
+                        cursor: escrowLoading ? "not-allowed" : "pointer",
+                        opacity: escrowLoading ? 0.7 : 1,
+                      }}
+                    >
+                      🛡️ {escrowLoading ? "Vytvářím..." : "Koupit s Bezpečnou platbou"}
+                    </button>
+                    <Link
+                      href="/bazar/bezpecna-platba"
+                      style={{
+                        fontSize: "12px",
+                        color: "var(--text-dimmer)",
+                        textDecoration: "none",
+                        display: "block",
+                        textAlign: "center",
+                        marginTop: "6px",
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dimmer)"; }}
+                    >
+                      Jak funguje bezpečná platba? →
+                    </Link>
+                  </>
                 )}
               </>
             ) : (
