@@ -157,7 +157,7 @@ export default function EscrowActions({ transaction, role, roles, onUpdate }: Es
 
       <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
         {/* Admin: confirm payment */}
-        {hasRole("admin") && transaction.status === "created" && (
+        {hasRole("admin") && (transaction.status === "created" || transaction.status === "partial_paid") && (
           <button
             onClick={() => handleAction("confirm-payment", { escrow_id: transaction.id }, "Opravdu potvrdit přijetí platby?")}
             disabled={loading}
@@ -168,7 +168,7 @@ export default function EscrowActions({ transaction, role, roles, onUpdate }: Es
         )}
 
         {/* Admin: partial payment */}
-        {hasRole("admin") && transaction.status === "created" && !showPartialForm && (
+        {hasRole("admin") && (transaction.status === "created" || transaction.status === "partial_paid") && !showPartialForm && (
           <button
             onClick={() => setShowPartialForm(true)}
             disabled={loading}
@@ -292,7 +292,12 @@ export default function EscrowActions({ transaction, role, roles, onUpdate }: Es
           )}
           <div style={{ display: "flex", gap: "10px" }}>
             <button
-              onClick={handlePartialPayment}
+              onClick={() => {
+                const amount = Number(partialAmount);
+                if (isNaN(amount) || amount <= 0) { setError("Zadejte platnou částku"); return; }
+                if (!confirm(`Opravdu oznámit neúplnou platbu ${amount.toLocaleString("cs-CZ")} Kč z ${Number(transaction.amount).toLocaleString("cs-CZ")} Kč?`)) return;
+                handlePartialPayment();
+              }}
               disabled={loading}
               style={btnStyle("rgba(249,115,22,0.15)", "#f97316", "rgba(249,115,22,0.3)")}
             >
@@ -404,7 +409,10 @@ export default function EscrowActions({ transaction, role, roles, onUpdate }: Es
 
           <div style={{ display: "flex", gap: "10px" }}>
             <button
-              onClick={handleShip}
+              onClick={() => {
+                if (!confirm("Opravdu potvrdit odeslání zásilky? Po odeslání začne běžet lhůta pro kupujícího.")) return;
+                handleShip();
+              }}
               disabled={loading}
               style={btnStyle("rgba(139,92,246,0.15)", "#8b5cf6", "rgba(139,92,246,0.3)")}
             >

@@ -47,6 +47,8 @@ export default function DisputeForm({ escrowId, onClose, onSubmitted }: DisputeF
       return;
     }
 
+    if (!confirm("Opravdu chcete otevřít spor? Tato akce pozdrží výplatu prodávajícímu a bude řešena administrátorem.")) return;
+
     setSubmitting(true);
     setError("");
 

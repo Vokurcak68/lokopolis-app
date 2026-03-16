@@ -387,8 +387,7 @@ export function escrowCreated(buyer: any, seller: any, listing: any, transaction
     ${listingInfoBlock(listing, transaction)}
 
     <div style="margin:20px 0;padding:16px;background:#16162b;border-radius:8px;border-left:3px solid #f0a030;">
-      <strong style="font-size:18px;color:#f0a030;">Celkem: ${formatPrice(Number(transaction.amount))}</strong>
-      <br><span style="color:#888;font-size:13px;">z toho provize: ${formatPrice(Number(transaction.commission_amount))}</span>
+      <strong style="font-size:18px;color:#f0a030;">Celkem k úhradě: ${formatPrice(Number(transaction.amount))}</strong>
     </div>
 
     <div style="margin:16px 0;padding:16px;background:#16162b;border-radius:8px;">
