@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { escrow_id, tracking_number, carrier } = body;
+    const { escrow_id, tracking_number, carrier, shipping_photo } = body;
     if (!escrow_id) {
       return NextResponse.json({ error: "Chybí escrow_id" }, { status: 400 });
     }
@@ -47,6 +47,7 @@ export async function POST(req: NextRequest) {
         status: "shipped",
         tracking_number: tracking_number || null,
         carrier: carrier || null,
+        shipping_photo: shipping_photo || null,
         shipped_at: new Date().toISOString(),
         auto_complete_at: autoCompleteAt.toISOString(),
       })

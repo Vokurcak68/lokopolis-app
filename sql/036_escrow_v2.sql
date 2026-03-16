@@ -10,6 +10,9 @@ ALTER TABLE escrow_transactions ADD COLUMN IF NOT EXISTS partial_amount numeric;
 -- Admin poznámka
 ALTER TABLE escrow_transactions ADD COLUMN IF NOT EXISTS admin_note text;
 
+-- Fotka potvrzení o odeslání
+ALTER TABLE escrow_transactions ADD COLUMN IF NOT EXISTS shipping_photo text;
+
 -- Rozšířit CHECK constraint o nové stavy
 ALTER TABLE escrow_transactions DROP CONSTRAINT IF EXISTS escrow_transactions_status_check;
 ALTER TABLE escrow_transactions ADD CONSTRAINT escrow_transactions_status_check

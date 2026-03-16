@@ -642,6 +642,7 @@ export interface EscrowTransaction {
   status: EscrowStatus;
   tracking_number: string | null;
   carrier: string | null;
+  shipping_photo: string | null;
   shipped_at: string | null;
   delivered_at: string | null;
   completed_at: string | null;

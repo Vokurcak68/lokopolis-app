@@ -309,6 +309,18 @@ export default function TransactionDetailPage() {
               </span>
             )}
           </div>
+          {transaction.shipping_photo && (
+            <div style={{ marginTop: "12px" }}>
+              <a href={transaction.shipping_photo} target="_blank" rel="noopener noreferrer">
+                <img
+                  src={transaction.shipping_photo}
+                  alt="Potvrzení o odeslání"
+                  style={{ maxWidth: "300px", maxHeight: "200px", borderRadius: "8px", border: "1px solid var(--border)", cursor: "pointer" }}
+                />
+              </a>
+              <p style={{ fontSize: "11px", color: "var(--text-dimmer)", marginTop: "4px" }}>📷 Potvrzení o odeslání</p>
+            </div>
+          )}
         </div>
       )}
 

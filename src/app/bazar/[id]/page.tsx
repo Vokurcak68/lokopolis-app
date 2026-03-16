@@ -530,7 +530,19 @@ export default function ListingDetailPage() {
           >
             <InfoItem label="Zaslání" value={listing.shipping ? "✅ Ano" : "❌ Ne"} />
             <InfoItem label="Osobní předání" value={listing.personal_pickup ? "✅ Ano" : "❌ Ne"} />
-            {listing.location && <InfoItem label="Lokace" value={`📍 ${listing.location}`} />}
+            {listing.location && (
+              <div>
+                <span style={{ fontSize: "12px", color: "var(--text-dimmer)", display: "block", marginBottom: "2px" }}>Lokace</span>
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(listing.location)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: "var(--accent)", textDecoration: "none", fontSize: "14px" }}
+                >
+                  📍 {listing.location} ↗
+                </a>
+              </div>
+            )}
             <InfoItem label="Přidáno" value={formatCzechDate(listing.created_at)} />
             <InfoItem label="Zobrazení" value={`👁 ${listing.view_count}`} />
           </div>

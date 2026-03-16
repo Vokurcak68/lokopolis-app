@@ -1,9 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import type { EscrowTransaction } from "@/types/database";
 import DisputeForm from "./DisputeForm";
+
+const CARRIERS = [
+  { value: "ceska-posta", label: "Česká pošta" },
+  { value: "zasilkovna", label: "Zásilkovna" },
+  { value: "ppl", label: "PPL" },
+  { value: "dpd", label: "DPD" },
+  { value: "gls", label: "GLS" },
+  { value: "balikovna", label: "Balíkovna" },
+  { value: "wedo", label: "WE|DO (České pošta)" },
+  { value: "intime", label: "InTime" },
+  { value: "toptrans", label: "TopTrans" },
+  { value: "osobni-predani", label: "Osobní předání" },
+  { value: "other", label: "Jiné..." },
+];
 
 interface EscrowActionsProps {
   transaction: EscrowTransaction;
@@ -44,6 +58,10 @@ export default function EscrowActions({ transaction, role, roles, onUpdate }: Es
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [trackingNumber, setTrackingNumber] = useState("");
   const [carrier, setCarrier] = useState("");
+  const [customCarrier, setCustomCarrier] = useState("");
+  const [shipPhoto, setShipPhoto] = useState<File | null>(null);
+  const [shipPhotoPreview, setShipPhotoPreview] = useState<string | null>(null);
+  const shipPhotoRef = useRef<HTMLInputElement>(null);
   const [partialAmount, setPartialAmount] = useState("");
   const [adminNote, setAdminNote] = useState(transaction.admin_note || "");
 
@@ -62,13 +80,27 @@ export default function EscrowActions({ transaction, role, roles, onUpdate }: Es
   }
 
   async function handleShip() {
+    const effectiveCarrier = carrier === "other" ? customCarrier : CARRIERS.find(c => c.value === carrier)?.label || carrier;
+    if (!trackingNumber.trim()) { setError("Vyplňte číslo zásilky"); return; }
+    if (!carrier) { setError("Vyberte přepravce"); return; }
+    if (carrier === "other" && !customCarrier.trim()) { setError("Vyplňte název přepravce"); return; }
+    if (!shipPhoto) { setError("Nahrajte fotku potvrzení o odeslání"); return; }
+
     setLoading(true);
     setError("");
     try {
+      // Upload photo
+      const ext = shipPhoto.name.split(".").pop() || "jpg";
+      const path = `escrow/${transaction.id}/shipping_${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("images").upload(path, shipPhoto);
+      if (upErr) throw new Error("Nepodařilo se nahrát fotku: " + upErr.message);
+      const { data: urlData } = supabase.storage.from("images").getPublicUrl(path);
+
       await apiCall("ship", {
         escrow_id: transaction.id,
-        tracking_number: trackingNumber || undefined,
-        carrier: carrier || undefined,
+        tracking_number: trackingNumber.trim(),
+        carrier: effectiveCarrier,
+        shipping_photo: urlData.publicUrl,
       });
       setShowShipForm(false);
       onUpdate();
@@ -280,42 +312,96 @@ export default function EscrowActions({ transaction, role, roles, onUpdate }: Es
       {showShipForm && (
         <div style={{ marginTop: "16px", padding: "16px", borderRadius: "12px", background: "var(--bg-card)", border: "1px solid var(--border)" }}>
           <h4 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "12px" }}>📦 Zadání odeslání</h4>
+
+          {/* Carrier select */}
           <div style={{ marginBottom: "12px" }}>
-            <label style={{ display: "block", fontSize: "13px", color: "var(--text-muted)", marginBottom: "4px" }}>Číslo zásilky</label>
+            <label style={{ display: "block", fontSize: "13px", color: "var(--text-muted)", marginBottom: "4px" }}>Přepravce *</label>
+            <select
+              value={carrier}
+              onChange={(e) => { setCarrier(e.target.value); if (e.target.value !== "other") setCustomCarrier(""); }}
+              style={{
+                width: "100%", padding: "10px 12px", borderRadius: "8px",
+                border: "1px solid var(--border)", background: "var(--bg-input, var(--bg-card))",
+                color: "var(--text-primary)", fontSize: "14px", boxSizing: "border-box",
+              }}
+            >
+              <option value="">— Vyberte přepravce —</option>
+              {CARRIERS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+            </select>
+          </div>
+
+          {/* Custom carrier */}
+          {carrier === "other" && (
+            <div style={{ marginBottom: "12px" }}>
+              <label style={{ display: "block", fontSize: "13px", color: "var(--text-muted)", marginBottom: "4px" }}>Název přepravce *</label>
+              <input
+                value={customCarrier}
+                onChange={(e) => setCustomCarrier(e.target.value)}
+                placeholder="Zadejte název přepravce"
+                style={{
+                  width: "100%", padding: "10px 12px", borderRadius: "8px",
+                  border: "1px solid var(--border)", background: "var(--bg-input, var(--bg-card))",
+                  color: "var(--text-primary)", fontSize: "14px", boxSizing: "border-box",
+                }}
+              />
+            </div>
+          )}
+
+          {/* Tracking number */}
+          <div style={{ marginBottom: "12px" }}>
+            <label style={{ display: "block", fontSize: "13px", color: "var(--text-muted)", marginBottom: "4px" }}>Číslo zásilky *</label>
             <input
               value={trackingNumber}
               onChange={(e) => setTrackingNumber(e.target.value)}
-              placeholder="Nepovinné"
+              placeholder="Zadejte tracking číslo"
               style={{
-                width: "100%",
-                padding: "10px 12px",
-                borderRadius: "8px",
-                border: "1px solid var(--border)",
-                background: "var(--bg-input, var(--bg-card))",
-                color: "var(--text-primary)",
-                fontSize: "14px",
-                boxSizing: "border-box",
+                width: "100%", padding: "10px 12px", borderRadius: "8px",
+                border: "1px solid var(--border)", background: "var(--bg-input, var(--bg-card))",
+                color: "var(--text-primary)", fontSize: "14px", boxSizing: "border-box",
               }}
             />
           </div>
+
+          {/* Shipping photo */}
           <div style={{ marginBottom: "16px" }}>
-            <label style={{ display: "block", fontSize: "13px", color: "var(--text-muted)", marginBottom: "4px" }}>Dopravce</label>
+            <label style={{ display: "block", fontSize: "13px", color: "var(--text-muted)", marginBottom: "4px" }}>Fotka potvrzení o odeslání *</label>
             <input
-              value={carrier}
-              onChange={(e) => setCarrier(e.target.value)}
-              placeholder="Např. Česká pošta, Zásilkovna, PPL"
-              style={{
-                width: "100%",
-                padding: "10px 12px",
-                borderRadius: "8px",
-                border: "1px solid var(--border)",
-                background: "var(--bg-input, var(--bg-card))",
-                color: "var(--text-primary)",
-                fontSize: "14px",
-                boxSizing: "border-box",
+              ref={shipPhotoRef}
+              type="file"
+              accept="image/*"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  setShipPhoto(file);
+                  setShipPhotoPreview(URL.createObjectURL(file));
+                }
               }}
+              style={{ display: "none" }}
             />
+            {shipPhotoPreview ? (
+              <div style={{ position: "relative", display: "inline-block" }}>
+                <img src={shipPhotoPreview} alt="Potvrzení" style={{ maxWidth: "200px", maxHeight: "150px", borderRadius: "8px", border: "1px solid var(--border)" }} />
+                <button
+                  onClick={() => { setShipPhoto(null); setShipPhotoPreview(null); if (shipPhotoRef.current) shipPhotoRef.current.value = ""; }}
+                  style={{ position: "absolute", top: "-6px", right: "-6px", width: "22px", height: "22px", borderRadius: "50%", background: "#ef4444", color: "#fff", border: "none", cursor: "pointer", fontSize: "12px", fontWeight: 700, lineHeight: "22px", textAlign: "center" }}
+                >✕</button>
+              </div>
+            ) : (
+              <button
+                onClick={() => shipPhotoRef.current?.click()}
+                style={{
+                  padding: "12px 20px", borderRadius: "8px", border: "2px dashed var(--border)",
+                  background: "transparent", color: "var(--text-muted)", cursor: "pointer", fontSize: "13px",
+                }}
+              >
+                📷 Nahrát fotku potvrzení
+              </button>
+            )}
+            <p style={{ fontSize: "11px", color: "var(--text-dimmer)", marginTop: "4px" }}>
+              Např. podací lístek, potvrzení z appky přepravce, screenshot trackingu
+            </p>
           </div>
+
           <div style={{ display: "flex", gap: "10px" }}>
             <button
               onClick={handleShip}
