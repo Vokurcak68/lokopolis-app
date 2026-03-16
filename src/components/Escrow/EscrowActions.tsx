@@ -8,6 +8,7 @@ import DisputeForm from "./DisputeForm";
 interface EscrowActionsProps {
   transaction: EscrowTransaction;
   role: "buyer" | "seller" | "admin";
+  roles?: ("buyer" | "seller" | "admin")[];
   onUpdate: () => void;
 }
 
@@ -31,15 +32,20 @@ async function apiCall(path: string, body: Record<string, unknown>) {
   return data;
 }
 
-export default function EscrowActions({ transaction, role, onUpdate }: EscrowActionsProps) {
+export default function EscrowActions({ transaction, role, roles, onUpdate }: EscrowActionsProps) {
+  const effectiveRoles = roles || [role];
+  const hasRole = (r: string) => effectiveRoles.includes(r as "buyer" | "seller" | "admin");
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showShipForm, setShowShipForm] = useState(false);
   const [showDisputeForm, setShowDisputeForm] = useState(false);
   const [showPartialForm, setShowPartialForm] = useState(false);
+  const [showNoteForm, setShowNoteForm] = useState(false);
   const [trackingNumber, setTrackingNumber] = useState("");
   const [carrier, setCarrier] = useState("");
   const [partialAmount, setPartialAmount] = useState("");
+  const [adminNote, setAdminNote] = useState(transaction.admin_note || "");
 
   async function handleAction(path: string, body: Record<string, unknown>, confirmMsg?: string) {
     if (confirmMsg && !confirm(confirmMsg)) return;
@@ -119,7 +125,7 @@ export default function EscrowActions({ transaction, role, onUpdate }: EscrowAct
 
       <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
         {/* Admin: confirm payment */}
-        {role === "admin" && transaction.status === "created" && (
+        {hasRole("admin") && transaction.status === "created" && (
           <button
             onClick={() => handleAction("confirm-payment", { escrow_id: transaction.id }, "Opravdu potvrdit přijetí platby?")}
             disabled={loading}
@@ -130,7 +136,7 @@ export default function EscrowActions({ transaction, role, onUpdate }: EscrowAct
         )}
 
         {/* Admin: partial payment */}
-        {role === "admin" && transaction.status === "created" && !showPartialForm && (
+        {hasRole("admin") && transaction.status === "created" && !showPartialForm && (
           <button
             onClick={() => setShowPartialForm(true)}
             disabled={loading}
@@ -141,7 +147,7 @@ export default function EscrowActions({ transaction, role, onUpdate }: EscrowAct
         )}
 
         {/* Admin: send payout */}
-        {role === "admin" && (transaction.status === "completed" || transaction.status === "auto_completed") && (
+        {hasRole("admin") && (transaction.status === "completed" || transaction.status === "auto_completed") && (
           <button
             onClick={() => handleAction("send-payout", { escrow_id: transaction.id }, `Opravdu odeslat výplatu ${Number(transaction.seller_payout).toLocaleString("cs-CZ")} Kč prodávajícímu?`)}
             disabled={loading}
@@ -151,8 +157,19 @@ export default function EscrowActions({ transaction, role, onUpdate }: EscrowAct
           </button>
         )}
 
+        {/* Admin: add note */}
+        {hasRole("admin") && !showNoteForm && (
+          <button
+            onClick={() => setShowNoteForm(true)}
+            disabled={loading}
+            style={btnStyle("rgba(107,114,128,0.1)", "#9ca3af", "rgba(107,114,128,0.3)")}
+          >
+            📝 Admin poznámka
+          </button>
+        )}
+
         {/* Seller: confirm payout received */}
-        {role === "seller" && transaction.status === "payout_sent" && (
+        {hasRole("seller") && transaction.status === "payout_sent" && (
           <button
             onClick={() => handleAction("confirm-payout", { escrow_id: transaction.id }, "Potvrzujete, že jste přijal/a výplatu na svůj účet?")}
             disabled={loading}
@@ -163,7 +180,7 @@ export default function EscrowActions({ transaction, role, onUpdate }: EscrowAct
         )}
 
         {/* Seller: ship */}
-        {role === "seller" && transaction.status === "paid" && !showShipForm && (
+        {hasRole("seller") && transaction.status === "paid" && !showShipForm && (
           <button
             onClick={() => setShowShipForm(true)}
             disabled={loading}
@@ -174,7 +191,7 @@ export default function EscrowActions({ transaction, role, onUpdate }: EscrowAct
         )}
 
         {/* Buyer: confirm delivery */}
-        {role === "buyer" && (transaction.status === "shipped" || transaction.status === "delivered") && (
+        {hasRole("buyer") && (transaction.status === "shipped" || transaction.status === "delivered") && (
           <button
             onClick={() => handleAction("confirm-delivery", { escrow_id: transaction.id }, "Potvrzujete, že jste zboží obdrželi v pořádku?")}
             disabled={loading}
@@ -185,7 +202,7 @@ export default function EscrowActions({ transaction, role, onUpdate }: EscrowAct
         )}
 
         {/* Buyer: open dispute */}
-        {role === "buyer" && (transaction.status === "shipped" || transaction.status === "delivered") && !showDisputeForm && (
+        {hasRole("buyer") && (transaction.status === "shipped" || transaction.status === "delivered") && !showDisputeForm && (
           <button
             onClick={() => setShowDisputeForm(true)}
             disabled={loading}
@@ -196,8 +213,8 @@ export default function EscrowActions({ transaction, role, onUpdate }: EscrowAct
         )}
 
         {/* Buyer/Admin: cancel */}
-        {((role === "buyer" && ["created", "paid", "partial_paid"].includes(transaction.status)) ||
-          (role === "admin" && ["created", "paid", "partial_paid", "shipped", "delivered", "disputed"].includes(transaction.status))) && (
+        {((hasRole("buyer") && ["created", "paid", "partial_paid"].includes(transaction.status)) ||
+          (hasRole("admin") && ["created", "paid", "partial_paid", "shipped", "delivered", "disputed"].includes(transaction.status))) && (
           <button
             onClick={() => handleAction("cancel", { escrow_id: transaction.id }, "Opravdu chcete transakci zrušit?")}
             disabled={loading}
@@ -324,6 +341,66 @@ export default function EscrowActions({ transaction, role, onUpdate }: EscrowAct
           onClose={() => setShowDisputeForm(false)}
           onSubmitted={onUpdate}
         />
+      )}
+
+      {/* Admin note form */}
+      {showNoteForm && (
+        <div style={{ marginTop: "16px", padding: "16px", borderRadius: "12px", background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+          <h4 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "12px" }}>📝 Admin poznámka</h4>
+          <textarea
+            value={adminNote}
+            onChange={(e) => setAdminNote(e.target.value)}
+            placeholder="Interní poznámka (vidí jen admin)..."
+            rows={3}
+            style={{
+              width: "100%",
+              padding: "10px 12px",
+              borderRadius: "8px",
+              border: "1px solid var(--border)",
+              background: "var(--bg-input, var(--bg-card))",
+              color: "var(--text-primary)",
+              fontSize: "14px",
+              boxSizing: "border-box",
+              resize: "vertical",
+              marginBottom: "12px",
+            }}
+          />
+          <div style={{ display: "flex", gap: "10px" }}>
+            <button
+              onClick={async () => {
+                setLoading(true);
+                setError("");
+                try {
+                  await apiCall("admin-note", { escrow_id: transaction.id, note: adminNote });
+                  setShowNoteForm(false);
+                  onUpdate();
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : "Chyba");
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              disabled={loading}
+              style={btnStyle("rgba(107,114,128,0.15)", "#9ca3af", "rgba(107,114,128,0.3)")}
+            >
+              💾 Uložit poznámku
+            </button>
+            <button
+              onClick={() => setShowNoteForm(false)}
+              style={btnStyle("transparent", "var(--text-muted)", "var(--border)")}
+            >
+              Zrušit
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Show existing admin note (admin only) */}
+      {hasRole("admin") && transaction.admin_note && !showNoteForm && (
+        <div style={{ marginTop: "12px", padding: "12px 14px", borderRadius: "8px", background: "rgba(107,114,128,0.08)", border: "1px solid rgba(107,114,128,0.2)" }}>
+          <div style={{ fontSize: "11px", fontWeight: 600, color: "#9ca3af", marginBottom: "4px", textTransform: "uppercase" }}>📝 Admin poznámka</div>
+          <div style={{ fontSize: "13px", color: "var(--text-muted)", whiteSpace: "pre-wrap" }}>{transaction.admin_note}</div>
+        </div>
       )}
     </div>
   );

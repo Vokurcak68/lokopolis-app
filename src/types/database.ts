@@ -652,6 +652,7 @@ export interface EscrowTransaction {
   payment_reference: string;
   partial_amount: number | null;
   notes: string | null;
+  admin_note: string | null;
   created_at: string;
   updated_at: string;
 }

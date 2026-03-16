@@ -136,6 +136,10 @@ export default function TransactionDetailPage() {
   const isSeller = user.id === transaction.seller_id;
   const isAdmin = profile?.role === "admin";
   const role: "buyer" | "seller" | "admin" = isAdmin ? "admin" : isBuyer ? "buyer" : "seller";
+  // Admin who is also buyer/seller gets dual actions
+  const effectiveRoles: ("buyer" | "seller" | "admin")[] = [role];
+  if (isAdmin && isBuyer && !effectiveRoles.includes("buyer")) effectiveRoles.push("buyer");
+  if (isAdmin && isSeller && !effectiveRoles.includes("seller")) effectiveRoles.push("seller");
 
   return (
     <div style={{ maxWidth: "800px", margin: "0 auto", padding: "48px 20px" }}>
@@ -201,6 +205,7 @@ export default function TransactionDetailPage() {
         <EscrowActions
           transaction={transaction}
           role={role}
+          roles={effectiveRoles}
           onUpdate={fetchData}
         />
       </div>
