@@ -121,7 +121,7 @@ export default function AdminEscrowPage() {
                   <div style={{ color: "var(--text-muted)", fontSize: "12px" }}>{t.status} · {Number(t.amount).toLocaleString("cs-CZ")} Kč</div>
                 </div>
                 <div style={{ display: "flex", gap: "8px" }}>
-                  {t.status === "created" && <button onClick={async () => { await callApi("confirm-payment", { escrow_id: t.id }); await fetchAll(); }} style={btnSmall("#22c55e")}>Potvrdit platbu</button>}
+                  {t.status === "created" && <button onClick={async () => { if (!window.confirm(`Opravdu potvrdit úhradu ${Number(t.amount).toLocaleString("cs-CZ")} Kč pro ${t.payment_reference}?`)) return; await callApi("confirm-payment", { escrow_id: t.id }); await fetchAll(); }} style={btnSmall("#22c55e")}>Potvrdit platbu</button>}
                   <Link href={`/bazar/transakce/${t.id}`} style={{ ...btnLinkSmall(), textDecoration: "none" }}>Detail</Link>
                 </div>
               </div>
@@ -144,9 +144,9 @@ export default function AdminEscrowPage() {
                 )}
                 {d.status === "open" && (
                   <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                    <button onClick={async () => { await callApi("resolve", { dispute_id: d.id, resolution_status: "resolved_buyer", resolution_text: "Rozhodnuto ve prospěch kupujícího." }); await fetchAll(); }} style={btnSmall("#f97316")}>Ve prospěch kupujícího</button>
-                    <button onClick={async () => { await callApi("resolve", { dispute_id: d.id, resolution_status: "resolved_seller", resolution_text: "Rozhodnuto ve prospěch prodávajícího." }); await fetchAll(); }} style={btnSmall("#22c55e")}>Ve prospěch prodávajícího</button>
-                    <button onClick={async () => { await callApi("resolve", { dispute_id: d.id, resolution_status: "resolved_split", resolution_text: "Kompromisní rozdělení částky." }); await fetchAll(); }} style={btnSmall("#3b82f6")}>Kompromis</button>
+                    <button onClick={async () => { if (!window.confirm("Rozhodnout ve prospěch kupujícího? Peníze se vrátí kupujícímu.")) return; await callApi("resolve", { dispute_id: d.id, resolution_status: "resolved_buyer", resolution_text: "Rozhodnuto ve prospěch kupujícího." }); await fetchAll(); }} style={btnSmall("#f97316")}>Ve prospěch kupujícího</button>
+                    <button onClick={async () => { if (!window.confirm("Rozhodnout ve prospěch prodávajícího? Peníze se uvolní prodejci.")) return; await callApi("resolve", { dispute_id: d.id, resolution_status: "resolved_seller", resolution_text: "Rozhodnuto ve prospěch prodávajícího." }); await fetchAll(); }} style={btnSmall("#22c55e")}>Ve prospěch prodávajícího</button>
+                    <button onClick={async () => { if (!window.confirm("Kompromisní rozdělení částky?")) return; await callApi("resolve", { dispute_id: d.id, resolution_status: "resolved_split", resolution_text: "Kompromisní rozdělení částky." }); await fetchAll(); }} style={btnSmall("#3b82f6")}>Kompromis</button>
                   </div>
                 )}
               </div>
