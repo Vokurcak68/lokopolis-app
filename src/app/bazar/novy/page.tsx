@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
@@ -45,7 +45,15 @@ const BRAND_SUGGESTIONS = [
   "Lima", "Rivarossi", "Hornby", "Bachmann", "MTB",
 ];
 
-export default function NewListingPage() {
+export default function NewListingPageWrapper() {
+  return (
+    <Suspense fallback={<div style={{ maxWidth: "700px", margin: "0 auto", padding: "48px 20px", textAlign: "center", color: "var(--text-dimmer)" }}>⏳ Načítám...</div>}>
+      <NewListingPage />
+    </Suspense>
+  );
+}
+
+function NewListingPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading: authLoading } = useAuth();
