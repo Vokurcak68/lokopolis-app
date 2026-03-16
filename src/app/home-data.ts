@@ -462,14 +462,12 @@ async function fetchHomeDataInternal(): Promise<HomePageData> {
     }
     if (bannerData) {
       // Filter by date range in JS (Supabase .or() chaining is unreliable)
-      banners = (bannerData as HomeBanner[]).filter(b => {
-        const rec = b as Record<string, unknown>;
-        const startsAt = rec.starts_at as string | null;
-        const endsAt = rec.ends_at as string | null;
-        if (startsAt && startsAt > now) return false;
-        if (endsAt && endsAt <= now) return false;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      banners = (bannerData as any[]).filter((b: any) => {
+        if (b.starts_at && b.starts_at > now) return false;
+        if (b.ends_at && b.ends_at <= now) return false;
         return true;
-      });
+      }) as HomeBanner[];
     }
   } catch {
     // table may not exist yet
