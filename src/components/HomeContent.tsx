@@ -259,22 +259,24 @@ export default function HomeContent({ data }: { data: HomePageData }) {
                     onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.transform = "translateY(-1px)"; }}
                     onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.transform = "translateY(0)"; }}
                   >
-                    {/* Article image */}
-                    <div className="w-full sm:w-[200px]" style={{ minHeight: "140px", position: "relative", flexShrink: 0, background: "var(--bg-page)" }}>
-                      {a.cover_image_url ? (
-                        <Image
-                          src={optimizeImageUrl(a.cover_image_url, 400)}
-                          alt={a.title}
-                          fill
-                          style={{ objectFit: "contain" }}
-                          sizes="200px"
-                          priority={i < 2}
-                        />
-                      ) : (
-                        <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-page)", fontSize: "32px", color: "var(--text-dimmer)" }}>
-                          {a.category?.icon || "📄"}
-                        </div>
-                      )}
+                    {/* Article image — same approach as ProductCard */}
+                    <div className="w-full sm:w-[200px]" style={{ position: "relative", flexShrink: 0, overflow: "hidden" }}>
+                      <div style={{ position: "relative", width: "100%", paddingBottom: "75%", background: "var(--bg-page)" }}>
+                        {a.cover_image_url ? (
+                          <Image
+                            src={getImageVariant(a.cover_image_url, "card")}
+                            alt={a.title}
+                            fill
+                            style={{ objectFit: "contain" }}
+                            sizes="200px"
+                            priority={i < 2}
+                          />
+                        ) : (
+                          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "32px", color: "var(--text-dimmer)" }}>
+                            {a.category?.icon || "📄"}
+                          </div>
+                        )}
+                      </div>
                     </div>
                     {/* Article info */}
                     <div style={{ padding: "14px 16px 14px 0", flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 0 }}>
