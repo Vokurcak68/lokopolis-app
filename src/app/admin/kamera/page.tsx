@@ -36,7 +36,12 @@ export default function AdminCameraPage() {
       setLoading(true);
       setError("");
       try {
-        const res = await fetch("/api/tuya/stream");
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch("/api/tuya/stream", {
+          headers: session?.access_token
+            ? { Authorization: `Bearer ${session.access_token}` }
+            : {},
+        });
         if (!res.ok) {
           const data = await res.json().catch(() => ({ error: "Chyba" }));
           throw new Error(data.error || `HTTP ${res.status}`);
@@ -102,7 +107,7 @@ export default function AdminCameraPage() {
   }, [streamInfo]);
 
   // Refresh stream (URLs expire)
-  function handleRefresh() {
+  async function handleRefresh() {
     if (hlsRef.current) {
       hlsRef.current.destroy();
       hlsRef.current = null;
@@ -110,7 +115,12 @@ export default function AdminCameraPage() {
     setStreamInfo(null);
     setError("");
     setLoading(true);
-    fetch("/api/tuya/stream")
+    const { data: { session } } = await supabase.auth.getSession();
+    fetch("/api/tuya/stream", {
+      headers: session?.access_token
+        ? { Authorization: `Bearer ${session.access_token}` }
+        : {},
+    })
       .then((r) => r.json())
       .then((data) => {
         if (data.error) throw new Error(data.error);
