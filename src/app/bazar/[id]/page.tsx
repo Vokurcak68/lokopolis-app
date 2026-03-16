@@ -53,14 +53,14 @@ function optimizeImageUrl(url: string, width: number = 800): string {
   if (!url) return "";
   return url
     .replace("/object/public/", "/render/image/public/")
-    .concat(`?width=${width}&quality=85`);
+    .concat(`?width=${width}&height=${Math.round(width * 0.75)}&resize=contain&quality=85`);
 }
 
 function thumbUrl(url: string): string {
   if (!url) return "";
   return url
     .replace("/object/public/", "/render/image/public/")
-    .concat("?width=150&quality=75");
+    .concat("?width=150&height=112&resize=contain&quality=75");
 }
 
 export default function ListingDetailPage() {
@@ -351,7 +351,7 @@ export default function ListingDetailPage() {
                     cursor: "pointer",
                     position: "relative",
                     flexShrink: 0,
-                    background: "none",
+                    background: "var(--bg-page)",
                     padding: 0,
                   }}
                 >
@@ -359,7 +359,7 @@ export default function ListingDetailPage() {
                     src={thumbUrl(url)}
                     alt={`Fotka ${i + 1}`}
                     fill
-                    style={{ objectFit: "cover" }}
+                    style={{ objectFit: "contain" }}
                     sizes="72px"
                   />
                 </button>
