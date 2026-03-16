@@ -9,6 +9,7 @@ import CategoryIcon from "@/components/CategoryIcon";
 import { getImageVariant } from "@/lib/image-variants";
 import type {
   HomePageData,
+  HomeBanner,
   LatestArticle,
   PopularArticle,
   PopularTag,
@@ -22,6 +23,110 @@ function optimizeImageUrl(url: string, width: number = 400): string {
   if (!url) return "";
   const height = Math.round(width * 0.75);
   return url.replace("/object/public/", "/render/image/public/").concat(`?width=${width}&height=${height}&resize=contain&quality=75`);
+}
+
+/* ============================================================
+   BANNER CLICK TRACKER
+   ============================================================ */
+function trackBannerClick(bannerId: string) {
+  fetch("/api/banners/click", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: bannerId }),
+  }).catch(() => {});
+}
+
+/* ============================================================
+   LEADERBOARD BANNER (Pozice 1 — pod hero)
+   ============================================================ */
+function LeaderboardBanner({ banners }: { banners: HomeBanner[] }) {
+  // Pick one banner: rotate daily by priority, then by day-of-year
+  if (!banners || banners.length === 0) return null;
+  const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000);
+  const banner = banners.length === 1 ? banners[0] : banners[dayOfYear % banners.length];
+
+  return (
+    <section style={{ maxWidth: "1200px", margin: "24px auto 0", padding: "0 20px" }}>
+      <a
+        href={banner.link_url}
+        onClick={() => trackBannerClick(banner.id)}
+        style={{ display: "block", textDecoration: "none", borderRadius: "12px", overflow: "hidden", position: "relative", background: "var(--bg-card)", border: "1px solid var(--border)", transition: "box-shadow 0.2s" }}
+        onMouseEnter={e => (e.currentTarget.style.boxShadow = "0 4px 20px rgba(240,160,48,0.15)")}
+        onMouseLeave={e => (e.currentTarget.style.boxShadow = "none")}
+      >
+        {banner.image_url ? (
+          <div style={{ width: "100%", height: "0", paddingBottom: "12%", position: "relative", minHeight: "80px" }}>
+            <Image src={banner.image_url} alt={banner.title} fill style={{ objectFit: "cover" }} sizes="1200px" priority />
+            {/* Overlay text */}
+            <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px", background: "linear-gradient(90deg, rgba(0,0,0,0.5) 0%, transparent 60%)" }}>
+              <div>
+                <div style={{ fontSize: "18px", fontWeight: 700, color: "#fff" }}>{banner.title}</div>
+                {banner.subtitle && <div style={{ fontSize: "14px", color: "rgba(255,255,255,0.8)", marginTop: "2px" }}>{banner.subtitle}</div>}
+              </div>
+              {banner.badge_text && (
+                <span style={{ fontSize: "11px", padding: "3px 10px", borderRadius: "4px", background: "rgba(255,255,255,0.2)", color: "#fff", backdropFilter: "blur(4px)", flexShrink: 0 }}>
+                  {banner.badge_text}
+                </span>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div style={{ padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "linear-gradient(135deg, var(--bg-card), var(--bg-page))" }}>
+            <div>
+              <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary)" }}>{banner.title}</div>
+              {banner.subtitle && <div style={{ fontSize: "13px", color: "var(--text-muted)", marginTop: "2px" }}>{banner.subtitle}</div>}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              {banner.badge_text && (
+                <span style={{ fontSize: "11px", padding: "3px 10px", borderRadius: "4px", background: "var(--accent)", color: "#000", fontWeight: 600 }}>
+                  {banner.badge_text}
+                </span>
+              )}
+              <span style={{ fontSize: "14px", color: "var(--accent)" }}>→</span>
+            </div>
+          </div>
+        )}
+      </a>
+    </section>
+  );
+}
+
+/* ============================================================
+   NATIVE BANNER CARD (Pozice 2/5 — vmíchaná v seznamu)
+   ============================================================ */
+function NativeBannerCard({ banner }: { banner: HomeBanner }) {
+  return (
+    <a
+      href={banner.link_url}
+      onClick={() => trackBannerClick(banner.id)}
+      style={{
+        display: "block",
+        textDecoration: "none",
+        background: "var(--bg-card)",
+        border: "1px solid var(--accent-border)",
+        borderRadius: "12px",
+        overflow: "hidden",
+        transition: "transform 0.2s, box-shadow 0.2s",
+      }}
+      onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 4px 20px rgba(240,160,48,0.15)"; }}
+      onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; }}
+    >
+      {banner.image_url && (
+        <div style={{ position: "relative", width: "100%", paddingBottom: "75%", background: "var(--bg-page)" }}>
+          <Image src={banner.image_url} alt={banner.title} fill style={{ objectFit: "contain" }} sizes="300px" />
+        </div>
+      )}
+      <div style={{ padding: "12px 16px" }}>
+        {banner.badge_text && (
+          <span style={{ fontSize: "10px", padding: "2px 8px", borderRadius: "3px", background: "var(--accent)", color: "#000", fontWeight: 600, display: "inline-block", marginBottom: "6px" }}>
+            {banner.badge_text}
+          </span>
+        )}
+        <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>{banner.title}</div>
+        {banner.subtitle && <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "2px" }}>{banner.subtitle}</div>}
+      </div>
+    </a>
+  );
 }
 
 /* ============================================================
@@ -271,7 +376,12 @@ export default function HomeContent({ data }: { data: HomePageData }) {
     competition,
     latestListings,
     featuredShopProducts,
+    banners,
   } = data;
+
+  const heroBanners = banners.filter((b: HomeBanner) => b.position === "hero_leaderboard");
+  const articleBanners = banners.filter((b: HomeBanner) => b.position === "article_native");
+  const bazarBanners = banners.filter((b: HomeBanner) => b.position === "bazar_native");
 
   return (
     <div>
@@ -326,6 +436,9 @@ export default function HomeContent({ data }: { data: HomePageData }) {
           </form>
         </div>
       </section>
+
+      {/* ===================== 🏠 LEADERBOARD BANNER (Pozice 1) ===================== */}
+      <LeaderboardBanner banners={heroBanners} />
 
       {/* ===================== 📰 NEJNOVĚJŠÍ Z KOMUNITY ===================== */}
       <section style={{ maxWidth: "1200px", margin: "40px auto 0", padding: "0 20px" }}>
@@ -608,12 +721,15 @@ export default function HomeContent({ data }: { data: HomePageData }) {
             </Link>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" style={{ gap: "16px" }}>
-            {latestListings.map((listing: BazarListingHome) => {
+            {latestListings.map((listing: BazarListingHome, idx: number) => {
               const firstImage = listing.images && listing.images.length > 0 ? listing.images[0] : null;
               const condLabel: Record<string, string> = { new: "Nový", opened: "Rozbalený", used: "Použitý", parts: "Na díly" };
               const condColor: Record<string, string> = { new: "#22c55e", opened: "#3b82f6", used: "#f59e0b", parts: "#ef4444" };
               const scaleColor: Record<string, string> = { TT: "#3b82f6", H0: "#22c55e", N: "#a855f7", Z: "#ec4899", G: "#f59e0b" };
+              // Insert native bazar banner after 3rd listing
+              const showBazarBanner = idx === 2 && bazarBanners.length > 0;
               return (
+                <>{showBazarBanner && <NativeBannerCard key="bazar-native" banner={bazarBanners[0]} />}
                 <Link key={listing.id} href={`/bazar/${listing.id}`} style={{ textDecoration: "none" }}>
                   <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px", overflow: "hidden", transition: "all 0.2s", height: "100%" }} onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.transform = "translateY(0)"; }}>
                     <div style={{ position: "relative", width: "100%", paddingBottom: "75%", background: "var(--bg-page)" }}>
@@ -633,6 +749,7 @@ export default function HomeContent({ data }: { data: HomePageData }) {
                     </div>
                   </div>
                 </Link>
+                </>
               );
             })}
           </div>
@@ -741,6 +858,8 @@ export default function HomeContent({ data }: { data: HomePageData }) {
                 </Link>
               );
             })}
+            {/* Native article banner as extra card */}
+            {articleBanners.length > 0 && <NativeBannerCard banner={articleBanners[0]} />}
           </div>
         </section>
       )}

@@ -135,6 +135,17 @@ export interface ShopProductHome {
   featured: boolean;
 }
 
+export interface HomeBanner {
+  id: string;
+  position: string;
+  title: string;
+  subtitle: string | null;
+  image_url: string | null;
+  link_url: string;
+  badge_text: string | null;
+  priority: number;
+}
+
 export interface HomePageData {
   stats: HomeStats;
   memberCount: number | null;
@@ -150,6 +161,7 @@ export interface HomePageData {
   competition: CompetitionHomeData | null;
   latestListings: BazarListingHome[];
   featuredShopProducts: ShopProductHome[];
+  banners: HomeBanner[];
 }
 
 /* ============================================================
@@ -195,6 +207,7 @@ async function fetchHomeDataInternal(): Promise<HomePageData> {
       competition: null,
       latestListings: [],
       featuredShopProducts: [],
+      banners: [],
     };
   }
 
@@ -435,6 +448,28 @@ async function fetchHomeDataInternal(): Promise<HomePageData> {
     // table may not exist yet
   }
 
+  // --- Homepage banners ---
+  let banners: HomeBanner[] = [];
+  try {
+    const now = new Date().toISOString();
+    const { data: bannerData } = await supabase
+      .from("homepage_banners")
+      .select("id, position, title, subtitle, image_url, link_url, badge_text, priority")
+      .eq("is_active", true)
+      .or(`starts_at.is.null,starts_at.lte.${now}`)
+      .or(`ends_at.is.null,ends_at.gt.${now}`)
+      .order("priority", { ascending: false });
+    if (bannerData) banners = bannerData as HomeBanner[];
+  } catch {
+    // table may not exist yet
+  }
+
+  // Track impressions server-side (fire and forget)
+  if (banners.length > 0) {
+    const ids = banners.map(b => b.id);
+    Promise.resolve(supabase.rpc("increment_banner_impressions", { banner_ids: ids })).catch(() => {});
+  }
+
   return {
     stats,
     memberCount: memCount,
@@ -450,6 +485,7 @@ async function fetchHomeDataInternal(): Promise<HomePageData> {
     competition,
     latestListings,
     featuredShopProducts,
+    banners,
   };
 }
 

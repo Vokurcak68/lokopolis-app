@@ -30,6 +30,7 @@ const adminSections = [
   { href: "/admin/zakaznici", icon: "👥", title: "Zákazníci", desc: "Přehled registrovaných uživatelů" },
   { href: "/admin/sablony", icon: "📧", title: "Šablony", desc: "E-mailové šablony" },
   { href: "/admin/escrow", icon: "🛡️", title: "Escrow", desc: "Bezpečná platba, spory, nastavení" },
+  { href: "/admin/bannery", icon: "🖼️", title: "Bannery", desc: "Homepage bannery, reklama, pozice, plánování" },
 ];
 
 const STATUS_LABELS: Record<string, string> = {

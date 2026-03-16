@@ -698,6 +698,27 @@ export interface EscrowSettings {
   updated_at: string;
 }
 
+export type BannerPosition = "hero_leaderboard" | "article_native" | "bazar_native";
+
+export interface HomepageBanner {
+  id: string;
+  position: BannerPosition;
+  title: string;
+  subtitle: string | null;
+  image_url: string | null;
+  link_url: string;
+  badge_text: string | null;
+  starts_at: string | null;
+  ends_at: string | null;
+  priority: number;
+  is_active: boolean;
+  impressions: number;
+  clicks: number;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+}
+
 // Supabase Database type pro type-safe klienta
 export interface Database {
   public: {
