@@ -83,8 +83,8 @@ export default function AdminCameraPage() {
       }
 
       ws.onopen = () => {
-        // go2rtc expects a JSON message to start MSE stream
-        // Send empty to use default
+        // go2rtc requires this message to start sending MSE data
+        ws.send(JSON.stringify({ type: "mse" }));
       };
 
       ws.onmessage = (event) => {
