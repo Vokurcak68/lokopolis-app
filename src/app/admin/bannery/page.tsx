@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Image from "next/image";
 import { supabase } from "@/lib/supabase";
-
+import { optimizeImageUrl } from "@/lib/image-variants";
 import type { HomepageBanner, BannerPosition } from "@/types/database";
 
 
@@ -195,9 +196,8 @@ export default function AdminBannersPage() {
                 : "Doporučená velikost: 600 × 450 px (4:3)"}
             </p>
             {form.image_url && (
-              <div style={{ marginTop: "8px", width: "200px", height: "auto", borderRadius: "6px", overflow: "hidden", background: "var(--bg-page)" }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={form.image_url} alt="Preview" style={{ width: "100%", height: "auto", display: "block", objectFit: "contain" }} />
+              <div style={{ marginTop: "8px", width: "200px", height: "80px", position: "relative", borderRadius: "6px", overflow: "hidden", background: "var(--bg-page)" }}>
+                <Image src={optimizeImageUrl(form.image_url, 400)} alt="Preview" fill style={{ objectFit: "contain" }} sizes="200px" unoptimized />
               </div>
             )}
           </div>
@@ -237,9 +237,8 @@ export default function AdminBannersPage() {
         {banners.map(b => (
           <div key={b.id} style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "16px", display: "flex", gap: "16px", alignItems: "center", opacity: b.is_active ? 1 : 0.5 }}>
             {b.image_url && (
-              <div style={{ width: "120px", flexShrink: 0, borderRadius: "6px", overflow: "hidden", background: "var(--bg-page)" }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={b.image_url} alt="" style={{ width: "100%", height: "auto", display: "block", objectFit: "contain" }} />
+              <div style={{ width: "120px", height: "80px", position: "relative", borderRadius: "6px", overflow: "hidden", flexShrink: 0, background: "var(--bg-page)" }}>
+                <Image src={optimizeImageUrl(b.image_url, 240)} alt="" fill style={{ objectFit: "contain" }} sizes="120px" unoptimized />
               </div>
             )}
             <div style={{ flex: 1, minWidth: 0 }}>

@@ -30,7 +30,7 @@ export function optimizeImageUrl(url: string, width?: number): string {
   if (!url) return "";
   let optimized = url.replace("/object/public/", "/render/image/public/");
   if (width) {
-    optimized += `?width=${width}&quality=75`;
+    optimized += `?width=${width}&resize=contain&quality=75`;
   }
   return optimized;
 }
