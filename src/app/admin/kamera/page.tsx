@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 
@@ -10,9 +10,12 @@ const STREAM_NAME = "kolejiste";
 
 export default function AdminCameraPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const pcRef = useRef<RTCPeerConnection | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const sbRef = useRef<SourceBuffer | null>(null);
+  const queueRef = useRef<ArrayBuffer[]>([]);
   const [status, setStatus] = useState<"checking" | "denied" | "connecting" | "live" | "error">("checking");
   const [error, setError] = useState("");
+  const [mode, setMode] = useState<"mse" | "mp4">("mse");
 
   // Check admin
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
@@ -30,94 +33,141 @@ export default function AdminCameraPage() {
     checkAdmin();
   }, []);
 
-  // Connect WebRTC to go2rtc
-  async function connectWebRTC() {
+  const cleanup = useCallback(() => {
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    sbRef.current = null;
+    queueRef.current = [];
+  }, []);
+
+  // MSE via WebSocket (low latency)
+  const connectMSE = useCallback(async () => {
+    cleanup();
     setStatus("connecting");
     setError("");
 
+    if (!videoRef.current) return;
+
     try {
-      // Cleanup previous connection
-      if (pcRef.current) {
-        pcRef.current.close();
-        pcRef.current = null;
+      if (!("MediaSource" in window)) {
+        // Fallback to MP4 stream
+        setMode("mp4");
+        return;
       }
 
-      const pc = new RTCPeerConnection({
-        iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+      const ms = new MediaSource();
+      videoRef.current.src = URL.createObjectURL(ms);
+
+      ms.addEventListener("sourceopen", () => {
+        const wsUrl = GO2RTC_URL.replace("https://", "wss://").replace("http://", "ws://");
+        const ws = new WebSocket(`${wsUrl}/api/ws?src=${STREAM_NAME}`);
+        ws.binaryType = "arraybuffer";
+        wsRef.current = ws;
+
+        let sourceBuffer: SourceBuffer | null = null;
+        let mimeType = "";
+
+        ws.onmessage = (event) => {
+          if (typeof event.data === "string") {
+            // go2rtc sends codec info as JSON first
+            try {
+              const msg = JSON.parse(event.data);
+              if (msg.type === "mse") {
+                mimeType = msg.value;
+                try {
+                  sourceBuffer = ms.addSourceBuffer(mimeType);
+                  sbRef.current = sourceBuffer;
+                  sourceBuffer.mode = "segments";
+                  sourceBuffer.addEventListener("updateend", () => {
+                    if (queueRef.current.length > 0 && sourceBuffer && !sourceBuffer.updating) {
+                      sourceBuffer.appendBuffer(queueRef.current.shift()!);
+                    }
+                  });
+                  setStatus("live");
+                } catch (e) {
+                  console.error("addSourceBuffer error:", e);
+                  setMode("mp4");
+                }
+              }
+            } catch {
+              // not JSON, ignore
+            }
+          } else if (event.data instanceof ArrayBuffer && sourceBuffer) {
+            if (sourceBuffer.updating) {
+              // Keep buffer from growing too large
+              if (queueRef.current.length < 100) {
+                queueRef.current.push(event.data);
+              }
+            } else {
+              try {
+                sourceBuffer.appendBuffer(event.data);
+              } catch {
+                queueRef.current.push(event.data);
+              }
+            }
+          }
+        };
+
+        ws.onerror = () => {
+          setMode("mp4");
+        };
+
+        ws.onclose = () => {
+          if (status === "live") {
+            setStatus("error");
+            setError("WebSocket spojení ukončeno.");
+          }
+        };
       });
-      pcRef.current = pc;
 
-      // Handle remote tracks
-      pc.ontrack = (event) => {
-        if (videoRef.current && event.streams[0]) {
-          videoRef.current.srcObject = event.streams[0];
-          setStatus("live");
-        }
-      };
-
-      pc.oniceconnectionstatechange = () => {
-        if (pc.iceConnectionState === "failed" || pc.iceConnectionState === "disconnected") {
-          setStatus("error");
-          setError("Spojení přerušeno. Zkus obnovit.");
-        }
-      };
-
-      // We need to receive video and audio
-      pc.addTransceiver("video", { direction: "recvonly" });
-      pc.addTransceiver("audio", { direction: "recvonly" });
-
-      // Create offer
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-
-      // Wait for ICE gathering
-      await new Promise<void>((resolve) => {
-        if (pc.iceGatheringState === "complete") {
-          resolve();
-        } else {
-          pc.onicegatheringstatechange = () => {
-            if (pc.iceGatheringState === "complete") resolve();
-          };
-          // Timeout after 3s
-          setTimeout(resolve, 3000);
-        }
-      });
-
-      // Send offer to go2rtc
-      const res = await fetch(`${GO2RTC_URL}/api/webrtc?src=${STREAM_NAME}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/sdp" },
-        body: pc.localDescription?.sdp,
-      });
-
-      if (!res.ok) {
-        throw new Error(`go2rtc error: ${res.status}`);
-      }
-
-      const answerSdp = await res.text();
-      await pc.setRemoteDescription(new RTCSessionDescription({
-        type: "answer",
-        sdp: answerSdp,
-      }));
-    } catch (err: unknown) {
-      setStatus("error");
-      setError(err instanceof Error ? err.message : "Nepodařilo se připojit ke streamu");
+      videoRef.current.play().catch(() => {});
+    } catch {
+      setMode("mp4");
     }
+  }, [cleanup, status]);
+
+  // MP4 fallback (works everywhere via HTTP)
+  const connectMP4 = useCallback(() => {
+    cleanup();
+    setStatus("connecting");
+    setError("");
+
+    if (!videoRef.current) return;
+
+    const video = videoRef.current;
+    video.src = `${GO2RTC_URL}/api/stream.mp4?src=${STREAM_NAME}`;
+
+    video.oncanplay = () => {
+      setStatus("live");
+      video.play().catch(() => {});
+    };
+
+    video.onerror = () => {
+      setStatus("error");
+      setError("Nepodařilo se načíst MP4 stream. Zkontroluj go2rtc na PC.");
+    };
+  }, [cleanup]);
+
+  // Connect based on mode
+  useEffect(() => {
+    if (isAdmin !== true) return;
+    if (mode === "mse") {
+      connectMSE();
+    } else {
+      connectMP4();
+    }
+    return cleanup;
+  }, [isAdmin, mode, connectMSE, connectMP4, cleanup]);
+
+  function handleRefresh() {
+    setMode("mse");
   }
 
-  // Auto-connect when admin confirmed
-  useEffect(() => {
-    if (isAdmin === true) {
-      connectWebRTC();
-    }
-    return () => {
-      if (pcRef.current) {
-        pcRef.current.close();
-        pcRef.current = null;
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin]);
+  function handleSwitchMode() {
+    setMode(m => m === "mse" ? "mp4" : "mse");
+  }
 
   if (isAdmin === null) {
     return (
@@ -146,12 +196,12 @@ export default function AdminCameraPage() {
             📹 Kamera — Kolejiště
           </h1>
           <p style={{ fontSize: "13px", color: "var(--text-muted)" }}>
-            Živý stream přes WebRTC · Pouze admin
+            Živý stream · Režim: {mode === "mse" ? "MSE (WebSocket)" : "MP4 (HTTP)"}
           </p>
         </div>
-        <div style={{ display: "flex", gap: "8px" }}>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
           <button
-            onClick={connectWebRTC}
+            onClick={handleRefresh}
             disabled={status === "connecting"}
             style={{
               padding: "8px 16px",
@@ -165,7 +215,22 @@ export default function AdminCameraPage() {
               opacity: status === "connecting" ? 0.6 : 1,
             }}
           >
-            🔄 Obnovit stream
+            🔄 Obnovit
+          </button>
+          <button
+            onClick={handleSwitchMode}
+            style={{
+              padding: "8px 16px",
+              background: "var(--bg-card)",
+              color: "var(--text-primary)",
+              border: "1px solid var(--border)",
+              borderRadius: "8px",
+              fontSize: "13px",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            {mode === "mse" ? "📺 MP4 režim" : "⚡ MSE režim"}
           </button>
           <Link
             href="/admin"
@@ -199,7 +264,7 @@ export default function AdminCameraPage() {
         }}
       >
         {status === "connecting" && (
-          <div style={{ color: "#fff", fontSize: "16px", display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
+          <div style={{ position: "absolute", color: "#fff", fontSize: "16px", display: "flex", flexDirection: "column", alignItems: "center", gap: "12px", zIndex: 2 }}>
             <div style={{ width: "32px", height: "32px", border: "3px solid rgba(255,255,255,0.2)", borderTopColor: "var(--accent)", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
             Připojuji se ke streamu...
           </div>
@@ -209,9 +274,9 @@ export default function AdminCameraPage() {
           <div style={{ color: "#ef4444", fontSize: "14px", textAlign: "center", padding: "20px", maxWidth: "400px" }}>
             <div style={{ fontSize: "40px", marginBottom: "12px" }}>⚠️</div>
             {error || "Stream není dostupný"}
-            <div style={{ marginTop: "16px" }}>
+            <div style={{ marginTop: "16px", display: "flex", gap: "8px", justifyContent: "center" }}>
               <button
-                onClick={connectWebRTC}
+                onClick={handleRefresh}
                 style={{
                   padding: "8px 20px",
                   background: "var(--accent)",
@@ -238,7 +303,6 @@ export default function AdminCameraPage() {
           style={{
             width: "100%",
             height: "100%",
-            display: status === "live" ? "block" : "none",
           }}
         />
       </div>
@@ -253,7 +317,7 @@ export default function AdminCameraPage() {
           background: status === "live" ? "#22c55e" : status === "connecting" ? "#f59e0b" : "#ef4444",
         }} />
         <span>
-          {status === "live" && "🟢 Stream aktivní — WebRTC"}
+          {status === "live" && `🟢 Stream aktivní — ${mode === "mse" ? "MSE/WebSocket" : "MP4/HTTP"}`}
           {status === "connecting" && "🟡 Připojování..."}
           {status === "error" && "🔴 Stream nedostupný — zkontroluj go2rtc na PC"}
         </span>
