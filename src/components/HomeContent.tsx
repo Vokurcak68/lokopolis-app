@@ -584,7 +584,7 @@ export default function HomeContent({ data }: { data: HomePageData }) {
               <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px", padding: "16px" }}>
                 <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "12px" }}>⚡ Aktivita na webu</h3>
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                  {activityFeed.slice(0, 8).map((item: ActivityFeedItem) => {
+                  {activityFeed.slice(0, 6).map((item: ActivityFeedItem) => {
                     const icons: Record<string, string> = { article: '📝', listing: '🛒', forum: '💬', shop: '🛍️', member: '👋' };
                     const icon = icons[item.type] || '📌';
                     const labels: Record<string, string> = { article: 'Nový článek', listing: 'Nový inzerát', forum: 'Nové vlákno', shop: 'Nový produkt', member: 'Nový člen' };
