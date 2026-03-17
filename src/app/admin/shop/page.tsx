@@ -1572,6 +1572,16 @@ export default function AdminShopPage() {
               </div>
               <div>
                 <label style={labelStyle}>Galerie náhledů (více souborů)</label>
+                {editProduct?.preview_images && editProduct.preview_images.length > 0 && !previewFiles.length && (
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "8px" }}>
+                    {editProduct.preview_images.map((url: string, i: number) => (
+                      <div key={i} style={{ position: "relative", width: "80px", height: "60px", borderRadius: "8px", overflow: "hidden", border: "1px solid var(--border)" }}>
+                        <Image src={getImageVariant(url, "thumb")} alt={`Náhled ${i + 1}`} fill style={{ objectFit: "contain" }} sizes="80px" unoptimized />
+                      </div>
+                    ))}
+                    <span style={{ fontSize: "12px", color: "var(--text-dimmer)", alignSelf: "center" }}>(nahradit novými)</span>
+                  </div>
+                )}
                 <input type="file" accept="image/*" multiple onChange={(e) => setPreviewFiles(Array.from(e.target.files || []))} style={{ fontSize: "13px", color: "var(--text-body)" }} />
                 <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "4px" }}>Doporučená velikost: 800 × 600 px (4:3)</p>
               </div>

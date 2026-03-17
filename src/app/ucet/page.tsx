@@ -6,7 +6,7 @@ import { useAuth } from "@/components/Auth/AuthProvider";
 import { supabase } from "@/lib/supabase";
 import type { Profile, ShopOrder, UserAddress } from "@/types/database";
 
-type Tab = "osobni" | "adresy" | "dodaci" | "heslo" | "objednavky";
+type Tab = "osobni" | "adresy" | "dodaci" | "platba" | "heslo" | "objednavky";
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   pending: { label: "Čeká na platbu", color: "#f59e0b" },
@@ -64,6 +64,14 @@ export default function AccountPage() {
     billing_dic: "",
     billing_company: "",
   });
+
+  // Bank account form
+  const [bankForm, setBankForm] = useState({
+    bank_account: "",
+    bank_iban: "",
+  });
+  const [bankMsg, setBankMsg] = useState("");
+  const [bankSaving, setBankSaving] = useState(false);
 
   // Password form
   const [passwordForm, setPasswordForm] = useState({
@@ -137,6 +145,10 @@ export default function AccountPage() {
       billing_ico: profile.billing_ico || "",
       billing_dic: profile.billing_dic || "",
       billing_company: profile.billing_company || "",
+    });
+    setBankForm({
+      bank_account: profile.bank_account || "",
+      bank_iban: profile.bank_iban || "",
     });
   }, [profile]);
 
@@ -217,6 +229,22 @@ export default function AccountPage() {
 
     setSaveMsg(error ? "❌ " + error.message : "✅ Uloženo");
     setSaving(false);
+  }
+
+  // Save bank account
+  async function saveBank() {
+    if (!user) return;
+    setBankSaving(true);
+    setBankMsg("");
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        bank_account: bankForm.bank_account || null,
+        bank_iban: bankForm.bank_iban || null,
+      })
+      .eq("id", user.id);
+    setBankMsg(error ? "❌ " + error.message : "✅ Uloženo");
+    setBankSaving(false);
   }
 
   // Change password
@@ -388,6 +416,7 @@ export default function AccountPage() {
     { key: "osobni", label: "Osobní údaje", icon: "👤" },
     { key: "adresy", label: "Adresy", icon: "🏠" },
     { key: "dodaci", label: "Dodací adresy", icon: "📦" },
+    { key: "platba", label: "Platební údaje", icon: "💳" },
     { key: "heslo", label: "Změna hesla", icon: "🔒" },
     { key: "objednavky", label: "Objednávky", icon: "📋" },
   ];
@@ -835,6 +864,48 @@ export default function AccountPage() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* === PLATEBNÍ ÚDAJE === */}
+      {tab === "platba" && (
+        <div style={{ maxWidth: "500px" }}>
+          <p style={{ fontSize: "14px", color: "var(--text-dimmer)", marginBottom: "20px", lineHeight: 1.5 }}>
+            Bankovní účet pro výplatu z bazarových transakcí (escrow). Tyto údaje se nikde veřejně nezobrazují.
+          </p>
+          <div style={{ display: "grid", gap: "16px" }}>
+            <div>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "var(--text-dimmer)", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Číslo účtu (CZ formát)</label>
+              <input
+                type="text"
+                placeholder="123456789/0800"
+                value={bankForm.bank_account}
+                onChange={(e) => setBankForm({ ...bankForm, bank_account: e.target.value })}
+                style={{ width: "100%", padding: "10px 14px", borderRadius: "8px", border: "1px solid var(--border-input)", background: "var(--bg-input)", color: "var(--text-body)", fontSize: "14px" }}
+              />
+              <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "4px" }}>Např. 123456789/0800</p>
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "var(--text-dimmer)", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>IBAN (volitelné)</label>
+              <input
+                type="text"
+                placeholder="CZ65 0800 0000 0012 3456 789"
+                value={bankForm.bank_iban}
+                onChange={(e) => setBankForm({ ...bankForm, bank_iban: e.target.value })}
+                style={{ width: "100%", padding: "10px 14px", borderRadius: "8px", border: "1px solid var(--border-input)", background: "var(--bg-input)", color: "var(--text-body)", fontSize: "14px" }}
+              />
+            </div>
+          </div>
+          <div style={{ marginTop: "20px", display: "flex", alignItems: "center", gap: "12px" }}>
+            <button
+              onClick={saveBank}
+              disabled={bankSaving}
+              style={{ padding: "10px 24px", borderRadius: "8px", background: "var(--accent)", color: "var(--accent-text-on)", fontWeight: 600, fontSize: "14px", border: "none", cursor: bankSaving ? "wait" : "pointer", opacity: bankSaving ? 0.5 : 1 }}
+            >
+              {bankSaving ? "Ukládám…" : "Uložit"}
+            </button>
+            {bankMsg && <span style={{ fontSize: "13px" }}>{bankMsg}</span>}
+          </div>
         </div>
       )}
 

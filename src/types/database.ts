@@ -24,6 +24,8 @@ export interface Profile {
   billing_ico: string | null;
   billing_dic: string | null;
   billing_company: string | null;
+  bank_account: string | null;
+  bank_iban: string | null;
   permanent_discount_percent: number;
   volume_discount_percent: number;
   volume_discount_threshold: number;
