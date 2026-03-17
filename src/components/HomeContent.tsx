@@ -21,115 +21,12 @@ import type {
   ActivityFeedItem,
 } from "@/app/home-data";
 import { DEFAULT_HOMEPAGE_SECTIONS } from "@/app/home-data";
+import BannerCarousel from "@/components/BannerCarousel";
 
 function optimizeImageUrl(url: string, width: number = 400): string {
   if (!url) return "";
   const height = Math.round(width * 0.75);
   return url.replace("/object/public/", "/render/image/public/").concat(`?width=${width}&height=${height}&resize=contain&quality=75`);
-}
-
-/* ============================================================
-   BANNER CLICK TRACKER
-   ============================================================ */
-function trackBannerClick(bannerId: string) {
-  fetch("/api/banners/click", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id: bannerId }),
-  }).catch(() => {});
-}
-
-/* ============================================================
-   LEADERBOARD BANNER (Pozice 1 — pod hero)
-   ============================================================ */
-function LeaderboardBanner({ banners }: { banners: HomeBanner[] }) {
-  // Pick one banner: rotate daily by priority, then by day-of-year
-  if (!banners || banners.length === 0) return null;
-  const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000);
-  const banner = banners.length === 1 ? banners[0] : banners[dayOfYear % banners.length];
-
-  return (
-    <section style={{ maxWidth: "1200px", margin: "24px auto 0", padding: "0 20px" }}>
-      <a
-        href={banner.link_url}
-        onClick={() => trackBannerClick(banner.id)}
-        style={{ display: "block", textDecoration: "none", borderRadius: "12px", overflow: "hidden", position: "relative", background: "var(--bg-card)", border: "1px solid var(--border)", transition: "box-shadow 0.2s" }}
-        onMouseEnter={e => (e.currentTarget.style.boxShadow = "0 4px 20px rgba(240,160,48,0.15)")}
-        onMouseLeave={e => (e.currentTarget.style.boxShadow = "none")}
-      >
-        {banner.image_url ? (
-          <div style={{ width: "100%", height: "0", paddingBottom: "12%", position: "relative", minHeight: "80px" }}>
-            <Image src={banner.image_url} alt={banner.title} fill style={{ objectFit: "cover" }} sizes="1200px" priority />
-            {/* Overlay text */}
-            <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px", background: "linear-gradient(90deg, rgba(0,0,0,0.5) 0%, transparent 60%)" }}>
-              <div>
-                <div style={{ fontSize: "18px", fontWeight: 700, color: "#fff" }}>{banner.title}</div>
-                {banner.subtitle && <div style={{ fontSize: "14px", color: "rgba(255,255,255,0.8)", marginTop: "2px" }}>{banner.subtitle}</div>}
-              </div>
-              {banner.badge_text && (
-                <span style={{ fontSize: "11px", padding: "3px 10px", borderRadius: "4px", background: "rgba(255,255,255,0.2)", color: "#fff", backdropFilter: "blur(4px)", flexShrink: 0 }}>
-                  {banner.badge_text}
-                </span>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div style={{ padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "linear-gradient(135deg, var(--bg-card), var(--bg-page))" }}>
-            <div>
-              <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary)" }}>{banner.title}</div>
-              {banner.subtitle && <div style={{ fontSize: "13px", color: "var(--text-muted)", marginTop: "2px" }}>{banner.subtitle}</div>}
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              {banner.badge_text && (
-                <span style={{ fontSize: "11px", padding: "3px 10px", borderRadius: "4px", background: "var(--accent)", color: "#000", fontWeight: 600 }}>
-                  {banner.badge_text}
-                </span>
-              )}
-              <span style={{ fontSize: "14px", color: "var(--accent)" }}>→</span>
-            </div>
-          </div>
-        )}
-      </a>
-    </section>
-  );
-}
-
-/* ============================================================
-   NATIVE BANNER CARD (Pozice 2/5 — vmíchaná v seznamu)
-   ============================================================ */
-function NativeBannerCard({ banner }: { banner: HomeBanner }) {
-  return (
-    <a
-      href={banner.link_url}
-      onClick={() => trackBannerClick(banner.id)}
-      style={{
-        display: "block",
-        textDecoration: "none",
-        background: "var(--bg-card)",
-        border: "1px solid var(--accent-border)",
-        borderRadius: "12px",
-        overflow: "hidden",
-        transition: "transform 0.2s, box-shadow 0.2s",
-      }}
-      onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 4px 20px rgba(240,160,48,0.15)"; }}
-      onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; }}
-    >
-      {banner.image_url && (
-        <div style={{ position: "relative", width: "100%", paddingBottom: "75%", background: "var(--bg-page)" }}>
-          <Image src={banner.image_url} alt={banner.title} fill style={{ objectFit: "contain" }} sizes="300px" />
-        </div>
-      )}
-      <div style={{ padding: "12px 16px" }}>
-        {banner.badge_text && (
-          <span style={{ fontSize: "10px", padding: "2px 8px", borderRadius: "3px", background: "var(--accent)", color: "#000", fontWeight: 600, display: "inline-block", marginBottom: "6px" }}>
-            {banner.badge_text}
-          </span>
-        )}
-        <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>{banner.title}</div>
-        {banner.subtitle && <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "2px" }}>{banner.subtitle}</div>}
-      </div>
-    </a>
-  );
 }
 
 /* ============================================================
@@ -445,7 +342,7 @@ export default function HomeContent({ data }: { data: HomePageData }) {
       </section>
 
       {/* ===================== 🏠 LEADERBOARD BANNER (Pozice 1) ===================== */}
-      {sections.leaderboard_banner && <LeaderboardBanner banners={heroBanners} />}
+      {sections.leaderboard_banner && <BannerCarousel banners={heroBanners} variant="leaderboard" />}
 
       {/* ===================== 📰 NEJNOVĚJŠÍ Z KOMUNITY ===================== */}
       {sections.latest_articles && <section style={{ maxWidth: "1200px", margin: "40px auto 0", padding: "0 20px" }}>
@@ -623,33 +520,7 @@ export default function HomeContent({ data }: { data: HomePageData }) {
             {sections.sidebar_banner && (() => {
               const sidebarBanners = banners.filter((b: HomeBanner) => b.position === "sidebar_native");
               if (sidebarBanners.length === 0) return null;
-              const banner = sidebarBanners[Math.floor((Date.now() / 60000) % sidebarBanners.length)];
-              return (
-                <a href={banner.link_url} target="_blank" rel="noopener noreferrer" style={{ display: "block", textDecoration: "none" }}>
-                  <div style={{
-                    background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px",
-                    overflow: "hidden", transition: "border-color 0.2s",
-                  }}
-                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
-                  >
-                    {banner.image_url && (
-                      <div style={{ position: "relative", width: "100%", paddingBottom: "75%" }}>
-                        <Image src={banner.image_url} alt={banner.title} fill style={{ objectFit: "cover" }} sizes="340px" />
-                      </div>
-                    )}
-                    <div style={{ padding: "12px 14px" }}>
-                      {banner.badge_text && (
-                        <span style={{ fontSize: "10px", fontWeight: 700, background: "var(--accent)", color: "#000", padding: "2px 6px", borderRadius: "4px", marginBottom: "4px", display: "inline-block" }}>
-                          {banner.badge_text}
-                        </span>
-                      )}
-                      <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)", marginTop: "4px" }}>{banner.title}</div>
-                      {banner.subtitle && <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "2px" }}>{banner.subtitle}</div>}
-                    </div>
-                  </div>
-                </a>
-              );
+              return <BannerCarousel banners={sidebarBanners} variant="sidebar" />;
             })()}
           </div>
         </div>
@@ -800,24 +671,8 @@ export default function HomeContent({ data }: { data: HomePageData }) {
               });
 
               if (hasBazarBanner) {
-                const b = bazarBanners[0];
                 const bannerCard = (
-                  <a key="bazar-native" href={b.link_url} onClick={() => trackBannerClick(b.id)} style={{ textDecoration: "none" }}>
-                    <div style={{ background: "var(--bg-card)", border: "1px solid var(--accent-border)", borderRadius: "12px", overflow: "hidden", transition: "all 0.2s", height: "100%", position: "relative" }} onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--accent-border)"; e.currentTarget.style.transform = "translateY(0)"; }}>
-                      <div style={{ position: "relative", width: "100%", paddingBottom: "75%", background: "var(--bg-page)" }}>
-                        {b.image_url ? (
-                          <Image src={b.image_url} alt={b.title} fill style={{ objectFit: "contain" }} sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw" />
-                        ) : (
-                          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "32px", color: "var(--accent)" }}>🛡️</div>
-                        )}
-                      </div>
-                      <div style={{ padding: "12px" }}>
-                        {b.badge_text && <div style={{ fontSize: "10px", fontWeight: 600, padding: "2px 8px", borderRadius: "4px", background: "var(--accent)", color: "#000", display: "inline-block", marginBottom: "6px" }}>{b.badge_text}</div>}
-                        <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "4px", lineHeight: 1.3, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{b.title}</div>
-                        {b.subtitle && <div style={{ fontSize: "12px", color: "var(--text-muted)", lineHeight: 1.3, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{b.subtitle}</div>}
-                      </div>
-                    </div>
-                  </a>
+                  <BannerCarousel key="bazar-native" banners={bazarBanners} variant="native_card" />
                 );
                 items.splice(bannerPos, 0, bannerCard);
               }
@@ -940,26 +795,8 @@ export default function HomeContent({ data }: { data: HomePageData }) {
               });
 
               if (hasShopBanner) {
-                const b = articleBanners[0];
                 const shopBannerCard = (
-                  <a key="article-native" href={b.link_url} onClick={() => trackBannerClick(b.id)} style={{ textDecoration: "none" }}>
-                    <div style={{ background: "var(--bg-card)", border: "1px solid var(--accent-border)", borderRadius: "12px", overflow: "hidden", transition: "all 0.2s", height: "100%", display: "flex", flexDirection: "column" }} onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--accent-border)"; e.currentTarget.style.transform = "translateY(0)"; }}>
-                      <div style={{ position: "relative", width: "100%", paddingBottom: "75%", background: "var(--bg-page)" }}>
-                        {b.image_url ? (
-                          <Image src={b.image_url} alt={b.title} fill style={{ objectFit: "contain" }} sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw" />
-                        ) : (
-                          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "40px", color: "var(--accent)" }}>⭐</div>
-                        )}
-                        <div style={{ position: "absolute", top: "8px", left: "8px", padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, background: "var(--accent)", color: "#000" }}>
-                          {b.badge_text || "Sponzorováno"}
-                        </div>
-                      </div>
-                      <div style={{ padding: "16px", flex: 1, display: "flex", flexDirection: "column" }}>
-                        <h3 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)", lineHeight: 1.4, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", flex: 1 }}>{b.title}</h3>
-                        {b.subtitle && <div style={{ fontSize: "12px", color: "var(--text-dimmer)", marginTop: "8px" }}>{b.subtitle}</div>}
-                      </div>
-                    </div>
-                  </a>
+                  <BannerCarousel key="article-native" banners={articleBanners} variant="native_card" />
                 );
                 shopItems.splice(shopBannerPos, 0, shopBannerCard);
               }
