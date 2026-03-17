@@ -140,13 +140,13 @@ export default function AdminBannersPage() {
     }
   }
 
-  const inputStyle: React.CSSProperties = { width: "100%", padding: "8px 12px", borderRadius: "8px", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-primary)", fontSize: "14px" };
+  const inputStyle: React.CSSProperties = { width: "100%", padding: "8px 12px", borderRadius: "8px", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-primary)", fontSize: "14px", boxSizing: "border-box" };
   const labelStyle: React.CSSProperties = { display: "block", fontSize: "13px", fontWeight: 600, marginBottom: "4px", color: "var(--text-secondary)" };
 
   if (loading) return <div style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>Načítám...</div>;
 
   return (
-    <div style={{ maxWidth: "1000px", margin: "0 auto", padding: "32px 20px" }}>
+    <div style={{ maxWidth: "1000px", margin: "0 auto", padding: "32px 20px", overflowX: "hidden" }}>
       <h1 style={{ fontSize: "24px", fontWeight: 700, marginBottom: "32px" }}>🖼️ Správa bannerů</h1>
 
       {/* Form */}
@@ -155,7 +155,7 @@ export default function AdminBannersPage() {
           {editId ? "✏️ Upravit banner" : "➕ Nový banner"}
         </h2>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "16px" }}>
           <div>
             <label style={labelStyle}>Pozice</label>
             <select value={form.position} onChange={e => setForm(f => ({ ...f, position: e.target.value as BannerPosition }))} style={inputStyle}>
@@ -185,7 +185,7 @@ export default function AdminBannersPage() {
           <div>
             <label style={labelStyle}>Obrázek</label>
             <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-              <input type="file" accept="image/*" onChange={handleImageUpload} disabled={uploading} style={{ fontSize: "13px" }} />
+              <input type="file" accept="image/*" onChange={handleImageUpload} disabled={uploading} style={{ fontSize: "13px", maxWidth: "100%" }} />
               {uploading && <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>⏳</span>}
             </div>
             <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "4px" }}>
@@ -235,7 +235,7 @@ export default function AdminBannersPage() {
           <p style={{ color: "var(--text-muted)", textAlign: "center", padding: "40px 0" }}>Žádné bannery. Vytvořte první ☝️</p>
         )}
         {banners.map(b => (
-          <div key={b.id} style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "16px", display: "flex", gap: "16px", alignItems: "center", opacity: b.is_active ? 1 : 0.5 }}>
+          <div key={b.id} style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "16px", display: "flex", flexWrap: "wrap", gap: "12px", alignItems: "center", opacity: b.is_active ? 1 : 0.5 }}>
             {b.image_url && (
               <div style={{ width: "120px", height: "80px", position: "relative", borderRadius: "6px", overflow: "hidden", flexShrink: 0, background: "var(--bg-page)" }}>
                 <Image src={optimizeImageUrl(b.image_url, 240)} alt="" fill style={{ objectFit: "contain" }} sizes="120px" unoptimized />
