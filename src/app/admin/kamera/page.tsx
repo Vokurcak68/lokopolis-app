@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 
@@ -8,10 +8,17 @@ import Link from "next/link";
 const GO2RTC_URL = "https://rid-weekly-decade-homework.trycloudflare.com";
 const STREAM_NAME = "kolejiste";
 
+function getWsUrl() {
+  return GO2RTC_URL.replace("https://", "wss://").replace("http://", "ws://");
+}
+
 export default function AdminCameraPage() {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const msRef = useRef<MediaSource | null>(null);
+  const [status, setStatus] = useState<"checking" | "connecting" | "live" | "error">("checking");
+  const [error, setError] = useState("");
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
-  const [iframeKey, setIframeKey] = useState(0);
-  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -25,6 +32,128 @@ export default function AdminCameraPage() {
       setIsAdmin(profile?.role === "admin");
     })();
   }, []);
+
+  function cleanup() {
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    if (msRef.current && msRef.current.readyState === "open") {
+      try { msRef.current.endOfStream(); } catch { /* ok */ }
+    }
+    msRef.current = null;
+  }
+
+  function startStream() {
+    cleanup();
+    setStatus("connecting");
+    setError("");
+
+    const video = videoRef.current;
+    if (!video) return;
+
+    // Check MSE support
+    if (!("MediaSource" in window) || !MediaSource.isTypeSupported('video/mp4; codecs="avc1.640029"')) {
+      setStatus("error");
+      setError("Prohlížeč nepodporuje MSE/H264. Zkus Chrome nebo Edge.");
+      return;
+    }
+
+    const ms = new MediaSource();
+    msRef.current = ms;
+    video.src = URL.createObjectURL(ms);
+
+    ms.addEventListener("sourceopen", () => {
+      const wsUrl = `${getWsUrl()}/api/ws?src=${STREAM_NAME}`;
+      const ws = new WebSocket(wsUrl);
+      ws.binaryType = "arraybuffer";
+      wsRef.current = ws;
+
+      let sb: SourceBuffer | null = null;
+      const queue: ArrayBuffer[] = [];
+
+      function appendNext() {
+        if (sb && !sb.updating && queue.length > 0) {
+          try {
+            sb.appendBuffer(queue.shift()!);
+          } catch (e) {
+            console.warn("appendBuffer error:", e);
+          }
+        }
+      }
+
+      ws.onopen = () => {
+        // go2rtc expects a JSON message to start MSE stream
+        // Send empty to use default
+      };
+
+      ws.onmessage = (event) => {
+        if (typeof event.data === "string") {
+          // go2rtc sends JSON with codec info: {"type":"mse","value":"video/mp4; codecs=\"avc1.64001F\""}
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.type === "mse" && msg.value && !sb) {
+              try {
+                sb = ms.addSourceBuffer(msg.value);
+                sb.mode = "segments";
+                sb.addEventListener("updateend", () => {
+                  appendNext();
+                  // Keep buffer trimmed — max 10s behind
+                  if (sb && !sb.updating && video.buffered.length > 0) {
+                    const end = video.buffered.end(video.buffered.length - 1);
+                    const start = video.buffered.start(0);
+                    if (end - start > 15) {
+                      try { sb.remove(0, end - 10); } catch { /* ok */ }
+                    }
+                  }
+                });
+                setStatus("live");
+                video.play().catch(() => {});
+              } catch (e) {
+                setStatus("error");
+                setError(`Codec nepodporovaný: ${msg.value}`);
+                ws.close();
+              }
+            }
+          } catch { /* not JSON, ignore */ }
+        } else if (event.data instanceof ArrayBuffer && sb) {
+          if (sb.updating || queue.length > 0) {
+            // Drop old frames if queue gets too large
+            if (queue.length > 50) {
+              queue.splice(0, queue.length - 10);
+            }
+            queue.push(event.data);
+          } else {
+            try {
+              sb.appendBuffer(event.data);
+            } catch {
+              queue.push(event.data);
+            }
+          }
+        }
+      };
+
+      ws.onerror = () => {
+        setStatus("error");
+        setError("WebSocket spojení selhalo. Zkontroluj go2rtc na PC.");
+      };
+
+      ws.onclose = (e) => {
+        if (status !== "error") {
+          setStatus("error");
+          setError(`Stream ukončen (kód ${e.code}). Zkus obnovit.`);
+        }
+      };
+    }, { once: true });
+  }
+
+  // Auto-start
+  useEffect(() => {
+    if (isAdmin !== true) return;
+    startStream();
+    return cleanup;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin]);
 
   if (isAdmin === null) {
     return (
@@ -58,7 +187,8 @@ export default function AdminCameraPage() {
         </div>
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
           <button
-            onClick={() => { setLoaded(false); setIframeKey(k => k + 1); }}
+            onClick={startStream}
+            disabled={status === "connecting"}
             style={{
               padding: "8px 16px",
               background: "var(--accent)",
@@ -67,30 +197,12 @@ export default function AdminCameraPage() {
               borderRadius: "8px",
               fontSize: "13px",
               fontWeight: 600,
-              cursor: "pointer",
+              cursor: status === "connecting" ? "wait" : "pointer",
+              opacity: status === "connecting" ? 0.6 : 1,
             }}
           >
             🔄 Obnovit
           </button>
-          <a
-            href={`${GO2RTC_URL}/stream.html?src=${STREAM_NAME}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              padding: "8px 16px",
-              background: "var(--bg-card)",
-              color: "var(--text-primary)",
-              border: "1px solid var(--border)",
-              borderRadius: "8px",
-              fontSize: "13px",
-              fontWeight: 600,
-              textDecoration: "none",
-              display: "inline-flex",
-              alignItems: "center",
-            }}
-          >
-            🔗 Plné okno
-          </a>
           <Link
             href="/admin"
             style={{
@@ -109,7 +221,7 @@ export default function AdminCameraPage() {
         </div>
       </div>
 
-      {/* Video player — go2rtc embedded player */}
+      {/* Video player */}
       <div
         style={{
           background: "#000",
@@ -119,38 +231,49 @@ export default function AdminCameraPage() {
           aspectRatio: "16/9",
         }}
       >
-        {!loaded && (
+        {status === "connecting" && (
           <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2, background: "rgba(0,0,0,0.7)" }}>
             <div style={{ color: "#fff", fontSize: "16px", display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
               <div style={{ width: "32px", height: "32px", border: "3px solid rgba(255,255,255,0.2)", borderTopColor: "var(--accent)", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
-              Načítám stream...
+              Připojuji se...
             </div>
           </div>
         )}
 
-        <iframe
-          key={iframeKey}
-          src={`${GO2RTC_URL}/stream.html?src=${STREAM_NAME}`}
-          style={{
-            width: "100%",
-            height: "100%",
-            border: "none",
-            display: "block",
-          }}
-          allow="autoplay; fullscreen"
-          onLoad={() => setLoaded(true)}
+        {status === "error" && (
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2, background: "rgba(0,0,0,0.85)" }}>
+            <div style={{ color: "#ef4444", fontSize: "14px", textAlign: "center", padding: "20px", maxWidth: "400px" }}>
+              <div style={{ fontSize: "40px", marginBottom: "12px" }}>⚠️</div>
+              {error}
+              <div style={{ marginTop: "16px" }}>
+                <button onClick={startStream} style={{ padding: "8px 20px", background: "var(--accent)", color: "var(--accent-text-on)", border: "none", borderRadius: "8px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
+                  Zkusit znovu
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <video
+          ref={videoRef}
+          autoPlay
+          muted
+          playsInline
+          controls
+          style={{ width: "100%", height: "100%", display: "block" }}
         />
       </div>
 
-      {/* Status */}
+      {/* Status bar */}
       <div style={{ marginTop: "12px", fontSize: "12px", color: "var(--text-dimmer)", display: "flex", gap: "12px", alignItems: "center" }}>
         <span style={{
           display: "inline-block", width: "8px", height: "8px", borderRadius: "50%",
-          background: loaded ? "#22c55e" : "#f59e0b",
+          background: status === "live" ? "#22c55e" : status === "connecting" ? "#f59e0b" : "#ef4444",
         }} />
-        <span>{loaded ? "Stream načten" : "Načítání..."}</span>
-        <span style={{ marginLeft: "auto", opacity: 0.5 }}>
-          go2rtc · Cloudflare Tunnel
+        <span>
+          {status === "live" && "Stream aktivní · MSE/WebSocket"}
+          {status === "connecting" && "Připojování..."}
+          {status === "error" && "Stream nedostupný"}
         </span>
       </div>
 
