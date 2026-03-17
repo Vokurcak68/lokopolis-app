@@ -236,7 +236,7 @@ export default function AdminBannersPage() {
         {banners.map(b => (
           <div key={b.id} style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "16px", display: "flex", gap: "16px", alignItems: "center", opacity: b.is_active ? 1 : 0.5 }}>
             {b.image_url && (
-              <div style={{ width: "120px", height: "45px", position: "relative", borderRadius: "6px", overflow: "hidden", flexShrink: 0, background: "var(--bg-page)" }}>
+              <div style={{ width: "120px", height: "80px", position: "relative", borderRadius: "6px", overflow: "hidden", flexShrink: 0, background: "var(--bg-page)" }}>
                 <Image src={optimizeImageUrl(b.image_url || "", 240)} alt="" fill style={{ objectFit: "contain" }} sizes="120px" unoptimized />
               </div>
             )}
