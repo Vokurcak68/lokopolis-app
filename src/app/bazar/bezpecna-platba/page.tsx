@@ -184,6 +184,18 @@ export default function SafePaymentInfoPage() {
         >
           🚂 Prohlédnout bazar →
         </Link>
+        <div style={{ marginTop: "12px" }}>
+          <Link
+            href="/bazar/podminky-escrow"
+            style={{
+              fontSize: "13px",
+              color: "var(--text-dimmer)",
+              textDecoration: "underline",
+            }}
+          >
+            Podmínky služby Bezpečná platba
+          </Link>
+        </div>
       </div>
     </div>
   );

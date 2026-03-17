@@ -121,6 +121,9 @@ export default function Footer() {
             <Link href="/ochrana-udaju" style={{ display: "block", fontSize: "13px", color: "var(--text-dimmer)", padding: "4px 0", textDecoration: "none" }}>
               Ochrana osobních údajů
             </Link>
+            <Link href="/bazar/podminky-escrow" style={{ display: "block", fontSize: "13px", color: "var(--text-dimmer)", padding: "4px 0", textDecoration: "none" }}>
+              Podmínky Bezpečné platby
+            </Link>
           </div>
         </div>
 
