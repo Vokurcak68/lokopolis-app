@@ -12,7 +12,7 @@ interface SectionConfig {
 }
 
 const SECTIONS: SectionConfig[] = [
-  { key: "leaderboard_banner", label: "Leaderboard banner", description: "Reklamní banner pod hero sekcí" },
+  { key: "leaderboard_banner", label: "Horní banner", description: "Reklamní banner pod hero sekcí" },
   { key: "latest_articles", label: "Nejnovější z komunity", description: "Nejnovější články + postranní panel s fórem a bazarem" },
   { key: "forum_bar", label: "Aktivní diskuze", description: "Lišta se statistikami fóra a odkazem" },
   { key: "categories", label: "Kategorie", description: "Mřížka kategorií článků" },
