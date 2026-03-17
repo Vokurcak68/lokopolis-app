@@ -40,14 +40,34 @@ const ALLOWED_EXTENSIONS = ["pdf", "stl", "zip", "rar", "7z", "jpg", "jpeg", "pn
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
 
-function getFileIcon(fileType: string | null, fileName: string): { emoji: string; colorClass: string } {
+function getFileIcon(fileType: string | null, fileName: string): { icon: React.ReactNode; colorClass: string } {
   const ext = fileName.split(".").pop()?.toLowerCase() || "";
-  if (fileType?.includes("pdf") || ext === "pdf") return { emoji: "📄", colorClass: "pdf" };
-  if (ext === "stl" || fileType?.includes("stl")) return { emoji: "🧊", colorClass: "stl" };
-  if (ext === "zip" || ext === "rar" || ext === "7z") return { emoji: "📦", colorClass: "zip" };
-  if (fileType?.includes("image") || ["jpg", "jpeg", "png", "svg"].includes(ext)) return { emoji: "🖼️", colorClass: "img" };
-  if (ext === "dxf") return { emoji: "📐", colorClass: "dxf" };
-  return { emoji: "📎", colorClass: "other" };
+  // SVG icons for a cleaner, more professional look
+  const svgStyle = { width: "28px", height: "28px" };
+  if (fileType?.includes("pdf") || ext === "pdf") return {
+    icon: <svg style={svgStyle} viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15h1.5a1.5 1.5 0 000-3H9v6"/><path d="M15 12h2"/><path d="M15 15h1"/></svg>,
+    colorClass: "pdf"
+  };
+  if (ext === "stl" || fileType?.includes("stl")) return {
+    icon: <svg style={svgStyle} viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>,
+    colorClass: "stl"
+  };
+  if (ext === "zip" || ext === "rar" || ext === "7z") return {
+    icon: <svg style={svgStyle} viewBox="0 0 24 24" fill="none" stroke="#667eea" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 8v13H3V3h13"/><path d="M12 3v4h4"/><rect x="9" y="13" width="6" height="4" rx="1"/><line x1="12" y1="13" x2="12" y2="11"/></svg>,
+    colorClass: "zip"
+  };
+  if (fileType?.includes("image") || ["jpg", "jpeg", "png", "svg"].includes(ext)) return {
+    icon: <svg style={svgStyle} viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>,
+    colorClass: "img"
+  };
+  if (ext === "dxf") return {
+    icon: <svg style={svgStyle} viewBox="0 0 24 24" fill="none" stroke="#a064dc" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>,
+    colorClass: "dxf"
+  };
+  return {
+    icon: <svg style={svgStyle} viewBox="0 0 24 24" fill="none" stroke="#8a8ea0" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>,
+    colorClass: "other"
+  };
 }
 
 function formatFileSize(bytes: number | null): string {
@@ -329,7 +349,7 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
               {file ? (
                 <div>
                   <div style={{ fontSize: "32px", marginBottom: "8px" }}>
-                    {getFileIcon(file.type, file.name).emoji}
+                    {getFileIcon(file.type, file.name).icon}
                   </div>
                   <div style={{ fontSize: "14px", color: "var(--text-body)", fontWeight: 500 }}>{file.name}</div>
                   <div style={{ fontSize: "12px", color: "var(--text-dimmer)", marginTop: "4px" }}>
@@ -613,7 +633,6 @@ export default function DownloadsPage() {
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      fontSize: "24px",
                       flexShrink: 0,
                       background:
                         icon.colorClass === "pdf" ? "var(--danger-bg)" :
@@ -624,7 +643,7 @@ export default function DownloadsPage() {
                         "rgba(138,142,160,0.15)",
                     }}
                   >
-                    {icon.emoji}
+                    {icon.icon}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <h3 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-body)", marginBottom: "4px", lineHeight: 1.4 }}>
