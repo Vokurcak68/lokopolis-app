@@ -1,9 +1,12 @@
-import { getHomePageData } from "@/app/home-data";
+import { getHomePageData, getHomepageSections } from "@/app/home-data";
 import HomeContent from "@/components/HomeContent";
 
 export const revalidate = 60;
 
 export default async function Home() {
-  const data = await getHomePageData();
-  return <HomeContent data={data} />;
+  const [data, sections] = await Promise.all([
+    getHomePageData(),
+    getHomepageSections(),
+  ]);
+  return <HomeContent data={{ ...data, sections }} />;
 }

@@ -689,9 +689,28 @@ async function fetchHomeDataInternal(): Promise<HomePageData> {
   };
 }
 
-// Cache the entire homepage data for 60 seconds
+// Cache the entire homepage data for 300 seconds
 export const getHomePageData = unstable_cache(
   fetchHomeDataInternal,
   ["homepage-data"],
   { revalidate: 300 }
 );
+
+// Fetch sections visibility FRESH (no cache) — for instant admin toggle
+export async function getHomepageSections(): Promise<HomepageSections> {
+  const supabase = createServerSupabaseClient();
+  if (!supabase) return { ...DEFAULT_HOMEPAGE_SECTIONS };
+  try {
+    const { data } = await supabase
+      .from("site_settings")
+      .select("value")
+      .eq("key", "homepage_sections")
+      .single();
+    if (data?.value && typeof data.value === "object") {
+      return { ...DEFAULT_HOMEPAGE_SECTIONS, ...(data.value as Record<string, boolean>) };
+    }
+  } catch {
+    // fallback
+  }
+  return { ...DEFAULT_HOMEPAGE_SECTIONS };
+}
