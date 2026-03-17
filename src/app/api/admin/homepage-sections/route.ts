@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseAdmin = createClient(
@@ -81,6 +82,13 @@ export async function PUT(req: NextRequest) {
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Invalidate ISR cache for homepage
+  try {
+    revalidatePath("/", "page");
+  } catch {
+    // revalidatePath may fail in some contexts — non-critical
   }
 
   return NextResponse.json({ ok: true });
