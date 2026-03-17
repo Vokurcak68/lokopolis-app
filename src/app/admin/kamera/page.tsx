@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 
@@ -8,22 +8,21 @@ import Link from "next/link";
 const GO2RTC_URL = "https://rid-weekly-decade-homework.trycloudflare.com";
 const STREAM_NAME = "kolejiste";
 
-function getWsUrl() {
-  return GO2RTC_URL.replace("https://", "wss://").replace("http://", "ws://");
-}
-
 export default function AdminCameraPage() {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const wsRef = useRef<WebSocket | null>(null);
-  const msRef = useRef<MediaSource | null>(null);
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [status, setStatus] = useState<"checking" | "connecting" | "live" | "error">("checking");
   const [error, setError] = useState("");
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setIsAdmin(false); return; }
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        setIsAdmin(false);
+        return;
+      }
       const { data: profile } = await supabase
         .from("profiles")
         .select("role")
@@ -33,127 +32,14 @@ export default function AdminCameraPage() {
     })();
   }, []);
 
-  function cleanup() {
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
-    }
-    if (msRef.current && msRef.current.readyState === "open") {
-      try { msRef.current.endOfStream(); } catch { /* ok */ }
-    }
-    msRef.current = null;
-  }
-
-  function startStream() {
-    cleanup();
-    setStatus("connecting");
-    setError("");
-
-    const video = videoRef.current;
-    if (!video) return;
-
-    // Check MSE support
-    if (!("MediaSource" in window) || !MediaSource.isTypeSupported('video/mp4; codecs="avc1.640029"')) {
-      setStatus("error");
-      setError("Prohlížeč nepodporuje MSE/H264. Zkus Chrome nebo Edge.");
-      return;
-    }
-
-    const ms = new MediaSource();
-    msRef.current = ms;
-    video.src = URL.createObjectURL(ms);
-
-    ms.addEventListener("sourceopen", () => {
-      const wsUrl = `${getWsUrl()}/api/ws?src=${STREAM_NAME}`;
-      const ws = new WebSocket(wsUrl);
-      ws.binaryType = "arraybuffer";
-      wsRef.current = ws;
-
-      let sb: SourceBuffer | null = null;
-      const queue: ArrayBuffer[] = [];
-
-      function appendNext() {
-        if (sb && !sb.updating && queue.length > 0) {
-          try {
-            sb.appendBuffer(queue.shift()!);
-          } catch (e) {
-            console.warn("appendBuffer error:", e);
-          }
-        }
-      }
-
-      ws.onopen = () => {
-        // go2rtc requires this message to start sending MSE data
-        ws.send(JSON.stringify({ type: "mse" }));
-      };
-
-      ws.onmessage = (event) => {
-        if (typeof event.data === "string") {
-          // go2rtc sends JSON with codec info: {"type":"mse","value":"video/mp4; codecs=\"avc1.64001F\""}
-          try {
-            const msg = JSON.parse(event.data);
-            if (msg.type === "mse" && msg.value && !sb) {
-              try {
-                sb = ms.addSourceBuffer(msg.value);
-                sb.mode = "segments";
-                sb.addEventListener("updateend", () => {
-                  appendNext();
-                  // Keep buffer trimmed — max 10s behind
-                  if (sb && !sb.updating && video.buffered.length > 0) {
-                    const end = video.buffered.end(video.buffered.length - 1);
-                    const start = video.buffered.start(0);
-                    if (end - start > 15) {
-                      try { sb.remove(0, end - 10); } catch { /* ok */ }
-                    }
-                  }
-                });
-                setStatus("live");
-                video.play().catch(() => {});
-              } catch (e) {
-                setStatus("error");
-                setError(`Codec nepodporovaný: ${msg.value}`);
-                ws.close();
-              }
-            }
-          } catch { /* not JSON, ignore */ }
-        } else if (event.data instanceof ArrayBuffer && sb) {
-          if (sb.updating || queue.length > 0) {
-            // Drop old frames if queue gets too large
-            if (queue.length > 50) {
-              queue.splice(0, queue.length - 10);
-            }
-            queue.push(event.data);
-          } else {
-            try {
-              sb.appendBuffer(event.data);
-            } catch {
-              queue.push(event.data);
-            }
-          }
-        }
-      };
-
-      ws.onerror = () => {
-        setStatus("error");
-        setError("WebSocket spojení selhalo. Zkontroluj go2rtc na PC.");
-      };
-
-      ws.onclose = (e) => {
-        if (status !== "error") {
-          setStatus("error");
-          setError(`Stream ukončen (kód ${e.code}). Zkus obnovit.`);
-        }
-      };
-    }, { once: true });
-  }
-
-  // Auto-start
   useEffect(() => {
-    if (isAdmin !== true) return;
-    startStream();
-    return cleanup;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin]);
+    if (isAdmin === true) {
+      setStatus("connecting");
+      setError("");
+    }
+  }, [isAdmin, reloadKey]);
+
+  const streamUrl = `${GO2RTC_URL}/api/stream.mjpeg?src=${STREAM_NAME}`;
 
   if (isAdmin === null) {
     return (
@@ -169,7 +55,9 @@ export default function AdminCameraPage() {
         <div style={{ fontSize: "48px" }}>🔒</div>
         <h1 style={{ fontSize: "24px", fontWeight: 700, color: "var(--text-primary)" }}>Přístup odepřen</h1>
         <p style={{ color: "var(--text-muted)", fontSize: "14px" }}>Tato stránka je dostupná pouze pro administrátory.</p>
-        <Link href="/" style={{ color: "var(--accent)", textDecoration: "none", fontSize: "14px" }}>← Zpět na hlavní stránku</Link>
+        <Link href="/" style={{ color: "var(--accent)", textDecoration: "none", fontSize: "14px" }}>
+          ← Zpět na hlavní stránku
+        </Link>
       </div>
     );
   }
@@ -178,17 +66,12 @@ export default function AdminCameraPage() {
     <div style={{ maxWidth: "1000px", margin: "0 auto", padding: "32px 20px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px", flexWrap: "wrap", gap: "12px" }}>
         <div>
-          <h1 style={{ fontSize: "24px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "4px" }}>
-            📹 Kamera — Kolejiště
-          </h1>
-          <p style={{ fontSize: "13px", color: "var(--text-muted)" }}>
-            Živý stream z IP kamery
-          </p>
+          <h1 style={{ fontSize: "24px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "4px" }}>📹 Kamera — Kolejiště</h1>
+          <p style={{ fontSize: "13px", color: "var(--text-muted)" }}>Živý stream (MJPEG fallback přes Cloudflare tunnel)</p>
         </div>
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
           <button
-            onClick={startStream}
-            disabled={status === "connecting"}
+            onClick={() => setReloadKey((k) => k + 1)}
             style={{
               padding: "8px 16px",
               background: "var(--accent)",
@@ -197,12 +80,28 @@ export default function AdminCameraPage() {
               borderRadius: "8px",
               fontSize: "13px",
               fontWeight: 600,
-              cursor: status === "connecting" ? "wait" : "pointer",
-              opacity: status === "connecting" ? 0.6 : 1,
+              cursor: "pointer",
             }}
           >
             🔄 Obnovit
           </button>
+          <a
+            href={streamUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              padding: "8px 16px",
+              background: "var(--bg-card)",
+              color: "var(--text-primary)",
+              border: "1px solid var(--border)",
+              borderRadius: "8px",
+              fontSize: "13px",
+              fontWeight: 600,
+              textDecoration: "none",
+            }}
+          >
+            🔗 Otevřít stream
+          </a>
           <Link
             href="/admin"
             style={{
@@ -221,7 +120,6 @@ export default function AdminCameraPage() {
         </div>
       </div>
 
-      {/* Video player */}
       <div
         style={{
           background: "#000",
@@ -229,6 +127,9 @@ export default function AdminCameraPage() {
           overflow: "hidden",
           position: "relative",
           aspectRatio: "16/9",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
         }}
       >
         {status === "connecting" && (
@@ -242,11 +143,14 @@ export default function AdminCameraPage() {
 
         {status === "error" && (
           <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2, background: "rgba(0,0,0,0.85)" }}>
-            <div style={{ color: "#ef4444", fontSize: "14px", textAlign: "center", padding: "20px", maxWidth: "400px" }}>
+            <div style={{ color: "#ef4444", fontSize: "14px", textAlign: "center", padding: "20px", maxWidth: "440px" }}>
               <div style={{ fontSize: "40px", marginBottom: "12px" }}>⚠️</div>
-              {error}
+              {error || "Stream nedostupný. Zkontroluj go2rtc na PC."}
               <div style={{ marginTop: "16px" }}>
-                <button onClick={startStream} style={{ padding: "8px 20px", background: "var(--accent)", color: "var(--accent-text-on)", border: "none", borderRadius: "8px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
+                <button
+                  onClick={() => setReloadKey((k) => k + 1)}
+                  style={{ padding: "8px 20px", background: "var(--accent)", color: "var(--accent-text-on)", border: "none", borderRadius: "8px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
+                >
                   Zkusit znovu
                 </button>
               </div>
@@ -254,24 +158,31 @@ export default function AdminCameraPage() {
           </div>
         )}
 
-        <video
-          ref={videoRef}
-          autoPlay
-          muted
-          playsInline
-          controls
-          style={{ width: "100%", height: "100%", display: "block" }}
+        <img
+          key={reloadKey}
+          src={streamUrl}
+          alt="Živý stream kamery"
+          onLoad={() => setStatus("live")}
+          onError={() => {
+            setStatus("error");
+            setError("MJPEG stream se nepodařilo načíst.");
+          }}
+          style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
         />
       </div>
 
-      {/* Status bar */}
       <div style={{ marginTop: "12px", fontSize: "12px", color: "var(--text-dimmer)", display: "flex", gap: "12px", alignItems: "center" }}>
-        <span style={{
-          display: "inline-block", width: "8px", height: "8px", borderRadius: "50%",
-          background: status === "live" ? "#22c55e" : status === "connecting" ? "#f59e0b" : "#ef4444",
-        }} />
+        <span
+          style={{
+            display: "inline-block",
+            width: "8px",
+            height: "8px",
+            borderRadius: "50%",
+            background: status === "live" ? "#22c55e" : status === "connecting" ? "#f59e0b" : "#ef4444",
+          }}
+        />
         <span>
-          {status === "live" && "Stream aktivní · MSE/WebSocket"}
+          {status === "live" && "Stream aktivní · MJPEG"}
           {status === "connecting" && "Připojování..."}
           {status === "error" && "Stream nedostupný"}
         </span>
