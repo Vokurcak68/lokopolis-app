@@ -182,6 +182,13 @@ export default function UserMenu() {
               >
                 🛡️ Escrow
               </Link>
+              <Link
+                href="/admin/homepage"
+                onClick={() => setOpen(false)}
+                className="block w-full text-left px-4 py-2 text-sm text-primary hover:bg-bg-card-hover transition-colors"
+              >
+                🏠 Homepage sekce
+              </Link>
             </>
           )}
 

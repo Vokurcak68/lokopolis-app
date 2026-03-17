@@ -146,6 +146,45 @@ export interface HomeBanner {
   priority: number;
 }
 
+export interface HomepageSections {
+  leaderboard_banner: boolean;
+  latest_articles: boolean;
+  forum_bar: boolean;
+  categories: boolean;
+  cta_strip: boolean;
+  stats_bar: boolean;
+  inline_banner: boolean;
+  bazar: boolean;
+  competition: boolean;
+  shop_products: boolean;
+  downloads: boolean;
+  popular_articles: boolean;
+  events: boolean;
+  active_authors: boolean;
+  forum_widget: boolean;
+  tags: boolean;
+  [key: string]: boolean;
+}
+
+export const DEFAULT_HOMEPAGE_SECTIONS: HomepageSections = {
+  leaderboard_banner: true,
+  latest_articles: true,
+  forum_bar: true,
+  categories: true,
+  cta_strip: true,
+  stats_bar: true,
+  inline_banner: true,
+  bazar: true,
+  competition: true,
+  shop_products: true,
+  downloads: true,
+  popular_articles: true,
+  events: true,
+  active_authors: true,
+  forum_widget: true,
+  tags: true,
+};
+
 export interface HomePageData {
   stats: HomeStats;
   memberCount: number | null;
@@ -162,6 +201,7 @@ export interface HomePageData {
   latestListings: BazarListingHome[];
   featuredShopProducts: ShopProductHome[];
   banners: HomeBanner[];
+  sections: HomepageSections;
 }
 
 /* ============================================================
@@ -208,6 +248,7 @@ async function fetchHomeDataInternal(): Promise<HomePageData> {
       latestListings: [],
       featuredShopProducts: [],
       banners: [],
+      sections: DEFAULT_HOMEPAGE_SECTIONS,
     };
   }
 
@@ -479,6 +520,21 @@ async function fetchHomeDataInternal(): Promise<HomePageData> {
     Promise.resolve(supabase.rpc("increment_banner_impressions", { banner_ids: ids })).catch(() => {});
   }
 
+  // --- Homepage sections visibility ---
+  let sections: HomepageSections = { ...DEFAULT_HOMEPAGE_SECTIONS };
+  try {
+    const { data: settingsData } = await supabase
+      .from("site_settings")
+      .select("value")
+      .eq("key", "homepage_sections")
+      .single();
+    if (settingsData?.value && typeof settingsData.value === "object") {
+      sections = { ...DEFAULT_HOMEPAGE_SECTIONS, ...(settingsData.value as Record<string, boolean>) };
+    }
+  } catch {
+    // Use defaults
+  }
+
   return {
     stats,
     memberCount: memCount,
@@ -495,6 +551,7 @@ async function fetchHomeDataInternal(): Promise<HomePageData> {
     latestListings,
     featuredShopProducts,
     banners,
+    sections,
   };
 }
 

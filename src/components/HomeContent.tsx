@@ -10,6 +10,7 @@ import { getImageVariant } from "@/lib/image-variants";
 import type {
   HomePageData,
   HomeBanner,
+  HomepageSections,
   LatestArticle,
   PopularArticle,
   PopularTag,
@@ -18,6 +19,7 @@ import type {
   ShopProductHome,
   RecentForumThread,
 } from "@/app/home-data";
+import { DEFAULT_HOMEPAGE_SECTIONS } from "@/app/home-data";
 
 function optimizeImageUrl(url: string, width: number = 400): string {
   if (!url) return "";
@@ -377,7 +379,10 @@ export default function HomeContent({ data }: { data: HomePageData }) {
     latestListings,
     featuredShopProducts,
     banners,
+    sections: _sections,
   } = data;
+
+  const sections: HomepageSections = { ...DEFAULT_HOMEPAGE_SECTIONS, ..._sections };
 
   const heroBanners = banners.filter((b: HomeBanner) => b.position === "hero_leaderboard");
   const articleBanners = banners.filter((b: HomeBanner) => b.position === "article_native");
@@ -438,10 +443,10 @@ export default function HomeContent({ data }: { data: HomePageData }) {
       </section>
 
       {/* ===================== 🏠 LEADERBOARD BANNER (Pozice 1) ===================== */}
-      <LeaderboardBanner banners={heroBanners} />
+      {sections.leaderboard_banner && <LeaderboardBanner banners={heroBanners} />}
 
       {/* ===================== 📰 NEJNOVĚJŠÍ Z KOMUNITY ===================== */}
-      <section style={{ maxWidth: "1200px", margin: "40px auto 0", padding: "0 20px" }}>
+      {sections.latest_articles && <section style={{ maxWidth: "1200px", margin: "40px auto 0", padding: "0 20px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
           <h2 style={{ fontSize: "24px", fontWeight: 700, color: "var(--text-primary)" }}>📰 Nejnovější z komunity</h2>
         </div>
@@ -612,10 +617,10 @@ export default function HomeContent({ data }: { data: HomePageData }) {
             )}
           </div>
         </div>
-      </section>
+      </section>}
 
       {/* ===================== 💬 AKTIVNÍ DISKUZE ===================== */}
-      <section style={{ maxWidth: "1200px", margin: "40px auto 0", padding: "0 20px" }}>
+      {sections.forum_bar && <section style={{ maxWidth: "1200px", margin: "40px auto 0", padding: "0 20px" }}>
         <div style={{
           background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "14px",
           padding: "20px 24px", display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -647,10 +652,10 @@ export default function HomeContent({ data }: { data: HomePageData }) {
             Přejít na fórum →
           </Link>
         </div>
-      </section>
+      </section>}
 
       {/* ===================== 📂 KATEGORIE (compact) ===================== */}
-      <section style={{ maxWidth: "1200px", margin: "40px auto 0", padding: "0 20px" }}>
+      {sections.categories && <section style={{ maxWidth: "1200px", margin: "40px auto 0", padding: "0 20px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
           <h2 style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-primary)" }}>📂 Kategorie</h2>
           <Link href="#" style={{ fontSize: "13px", color: "var(--accent)", textDecoration: "none" }}>
@@ -680,13 +685,13 @@ export default function HomeContent({ data }: { data: HomePageData }) {
             </Link>
           ))}
         </div>
-      </section>
+      </section>}
 
       {/* ===================== 🎯 CTA STRIP (Pozice 3) ===================== */}
-      <CtaStrip />
+      {sections.cta_strip && <CtaStrip />}
 
       {/* ===================== 📊 STATS BAR ===================== */}
-      <div className="stats-bar" style={{ background: "var(--bg-header)", padding: "16px 0", marginTop: "40px" }}>
+      {sections.stats_bar && <div className="stats-bar" style={{ background: "var(--bg-header)", padding: "16px 0", marginTop: "40px" }}>
         <div
           className="stats-bar-inner"
           style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 20px", display: "flex", justifyContent: "center", gap: "48px" }}
@@ -706,13 +711,13 @@ export default function HomeContent({ data }: { data: HomePageData }) {
             </div>
           ))}
         </div>
-      </div>
+      </div>}
 
       {/* ===================== 🏆 INLINE BANNER (Pozice 4) ===================== */}
-      <InlineBanner competition={competition} />
+      {sections.inline_banner && <InlineBanner competition={competition} />}
 
       {/* ===================== BAZAR (full) ===================== */}
-      {latestListings && latestListings.length > 0 && (
+      {sections.bazar && latestListings && latestListings.length > 0 && (
         <section style={{ maxWidth: "1200px", margin: "48px auto 0", padding: "0 20px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
             <h2 style={{ fontSize: "24px", fontWeight: 700, color: "var(--text-primary)" }}>🛒 Nejnovější v bazaru</h2>
@@ -788,14 +793,14 @@ export default function HomeContent({ data }: { data: HomePageData }) {
       )}
 
       {/* ===================== COMPETITION ===================== */}
-      {competition && (
+      {sections.competition && competition && (
         <section style={{ maxWidth: "1200px", margin: "48px auto 0", padding: "0 20px" }}>
           <CompetitionBanner competition={competition} />
         </section>
       )}
 
       {/* ===================== FEATURED SHOP PRODUCTS ===================== */}
-      {featuredShopProducts && featuredShopProducts.length > 0 && (
+      {sections.shop_products && featuredShopProducts && featuredShopProducts.length > 0 && (
         <section style={{ maxWidth: "1200px", margin: "48px auto 0", padding: "0 20px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
             <h2 style={{ fontSize: "24px", fontWeight: 700, color: "var(--text-primary)" }}>🛍️ Doporučené produkty</h2>
@@ -930,7 +935,7 @@ export default function HomeContent({ data }: { data: HomePageData }) {
       )}
 
       {/* ===================== DOWNLOADS ===================== */}
-      <section style={{ maxWidth: "1200px", margin: "48px auto 0", padding: "0 20px" }}>
+      {sections.downloads && <section style={{ maxWidth: "1200px", margin: "48px auto 0", padding: "0 20px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
           <h2 style={{ fontSize: "24px", fontWeight: 700, color: "var(--text-primary)" }}>Ke stažení</h2>
           <Link href="/ke-stazeni" style={{ fontSize: "13px", color: "var(--accent)", textDecoration: "none" }}>
@@ -972,15 +977,16 @@ export default function HomeContent({ data }: { data: HomePageData }) {
             <p style={{ fontSize: "14px", color: "var(--text-dimmer)" }}>Zatím žádné soubory ke stažení</p>
           </div>
         )}
-      </section>
+      </section>}
 
       {/* ===================== MAIN + SIDEBAR ===================== */}
-      <div
+      {(sections.popular_articles || sections.events || sections.active_authors || sections.forum_widget || sections.tags) && <div
         className="grid grid-cols-1 lg:grid-cols-[1fr_320px]"
         style={{ maxWidth: "1200px", margin: "48px auto 0", padding: "0 20px", gap: "32px" }}
       >
         {/* Main content */}
         <div>
+          {sections.popular_articles && <>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
             <h2 style={{ fontSize: "24px", fontWeight: 700, color: "var(--text-primary)" }}>Populární tento měsíc</h2>
           </div>
@@ -1025,12 +1031,13 @@ export default function HomeContent({ data }: { data: HomePageData }) {
               Zatím žádné zobrazení — články se tu objeví po prvních návštěvách
             </p>
           )}
+          </>}
         </div>
 
         {/* Sidebar */}
         <aside>
           {/* Events */}
-          <div className="widget">
+          {sections.events && <div className="widget">
             <h3>📅 Nadcházející akce</h3>
             {upcomingEvents.length > 0 ? (
               upcomingEvents.map((e) => {
@@ -1058,10 +1065,10 @@ export default function HomeContent({ data }: { data: HomePageData }) {
             <Link href="/akce" style={{ fontSize: "12px", color: "var(--accent)", textDecoration: "none", display: "block", marginTop: "10px" }}>
               Všechny akce →
             </Link>
-          </div>
+          </div>}
 
           {/* Active authors */}
-          <div className="widget">
+          {sections.active_authors && <div className="widget">
             <h3>🏆 Aktivní autoři</h3>
             <ul className="widget-list">
               {activeAuthors.map((a) => (
@@ -1071,10 +1078,10 @@ export default function HomeContent({ data }: { data: HomePageData }) {
                 </li>
               ))}
             </ul>
-          </div>
+          </div>}
 
           {/* Forum widget */}
-          <div className="widget">
+          {sections.forum_widget && <div className="widget">
             <h3>💬 Fórum</h3>
             <p style={{ fontSize: "13px", color: "var(--text-dim)", marginBottom: "8px" }}>
               💬 {forumStats.thread_count} vláken · {forumStats.post_count} příspěvků
@@ -1093,10 +1100,10 @@ export default function HomeContent({ data }: { data: HomePageData }) {
             <div style={{ marginTop: "10px", fontSize: "12px", color: "var(--text-faint)" }}>
               Celkem registrováno: {memberCount !== null ? memberCount.toLocaleString("cs-CZ") : stats.members} členů
             </div>
-          </div>
+          </div>}
 
           {/* Tags */}
-          <div className="widget">
+          {sections.tags && <div className="widget">
             <h3>🏷️ Štítky</h3>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
               {popularTags.length > 0
@@ -1134,9 +1141,9 @@ export default function HomeContent({ data }: { data: HomePageData }) {
                   ))
               }
             </div>
-          </div>
+          </div>}
         </aside>
-      </div>
+      </div>}
     </div>
   );
 }
