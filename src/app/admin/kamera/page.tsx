@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 
@@ -9,14 +9,10 @@ const GO2RTC_URL = "https://rid-weekly-decade-homework.trycloudflare.com";
 const STREAM_NAME = "kolejiste";
 
 export default function AdminCameraPage() {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const hlsRef = useRef<{ destroy: () => void } | null>(null);
-  const [status, setStatus] = useState<"checking" | "denied" | "connecting" | "live" | "error">("checking");
-  const [error, setError] = useState("");
-  const startedRef = useRef(false);
-
-  // Check admin
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [iframeKey, setIframeKey] = useState(0);
+  const [loaded, setLoaded] = useState(false);
+
   useEffect(() => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -29,94 +25,6 @@ export default function AdminCameraPage() {
       setIsAdmin(profile?.role === "admin");
     })();
   }, []);
-
-  function cleanup() {
-    if (hlsRef.current) {
-      hlsRef.current.destroy();
-      hlsRef.current = null;
-    }
-    if (videoRef.current) {
-      videoRef.current.pause();
-      videoRef.current.removeAttribute("src");
-      videoRef.current.load();
-    }
-  }
-
-  function startStream() {
-    cleanup();
-    if (!videoRef.current) return;
-    setStatus("connecting");
-    setError("");
-
-    const video = videoRef.current;
-    const hlsUrl = `${GO2RTC_URL}/api/stream.m3u8?src=${STREAM_NAME}`;
-
-    // Safari supports HLS natively
-    if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      video.src = hlsUrl;
-      video.addEventListener("canplay", () => {
-        setStatus("live");
-        video.play().catch(() => {});
-      }, { once: true });
-      video.addEventListener("error", () => {
-        setStatus("error");
-        setError("Stream nedostupný. Zkontroluj go2rtc na PC.");
-      }, { once: true });
-      return;
-    }
-
-    // Chrome/Firefox/Edge — use hls.js
-    import("hls.js").then(({ default: Hls }) => {
-      if (!Hls.isSupported()) {
-        setStatus("error");
-        setError("Prohlížeč nepodporuje HLS.");
-        return;
-      }
-
-      const hls = new Hls({
-        enableWorker: true,
-        lowLatencyMode: true,
-        liveSyncDurationCount: 1,
-        liveMaxLatencyDurationCount: 3,
-        liveDurationInfinity: true,
-        maxBufferLength: 5,
-        maxMaxBufferLength: 10,
-      });
-
-      hlsRef.current = hls;
-      hls.loadSource(hlsUrl);
-      hls.attachMedia(video);
-
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        setStatus("live");
-        video.play().catch(() => {});
-      });
-
-      hls.on(Hls.Events.ERROR, (_event, data) => {
-        if (data.fatal) {
-          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-            // Try to recover
-            hls.startLoad();
-          } else {
-            setStatus("error");
-            setError("Stream chyba: " + data.details);
-          }
-        }
-      });
-    }).catch(() => {
-      setStatus("error");
-      setError("Nepodařilo se načíst HLS přehrávač.");
-    });
-  }
-
-  // Auto-connect when admin confirmed
-  useEffect(() => {
-    if (isAdmin !== true || startedRef.current) return;
-    startedRef.current = true;
-    startStream();
-    return cleanup;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin]);
 
   if (isAdmin === null) {
     return (
@@ -150,8 +58,7 @@ export default function AdminCameraPage() {
         </div>
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
           <button
-            onClick={() => { startedRef.current = false; startStream(); }}
-            disabled={status === "connecting"}
+            onClick={() => { setLoaded(false); setIframeKey(k => k + 1); }}
             style={{
               padding: "8px 16px",
               background: "var(--accent)",
@@ -160,12 +67,30 @@ export default function AdminCameraPage() {
               borderRadius: "8px",
               fontSize: "13px",
               fontWeight: 600,
-              cursor: status === "connecting" ? "wait" : "pointer",
-              opacity: status === "connecting" ? 0.6 : 1,
+              cursor: "pointer",
             }}
           >
             🔄 Obnovit
           </button>
+          <a
+            href={`${GO2RTC_URL}/stream.html?src=${STREAM_NAME}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              padding: "8px 16px",
+              background: "var(--bg-card)",
+              color: "var(--text-primary)",
+              border: "1px solid var(--border)",
+              borderRadius: "8px",
+              fontSize: "13px",
+              fontWeight: 600,
+              textDecoration: "none",
+              display: "inline-flex",
+              alignItems: "center",
+            }}
+          >
+            🔗 Plné okno
+          </a>
           <Link
             href="/admin"
             style={{
@@ -184,7 +109,7 @@ export default function AdminCameraPage() {
         </div>
       </div>
 
-      {/* Video player */}
+      {/* Video player — go2rtc embedded player */}
       <div
         style={{
           background: "#000",
@@ -194,49 +119,38 @@ export default function AdminCameraPage() {
           aspectRatio: "16/9",
         }}
       >
-        {status === "connecting" && (
+        {!loaded && (
           <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2, background: "rgba(0,0,0,0.7)" }}>
             <div style={{ color: "#fff", fontSize: "16px", display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
               <div style={{ width: "32px", height: "32px", border: "3px solid rgba(255,255,255,0.2)", borderTopColor: "var(--accent)", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
-              Připojuji se...
+              Načítám stream...
             </div>
           </div>
         )}
 
-        {status === "error" && (
-          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2, background: "rgba(0,0,0,0.85)" }}>
-            <div style={{ color: "#ef4444", fontSize: "14px", textAlign: "center", padding: "20px", maxWidth: "400px" }}>
-              <div style={{ fontSize: "40px", marginBottom: "12px" }}>⚠️</div>
-              {error}
-              <div style={{ marginTop: "16px" }}>
-                <button onClick={() => { startedRef.current = false; startStream(); }} style={{ padding: "8px 20px", background: "var(--accent)", color: "var(--accent-text-on)", border: "none", borderRadius: "8px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
-                  Zkusit znovu
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <video
-          ref={videoRef}
-          autoPlay
-          muted
-          playsInline
-          controls
-          style={{ width: "100%", height: "100%", display: "block" }}
+        <iframe
+          key={iframeKey}
+          src={`${GO2RTC_URL}/stream.html?src=${STREAM_NAME}`}
+          style={{
+            width: "100%",
+            height: "100%",
+            border: "none",
+            display: "block",
+          }}
+          allow="autoplay; fullscreen"
+          onLoad={() => setLoaded(true)}
         />
       </div>
 
-      {/* Status bar */}
+      {/* Status */}
       <div style={{ marginTop: "12px", fontSize: "12px", color: "var(--text-dimmer)", display: "flex", gap: "12px", alignItems: "center" }}>
         <span style={{
           display: "inline-block", width: "8px", height: "8px", borderRadius: "50%",
-          background: status === "live" ? "#22c55e" : status === "connecting" ? "#f59e0b" : "#ef4444",
+          background: loaded ? "#22c55e" : "#f59e0b",
         }} />
-        <span>
-          {status === "live" && "Stream aktivní"}
-          {status === "connecting" && "Připojování..."}
-          {status === "error" && "Stream nedostupný"}
+        <span>{loaded ? "Stream načten" : "Načítání..."}</span>
+        <span style={{ marginLeft: "auto", opacity: 0.5 }}>
+          go2rtc · Cloudflare Tunnel
         </span>
       </div>
 
