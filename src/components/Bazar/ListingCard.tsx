@@ -205,7 +205,7 @@ export default function ListingCard({ listing, compact }: ListingCardProps) {
             >
               {CONDITION_LABELS[listing.condition]}
             </span>
-            {listing.shipping && listing.status === "active" && <EscrowBadge size="sm" />}
+            {listing.status === "active" && listing.payment_methods?.includes("escrow") && <EscrowBadge size="sm" />}
           </div>
 
           {/* Location + Date */}
