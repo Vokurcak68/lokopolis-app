@@ -7,7 +7,7 @@ const csp = [
   "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
   "media-src 'self' blob:",
-  "connect-src 'self' https://*.supabase.co https://challenges.cloudflare.com ws://178.17.15.153:1984",
+  "connect-src 'self' https://*.supabase.co https://challenges.cloudflare.com wss://*.trycloudflare.com",
   "frame-src https://challenges.cloudflare.com",
   "object-src 'none'",
   "base-uri 'self'",

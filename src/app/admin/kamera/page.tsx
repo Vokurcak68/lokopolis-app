@@ -4,8 +4,8 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 
-// go2rtc — direct IP (port forwarded, supports WebSocket)
-const GO2RTC_DIRECT = "http://178.17.15.153:1984";
+// go2rtc — Cloudflare tunnel (WSS works with origin: "*")
+const GO2RTC_URL = "https://flooring-visits-pacific-glory.trycloudflare.com";
 const STREAM_NAME = "kolejiste";
 
 type Status = "checking" | "connecting" | "live" | "error";
@@ -70,7 +70,7 @@ export default function AdminCameraPage() {
     video.src = URL.createObjectURL(ms);
 
     ms.addEventListener("sourceopen", () => {
-      const wsUrl = GO2RTC_DIRECT.replace("http://", "ws://") + `/api/ws?src=${STREAM_NAME}`;
+      const wsUrl = GO2RTC_URL.replace("https://", "wss://").replace("http://", "ws://") + `/api/ws?src=${STREAM_NAME}`;
       const ws = new WebSocket(wsUrl);
       ws.binaryType = "arraybuffer";
       wsRef.current = ws;
