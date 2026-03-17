@@ -10,6 +10,7 @@ const POSITIONS: { value: BannerPosition; label: string }[] = [
   { value: "hero_leaderboard", label: "🏠 Leaderboard (pod hero)" },
   { value: "article_native", label: "📰 Nativní karta v článcích" },
   { value: "bazar_native", label: "🛒 Nativní karta v bazaru" },
+  { value: "sidebar_native", label: "📌 Sidebar (vedle článků)" },
 ];
 
 const EMPTY_FORM = {
@@ -189,6 +190,8 @@ export default function AdminBannersPage() {
             <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "4px" }}>
               {form.position === "hero_leaderboard"
                 ? "Doporučená velikost: 1200 × 150 px (leaderboard)"
+                : form.position === "sidebar_native"
+                ? "Doporučená velikost: 340 × 255 px (4:3)"
                 : "Doporučená velikost: 600 × 450 px (4:3)"}
             </p>
             {form.image_url && (

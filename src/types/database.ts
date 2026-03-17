@@ -700,7 +700,7 @@ export interface EscrowSettings {
   updated_at: string;
 }
 
-export type BannerPosition = "hero_leaderboard" | "article_native" | "bazar_native";
+export type BannerPosition = "hero_leaderboard" | "article_native" | "bazar_native" | "sidebar_native";
 
 export interface HomepageBanner {
   id: string;

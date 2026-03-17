@@ -18,6 +18,7 @@ import type {
   BazarListingHome,
   ShopProductHome,
   RecentForumThread,
+  ActivityFeedItem,
 } from "@/app/home-data";
 import { DEFAULT_HOMEPAGE_SECTIONS } from "@/app/home-data";
 
@@ -380,6 +381,7 @@ export default function HomeContent({ data }: { data: HomePageData }) {
     featuredShopProducts,
     banners,
     sections: _sections,
+    activityFeed,
   } = data;
 
   const sections: HomepageSections = { ...DEFAULT_HOMEPAGE_SECTIONS, ..._sections };
@@ -577,36 +579,37 @@ export default function HomeContent({ data }: { data: HomePageData }) {
               </div>
             )}
 
-            {/* Latest bazar items (mini) */}
-            {latestListings && latestListings.length > 0 && (
+            {/* Activity feed */}
+            {sections.activity_feed && activityFeed && activityFeed.length > 0 && (
               <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px", padding: "16px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-                  <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary)" }}>🛒 Nové v bazaru</h3>
-                  <Link href="/bazar" style={{ fontSize: "12px", color: "var(--accent)", textDecoration: "none" }}>Bazar →</Link>
-                </div>
+                <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "12px" }}>⚡ Aktivita na webu</h3>
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                  {latestListings.slice(0, 3).map((listing: BazarListingHome) => {
-                    const firstImage = listing.images && listing.images.length > 0 ? listing.images[0] : null;
+                  {activityFeed.slice(0, 8).map((item: ActivityFeedItem) => {
+                    const icons: Record<string, string> = { article: '📝', listing: '🛒', forum: '💬', shop: '🛍️', member: '👋' };
+                    const icon = icons[item.type] || '📌';
+                    const labels: Record<string, string> = { article: 'Nový článek', listing: 'Nový inzerát', forum: 'Nové vlákno', shop: 'Nový produkt', member: 'Nový člen' };
+                    const label = labels[item.type] || '';
                     return (
-                      <Link key={listing.id} href={`/bazar/${listing.id}`} style={{ textDecoration: "none" }}>
+                      <Link key={item.id} href={item.link} style={{ textDecoration: "none" }}>
                         <div style={{
-                          display: "flex", gap: "10px", alignItems: "center",
-                          padding: "8px", borderRadius: "8px", background: "var(--bg-page)",
-                          border: "1px solid transparent", transition: "border-color 0.2s",
+                          display: "flex", gap: "10px", alignItems: "flex-start",
+                          padding: "8px", borderRadius: "8px",
+                          transition: "background 0.15s",
                         }}
-                          onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent-border)"; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.borderColor = "transparent"; }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-page)"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                         >
-                          <div style={{ width: "48px", height: "48px", borderRadius: "6px", overflow: "hidden", flexShrink: 0, position: "relative", background: "var(--bg-page)" }}>
-                            {firstImage ? (
-                              <Image src={optimizeImageUrl(firstImage, 100)} alt={listing.title} fill style={{ objectFit: "contain" }} sizes="48px" />
-                            ) : (
-                              <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px" }}>🚂</div>
-                            )}
-                          </div>
+                          <span style={{ fontSize: "16px", flexShrink: 0, marginTop: "1px" }}>{icon}</span>
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{listing.title}</div>
-                            <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--accent)" }}>{listing.price.toLocaleString("cs-CZ")} Kč</div>
+                            <div style={{ fontSize: "12px", color: "var(--text-dimmer)", marginBottom: "2px" }}>
+                              {label} · {timeAgo(item.created_at)}
+                            </div>
+                            <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {item.type === 'member' ? `${item.title} se zaregistroval/a` : item.title}
+                            </div>
+                            {item.author_name && item.type !== 'member' && (
+                              <div style={{ fontSize: "11px", color: "var(--text-faint)", marginTop: "1px" }}>{item.author_name}</div>
+                            )}
                           </div>
                         </div>
                       </Link>
@@ -615,6 +618,39 @@ export default function HomeContent({ data }: { data: HomePageData }) {
                 </div>
               </div>
             )}
+
+            {/* Sidebar banner */}
+            {sections.sidebar_banner && (() => {
+              const sidebarBanners = banners.filter((b: HomeBanner) => b.position === "sidebar_native");
+              if (sidebarBanners.length === 0) return null;
+              const banner = sidebarBanners[Math.floor((Date.now() / 60000) % sidebarBanners.length)];
+              return (
+                <a href={banner.link_url} target="_blank" rel="noopener noreferrer" style={{ display: "block", textDecoration: "none" }}>
+                  <div style={{
+                    background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px",
+                    overflow: "hidden", transition: "border-color 0.2s",
+                  }}
+                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
+                  >
+                    {banner.image_url && (
+                      <div style={{ position: "relative", width: "100%", paddingBottom: "75%" }}>
+                        <Image src={banner.image_url} alt={banner.title} fill style={{ objectFit: "cover" }} sizes="340px" />
+                      </div>
+                    )}
+                    <div style={{ padding: "12px 14px" }}>
+                      {banner.badge_text && (
+                        <span style={{ fontSize: "10px", fontWeight: 700, background: "var(--accent)", color: "#000", padding: "2px 6px", borderRadius: "4px", marginBottom: "4px", display: "inline-block" }}>
+                          {banner.badge_text}
+                        </span>
+                      )}
+                      <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)", marginTop: "4px" }}>{banner.title}</div>
+                      {banner.subtitle && <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "2px" }}>{banner.subtitle}</div>}
+                    </div>
+                  </div>
+                </a>
+              );
+            })()}
           </div>
         </div>
       </section>}

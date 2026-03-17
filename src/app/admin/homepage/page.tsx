@@ -28,6 +28,8 @@ const SECTIONS: SectionConfig[] = [
   { key: "active_authors", label: "Aktivní autoři", description: "Top autoři v postranním panelu" },
   { key: "forum_widget", label: "Fórum widget", description: "Widget fóra v postranním panelu" },
   { key: "tags", label: "Štítky", description: "Populární štítky v postranním panelu" },
+  { key: "activity_feed", label: "Aktivita na webu", description: "Live feed posledních událostí (články, bazar, fórum, shop, noví členové)" },
+  { key: "sidebar_banner", label: "Sidebar banner", description: "Reklamní banner v postranním panelu vedle článků" },
 ];
 
 export default function AdminHomepagePage() {

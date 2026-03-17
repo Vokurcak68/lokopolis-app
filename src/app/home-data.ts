@@ -135,6 +135,15 @@ export interface ShopProductHome {
   featured: boolean;
 }
 
+export interface ActivityFeedItem {
+  id: string;
+  type: 'article' | 'listing' | 'forum' | 'shop' | 'member';
+  title: string;
+  link: string;
+  author_name: string | null;
+  created_at: string;
+}
+
 export interface HomeBanner {
   id: string;
   position: string;
@@ -163,6 +172,8 @@ export interface HomepageSections {
   active_authors: boolean;
   forum_widget: boolean;
   tags: boolean;
+  activity_feed: boolean;
+  sidebar_banner: boolean;
   [key: string]: boolean;
 }
 
@@ -183,6 +194,8 @@ export const DEFAULT_HOMEPAGE_SECTIONS: HomepageSections = {
   active_authors: true,
   forum_widget: true,
   tags: true,
+  activity_feed: true,
+  sidebar_banner: true,
 };
 
 export interface HomePageData {
@@ -202,6 +215,7 @@ export interface HomePageData {
   featuredShopProducts: ShopProductHome[];
   banners: HomeBanner[];
   sections: HomepageSections;
+  activityFeed: ActivityFeedItem[];
 }
 
 /* ============================================================
@@ -249,6 +263,7 @@ async function fetchHomeDataInternal(): Promise<HomePageData> {
       featuredShopProducts: [],
       banners: [],
       sections: DEFAULT_HOMEPAGE_SECTIONS,
+      activityFeed: [],
     };
   }
 
@@ -535,6 +550,124 @@ async function fetchHomeDataInternal(): Promise<HomePageData> {
     // Use defaults
   }
 
+  // --- Activity feed (latest events across the site) ---
+  let activityFeed: ActivityFeedItem[] = [];
+  try {
+    const [feedArticles, feedListings, feedThreads, feedProducts, feedMembers] = await Promise.all([
+      supabase
+        .from("articles")
+        .select("id, slug, title, created_at, author:profiles(display_name, username)")
+        .eq("status", "published")
+        .eq("verified", true)
+        .order("created_at", { ascending: false })
+        .limit(3),
+      supabase
+        .from("listings")
+        .select("id, title, created_at, user_id")
+        .eq("status", "active")
+        .order("created_at", { ascending: false })
+        .limit(3),
+      supabase
+        .from("forum_threads")
+        .select("id, title, created_at, section:forum_sections(slug), author:profiles!forum_threads_user_id_fkey(display_name, username)")
+        .order("created_at", { ascending: false })
+        .limit(3),
+      supabase
+        .from("shop_products")
+        .select("id, slug, title, created_at")
+        .eq("status", "active")
+        .order("created_at", { ascending: false })
+        .limit(3),
+      supabase
+        .from("profiles")
+        .select("id, display_name, username, created_at")
+        .order("created_at", { ascending: false })
+        .limit(3),
+    ]);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const items: ActivityFeedItem[] = [];
+
+    if (feedArticles.data) {
+      for (const a of feedArticles.data) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const auth = Array.isArray((a as any).author) ? (a as any).author[0] : (a as any).author;
+        items.push({
+          id: `article-${a.id}`,
+          type: "article",
+          title: a.title,
+          link: `/clanky/${a.slug}`,
+          author_name: auth?.display_name || auth?.username || null,
+          created_at: a.created_at,
+        });
+      }
+    }
+
+    if (feedListings.data) {
+      for (const l of feedListings.data) {
+        items.push({
+          id: `listing-${l.id}`,
+          type: "listing",
+          title: l.title,
+          link: `/bazar/${l.id}`,
+          author_name: null,
+          created_at: l.created_at,
+        });
+      }
+    }
+
+    if (feedThreads.data) {
+      for (const t of feedThreads.data) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const sec = Array.isArray((t as any).section) ? (t as any).section[0] : (t as any).section;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const auth = Array.isArray((t as any).author) ? (t as any).author[0] : (t as any).author;
+        items.push({
+          id: `forum-${t.id}`,
+          type: "forum",
+          title: t.title,
+          link: `/forum/${sec?.slug || "obecna-diskuze"}/${t.id}`,
+          author_name: auth?.display_name || auth?.username || null,
+          created_at: t.created_at,
+        });
+      }
+    }
+
+    if (feedProducts.data) {
+      for (const p of feedProducts.data) {
+        items.push({
+          id: `shop-${p.id}`,
+          type: "shop",
+          title: p.title,
+          link: `/shop/${p.slug}`,
+          author_name: null,
+          created_at: p.created_at,
+        });
+      }
+    }
+
+    if (feedMembers.data) {
+      for (const m of feedMembers.data) {
+        const name = m.display_name || m.username || "Anonym";
+        items.push({
+          id: `member-${m.id}`,
+          type: "member",
+          title: name,
+          link: "#",
+          author_name: name,
+          created_at: m.created_at,
+        });
+      }
+    }
+
+    // Sort by created_at DESC and take top 8
+    activityFeed = items
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, 8);
+  } catch {
+    // keep empty
+  }
+
   return {
     stats,
     memberCount: memCount,
@@ -552,6 +685,7 @@ async function fetchHomeDataInternal(): Promise<HomePageData> {
     featuredShopProducts,
     banners,
     sections,
+    activityFeed,
   };
 }
 
