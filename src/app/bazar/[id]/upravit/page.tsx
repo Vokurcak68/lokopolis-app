@@ -414,6 +414,7 @@ export default function EditListingPage() {
         <div>
           <label style={labelStyle}>Fotky</label>
           <ImageUpload images={images} onChange={setImages} listingId={listing.id} />
+          <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "4px" }}>Doporučená velikost: 800 × 600 px (4:3)</p>
         </div>
 
         <div style={{ display: "flex", gap: "12px", marginTop: "8px" }}>

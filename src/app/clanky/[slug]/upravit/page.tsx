@@ -447,6 +447,7 @@ export default function EditArticlePage() {
         {/* Cover image */}
         <div className="flex-1 min-w-[200px]">
           <label className="block text-xs text-gray-500 mb-1.5 uppercase tracking-wider">Úvodní obrázek</label>
+          <p className="text-xs text-gray-500 mt-0.5 mb-1">Doporučená velikost: 1200 × 800 px (16:10)</p>
           <div className="flex items-center gap-3">
             {coverPreview ? (
               <div className="relative group">
