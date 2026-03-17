@@ -440,6 +440,7 @@ export default function NewArticlePage() {
               />
             </label>
           </div>
+          <p className="text-xs text-gray-500 mt-1">Doporučená velikost: 1200 × 800 px (16:10)</p>
         </div>
       </div>
 

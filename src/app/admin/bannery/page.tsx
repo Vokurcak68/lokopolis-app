@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import Image from "next/image";
 import type { HomepageBanner, BannerPosition } from "@/types/database";
+import { optimizeImageUrl } from "@/lib/image-variants";
 
 const POSITIONS: { value: BannerPosition; label: string }[] = [
   { value: "hero_leaderboard", label: "🏠 Leaderboard (pod hero)" },
@@ -185,9 +186,14 @@ export default function AdminBannersPage() {
               <input type="file" accept="image/*" onChange={handleImageUpload} disabled={uploading} style={{ fontSize: "13px" }} />
               {uploading && <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>⏳</span>}
             </div>
+            <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "4px" }}>
+              {form.position === "hero_leaderboard"
+                ? "Doporučená velikost: 1200 × 150 px (leaderboard)"
+                : "Doporučená velikost: 600 × 450 px (4:3)"}
+            </p>
             {form.image_url && (
               <div style={{ marginTop: "8px", width: "200px", height: "60px", position: "relative", borderRadius: "6px", overflow: "hidden", background: "var(--bg-page)" }}>
-                <Image src={form.image_url} alt="Preview" fill style={{ objectFit: "contain" }} sizes="200px" />
+                <Image src={optimizeImageUrl(form.image_url, 400)} alt="Preview" fill style={{ objectFit: "contain" }} sizes="200px" unoptimized />
               </div>
             )}
           </div>
@@ -228,7 +234,7 @@ export default function AdminBannersPage() {
           <div key={b.id} style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "10px", padding: "16px", display: "flex", gap: "16px", alignItems: "center", opacity: b.is_active ? 1 : 0.5 }}>
             {b.image_url && (
               <div style={{ width: "120px", height: "45px", position: "relative", borderRadius: "6px", overflow: "hidden", flexShrink: 0, background: "var(--bg-page)" }}>
-                <Image src={b.image_url} alt="" fill style={{ objectFit: "contain" }} sizes="120px" />
+                <Image src={optimizeImageUrl(b.image_url || "", 240)} alt="" fill style={{ objectFit: "contain" }} sizes="120px" unoptimized />
               </div>
             )}
             <div style={{ flex: 1, minWidth: 0 }}>

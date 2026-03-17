@@ -410,6 +410,7 @@ function NewListingPage() {
         <div>
           <label style={labelStyle}>Fotky</label>
           <ImageUpload images={images} onChange={setImages} />
+          <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "4px" }}>Doporučená velikost: 800 × 600 px (4:3)</p>
         </div>
 
         {/* Submit */}

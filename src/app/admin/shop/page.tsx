@@ -1567,11 +1567,13 @@ export default function AdminShopPage() {
               <div>
                 <label style={labelStyle}>Náhledový obrázek</label>
                 <input type="file" accept="image/*" onChange={(e) => setCoverFile(e.target.files?.[0] || null)} style={{ fontSize: "13px", color: "var(--text-body)" }} />
+                <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "4px" }}>Doporučená velikost: 600 × 450 px (4:3)</p>
                 {editProduct?.cover_image_url && !coverFile && <span style={{ fontSize: "12px", color: "var(--text-dimmer)", marginLeft: "8px" }}>(aktuální obrázek zachován)</span>}
               </div>
               <div>
                 <label style={labelStyle}>Galerie náhledů (více souborů)</label>
                 <input type="file" accept="image/*" multiple onChange={(e) => setPreviewFiles(Array.from(e.target.files || []))} style={{ fontSize: "13px", color: "var(--text-body)" }} />
+                <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "4px" }}>Doporučená velikost: 800 × 600 px (4:3)</p>
               </div>
               <div>
                 <label style={labelStyle}>Soubor ke stažení (PDF, ZIP, STL...)</label>

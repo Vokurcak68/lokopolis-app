@@ -721,55 +721,67 @@ export default function HomeContent({ data }: { data: HomePageData }) {
             </Link>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" style={{ gap: "16px" }}>
-            {/* Bazar listings — if native banner exists, replace last slot */}
-            {(bazarBanners.length > 0 && latestListings.length >= 4 ? latestListings.slice(0, 3) : latestListings).map((listing: BazarListingHome, idx: number) => {
-              const firstImage = listing.images && listing.images.length > 0 ? listing.images[0] : null;
+            {/* Bazar listings — if native banner exists, replace a random slot */}
+            {(() => {
               const condLabel: Record<string, string> = { new: "Nový", opened: "Rozbalený", used: "Použitý", parts: "Na díly" };
               const condColor: Record<string, string> = { new: "#22c55e", opened: "#3b82f6", used: "#f59e0b", parts: "#ef4444" };
               const scaleColor: Record<string, string> = { TT: "#3b82f6", H0: "#22c55e", N: "#a855f7", Z: "#ec4899", G: "#f59e0b" };
-              return (
-                <Link key={listing.id} href={`/bazar/${listing.id}`} style={{ textDecoration: "none" }}>
-                  <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px", overflow: "hidden", transition: "all 0.2s", height: "100%" }} onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.transform = "translateY(0)"; }}>
-                    <div style={{ position: "relative", width: "100%", paddingBottom: "75%", background: "var(--bg-page)" }}>
-                      {firstImage ? (
-                        <Image src={optimizeImageUrl(firstImage)} alt={listing.title} fill style={{ objectFit: "contain" }} sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw" />
-                      ) : (
-                        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "32px", color: "var(--text-dimmer)" }}>🚂</div>
-                      )}
-                    </div>
-                    <div style={{ padding: "12px" }}>
-                      <div style={{ fontSize: "18px", fontWeight: 700, color: "var(--accent)", marginBottom: "4px" }}>{listing.price.toLocaleString("cs-CZ")} Kč</div>
-                      <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "6px", lineHeight: 1.3, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{listing.title}</div>
-                      <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
-                        {listing.scale && <span style={{ padding: "1px 6px", borderRadius: "4px", fontSize: "10px", fontWeight: 600, background: `${scaleColor[listing.scale] || "#6b7280"}20`, color: scaleColor[listing.scale] || "#6b7280" }}>{listing.scale}</span>}
-                        <span style={{ padding: "1px 6px", borderRadius: "4px", fontSize: "10px", fontWeight: 600, background: `${condColor[listing.condition]}20`, color: condColor[listing.condition] }}>{condLabel[listing.condition] || listing.condition}</span>
+
+              const hasBazarBanner = bazarBanners.length > 0 && latestListings.length >= 4;
+              const displayListings = hasBazarBanner ? latestListings.slice(0, 3) : latestListings;
+              const bannerPos = hasBazarBanner
+                ? Math.floor(Date.now() / 60000) % 4
+                : -1;
+
+              const items: React.ReactNode[] = displayListings.map((listing: BazarListingHome) => {
+                const firstImage = listing.images && listing.images.length > 0 ? listing.images[0] : null;
+                return (
+                  <Link key={listing.id} href={`/bazar/${listing.id}`} style={{ textDecoration: "none" }}>
+                    <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px", overflow: "hidden", transition: "all 0.2s", height: "100%" }} onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.transform = "translateY(0)"; }}>
+                      <div style={{ position: "relative", width: "100%", paddingBottom: "75%", background: "var(--bg-page)" }}>
+                        {firstImage ? (
+                          <Image src={optimizeImageUrl(firstImage)} alt={listing.title} fill style={{ objectFit: "contain" }} sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw" />
+                        ) : (
+                          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "32px", color: "var(--text-dimmer)" }}>🚂</div>
+                        )}
+                      </div>
+                      <div style={{ padding: "12px" }}>
+                        <div style={{ fontSize: "18px", fontWeight: 700, color: "var(--accent)", marginBottom: "4px" }}>{listing.price.toLocaleString("cs-CZ")} Kč</div>
+                        <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "6px", lineHeight: 1.3, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{listing.title}</div>
+                        <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
+                          {listing.scale && <span style={{ padding: "1px 6px", borderRadius: "4px", fontSize: "10px", fontWeight: 600, background: `${scaleColor[listing.scale] || "#6b7280"}20`, color: scaleColor[listing.scale] || "#6b7280" }}>{listing.scale}</span>}
+                          <span style={{ padding: "1px 6px", borderRadius: "4px", fontSize: "10px", fontWeight: 600, background: `${condColor[listing.condition]}20`, color: condColor[listing.condition] }}>{condLabel[listing.condition] || listing.condition}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </Link>
-              );
-            })}
-            {/* Native bazar banner — replaces 4th slot, same card design */}
-            {bazarBanners.length > 0 && (() => {
-              const b = bazarBanners[0];
-              return (
-                <a key="bazar-native" href={b.link_url} onClick={() => trackBannerClick(b.id)} style={{ textDecoration: "none" }}>
-                  <div style={{ background: "var(--bg-card)", border: "1px solid var(--accent-border)", borderRadius: "12px", overflow: "hidden", transition: "all 0.2s", height: "100%", position: "relative" }} onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--accent-border)"; e.currentTarget.style.transform = "translateY(0)"; }}>
-                    <div style={{ position: "relative", width: "100%", paddingBottom: "75%", background: "var(--bg-page)" }}>
-                      {b.image_url ? (
-                        <Image src={b.image_url} alt={b.title} fill style={{ objectFit: "contain" }} sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw" />
-                      ) : (
-                        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "32px", color: "var(--accent)" }}>🛡️</div>
-                      )}
+                  </Link>
+                );
+              });
+
+              if (hasBazarBanner) {
+                const b = bazarBanners[0];
+                const bannerCard = (
+                  <a key="bazar-native" href={b.link_url} onClick={() => trackBannerClick(b.id)} style={{ textDecoration: "none" }}>
+                    <div style={{ background: "var(--bg-card)", border: "1px solid var(--accent-border)", borderRadius: "12px", overflow: "hidden", transition: "all 0.2s", height: "100%", position: "relative" }} onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--accent-border)"; e.currentTarget.style.transform = "translateY(0)"; }}>
+                      <div style={{ position: "relative", width: "100%", paddingBottom: "75%", background: "var(--bg-page)" }}>
+                        {b.image_url ? (
+                          <Image src={b.image_url} alt={b.title} fill style={{ objectFit: "contain" }} sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw" />
+                        ) : (
+                          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "32px", color: "var(--accent)" }}>🛡️</div>
+                        )}
+                      </div>
+                      <div style={{ padding: "12px" }}>
+                        {b.badge_text && <div style={{ fontSize: "10px", fontWeight: 600, padding: "2px 8px", borderRadius: "4px", background: "var(--accent)", color: "#000", display: "inline-block", marginBottom: "6px" }}>{b.badge_text}</div>}
+                        <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "4px", lineHeight: 1.3, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{b.title}</div>
+                        {b.subtitle && <div style={{ fontSize: "12px", color: "var(--text-muted)", lineHeight: 1.3, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{b.subtitle}</div>}
+                      </div>
                     </div>
-                    <div style={{ padding: "12px" }}>
-                      {b.badge_text && <div style={{ fontSize: "10px", fontWeight: 600, padding: "2px 8px", borderRadius: "4px", background: "var(--accent)", color: "#000", display: "inline-block", marginBottom: "6px" }}>{b.badge_text}</div>}
-                      <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "4px", lineHeight: 1.3, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{b.title}</div>
-                      {b.subtitle && <div style={{ fontSize: "12px", color: "var(--text-muted)", lineHeight: 1.3, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{b.subtitle}</div>}
-                    </div>
-                  </div>
-                </a>
-              );
+                  </a>
+                );
+                items.splice(bannerPos, 0, bannerCard);
+              }
+
+              return items;
             })()}
           </div>
         </section>
@@ -798,7 +810,7 @@ export default function HomeContent({ data }: { data: HomePageData }) {
               gap: "16px",
             }}
           >
-            {(articleBanners.length > 0 && featuredShopProducts.length >= 4 ? featuredShopProducts.slice(0, 3) : featuredShopProducts).map((p: ShopProductHome) => {
+            {(() => {
               const catColors: Record<string, string> = {
                 "kolejovy-plan": "#3b82f6",
                 "stl-model": "#a855f7",
@@ -813,93 +825,105 @@ export default function HomeContent({ data }: { data: HomePageData }) {
                 ebook: "📖 E-booky",
                 balicek: "📦 Balíčky",
               };
-              const isFree = p.price === 0;
-              const hasDiscount = p.original_price && p.original_price > p.price;
-              const catColor = catColors[p.category] || "#6b7280";
-              return (
-                <Link key={p.id} href={`/shop/${p.slug}`} style={{ textDecoration: "none" }}>
-                  <div
-                    style={{
-                      background: "var(--bg-card)",
-                      border: "1px solid var(--border)",
-                      borderRadius: "12px",
-                      overflow: "hidden",
-                      transition: "all 0.2s",
-                      height: "100%",
-                      display: "flex",
-                      flexDirection: "column",
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = "var(--accent)";
-                      e.currentTarget.style.transform = "translateY(-2px)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = "var(--border)";
-                      e.currentTarget.style.transform = "translateY(0)";
-                    }}
-                  >
-                    <div style={{ position: "relative", width: "100%", paddingBottom: "75%", background: "var(--bg-page)" }}>
-                      {p.cover_image_url ? (
-                        <Image src={getImageVariant(p.cover_image_url, "card")} alt={p.title} fill style={{ objectFit: "contain" }} sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw" />
-                      ) : (
-                        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "40px", color: "var(--text-dimmer)" }}>
-                          {p.category === "kolejovy-plan" ? "📐" : p.category === "stl-model" ? "🧊" : "📖"}
+
+              const hasShopBanner = articleBanners.length > 0 && featuredShopProducts.length >= 4;
+              const displayProducts = hasShopBanner ? featuredShopProducts.slice(0, 3) : featuredShopProducts;
+              const shopBannerPos = hasShopBanner
+                ? Math.floor(Date.now() / 60000) % 4
+                : -1;
+
+              const shopItems: React.ReactNode[] = displayProducts.map((p: ShopProductHome) => {
+                const isFree = p.price === 0;
+                const hasDiscount = p.original_price && p.original_price > p.price;
+                const catColor = catColors[p.category] || "#6b7280";
+                return (
+                  <Link key={p.id} href={`/shop/${p.slug}`} style={{ textDecoration: "none" }}>
+                    <div
+                      style={{
+                        background: "var(--bg-card)",
+                        border: "1px solid var(--border)",
+                        borderRadius: "12px",
+                        overflow: "hidden",
+                        transition: "all 0.2s",
+                        height: "100%",
+                        display: "flex",
+                        flexDirection: "column",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = "var(--accent)";
+                        e.currentTarget.style.transform = "translateY(-2px)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = "var(--border)";
+                        e.currentTarget.style.transform = "translateY(0)";
+                      }}
+                    >
+                      <div style={{ position: "relative", width: "100%", paddingBottom: "75%", background: "var(--bg-page)" }}>
+                        {p.cover_image_url ? (
+                          <Image src={getImageVariant(p.cover_image_url, "card")} alt={p.title} fill style={{ objectFit: "contain" }} sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw" />
+                        ) : (
+                          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "40px", color: "var(--text-dimmer)" }}>
+                            {p.category === "kolejovy-plan" ? "📐" : p.category === "stl-model" ? "🧊" : "📖"}
+                          </div>
+                        )}
+                        <div style={{ position: "absolute", top: "8px", left: "8px", padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, background: `${catColor}dd`, color: "#fff" }}>
+                          {catLabels[p.category] || p.category}
                         </div>
-                      )}
-                      <div style={{ position: "absolute", top: "8px", left: "8px", padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, background: `${catColor}dd`, color: "#fff" }}>
-                        {catLabels[p.category] || p.category}
-                      </div>
-                      {isFree && (
-                        <div style={{ position: "absolute", top: "8px", right: "8px", padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 700, background: "rgba(34,197,94,0.9)", color: "#fff" }}>
-                          ZDARMA
-                        </div>
-                      )}
-                    </div>
-                    <div style={{ padding: "16px", flex: 1, display: "flex", flexDirection: "column" }}>
-                      <div style={{ display: "flex", alignItems: "baseline", gap: "8px", marginBottom: "6px" }}>
-                        <span style={{ fontSize: "20px", fontWeight: 700, color: isFree ? "#22c55e" : "var(--accent)" }}>
-                          {isFree ? "Zdarma" : `${p.price.toLocaleString("cs-CZ")} Kč`}
-                        </span>
-                        {hasDiscount && (
-                          <span style={{ fontSize: "14px", color: "var(--text-dimmer)", textDecoration: "line-through" }}>
-                            {p.original_price!.toLocaleString("cs-CZ")} Kč
-                          </span>
+                        {isFree && (
+                          <div style={{ position: "absolute", top: "8px", right: "8px", padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 700, background: "rgba(34,197,94,0.9)", color: "#fff" }}>
+                            ZDARMA
+                          </div>
                         )}
                       </div>
-                      <h3 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)", lineHeight: 1.4, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", flex: 1 }}>
-                        {p.title}
-                      </h3>
-                      <div style={{ fontSize: "12px", color: "var(--text-dimmer)", marginTop: "8px" }}>
-                        ⬇️ {p.download_count}× staženo
+                      <div style={{ padding: "16px", flex: 1, display: "flex", flexDirection: "column" }}>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: "8px", marginBottom: "6px" }}>
+                          <span style={{ fontSize: "20px", fontWeight: 700, color: isFree ? "#22c55e" : "var(--accent)" }}>
+                            {isFree ? "Zdarma" : `${p.price.toLocaleString("cs-CZ")} Kč`}
+                          </span>
+                          {hasDiscount && (
+                            <span style={{ fontSize: "14px", color: "var(--text-dimmer)", textDecoration: "line-through" }}>
+                              {p.original_price!.toLocaleString("cs-CZ")} Kč
+                            </span>
+                          )}
+                        </div>
+                        <h3 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)", lineHeight: 1.4, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", flex: 1 }}>
+                          {p.title}
+                        </h3>
+                        <div style={{ fontSize: "12px", color: "var(--text-dimmer)", marginTop: "8px" }}>
+                          ⬇️ {p.download_count}× staženo
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </Link>
-              );
-            })}
-            {/* Native article banner — replaces 4th slot, same card design */}
-            {articleBanners.length > 0 && (() => {
-              const b = articleBanners[0];
-              return (
-                <a key="article-native" href={b.link_url} onClick={() => trackBannerClick(b.id)} style={{ textDecoration: "none" }}>
-                  <div style={{ background: "var(--bg-card)", border: "1px solid var(--accent-border)", borderRadius: "12px", overflow: "hidden", transition: "all 0.2s", height: "100%", display: "flex", flexDirection: "column" }} onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--accent-border)"; e.currentTarget.style.transform = "translateY(0)"; }}>
-                    <div style={{ position: "relative", width: "100%", paddingBottom: "75%", background: "var(--bg-page)" }}>
-                      {b.image_url ? (
-                        <Image src={b.image_url} alt={b.title} fill style={{ objectFit: "contain" }} sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw" />
-                      ) : (
-                        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "40px", color: "var(--accent)" }}>⭐</div>
-                      )}
-                      <div style={{ position: "absolute", top: "8px", left: "8px", padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, background: "var(--accent)", color: "#000" }}>
-                        {b.badge_text || "Sponzorováno"}
+                  </Link>
+                );
+              });
+
+              if (hasShopBanner) {
+                const b = articleBanners[0];
+                const shopBannerCard = (
+                  <a key="article-native" href={b.link_url} onClick={() => trackBannerClick(b.id)} style={{ textDecoration: "none" }}>
+                    <div style={{ background: "var(--bg-card)", border: "1px solid var(--accent-border)", borderRadius: "12px", overflow: "hidden", transition: "all 0.2s", height: "100%", display: "flex", flexDirection: "column" }} onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--accent-border)"; e.currentTarget.style.transform = "translateY(0)"; }}>
+                      <div style={{ position: "relative", width: "100%", paddingBottom: "75%", background: "var(--bg-page)" }}>
+                        {b.image_url ? (
+                          <Image src={b.image_url} alt={b.title} fill style={{ objectFit: "contain" }} sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw" />
+                        ) : (
+                          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "40px", color: "var(--accent)" }}>⭐</div>
+                        )}
+                        <div style={{ position: "absolute", top: "8px", left: "8px", padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, background: "var(--accent)", color: "#000" }}>
+                          {b.badge_text || "Sponzorováno"}
+                        </div>
+                      </div>
+                      <div style={{ padding: "16px", flex: 1, display: "flex", flexDirection: "column" }}>
+                        <h3 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)", lineHeight: 1.4, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", flex: 1 }}>{b.title}</h3>
+                        {b.subtitle && <div style={{ fontSize: "12px", color: "var(--text-dimmer)", marginTop: "8px" }}>{b.subtitle}</div>}
                       </div>
                     </div>
-                    <div style={{ padding: "16px", flex: 1, display: "flex", flexDirection: "column" }}>
-                      <h3 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)", lineHeight: 1.4, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", flex: 1 }}>{b.title}</h3>
-                      {b.subtitle && <div style={{ fontSize: "12px", color: "var(--text-dimmer)", marginTop: "8px" }}>{b.subtitle}</div>}
-                    </div>
-                  </div>
-                </a>
-              );
+                  </a>
+                );
+                shopItems.splice(shopBannerPos, 0, shopBannerCard);
+              }
+
+              return shopItems;
             })()}
           </div>
         </section>
