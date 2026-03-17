@@ -42,6 +42,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Inzerát nemá možnost zaslání" }, { status: 400 });
     }
 
+    if (!Array.isArray(listing.payment_methods) || !listing.payment_methods.includes("escrow")) {
+      return NextResponse.json({ error: "Prodejce nepovolil Bezpečnou platbu" }, { status: 400 });
+    }
+
     if (user.id === listing.seller_id) {
       return NextResponse.json({ error: "Nemůžete koupit vlastní inzerát" }, { status: 400 });
     }

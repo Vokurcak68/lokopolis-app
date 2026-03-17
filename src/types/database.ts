@@ -333,6 +333,7 @@ export interface Listing {
   location: string | null;
   shipping: boolean;
   personal_pickup: boolean;
+  payment_methods: string[];
   view_count: number;
   created_at: string;
   updated_at: string;

@@ -268,7 +268,8 @@ export default function ListingDetailPage() {
 
   const images = listing.images || [];
   const canUseEscrow = Boolean(
-    user && !isOwner && listing.shipping && listing.status === "active" && escrowEnabled
+    user && !isOwner && listing.status === "active" && escrowEnabled
+    && listing.payment_methods?.includes("escrow")
   );
 
   return (
@@ -481,7 +482,7 @@ export default function ListingDetailPage() {
                 🏭 {listing.brand}
               </span>
             )}
-            {listing.shipping && escrowEnabled && <EscrowBadge size="md" />}
+            {listing.payment_methods?.includes("escrow") && escrowEnabled && <EscrowBadge size="md" />}
           </div>
 
           {/* Description */}
@@ -530,6 +531,29 @@ export default function ListingDetailPage() {
           >
             <InfoItem label="Zaslání" value={listing.shipping ? "✅ Ano" : "❌ Ne"} />
             <InfoItem label="Osobní předání" value={listing.personal_pickup ? "✅ Ano" : "❌ Ne"} />
+            {listing.payment_methods && listing.payment_methods.length > 0 && (
+              <div
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: "8px",
+                  background: "var(--bg-card)",
+                  border: "1px solid var(--border)",
+                  gridColumn: "1 / -1",
+                }}
+              >
+                <div style={{ fontSize: "11px", color: "var(--text-dimmer)", marginBottom: "4px" }}>
+                  Způsoby platby
+                </div>
+                <div style={{ fontSize: "13px", color: "var(--text-body)", fontWeight: 500 }}>
+                  {[
+                    listing.payment_methods.includes("cash") && "💵 Hotovost",
+                    listing.payment_methods.includes("transfer") && "🏦 Převod",
+                    listing.payment_methods.includes("cod") && "📦 Dobírka",
+                    listing.payment_methods.includes("escrow") && "🛡️ Bezpečná platba",
+                  ].filter(Boolean).join(" · ")}
+                </div>
+              </div>
+            )}
             {listing.location && (
               <div>
                 <span style={{ fontSize: "12px", color: "var(--text-dimmer)", display: "block", marginBottom: "2px" }}>Lokace</span>

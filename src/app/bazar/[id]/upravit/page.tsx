@@ -6,7 +6,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/components/Auth/AuthProvider";
 import ImageUpload from "@/components/Bazar/ImageUpload";
-import type { Listing, ListingCategory, ListingCondition, ListingScale } from "@/types/database";
+import type { Listing, ListingCategory, ListingCondition, ListingScale, UserAddress } from "@/types/database";
 
 const CATEGORIES: { value: ListingCategory; label: string }[] = [
   { value: "lokomotivy", label: "🚂 Lokomotivy" },
@@ -68,6 +68,12 @@ export default function EditListingPage() {
   const [personalPickup, setPersonalPickup] = useState(true);
   const [images, setImages] = useState<string[]>([]);
   const [showBrandSuggestions, setShowBrandSuggestions] = useState(false);
+  const [paymentMethods, setPaymentMethods] = useState<string[]>(["cash", "transfer"]);
+  const [escrowCommission, setEscrowCommission] = useState<{rate: number, min: number} | null>(null);
+  const [savedAddresses, setSavedAddresses] = useState<UserAddress[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState<string>("new");
+  const [newAddress, setNewAddress] = useState({name: "", street: "", city: "", zip: "", phone: ""});
+  const [saveNewAddress, setSaveNewAddress] = useState(false);
   const brandRef = useRef<HTMLDivElement>(null);
 
   const fetchListing = useCallback(async () => {
@@ -96,12 +102,40 @@ export default function EditListingPage() {
       setShipping(l.shipping);
       setPersonalPickup(l.personal_pickup);
       setImages(l.images || []);
+      setPaymentMethods(l.payment_methods && l.payment_methods.length > 0 ? l.payment_methods : ["cash", "transfer"]);
     } catch {
       router.push("/bazar");
     } finally {
       setLoading(false);
     }
   }, [listingId, router]);
+
+  // Fetch escrow commission settings
+  useEffect(() => {
+    if (!user) return;
+    fetch("/api/escrow/public-settings").then(r => r.json()).then(d => {
+      setEscrowCommission({ rate: Number(d.commission_rate || 5), min: Number(d.min_commission || 15) });
+    }).catch(() => {
+      setEscrowCommission({ rate: 5, min: 15 });
+    });
+  }, [user]);
+
+  // Fetch saved addresses
+  useEffect(() => {
+    if (!user) return;
+    supabase.from("user_addresses").select("*").eq("user_id", user.id).order("is_default", { ascending: false }).then(({data}) => {
+      if (data) setSavedAddresses(data as UserAddress[]);
+      const def = (data as UserAddress[] | null)?.find(a => a.is_default);
+      if (def) setSelectedAddressId(def.id);
+    });
+  }, [user]);
+
+  // When shipping is unchecked, remove COD from payment methods
+  useEffect(() => {
+    if (!shipping) {
+      setPaymentMethods(prev => prev.filter(m => m !== "cod"));
+    }
+  }, [shipping]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -149,11 +183,46 @@ export default function EditListingPage() {
       setError("Vyberte kategorii");
       return;
     }
+    if (paymentMethods.length === 0) {
+      setError("Vyberte alespoň jeden způsob platby");
+      return;
+    }
+    if (paymentMethods.includes("escrow") && !shipping) {
+      setError("Bezpečná platba vyžaduje možnost zaslání");
+      return;
+    }
+    if (paymentMethods.includes("cod") && !shipping) {
+      setError("Dobírka vyžaduje možnost zaslání");
+      return;
+    }
+    if (paymentMethods.includes("escrow")) {
+      const hasAddress = selectedAddressId !== "new"
+        || (newAddress.name.trim() && newAddress.street.trim() && newAddress.city.trim() && newAddress.zip.trim());
+      if (!hasAddress) {
+        setError("Pro Bezpečnou platbu je nutné vyplnit dodací adresu");
+        return;
+      }
+    }
 
     setError(null);
     setSubmitting(true);
 
     try {
+      // Save new address if requested
+      if (paymentMethods.includes("escrow") && saveNewAddress && selectedAddressId === "new" && newAddress.name.trim()) {
+        await supabase.from("user_addresses").insert({
+          user_id: user.id,
+          label: "Dodací adresa",
+          full_name: newAddress.name.trim(),
+          street: newAddress.street.trim(),
+          city: newAddress.city.trim(),
+          zip: newAddress.zip.trim(),
+          phone: newAddress.phone.trim() || null,
+          country: "CZ",
+          is_default: savedAddresses.length === 0,
+        });
+      }
+
       const { error: updateError } = await supabase
         .from("listings")
         .update({
@@ -168,6 +237,7 @@ export default function EditListingPage() {
           location: location.trim() || null,
           shipping,
           personal_pickup: personalPickup,
+          payment_methods: paymentMethods,
           updated_at: new Date().toISOString(),
         })
         .eq("id", listing.id);
@@ -410,6 +480,178 @@ export default function EditListingPage() {
             🤝 Osobní předání
           </label>
         </div>
+
+        {/* Payment methods */}
+        <div>
+          <label style={labelStyle}>Způsoby platby *</label>
+          <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+            {([
+              { value: "cash", label: "💵 Hotovost", requiresShipping: false },
+              { value: "transfer", label: "🏦 Bankovní převod", requiresShipping: false },
+              { value: "cod", label: "📦 Na dobírku", requiresShipping: true },
+              { value: "escrow", label: "🛡️ Bezpečná platba", requiresShipping: false },
+            ] as const).map((pm) => {
+              const disabled = pm.requiresShipping && !shipping;
+              const checked = paymentMethods.includes(pm.value);
+              return (
+                <label
+                  key={pm.value}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    cursor: disabled ? "not-allowed" : "pointer",
+                    fontSize: "14px",
+                    color: disabled ? "var(--text-dimmer)" : "var(--text-body)",
+                    opacity: disabled ? 0.5 : 1,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    disabled={disabled}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setPaymentMethods(prev => [...prev, pm.value]);
+                      } else {
+                        setPaymentMethods(prev => prev.filter(m => m !== pm.value));
+                      }
+                    }}
+                    style={{ accentColor: "var(--accent)" }}
+                  />
+                  {pm.label}
+                </label>
+              );
+            })}
+          </div>
+          {!shipping && (
+            <p style={{ fontSize: "12px", color: "var(--text-dimmer)", marginTop: "6px" }}>
+              💡 Dobírka vyžaduje možnost zaslání
+            </p>
+          )}
+        </div>
+
+        {/* Escrow info + address (shown when escrow is selected) */}
+        {paymentMethods.includes("escrow") && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            {/* Escrow info box */}
+            <div
+              style={{
+                background: "rgba(34,197,94,0.08)",
+                border: "1px solid rgba(34,197,94,0.2)",
+                borderRadius: "10px",
+                padding: "16px",
+              }}
+            >
+              <div style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "8px" }}>
+                🛡️ Bezpečná platba chrání obě strany transakce
+              </div>
+              <p style={{ fontSize: "13px", color: "var(--text-body)", lineHeight: 1.6, margin: 0 }}>
+                Aktivací Bezpečné platby výrazně zvyšujete důvěryhodnost svého inzerátu
+                a šanci na rychlý prodej. Kupující ocení jistotu, že peníze uvolníme
+                prodejci až po potvrzení doručení — a vy získáte ochranu proti podvodným
+                reklamacím.
+              </p>
+              {escrowCommission && (
+                <p style={{ fontSize: "13px", color: "var(--text-muted)", marginTop: "8px", marginBottom: 0 }}>
+                  <strong>Provize:</strong> {escrowCommission.rate} % z ceny inzerátu (min. {escrowCommission.min} Kč) — strhne se automaticky z výplaty.
+                </p>
+              )}
+              <p style={{ fontSize: "13px", color: "var(--text-muted)", marginTop: "8px", marginBottom: 0 }}>
+                Pro aktivaci Bezpečné platby je nutné vyplnit dodací adresu — slouží
+                výhradně k ověření identity a zajištění bezpečného průběhu transakce.
+              </p>
+            </div>
+
+            {/* Delivery address */}
+            <div>
+              <label style={labelStyle}>Dodací adresa pro Bezpečnou platbu *</label>
+              {savedAddresses.length > 0 && (
+                <select
+                  value={selectedAddressId}
+                  onChange={(e) => setSelectedAddressId(e.target.value)}
+                  style={{ ...inputStyle, marginBottom: "12px" }}
+                >
+                  {savedAddresses.map((addr) => (
+                    <option key={addr.id} value={addr.id}>
+                      {addr.full_name} — {addr.street}, {addr.city} {addr.zip}
+                      {addr.is_default ? " (výchozí)" : ""}
+                    </option>
+                  ))}
+                  <option value="new">+ Jiná adresa</option>
+                </select>
+              )}
+
+              {(selectedAddressId === "new" || savedAddresses.length === 0) && (
+                <>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                    <div>
+                      <label style={{ ...labelStyle, fontSize: "12px" }}>Jméno a příjmení *</label>
+                      <input
+                        type="text"
+                        value={newAddress.name}
+                        onChange={(e) => setNewAddress(prev => ({ ...prev, name: e.target.value }))}
+                        placeholder="Jan Novák"
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ ...labelStyle, fontSize: "12px" }}>Telefon</label>
+                      <input
+                        type="text"
+                        value={newAddress.phone}
+                        onChange={(e) => setNewAddress(prev => ({ ...prev, phone: e.target.value }))}
+                        placeholder="+420 123 456 789"
+                        style={inputStyle}
+                      />
+                    </div>
+                  </div>
+                  <div style={{ marginTop: "12px" }}>
+                    <label style={{ ...labelStyle, fontSize: "12px" }}>Ulice a číslo *</label>
+                    <input
+                      type="text"
+                      value={newAddress.street}
+                      onChange={(e) => setNewAddress(prev => ({ ...prev, street: e.target.value }))}
+                      placeholder="Hlavní 123"
+                      style={inputStyle}
+                    />
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "12px", marginTop: "12px" }}>
+                    <div>
+                      <label style={{ ...labelStyle, fontSize: "12px" }}>Město *</label>
+                      <input
+                        type="text"
+                        value={newAddress.city}
+                        onChange={(e) => setNewAddress(prev => ({ ...prev, city: e.target.value }))}
+                        placeholder="Praha"
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ ...labelStyle, fontSize: "12px" }}>PSČ *</label>
+                      <input
+                        type="text"
+                        value={newAddress.zip}
+                        onChange={(e) => setNewAddress(prev => ({ ...prev, zip: e.target.value }))}
+                        placeholder="110 00"
+                        style={inputStyle}
+                      />
+                    </div>
+                  </div>
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "13px", color: "var(--text-muted)", marginTop: "12px" }}>
+                    <input
+                      type="checkbox"
+                      checked={saveNewAddress}
+                      onChange={(e) => setSaveNewAddress(e.target.checked)}
+                      style={{ accentColor: "var(--accent)" }}
+                    />
+                    Uložit adresu pro příště
+                  </label>
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
         <div>
           <label style={labelStyle}>Fotky</label>
