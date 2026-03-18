@@ -292,7 +292,8 @@ async function markPartialPaid(
 
   if (buyer?.email && listing) {
     try {
-      const html = escrowPartialPayment(buyer, listing, escrow, cumulativePaid);
+      const settings = await getEscrowSettings();
+      const html = escrowPartialPayment(buyer, listing, escrow, cumulativePaid, settings);
       const missing = Number(escrow.amount) - cumulativePaid;
       await sendEmail(
         buyer.email,

@@ -44,6 +44,7 @@ export default function TransactionDetailPage() {
   const [bankAccount, setBankAccount] = useState("");
   const [bankIban, setBankIban] = useState("");
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [partialQrDataUrl, setPartialQrDataUrl] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!user) return;
@@ -98,7 +99,7 @@ export default function TransactionDetailPage() {
     fetchData();
   }, [fetchData]);
 
-  // Generate QR code for SPD payment
+  // Generate QR code for full payment (status: created)
   useEffect(() => {
     if (!transaction || !bankIban || transaction.status !== "created") {
       setQrDataUrl(null);
@@ -113,6 +114,29 @@ export default function TransactionDetailPage() {
         .then((url: string) => setQrDataUrl(url))
         .catch(() => setQrDataUrl(null));
     }).catch(() => setQrDataUrl(null));
+  }, [transaction, bankIban]);
+
+  // Generate QR code for missing amount (status: partial_paid)
+  useEffect(() => {
+    if (!transaction || !bankIban || transaction.status !== "partial_paid" || transaction.partial_amount == null) {
+      setPartialQrDataUrl(null);
+      return;
+    }
+
+    const missing = Number(transaction.amount) - Number(transaction.partial_amount);
+    if (!(missing > 0)) {
+      setPartialQrDataUrl(null);
+      return;
+    }
+
+    const vs = transaction.payment_reference.replace(/\D/g, "");
+    const spd = `SPD*1.0*ACC:${bankIban}*AM:${missing.toFixed(2)}*CC:CZK*MSG:${transaction.payment_reference}*X-VS:${vs}`;
+
+    import("qrcode").then((QRCode) => {
+      QRCode.toDataURL(spd, { width: 200, margin: 2 })
+        .then((url: string) => setPartialQrDataUrl(url))
+        .catch(() => setPartialQrDataUrl(null));
+    }).catch(() => setPartialQrDataUrl(null));
   }, [transaction, bankIban]);
 
   if (!user) {
@@ -190,12 +214,19 @@ export default function TransactionDetailPage() {
           marginBottom: "12px",
           fontSize: "14px",
         }}>
-          <span style={{ fontWeight: 600, color: "#f97316" }}>⚠️ Neúplná platba</span>
-          <span style={{ color: "var(--text-body)", marginLeft: "8px" }}>
+          <div style={{ fontWeight: 600, color: "#f97316", marginBottom: "6px" }}>⚠️ Neúplná platba</div>
+          <div style={{ color: "var(--text-body)" }}>
             Přijato: <strong>{Number(transaction.partial_amount).toLocaleString("cs-CZ")} Kč</strong>
             {" · "}
             Chybí: <strong style={{ color: "#ef4444" }}>{(Number(transaction.amount) - Number(transaction.partial_amount)).toLocaleString("cs-CZ")} Kč</strong>
-          </span>
+          </div>
+          {isBuyer && (
+            <div style={{ marginTop: "6px", color: "var(--text-dimmer)", fontSize: "12px" }}>
+              Variabilní symbol: <strong>{transaction.payment_reference.replace(/\D/g, "")}</strong>
+              {" · "}
+              Reference / zpráva: <strong>{transaction.payment_reference}</strong>
+            </div>
+          )}
         </div>
       )}
 
@@ -338,8 +369,9 @@ export default function TransactionDetailPage() {
                 <div style={{ fontSize: "18px", fontWeight: 700, color: "#22c55e" }}>{Number(transaction.amount).toLocaleString("cs-CZ")} Kč</div>
               </div>
               <div style={{ marginBottom: "10px" }}>
-                <div style={{ fontSize: "12px", color: "var(--text-dimmer)", marginBottom: "2px" }}>Variabilní symbol / zpráva</div>
-                <div style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)", fontFamily: "monospace" }}>{transaction.payment_reference}</div>
+                <div style={{ fontSize: "12px", color: "var(--text-dimmer)", marginBottom: "2px" }}>Variabilní symbol (jen čísla)</div>
+                <div style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)", fontFamily: "monospace" }}>{transaction.payment_reference.replace(/\D/g, "")}</div>
+                <div style={{ fontSize: "11px", color: "var(--text-dimmer)", marginTop: "2px" }}>Reference / zpráva: {transaction.payment_reference}</div>
               </div>
               <p style={{ fontSize: "12px", color: "var(--text-dimmer)", marginTop: "12px", lineHeight: 1.5 }}>
                 Po připsání platby na účet admin potvrdí přijetí a prodávající bude vyzván k odeslání zboží.
@@ -349,6 +381,58 @@ export default function TransactionDetailPage() {
               <div style={{ textAlign: "center" }}>
                 <img src={qrDataUrl} alt="QR platba" style={{ width: "160px", height: "160px", borderRadius: "8px" }} />
                 <div style={{ fontSize: "11px", color: "var(--text-dimmer)", marginTop: "6px" }}>Naskenujte v bankovní aplikaci</div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Doplatek — pro kupujícího při neúplné platbě */}
+      {transaction.status === "partial_paid" && isBuyer && bankAccount && transaction.partial_amount != null && (
+        <div
+          style={{
+            padding: "20px",
+            borderRadius: "12px",
+            background: "linear-gradient(135deg, rgba(249,115,22,0.10) 0%, rgba(239,68,68,0.10) 100%)",
+            border: "1px solid rgba(249,115,22,0.3)",
+            marginBottom: "24px",
+          }}
+        >
+          <h3 style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px" }}>
+            🧾 Doplatek neúplné platby
+          </h3>
+          <div style={{ display: "flex", gap: "24px", alignItems: "flex-start", flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: "220px" }}>
+              <div style={{ marginBottom: "10px" }}>
+                <div style={{ fontSize: "12px", color: "var(--text-dimmer)", marginBottom: "2px" }}>Číslo účtu</div>
+                <div style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)", fontFamily: "monospace" }}>{bankAccount}</div>
+              </div>
+              {bankIban && (
+                <div style={{ marginBottom: "10px" }}>
+                  <div style={{ fontSize: "12px", color: "var(--text-dimmer)", marginBottom: "2px" }}>IBAN</div>
+                  <div style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-muted)", fontFamily: "monospace" }}>{bankIban}</div>
+                </div>
+              )}
+              <div style={{ marginBottom: "10px" }}>
+                <div style={{ fontSize: "12px", color: "var(--text-dimmer)", marginBottom: "2px" }}>Doplatek</div>
+                <div style={{ fontSize: "18px", fontWeight: 700, color: "#ef4444" }}>
+                  {(Number(transaction.amount) - Number(transaction.partial_amount)).toLocaleString("cs-CZ")} Kč
+                </div>
+              </div>
+              <div style={{ marginBottom: "10px" }}>
+                <div style={{ fontSize: "12px", color: "var(--text-dimmer)", marginBottom: "2px" }}>Variabilní symbol (jen čísla)</div>
+                <div style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)", fontFamily: "monospace" }}>
+                  {transaction.payment_reference.replace(/\D/g, "")}
+                </div>
+                <div style={{ fontSize: "11px", color: "var(--text-dimmer)", marginTop: "2px" }}>
+                  Reference / zpráva: {transaction.payment_reference}
+                </div>
+              </div>
+            </div>
+            {partialQrDataUrl && (
+              <div style={{ textAlign: "center" }}>
+                <img src={partialQrDataUrl} alt="QR doplatek" style={{ width: "160px", height: "160px", borderRadius: "8px" }} />
+                <div style={{ fontSize: "11px", color: "var(--text-dimmer)", marginTop: "6px" }}>Naskenujte QR kód pro doplatek</div>
               </div>
             )}
           </div>

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticateUser, getServiceClient, isAdmin } from "@/lib/escrow-helpers";
+import { authenticateUser, getEscrowSettings, getServiceClient, isAdmin } from "@/lib/escrow-helpers";
 import { sendEmail } from "@/lib/email";
 import { escrowPartialPayment } from "@/lib/email-templates";
 
@@ -66,7 +66,8 @@ export async function POST(req: NextRequest) {
 
     if (buyer?.email && listing) {
       try {
-        const html = escrowPartialPayment(buyer, listing, transaction, amount);
+        const settings = await getEscrowSettings();
+        const html = escrowPartialPayment(buyer, listing, transaction, amount, settings);
         await sendEmail(buyer.email, `⚠️ Neúplná platba — doplaťte ${Number(transaction.amount) - amount} Kč (${transaction.payment_reference})`, html);
       } catch (e) {
         console.error("Escrow email (partial-payment):", e);

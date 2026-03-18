@@ -374,10 +374,22 @@ function listingInfoBlock(listing: any, transaction: any): string {
     </div>`;
 }
 
+function escrowPaymentCodes(transaction: any): { reference: string; variableSymbol: string } {
+  const reference = String(transaction?.payment_reference || "");
+  const variableSymbol = reference.replace(/\D/g, "");
+  return { reference, variableSymbol };
+}
+
+function escrowQrUrl(iban: string, amount: number, variableSymbol: string, reference: string): string {
+  if (!iban || !variableSymbol || !(amount > 0)) return "";
+  const spd = `SPD*1.0*ACC:${iban}*AM:${amount.toFixed(2)}*CC:CZK*X-VS:${variableSymbol}*MSG:${reference}`;
+  return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(spd)}`;
+}
+
 export function escrowCreated(buyer: any, seller: any, listing: any, transaction: any, bankAccount: string, bankIban: string, settings?: Record<string, any>): string {
-  const vs = transaction.payment_reference?.replace(/\D/g, "") || "";
+  const { reference, variableSymbol } = escrowPaymentCodes(transaction);
   const iban = bankIban || (bankAccount ? czechToIBAN(bankAccount) : "");
-  const qrUrl = vs && iban ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`SPD*1.0*ACC:${iban}*AM:${Number(transaction.amount).toFixed(2)}*CC:CZK*X-VS:${vs}*MSG:Escrow ${transaction.payment_reference}`)}` : "";
+  const qrUrl = escrowQrUrl(iban, Number(transaction.amount), variableSymbol, reference);
 
   return emailWrapper(`
     <h2 style="color:#f0a030;margin:0 0 20px;">🛡️ Bezpečná platba vytvořena</h2>
@@ -392,7 +404,8 @@ export function escrowCreated(buyer: any, seller: any, listing: any, transaction
 
     <div style="margin:16px 0;padding:16px;background:#16162b;border-radius:8px;">
       <strong style="color:#f0a030;">💳 Platební údaje</strong><br>
-      <span style="color:#ccc;">Variabilní symbol: <strong>${esc(vs)}</strong></span><br>
+      <span style="color:#ccc;">Variabilní symbol (jen čísla): <strong>${esc(variableSymbol)}</strong></span><br>
+      <span style="color:#888;font-size:12px;">Reference / zpráva pro příjemce: <strong>${esc(reference)}</strong></span><br>
       <span style="color:#ccc;">Částka: <strong>${formatPrice(Number(transaction.amount))}</strong></span><br>
       <span style="color:#ccc;">Číslo účtu: <strong>${esc(bankAccount || iban)}</strong></span>
       ${qrUrl ? `<br><br><img src="${qrUrl}" alt="QR platba" width="180" height="180" style="border-radius:8px;" />
@@ -585,6 +598,11 @@ export function escrowResolved(buyer: any, seller: any, dispute: any, resolution
 
 export function escrowPartialPayment(buyer: any, listing: any, transaction: any, partialAmount: number, settings?: Record<string, any>): string {
   const missing = Number(transaction.amount) - partialAmount;
+  const { reference, variableSymbol } = escrowPaymentCodes(transaction);
+  const bankAccount = settings?.bank_account || "";
+  const bankIban = settings?.bank_iban || (bankAccount ? czechToIBAN(bankAccount) : "");
+  const qrUrl = escrowQrUrl(bankIban, missing, variableSymbol, reference);
+
   return emailWrapper(`
     <h2 style="color:#f97316;margin:0 0 20px;">⚠️ Neúplná platba</h2>
     <p>Dobrý den, <strong style="color:#f0a030;">${esc(buyer.display_name || buyer.username)}</strong>,</p>
@@ -598,7 +616,17 @@ export function escrowPartialPayment(buyer: any, listing: any, transaction: any,
       <span style="color:#888;font-size:13px;">Požadovaná celková částka: ${formatPrice(Number(transaction.amount))}</span>
     </div>
 
-    <p style="color:#ccc;">Prosíme o doplatek zbývající částky <strong>${formatPrice(missing)}</strong> se stejným variabilním symbolem <strong>${esc(transaction.payment_reference)}</strong>.</p>
+    <div style="margin:16px 0;padding:16px;background:#16162b;border-radius:8px;">
+      <strong style="color:#f0a030;">💳 Údaje pro doplatek</strong><br>
+      <span style="color:#ccc;">Variabilní symbol (jen čísla): <strong>${esc(variableSymbol)}</strong></span><br>
+      <span style="color:#888;font-size:12px;">Reference / zpráva pro příjemce: <strong>${esc(reference)}</strong></span><br>
+      <span style="color:#ccc;">Doplatek: <strong>${formatPrice(missing)}</strong></span><br>
+      <span style="color:#ccc;">Číslo účtu: <strong>${esc(bankAccount || bankIban || "(nastaví admin)")}</strong></span>
+      ${qrUrl ? `<br><br><img src="${qrUrl}" alt="QR doplatek" width="180" height="180" style="border-radius:8px;" />
+      <br><span style="color:#888;font-size:12px;">Naskenujte QR kód pro doplatek</span>` : ""}
+    </div>
+
+    <p style="color:#ccc;">Prosíme o doplatek zbývající částky <strong>${formatPrice(missing)}</strong>.</p>
 
     <div style="margin-top:24px;text-align:center;">
       <a href="https://lokopolis.cz/bazar/transakce/${esc(transaction.id)}" style="display:inline-block;padding:12px 28px;background:#f0a030;color:#1a1a2e;font-weight:700;border-radius:8px;text-decoration:none;">Zobrazit transakci →</a>
