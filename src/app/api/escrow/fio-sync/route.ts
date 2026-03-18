@@ -541,28 +541,15 @@ export async function GET(req: NextRequest) {
           })
           .eq("id", txRowId);
 
-        const { data: paidRows } = await supabase
-          .from("escrow_bank_payments")
-          .select("amount")
-          .eq("escrow_id", escrow.id)
-          .eq("matched", true);
-
-        const bankCumulativePaid = Number(
-          (paidRows || []).reduce((sum, row) => sum + Number(row.amount || 0), 0).toFixed(2)
-        );
-
-        // Fallback for legacy/manual partials where older incoming payments
-        // may not exist in escrow_bank_payments yet.
-        const escrowPartialKnown = Number(escrow.partial_amount || 0);
-        const cumulativePaid = Number(
-          Math.max(bankCumulativePaid, escrowPartialKnown + Number(parsed.amount)).toFixed(2)
-        );
-
+        // Přičti tuto platbu k partial_amount (kumulativně)
+        const previouslyPaid = Number(escrow.partial_amount || 0);
+        const newTotal = Number((previouslyPaid + parsed.amount).toFixed(2));
         const expectedAmount = Number(escrow.amount);
-        const diff = Number((cumulativePaid - expectedAmount).toFixed(2));
+        const diff = Number((newTotal - expectedAmount).toFixed(2));
 
-        if (cumulativePaid + tolerance < expectedAmount) {
-          await markPartialPaid(supabase, escrow, cumulativePaid);
+        if (newTotal + tolerance < expectedAmount) {
+          // Stále nedoplaceno — přičti a nech partial_paid
+          await markPartialPaid(supabase, escrow, newTotal);
 
           await supabase
             .from("escrow_bank_payments")
@@ -572,10 +559,14 @@ export async function GET(req: NextRequest) {
             })
             .eq("id", txRowId);
 
+          // Update local escrow cache for subsequent payments in same sync
+          escrow.partial_amount = newTotal;
+
           stats.partial += 1;
           continue;
         }
 
+        // Doplaceno nebo přeplaceno
         const overpaidBy = diff > tolerance ? diff : 0;
         await markPaid(supabase, escrow, overpaidBy);
 
@@ -586,6 +577,10 @@ export async function GET(req: NextRequest) {
             processed_at: new Date().toISOString(),
           })
           .eq("id", txRowId);
+
+        // Remove from open list so subsequent txs don't match again
+        const idx = (openEscrows || []).indexOf(escrow);
+        if (idx >= 0) openEscrows!.splice(idx, 1);
 
         if (overpaidBy > 0) {
           stats.overpaid += 1;
