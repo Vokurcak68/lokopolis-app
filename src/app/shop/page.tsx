@@ -115,15 +115,15 @@ export default function ShopPage() {
       <div
         style={{
           textAlign: "center",
-          padding: "48px 20px 40px",
-          marginBottom: "16px",
+          padding: "28px 20px 20px",
+          marginBottom: "12px",
         }}
       >
-        <h1 style={{ fontSize: "36px", fontWeight: 800, marginBottom: "10px" }}>
+        <h1 style={{ fontSize: "28px", fontWeight: 700, marginBottom: "6px" }}>
           <span style={{ color: "var(--text-primary)" }}>🛒 Lokopolis </span>
           <span style={{ color: "var(--accent)" }}>Shop</span>
         </h1>
-        <p style={{ fontSize: "17px", color: "var(--text-dim)", maxWidth: "500px", margin: "0 auto" }}>
+        <p style={{ fontSize: "14px", color: "var(--text-dim)", maxWidth: "500px", margin: "0 auto" }}>
           Kolejové plány, 3D modely a návody pro modeláře
         </p>
       </div>
