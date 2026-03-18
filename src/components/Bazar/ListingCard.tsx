@@ -68,7 +68,7 @@ export default function ListingCard({ listing, compact }: ListingCardProps) {
           style={{
             position: "relative",
             width: "100%",
-            paddingBottom: "75%", // 4:3 aspect ratio
+            paddingBottom: "56%", // 16:9 compact ratio
             background: "var(--bg-page)",
             overflow: "hidden",
           }}
@@ -144,11 +144,11 @@ export default function ListingCard({ listing, compact }: ListingCardProps) {
         </div>
 
         {/* Content */}
-        <div style={{ padding: compact ? "12px" : "16px", flex: 1, display: "flex", flexDirection: "column" }}>
+        <div style={{ padding: compact ? "10px" : "12px", flex: 1, display: "flex", flexDirection: "column" }}>
           {/* Price */}
           <div
             style={{
-              fontSize: compact ? "18px" : "22px",
+              fontSize: compact ? "16px" : "18px",
               fontWeight: 700,
               color: "var(--accent)",
               marginBottom: "6px",

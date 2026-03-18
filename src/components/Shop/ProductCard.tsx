@@ -69,7 +69,7 @@ export default function ProductCard({ product, featured, categories = [] }: Prod
           style={{
             position: "relative",
             width: "100%",
-            paddingBottom: "75%",
+            paddingBottom: featured ? "65%" : "56%",
             background: "var(--bg-page)",
             overflow: "hidden",
           }}
@@ -156,12 +156,12 @@ export default function ProductCard({ product, featured, categories = [] }: Prod
         </div>
 
         {/* Content */}
-        <div style={{ padding: featured ? "20px" : "16px", flex: 1, display: "flex", flexDirection: "column" }}>
+        <div style={{ padding: featured ? "16px" : "12px", flex: 1, display: "flex", flexDirection: "column" }}>
           {/* Price */}
-          <div style={{ display: "flex", alignItems: "baseline", gap: "8px", marginBottom: "6px" }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: "6px", marginBottom: "4px" }}>
             <span
               style={{
-                fontSize: featured ? "24px" : "20px",
+                fontSize: featured ? "20px" : "17px",
                 fontWeight: 700,
                 color: isFree ? "#22c55e" : "var(--accent)",
               }}
@@ -196,10 +196,10 @@ export default function ProductCard({ product, featured, categories = [] }: Prod
           {/* Title */}
           <h3
             style={{
-              fontSize: featured ? "16px" : "15px",
+              fontSize: featured ? "15px" : "14px",
               fontWeight: 600,
               color: "var(--text-primary)",
-              marginBottom: "8px",
+              marginBottom: "6px",
               lineHeight: 1.4,
               overflow: "hidden",
               display: "-webkit-box",
@@ -271,7 +271,7 @@ export default function ProductCard({ product, featured, categories = [] }: Prod
               alignItems: "center",
               fontSize: "12px",
               color: "var(--text-dimmer)",
-              marginBottom: "10px",
+              marginBottom: "8px",
             }}
           >
             <span style={{ display: "flex", alignItems: "center", gap: "3px" }}>

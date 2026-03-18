@@ -245,7 +245,7 @@ export default function SectionPage() {
         <>
           <div style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
             gap: "16px",
           }}>
             {threads.map((t) => {

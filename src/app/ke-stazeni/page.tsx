@@ -591,7 +591,7 @@ export default function DownloadsPage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
             gap: "16px",
           }}
         >
@@ -607,7 +607,7 @@ export default function DownloadsPage() {
                   background: "var(--bg-card)",
                   border: "1px solid var(--border)",
                   borderRadius: "12px",
-                  padding: "20px",
+                  padding: "14px",
                   transition: "all 0.2s",
                   display: "flex",
                   flexDirection: "column",
