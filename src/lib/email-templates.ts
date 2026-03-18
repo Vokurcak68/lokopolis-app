@@ -646,3 +646,75 @@ export function escrowPayoutConfirmed(seller: any, listing: any, transaction: an
     </div>
   `, settings);
 }
+
+// ─── ShieldTrack admin alert ─────────────────────────────────────────────────
+
+export function escrowVerificationAlert(
+  transaction: any,
+  listing: any,
+  score: number,
+  checks: { name: string; status: string; detail: string | null }[],
+  settings?: Record<string, any>,
+): string {
+  const failedChecks = checks.filter(c => c.status === "failed" || c.status === "warning");
+  const checksHtml = failedChecks.length > 0
+    ? failedChecks.map(c => {
+        const color = c.status === "failed" ? "#ef4444" : "#f59e0b";
+        const icon = c.status === "failed" ? "❌" : "⚠️";
+        return `<tr>
+          <td style="padding:6px 8px;border-bottom:1px solid #2a2a4e;color:${color};font-size:13px;">${icon} ${esc(c.name)}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid #2a2a4e;color:#ccc;font-size:13px;">${esc(c.detail || "—")}</td>
+        </tr>`;
+      }).join("")
+    : `<tr><td style="padding:8px;color:#888;">Žádné neúspěšné kontroly</td></tr>`;
+
+  const scoreColor = score < 40 ? "#ef4444" : score < 80 ? "#f59e0b" : "#22c55e";
+
+  return emailWrapper(`
+    <h2 style="color:#ef4444;margin:0 0 20px;">🚨 Problém s verifikací zásilky</h2>
+    <p>ShieldTrack hlásí nízké skóre verifikace u escrow transakce.</p>
+
+    ${listing ? listingInfoBlock(listing, transaction) : `<div style="margin:12px 0;padding:12px 16px;background:#16162b;border-radius:8px;font-size:13px;color:#ccc;">🏷️ <strong>Reference:</strong> ${esc(transaction.payment_reference)}</div>`}
+
+    <div style="margin:20px 0;padding:16px;background:#16162b;border-radius:8px;border-left:3px solid ${scoreColor};">
+      <strong style="color:${scoreColor};font-size:20px;">Skóre: ${score}/100</strong><br>
+      <span style="color:#ccc;">Částka: <strong>${formatPrice(Number(transaction.amount))}</strong></span>
+    </div>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0;">
+      <tr style="background:#16162b;">
+        <th style="padding:8px;text-align:left;color:#888;font-size:12px;">Kontrola</th>
+        <th style="padding:8px;text-align:left;color:#888;font-size:12px;">Detail</th>
+      </tr>
+      ${checksHtml}
+    </table>
+
+    <div style="margin-top:24px;text-align:center;">
+      <a href="https://lokopolis.cz/admin/escrow" style="display:inline-block;padding:12px 28px;background:#ef4444;color:#fff;font-weight:700;border-radius:8px;text-decoration:none;">Otevřít admin escrow →</a>
+    </div>
+  `, settings);
+}
+
+// ─── Escrow on hold ──────────────────────────────────────────────────────────
+
+export function escrowOnHold(user: any, listing: any, transaction: any, reason: string, settings?: Record<string, any>): string {
+  return emailWrapper(`
+    <h2 style="color:#ef4444;margin:0 0 20px;">⚠️ Výplata pozastavena</h2>
+    <p>Dobrý den, <strong style="color:#f0a030;">${esc(user.display_name || user.username)}</strong>,</p>
+    <p>výplata u transakce <strong>${esc(transaction.payment_reference)}</strong> za inzerát <strong>"${esc(listing.title)}"</strong> byla pozastavena k prověření administrátorem.</p>
+
+    ${listingInfoBlock(listing, transaction)}
+
+    <div style="margin:20px 0;padding:16px;background:#16162b;border-radius:8px;border-left:3px solid #ef4444;">
+      <strong style="color:#ef4444;">Důvod pozastavení:</strong><br>
+      <span style="color:#ccc;">${esc(reason)}</span>
+    </div>
+
+    <p style="color:#ccc;">Transakce je nyní prověřována. O dalším postupu budete informováni e-mailem.</p>
+    <p style="color:#888;">Pokud máte dotazy, kontaktujte nás na info@lokopolis.cz.</p>
+
+    <div style="margin-top:24px;text-align:center;">
+      <a href="https://lokopolis.cz/bazar/transakce/${esc(transaction.id)}" style="display:inline-block;padding:12px 28px;background:#f0a030;color:#1a1a2e;font-weight:700;border-radius:8px;text-decoration:none;">Zobrazit transakci →</a>
+    </div>
+  `, settings);
+}

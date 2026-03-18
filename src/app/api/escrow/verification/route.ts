@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticateUser, getServiceClient, isAdmin } from "@/lib/escrow-helpers";
+import { authenticateUser, getServiceClient, isAdmin, getEscrowSettings } from "@/lib/escrow-helpers";
 import { getShipmentVerification } from "@/lib/shieldtrack";
+import { sendEmail } from "@/lib/email";
+import { escrowVerificationAlert } from "@/lib/email-templates";
 
 export async function GET(req: NextRequest) {
   try {
@@ -18,7 +20,7 @@ export async function GET(req: NextRequest) {
 
     const { data: transaction, error } = await supabase
       .from("escrow_transactions")
-      .select("id, buyer_id, seller_id, shieldtrack_shipment_id")
+      .select("id, buyer_id, seller_id, shieldtrack_shipment_id, listing_id, payment_reference, amount, st_alert_sent")
       .eq("id", escrowId)
       .single();
 
@@ -45,9 +47,73 @@ export async function GET(req: NextRequest) {
         transaction.shieldtrack_shipment_id
       );
 
+      const verification = shipment.verification;
+
+      // Sync st_score a st_status do escrow_transactions (cache)
+      if (verification) {
+        const score = typeof verification.score === "number" ? verification.score : null;
+        const stStatus = verification.status || null;
+
+        await supabase
+          .from("escrow_transactions")
+          .update({ st_score: score, st_status: stStatus })
+          .eq("id", escrowId);
+
+        // Alert admin při nízkém skóre (< 40) — pokud ještě nebyl poslán
+        if (score !== null && score < 40 && !transaction.st_alert_sent) {
+          try {
+            const settings = await getEscrowSettings();
+
+            // Načíst listing pro email
+            const { data: listing } = await supabase
+              .from("listings")
+              .select("id, title")
+              .eq("id", transaction.listing_id)
+              .single();
+
+            // Získat admin email
+            let adminEmail = settings.admin_email;
+            if (!adminEmail) {
+              const { data: adminProfile } = await supabase
+                .from("profiles")
+                .select("email")
+                .eq("role", "admin")
+                .limit(1)
+                .single();
+              adminEmail = adminProfile?.email || "";
+            }
+
+            if (adminEmail) {
+              const checks = Array.isArray(verification.checks) ? verification.checks : [];
+              const html = escrowVerificationAlert(
+                transaction,
+                listing || { title: "Neznámý inzerát" },
+                score,
+                checks,
+                settings,
+              );
+
+              await sendEmail(
+                adminEmail,
+                `🚨 ShieldTrack alert — skóre ${score}/100 — ${transaction.payment_reference}`,
+                html,
+              );
+
+              // Označit alert jako poslaný
+              await supabase
+                .from("escrow_transactions")
+                .update({ st_alert_sent: true })
+                .eq("id", escrowId);
+            }
+          } catch (alertErr) {
+            console.warn("Nepodařilo se odeslat ShieldTrack alert:", alertErr);
+          }
+        }
+      }
+
       return NextResponse.json({
         available: true,
-        verification: shipment.verification,
+        verification,
       });
     } catch (stError) {
       console.warn("ShieldTrack verification fetch failed:", stError);

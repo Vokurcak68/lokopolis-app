@@ -7,6 +7,19 @@ import { supabase } from "@/lib/supabase";
 import type { EscrowDispute, EscrowTransaction, Listing } from "@/types/database";
 
 type Tab = "transactions" | "disputes" | "settings" | "stats";
+type SortKey = "date" | "score" | "amount";
+type SortDir = "asc" | "desc";
+
+function scoreIndicator(score: number | null): string {
+  if (score === null || score === undefined) return "⚪";
+  if (score >= 80) return "🟢";
+  if (score >= 40) return "🟡";
+  return "🔴";
+}
+
+function isProblematic(t: EscrowTransaction): boolean {
+  return (t.st_score !== null && t.st_score !== undefined && t.st_score < 40) || t.st_status === "failed";
+}
 
 export default function AdminEscrowPage() {
   const router = useRouter();
@@ -19,6 +32,12 @@ export default function AdminEscrowPage() {
   const [partialAmountInput, setPartialAmountInput] = useState("");
   const [settings, setSettings] = useState<Record<string, string>>({});
   const [statusFilter, setStatusFilter] = useState("");
+  const [problemFilter, setProblemFilter] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>("date");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [holdFormId, setHoldFormId] = useState<string | null>(null);
+  const [holdReasonInput, setHoldReasonInput] = useState("");
+  const [holdLoading, setHoldLoading] = useState(false);
 
   async function authAdmin() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -65,11 +84,44 @@ export default function AdminEscrowPage() {
 
   useEffect(() => { fetchAll(); }, []);
 
+  const filteredTransactions = useMemo(() => {
+    let list = transactions;
+
+    // Status filtr
+    if (statusFilter) {
+      list = list.filter(t => t.status === statusFilter);
+    }
+
+    // Problémové zásilky filtr
+    if (problemFilter) {
+      list = list.filter(t => isProblematic(t));
+    }
+
+    // Řazení
+    list = [...list].sort((a, b) => {
+      if (sortKey === "score") {
+        const sa = a.st_score ?? -1;
+        const sb = b.st_score ?? -1;
+        return sortDir === "asc" ? sa - sb : sb - sa;
+      }
+      if (sortKey === "amount") {
+        return sortDir === "asc" ? Number(a.amount) - Number(b.amount) : Number(b.amount) - Number(a.amount);
+      }
+      // date
+      return sortDir === "asc"
+        ? new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        : new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+
+    return list;
+  }, [transactions, statusFilter, problemFilter, sortKey, sortDir]);
+
   const stats = useMemo(() => {
     const totalVolume = transactions.reduce((a, t) => a + Number(t.amount || 0), 0);
     const totalCommission = transactions.reduce((a, t) => a + Number(t.commission_amount || 0), 0);
     const openDisputes = disputes.filter(d => d.status === "open").length;
-    return { total: transactions.length, totalVolume, totalCommission, openDisputes, disputes: disputes.length };
+    const problematic = transactions.filter(t => isProblematic(t)).length;
+    return { total: transactions.length, totalVolume, totalCommission, openDisputes, disputes: disputes.length, problematic };
   }, [transactions, disputes]);
 
   async function callApi(path: string, body: Record<string, unknown>) {
@@ -84,6 +136,21 @@ export default function AdminEscrowPage() {
     if (!res.ok) throw new Error(data.error || "Chyba");
   }
 
+  async function handleHold(escrowId: string) {
+    if (!holdReasonInput.trim()) { alert("Zadejte důvod pozastavení"); return; }
+    setHoldLoading(true);
+    try {
+      await callApi("hold", { escrow_id: escrowId, reason: holdReasonInput.trim() });
+      setHoldFormId(null);
+      setHoldReasonInput("");
+      await fetchAll();
+    } catch (err: any) {
+      alert(err.message || "Chyba při pozastavení");
+    } finally {
+      setHoldLoading(false);
+    }
+  }
+
   async function saveSettings() {
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token || "";
@@ -96,6 +163,15 @@ export default function AdminEscrowPage() {
     if (!res.ok) return alert(data.error || "Chyba");
     alert("Nastavení uloženo");
     setSettings(data.settings || settings);
+  }
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir(d => d === "asc" ? "desc" : "asc");
+    } else {
+      setSortKey(key);
+      setSortDir("desc");
+    }
   }
 
   if (loading) return <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "40px 20px", color: "var(--text-muted)" }}>Načítám…</div>;
@@ -125,31 +201,100 @@ export default function AdminEscrowPage() {
 
       {tab === "transactions" && (
         <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px", padding: "14px" }}>
-          <div style={{ marginBottom: "12px" }}>
+          {/* Filtry a řazení */}
+          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "12px", alignItems: "center" }}>
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ padding: "8px 10px", borderRadius: "8px", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-primary)" }}>
               <option value="">Všechny stavy</option>
-              {["created", "partial_paid", "paid", "shipped", "delivered", "completed", "auto_completed", "payout_sent", "payout_confirmed", "disputed", "refunded", "cancelled"].filter(s => transactions.some(t => t.status === s)).map(s => <option key={s} value={s}>{s}</option>)}
+              {["created", "partial_paid", "paid", "shipped", "delivered", "completed", "auto_completed", "payout_sent", "payout_confirmed", "hold", "disputed", "refunded", "cancelled"].filter(s => transactions.some(t => t.status === s)).map(s => <option key={s} value={s}>{s}</option>)}
             </select>
+
+            <button
+              onClick={() => setProblemFilter(f => !f)}
+              style={{
+                padding: "8px 12px",
+                borderRadius: "8px",
+                border: `1px solid ${problemFilter ? "#ef4444" : "var(--border)"}`,
+                background: problemFilter ? "#ef444422" : "var(--bg-card)",
+                color: problemFilter ? "#ef4444" : "var(--text-muted)",
+                cursor: "pointer",
+                fontWeight: 600,
+                fontSize: "13px",
+              }}
+            >
+              🔴 Problémové zásilky {stats.problematic > 0 && `(${stats.problematic})`}
+            </button>
+
+            <span style={{ color: "var(--text-dimmer)", fontSize: "12px", marginLeft: "auto" }}>Řazení:</span>
+            {([["date", "Datum"], ["score", "Skóre"], ["amount", "Částka"]] as [SortKey, string][]).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => toggleSort(key)}
+                style={{
+                  padding: "6px 10px",
+                  borderRadius: "6px",
+                  border: `1px solid ${sortKey === key ? "var(--accent)" : "var(--border)"}`,
+                  background: sortKey === key ? "var(--accent)" : "transparent",
+                  color: sortKey === key ? "var(--accent-text-on)" : "var(--text-muted)",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                  fontSize: "12px",
+                }}
+              >
+                {label} {sortKey === key && (sortDir === "asc" ? "↑" : "↓")}
+              </button>
+            ))}
           </div>
+
           <div style={{ display: "grid", gap: "10px" }}>
-            {transactions.filter(t => !statusFilter || t.status === statusFilter).map(t => {
+            {filteredTransactions.map(t => {
               const listing = listingMap[t.listing_id];
+              const problematic = isProblematic(t);
+              const canHold = ["paid", "shipped", "delivered", "auto_completed"].includes(t.status);
               return (
-                <div key={t.id} style={{ border: "1px solid var(--border)", borderRadius: "10px", padding: "12px" }}>
+                <div
+                  key={t.id}
+                  style={{
+                    border: `1px solid ${problematic ? "#ef444455" : t.status === "hold" ? "#ef444455" : "var(--border)"}`,
+                    borderRadius: "10px",
+                    padding: "12px",
+                    background: problematic ? "#ef444408" : t.status === "hold" ? "#ef444408" : undefined,
+                  }}
+                >
                   <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", flexWrap: "wrap" }}>
-                    <div>
+                    <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: "14px" }}>
                         {t.payment_reference}
                         {listing && <span style={{ fontWeight: 400, color: "var(--text-muted)", marginLeft: "8px" }}>— {listing.title}</span>}
                       </div>
-                      <div style={{ color: "var(--text-muted)", fontSize: "12px" }}>
-                        {t.status} · {Number(t.amount).toLocaleString("cs-CZ")} Kč
+                      <div style={{ color: "var(--text-muted)", fontSize: "12px", display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center", marginTop: "2px" }}>
+                        <span>{t.status === "hold" ? <span style={{ color: "#ef4444", fontWeight: 700 }}>⚠️ HOLD</span> : t.status}</span>
+                        <span>·</span>
+                        <span>{Number(t.amount).toLocaleString("cs-CZ")} Kč</span>
                         {t.status === "partial_paid" && t.partial_amount != null && (
-                          <span style={{ color: "#f97316", marginLeft: "8px" }}>
+                          <span style={{ color: "#f97316" }}>
                             (přijato {Number(t.partial_amount).toLocaleString("cs-CZ")} Kč, chybí {(Number(t.amount) - Number(t.partial_amount)).toLocaleString("cs-CZ")} Kč)
                           </span>
                         )}
+                        {/* ShieldTrack skóre */}
+                        <span style={{ marginLeft: "4px" }}>
+                          {scoreIndicator(t.st_score)}{" "}
+                          {t.st_score !== null && t.st_score !== undefined ? (
+                            <span style={{ color: t.st_score < 40 ? "#ef4444" : t.st_score < 80 ? "#f59e0b" : "#22c55e", fontWeight: 600 }}>
+                              ST: {t.st_score}
+                            </span>
+                          ) : (
+                            <span style={{ color: "var(--text-dimmer)" }}>ST: —</span>
+                          )}
+                        </span>
+                        {t.st_status && t.st_status !== "verified" && (
+                          <span style={{ color: "#ef4444", fontSize: "11px" }}>({t.st_status})</span>
+                        )}
                       </div>
+                      {t.status === "hold" && t.hold_reason && (
+                        <div style={{ marginTop: "4px", fontSize: "12px", color: "#ef4444" }}>
+                          Důvod: {t.hold_reason}
+                        </div>
+                      )}
                     </div>
                     <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
                       {t.status === "created" && (
@@ -164,9 +309,44 @@ export default function AdminEscrowPage() {
                       {(t.status === "completed" || t.status === "auto_completed") && (
                         <button onClick={async () => { if (!window.confirm(`Odeslat výplatu ${Number(t.seller_payout).toLocaleString("cs-CZ")} Kč prodávajícímu?`)) return; await callApi("send-payout", { escrow_id: t.id }); await fetchAll(); }} style={btnSmall("#8b5cf6")}>💸 Odeslat výplatu</button>
                       )}
+                      {/* Tlačítko pozastavit výplatu — u problémových nebo aktivních transakcí */}
+                      {canHold && (problematic || t.st_score !== null) && (
+                        <button
+                          onClick={() => { setHoldFormId(holdFormId === t.id ? null : t.id); setHoldReasonInput(""); }}
+                          style={btnSmall("#ef4444")}
+                        >
+                          ⚠️ Pozastavit výplatu
+                        </button>
+                      )}
                       <Link href={`/bazar/transakce/${t.id}`} style={{ ...btnLinkSmall(), textDecoration: "none" }}>Detail</Link>
                     </div>
                   </div>
+
+                  {/* Hold formulář */}
+                  {holdFormId === t.id && (
+                    <div style={{ marginTop: "10px", padding: "12px", borderRadius: "8px", border: "1px solid #ef444455", background: "#ef444410" }}>
+                      <div style={{ fontSize: "13px", color: "#ef4444", fontWeight: 600, marginBottom: "8px" }}>⚠️ Pozastavit výplatu</div>
+                      <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                        <input
+                          type="text"
+                          value={holdReasonInput}
+                          onChange={(e) => setHoldReasonInput(e.target.value)}
+                          placeholder="Důvod pozastavení..."
+                          style={{ flex: 1, minWidth: "200px", padding: "8px 10px", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-primary)", fontSize: "13px" }}
+                        />
+                        <button
+                          onClick={() => handleHold(t.id)}
+                          disabled={holdLoading}
+                          style={btnSmall("#ef4444")}
+                        >
+                          {holdLoading ? "Ukládám…" : "Pozastavit"}
+                        </button>
+                        <button onClick={() => { setHoldFormId(null); setHoldReasonInput(""); }} style={btnSmall("#6b7280")}>Zrušit</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Neúplná platba formulář */}
                   {partialFormId === t.id && (
                     <div style={{ marginTop: "10px", padding: "12px", borderRadius: "8px", border: "1px solid var(--border)", background: "var(--bg-soft, var(--bg-card))" }}>
                       <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
@@ -242,6 +422,7 @@ export default function AdminEscrowPage() {
               ["bank_account", "Bankovní účet"],
               ["bank_iban", "IBAN"],
               ["escrow_enabled", "Escrow zapnuto (true/false)"],
+              ["admin_email", "Admin email (pro ShieldTrack alerty)"],
             ].map(([key, label]) => (
               <div key={key}>
                 <label style={{ display: "block", fontSize: "12px", color: "var(--text-dimmer)", marginBottom: "5px" }}>{label}</label>
@@ -259,6 +440,7 @@ export default function AdminEscrowPage() {
           <StatCard label="Objem" value={`${stats.totalVolume.toLocaleString("cs-CZ")} Kč`} />
           <StatCard label="Provize" value={`${stats.totalCommission.toLocaleString("cs-CZ")} Kč`} />
           <StatCard label="Spory" value={`${stats.disputes} (${stats.openDisputes} otevřených)`} />
+          <StatCard label="Problémové zásilky" value={String(stats.problematic)} color={stats.problematic > 0 ? "#ef4444" : undefined} />
         </div>
       )}
     </div>
@@ -271,6 +453,6 @@ function btnSmall(color: string): React.CSSProperties {
 function btnLinkSmall(): React.CSSProperties {
   return { padding: "8px 10px", borderRadius: "8px", border: "1px solid var(--border)", color: "var(--text-muted)", fontWeight: 600, fontSize: "12px" };
 }
-function StatCard({ label, value }: { label: string; value: string }) {
-  return <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px", padding: "14px" }}><div style={{ color: "var(--text-dimmer)", fontSize: "12px", marginBottom: "5px" }}>{label}</div><div style={{ color: "var(--text-primary)", fontWeight: 700 }}>{value}</div></div>;
+function StatCard({ label, value, color }: { label: string; value: string; color?: string }) {
+  return <div style={{ background: "var(--bg-card)", border: `1px solid ${color ? color + "55" : "var(--border)"}`, borderRadius: "12px", padding: "14px" }}><div style={{ color: "var(--text-dimmer)", fontSize: "12px", marginBottom: "5px" }}>{label}</div><div style={{ color: color || "var(--text-primary)", fontWeight: 700 }}>{value}</div></div>;
 }

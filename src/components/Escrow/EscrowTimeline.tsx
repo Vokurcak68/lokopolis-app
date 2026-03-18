@@ -18,6 +18,7 @@ const STATUS_INDEX: Record<string, number> = {
   paid: 1,
   shipped: 2,
   delivered: 3,
+  hold: 3,
   completed: 4,
   auto_completed: 4,
   payout_sent: 5,
@@ -29,6 +30,7 @@ const TERMINAL_STATUSES: Record<string, { label: string; color: string; icon: st
   refunded: { label: "Vráceno", color: "#f97316", icon: "↩️" },
   cancelled: { label: "Zrušeno", color: "#6b7280", icon: "❌" },
   partial_paid: { label: "Neúplná platba", color: "#f97316", icon: "⚠️" },
+  hold: { label: "Pozastaveno", color: "#ef4444", icon: "⏸️" },
 };
 
 export default function EscrowTimeline({ status }: { status: EscrowStatus }) {

@@ -630,7 +630,7 @@ export interface CartItemData {
 }
 
 // Escrow types
-export type EscrowStatus = 'created' | 'partial_paid' | 'paid' | 'shipped' | 'delivered' | 'completed' | 'disputed' | 'refunded' | 'auto_completed' | 'cancelled' | 'payout_sent' | 'payout_confirmed';
+export type EscrowStatus = 'created' | 'partial_paid' | 'paid' | 'shipped' | 'delivered' | 'completed' | 'disputed' | 'refunded' | 'auto_completed' | 'cancelled' | 'payout_sent' | 'payout_confirmed' | 'hold';
 export type EscrowDisputeStatus = 'open' | 'resolved_buyer' | 'resolved_seller' | 'resolved_split';
 
 export interface EscrowTransaction {
@@ -665,6 +665,10 @@ export interface EscrowTransaction {
   notes: string | null;
   admin_note: string | null;
   shieldtrack_shipment_id: string | null;
+  st_score: number | null;
+  st_status: string | null;
+  st_alert_sent: boolean;
+  hold_reason: string | null;
   created_at: string;
   updated_at: string;
 }

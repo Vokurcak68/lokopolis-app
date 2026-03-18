@@ -198,6 +198,28 @@ export default function TransactionDetailPage() {
         </div>
       )}
 
+      {/* Hold banner */}
+      {transaction.status === "hold" && (
+        <div style={{
+          padding: "14px 16px",
+          borderRadius: "10px",
+          background: "rgba(239,68,68,0.08)",
+          border: "1px solid rgba(239,68,68,0.3)",
+          marginBottom: "12px",
+          fontSize: "14px",
+        }}>
+          <div style={{ fontWeight: 700, color: "#ef4444", marginBottom: "4px" }}>⚠️ Výplata pozastavena</div>
+          {transaction.hold_reason && (
+            <div style={{ color: "var(--text-body)" }}>
+              Důvod: <strong>{transaction.hold_reason}</strong>
+            </div>
+          )}
+          <div style={{ color: "var(--text-dimmer)", fontSize: "12px", marginTop: "6px" }}>
+            Transakce je prověřována administrátorem. O dalším postupu budete informováni.
+          </div>
+        </div>
+      )}
+
       {/* Timeline */}
       <EscrowTimeline status={transaction.status} />
 
