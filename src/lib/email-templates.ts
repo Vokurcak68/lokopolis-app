@@ -697,6 +697,84 @@ export function escrowVerificationAlert(
 
 // ─── Escrow on hold ──────────────────────────────────────────────────────────
 
+// ─── Auto-delivery templates ─────────────────────────────────────────────────
+
+export function escrowDelivered(buyer: any, listing: any, transaction: any, settings?: Record<string, any>): string {
+  return emailWrapper(`
+    <h2 style="color:#f0a030;margin:0 0 20px;">📬 Zásilka doručena</h2>
+    <p>Dobrý den, <strong style="color:#f0a030;">${esc(buyer.display_name || buyer.username)}</strong>,</p>
+    <p>zásilka z vaší bezpečné platby <strong>${esc(transaction.payment_reference)}</strong> za inzerát <strong>"${esc(listing.title)}"</strong> byla podle přepravce doručena.</p>
+
+    ${listingInfoBlock(listing, transaction)}
+
+    <div style="margin:20px 0;padding:16px;background:#16162b;border-radius:8px;border-left:3px solid #22c55e;">
+      <strong style="color:#22c55e;">📬 Zásilka doručena</strong><br>
+      <span style="color:#ccc;">Prosím potvrďte přijetí zboží kliknutím na tlačítko níže.</span>
+    </div>
+
+    <div style="margin:16px 0;padding:16px;background:#16162b;border-radius:8px;border-left:3px solid #f59e0b;">
+      <strong style="color:#f59e0b;">⏰ Máte 14 dní na potvrzení</strong><br>
+      <span style="color:#ccc;">Pokud tak neučiníte do 14 dnů, peníze budou automaticky uvolněny prodávajícímu.</span>
+    </div>
+
+    <div style="margin-top:24px;text-align:center;">
+      <a href="https://lokopolis.cz/bazar/transakce/${esc(transaction.id)}" style="display:inline-block;padding:12px 28px;background:#22c55e;color:#fff;font-weight:700;border-radius:8px;text-decoration:none;">✅ Potvrdit přijetí zboží →</a>
+    </div>
+
+    <p style="margin-top:16px;color:#888;font-size:13px;">Pokud zboží neodpovídá popisu nebo jste ho neobdrželi, můžete otevřít spor.</p>
+  `, settings);
+}
+
+export function escrowDeliveredSeller(seller: any, listing: any, transaction: any, settings?: Record<string, any>): string {
+  return emailWrapper(`
+    <h2 style="color:#f0a030;margin:0 0 20px;">📬 Zásilka doručena</h2>
+    <p>Dobrý den, <strong style="color:#f0a030;">${esc(seller.display_name || seller.username)}</strong>,</p>
+    <p>zásilka z transakce <strong>${esc(transaction.payment_reference)}</strong> za inzerát <strong>"${esc(listing.title)}"</strong> byla podle přepravce doručena kupujícímu.</p>
+
+    ${listingInfoBlock(listing, transaction)}
+
+    <div style="margin:20px 0;padding:16px;background:#16162b;border-radius:8px;border-left:3px solid #3b82f6;">
+      <strong style="color:#3b82f6;">⏳ Čekáme na potvrzení kupujícího</strong><br>
+      <span style="color:#ccc;">Kupující má 14 dní na potvrzení přijetí zboží. Pokud nepotvrdí, peníze vám budou uvolněny automaticky.</span>
+    </div>
+
+    <div style="margin-top:24px;text-align:center;">
+      <a href="https://lokopolis.cz/bazar/transakce/${esc(transaction.id)}" style="display:inline-block;padding:12px 28px;background:#f0a030;color:#1a1a2e;font-weight:700;border-radius:8px;text-decoration:none;">Zobrazit transakci →</a>
+    </div>
+  `, settings);
+}
+
+export function escrowAutoCompleted(user: any, listing: any, transaction: any, role: "buyer" | "seller", settings?: Record<string, any>): string {
+  const isBuyer = role === "buyer";
+  return emailWrapper(`
+    <h2 style="color:#22c55e;margin:0 0 20px;">✅ Transakce automaticky dokončena</h2>
+    <p>Dobrý den, <strong style="color:#f0a030;">${esc(user.display_name || user.username)}</strong>,</p>
+    <p>transakce <strong>${esc(transaction.payment_reference)}</strong> za inzerát <strong>"${esc(listing.title)}"</strong> byla automaticky dokončena po 14 dnech od doručení zásilky.</p>
+
+    ${listingInfoBlock(listing, transaction)}
+
+    <div style="margin:20px 0;padding:16px;background:#16162b;border-radius:8px;border-left:3px solid #22c55e;">
+      <strong style="color:#22c55e;">✅ Peníze uvolněny ${isBuyer ? "" : "— čekejte na výplatu"}</strong><br>
+      ${isBuyer
+        ? `<span style="color:#ccc;">Peníze byly automaticky uvolněny prodávajícímu, protože jste nepotvrdil/a přijetí zboží ve stanovené lhůtě.</span>`
+        : `<span style="color:#ccc;"><strong>Výplata: ${formatPrice(Number(transaction.seller_payout))}</strong></span><br>
+           <span style="color:#888;font-size:13px;">Celková cena: ${formatPrice(Number(transaction.amount))} · Provize: ${formatPrice(Number(transaction.commission_amount))}</span>`
+      }
+    </div>
+
+    ${isBuyer
+      ? `<p style="color:#888;font-size:13px;">Pokud jste zboží neobdrželi nebo s ním máte problém, kontaktujte nás na info@lokopolis.cz.</p>`
+      : `<p style="color:#ccc;">Výplata bude odeslána na váš účet v nejbližším možném termínu.</p>`
+    }
+
+    <div style="margin-top:24px;text-align:center;">
+      <a href="https://lokopolis.cz/bazar/transakce/${esc(transaction.id)}" style="display:inline-block;padding:12px 28px;background:#f0a030;color:#1a1a2e;font-weight:700;border-radius:8px;text-decoration:none;">Zobrazit transakci →</a>
+    </div>
+  `, settings);
+}
+
+// ─── Escrow on hold ──────────────────────────────────────────────────────────
+
 export function escrowOnHold(user: any, listing: any, transaction: any, reason: string, settings?: Record<string, any>): string {
   return emailWrapper(`
     <h2 style="color:#ef4444;margin:0 0 20px;">⚠️ Výplata pozastavena</h2>

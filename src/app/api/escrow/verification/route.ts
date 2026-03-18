@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateUser, getServiceClient, isAdmin, getEscrowSettings } from "@/lib/escrow-helpers";
 import { getShipmentVerification } from "@/lib/shieldtrack";
 import { sendEmail } from "@/lib/email";
-import { escrowVerificationAlert } from "@/lib/email-templates";
+import { escrowVerificationAlert, escrowDelivered, escrowDeliveredSeller } from "@/lib/email-templates";
 
 export async function GET(req: NextRequest) {
   try {
@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
 
     const { data: transaction, error } = await supabase
       .from("escrow_transactions")
-      .select("id, buyer_id, seller_id, shieldtrack_shipment_id, listing_id, payment_reference, amount, st_alert_sent")
+      .select("id, buyer_id, seller_id, shieldtrack_shipment_id, listing_id, payment_reference, amount, st_alert_sent, status, delivered_at")
       .eq("id", escrowId)
       .single();
 
@@ -107,6 +107,62 @@ export async function GET(req: NextRequest) {
             }
           } catch (alertErr) {
             console.warn("Nepodařilo se odeslat ShieldTrack alert:", alertErr);
+          }
+        }
+
+        // Auto-delivered: pokud ShieldTrack ukazuje delivery_confirmed=pass a status je "shipped"
+        const deliveryCheck = Array.isArray(verification.checks)
+          ? verification.checks.find((c: { name: string; status: string }) => c.name === "delivery_confirmed")
+          : null;
+
+        if (
+          deliveryCheck &&
+          deliveryCheck.status === "passed" &&
+          transaction.status === "shipped"
+        ) {
+          try {
+            const now = new Date().toISOString();
+            await supabase
+              .from("escrow_transactions")
+              .update({
+                status: "delivered",
+                delivered_at: now,
+              })
+              .eq("id", escrowId)
+              .eq("status", "shipped"); // Optimistic lock
+
+            // Send delivery notification emails
+            const [buyerRes, sellerRes, listingRes] = await Promise.all([
+              supabase.from("profiles").select("*").eq("id", transaction.buyer_id).single(),
+              supabase.from("profiles").select("*").eq("id", transaction.seller_id).single(),
+              supabase.from("listings").select("*").eq("id", transaction.listing_id).single(),
+            ]);
+
+            const buyer = buyerRes.data;
+            const seller = sellerRes.data;
+            const listing = listingRes.data || { title: "Neznámý inzerát", id: transaction.listing_id };
+            const emailSettings = await getEscrowSettings();
+
+            if (buyer?.email) {
+              const html = escrowDelivered(buyer, listing, transaction, emailSettings);
+              await sendEmail(
+                buyer.email,
+                `📬 Zásilka doručena — potvrďte přijetí (${transaction.payment_reference})`,
+                html,
+              );
+            }
+            if (seller?.email) {
+              const html = escrowDeliveredSeller(seller, listing, transaction, emailSettings);
+              await sendEmail(
+                seller.email,
+                `📬 Zásilka doručena — čekáme na potvrzení kupujícího (${transaction.payment_reference})`,
+                html,
+              );
+            }
+
+            console.log(`Auto-delivered escrow ${escrowId} (delivery_confirmed=pass)`);
+          } catch (deliveryErr) {
+            console.warn("Auto-delivery update failed:", deliveryErr);
           }
         }
       }

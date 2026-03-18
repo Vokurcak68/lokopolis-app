@@ -220,6 +220,37 @@ export default function TransactionDetailPage() {
         </div>
       )}
 
+      {/* Delivered banner with auto-release countdown */}
+      {transaction.status === "delivered" && transaction.delivered_at && (
+        <div style={{
+          padding: "14px 16px",
+          borderRadius: "10px",
+          background: "rgba(34,197,94,0.08)",
+          border: "1px solid rgba(34,197,94,0.3)",
+          marginBottom: "12px",
+          fontSize: "14px",
+        }}>
+          <div style={{ fontWeight: 700, color: "#22c55e", marginBottom: "4px" }}>📬 Zásilka doručena</div>
+          <div style={{ color: "var(--text-body)" }}>
+            {isBuyer
+              ? "Prosím potvrďte přijetí zboží tlačítkem níže."
+              : "Čekáme na potvrzení přijetí od kupujícího."
+            }
+          </div>
+          {(() => {
+            const deliveredDate = new Date(transaction.delivered_at!);
+            const autoReleaseDate = new Date(deliveredDate.getTime() + 14 * 24 * 60 * 60 * 1000);
+            const now = new Date();
+            const daysLeft = Math.max(0, Math.ceil((autoReleaseDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)));
+            return (
+              <div style={{ color: "var(--text-dimmer)", fontSize: "12px", marginTop: "6px" }}>
+                ⏰ Zbývá {daysLeft} {daysLeft === 1 ? 'den' : daysLeft >= 2 && daysLeft <= 4 ? 'dny' : 'dní'} do automatického uvolnění peněz prodávajícímu.
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
       {/* Timeline */}
       <EscrowTimeline status={transaction.status} />
 
@@ -257,9 +288,22 @@ export default function TransactionDetailPage() {
         <InfoCard label="Vytvořeno" value={formatCzechDate(transaction.created_at)} />
         {transaction.shipped_at && <InfoCard label="Odesláno" value={formatCzechDate(transaction.shipped_at)} />}
         {transaction.completed_at && <InfoCard label="Dokončeno" value={formatCzechDate(transaction.completed_at)} />}
+        {transaction.delivered_at && <InfoCard label="Doručeno" value={formatCzechDate(transaction.delivered_at)} />}
         {transaction.auto_complete_at && transaction.status === "shipped" && (
           <InfoCard label="Automatické dokončení" value={formatCzechDate(transaction.auto_complete_at)} />
         )}
+        {transaction.delivered_at && transaction.status === "delivered" && (() => {
+          const deliveredDate = new Date(transaction.delivered_at);
+          const autoReleaseDate = new Date(deliveredDate.getTime() + 14 * 24 * 60 * 60 * 1000);
+          const now = new Date();
+          const daysLeft = Math.max(0, Math.ceil((autoReleaseDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)));
+          return (
+            <InfoCard
+              label="Auto-uvolnění"
+              value={`za ${daysLeft} ${daysLeft === 1 ? 'den' : daysLeft >= 2 && daysLeft <= 4 ? 'dny' : 'dní'}`}
+            />
+          );
+        })()}
       </div>
 
       {/* Payment info — for buyer when status is "created" */}

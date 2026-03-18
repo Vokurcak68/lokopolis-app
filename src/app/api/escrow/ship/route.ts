@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateUser, getServiceClient, getEscrowSettings } from "@/lib/escrow-helpers";
 import { sendEmail } from "@/lib/email";
-import { escrowShipped } from "@/lib/email-templates";
-import { registerShipment } from "@/lib/shieldtrack";
+import { escrowShipped, escrowDelivered, escrowDeliveredSeller } from "@/lib/email-templates";
+import { registerShipment, getShipmentVerification } from "@/lib/shieldtrack";
 
 export async function POST(req: NextRequest) {
   try {
@@ -87,6 +87,52 @@ export async function POST(req: NextRequest) {
             .from("escrow_transactions")
             .update({ shieldtrack_shipment_id: stResult.id })
             .eq("id", escrow_id);
+
+          // Check if package is already delivered (old tracking numbers)
+          try {
+            const shipment = await getShipmentVerification(stResult.id);
+            const deliveryCheck = shipment.verification?.checks?.find(
+              (c: { name: string; status: string }) => c.name === "delivery_confirmed" && c.status === "passed"
+            );
+
+            if (deliveryCheck) {
+              const now = new Date().toISOString();
+              await supabase
+                .from("escrow_transactions")
+                .update({
+                  status: "delivered",
+                  delivered_at: now,
+                  st_score: shipment.verification?.score ?? null,
+                  st_status: shipment.verification?.status ?? null,
+                })
+                .eq("id", escrow_id)
+                .eq("status", "shipped");
+
+              console.log(`ShieldTrack: package already delivered for escrow ${escrow_id}`);
+
+              // Send delivered emails instead of shipped email
+              const buyer = buyerRes?.data;
+              const listing = listingRes?.data;
+              const seller = sellerRes?.data;
+
+              if (buyer?.email && listing) {
+                try {
+                  const html = escrowDelivered(buyer, listing, { ...transaction, tracking_number, carrier }, settings);
+                  await sendEmail(buyer.email, `📬 Zásilka doručena — potvrďte přijetí (${transaction.payment_reference})`, html);
+                } catch (e) { console.error("Delivered email to buyer error:", e); }
+              }
+              if (seller?.email && listing) {
+                try {
+                  const html = escrowDeliveredSeller(seller, listing, { ...transaction, tracking_number, carrier }, settings);
+                  await sendEmail(seller.email, `📬 Zásilka doručena — čekáme na potvrzení kupujícího (${transaction.payment_reference})`, html);
+                } catch (e) { console.error("Delivered email to seller error:", e); }
+              }
+
+              return NextResponse.json({ success: true, delivered: true });
+            }
+          } catch (verifyErr) {
+            console.warn("ShieldTrack immediate delivery check failed (non-blocking):", verifyErr);
+          }
         }
       } catch (stError) {
         console.warn("ShieldTrack registration failed (non-blocking):", stError);
