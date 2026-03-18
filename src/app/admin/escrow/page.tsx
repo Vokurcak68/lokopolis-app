@@ -74,6 +74,7 @@ export default function AdminEscrowPage() {
   const [holdFormId, setHoldFormId] = useState<string | null>(null);
   const [holdReasonInput, setHoldReasonInput] = useState("");
   const [holdLoading, setHoldLoading] = useState(false);
+  const [verifyPhotoLoading, setVerifyPhotoLoading] = useState<string | null>(null);
 
   async function authAdmin() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -193,6 +194,19 @@ export default function AdminEscrowPage() {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Chyba");
+  }
+
+  async function handleVerifyPhoto(escrowId: string) {
+    setVerifyPhotoLoading(escrowId);
+    try {
+      await callApi("verify-photo", { escrowId });
+      await fetchAll();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Chyba při ověřování fotek";
+      alert(message);
+    } finally {
+      setVerifyPhotoLoading(null);
+    }
   }
 
   async function handleHold(escrowId: string) {
@@ -434,6 +448,39 @@ export default function AdminEscrowPage() {
                       )}
                       {canHold && (
                         <button onClick={() => { setHoldFormId(holdFormId === t.id ? null : t.id); setHoldReasonInput(""); }} style={btnAction("#ef4444")}>⏸️ Pozastavit</button>
+                      )}
+                      {/* Verify photo button — only when shipping proof photos exist */}
+                      {t.shipping_proof_urls && t.shipping_proof_urls.length > 0 && (
+                        <button
+                          onClick={() => handleVerifyPhoto(t.id)}
+                          disabled={verifyPhotoLoading === t.id}
+                          style={{
+                            ...btnAction("#f0a030"),
+                            opacity: verifyPhotoLoading === t.id ? 0.6 : 1,
+                            cursor: verifyPhotoLoading === t.id ? "not-allowed" : "pointer",
+                          }}
+                        >
+                          {verifyPhotoLoading === t.id ? "⏳ Ověřuji…" : "🔍 Ověřit foto"}
+                        </button>
+                      )}
+                      {/* Photo verification result badge */}
+                      {t.photo_verification && (
+                        <span style={{
+                          padding: "4px 10px",
+                          borderRadius: "10px",
+                          fontSize: "11px",
+                          fontWeight: 600,
+                          background: (t.photo_verification as { overall_score: number }).overall_score >= 80
+                            ? "rgba(34,197,94,0.15)" : (t.photo_verification as { overall_score: number }).overall_score >= 40
+                            ? "rgba(245,158,11,0.15)" : "rgba(239,68,68,0.15)",
+                          color: (t.photo_verification as { overall_score: number }).overall_score >= 80
+                            ? "#22c55e" : (t.photo_verification as { overall_score: number }).overall_score >= 40
+                            ? "#f59e0b" : "#ef4444",
+                        }}>
+                          {(t.photo_verification as { overall_score: number }).overall_score >= 80
+                            ? "✅" : (t.photo_verification as { overall_score: number }).overall_score >= 40
+                            ? "⚠️" : "❌"} Foto: {(t.photo_verification as { overall_score: number }).overall_score}/100
+                        </span>
                       )}
                       <Link href={`/bazar/transakce/${t.id}`} style={{ ...btnAction("var(--accent)"), textDecoration: "none", display: "inline-block" }}>🔍 Detail</Link>
                     </div>

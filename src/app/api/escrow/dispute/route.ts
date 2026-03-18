@@ -60,6 +60,17 @@ export async function POST(req: NextRequest) {
       .update({ status: "disputed", disputed_at: new Date().toISOString() })
       .eq("id", escrow_id);
 
+    // Auto-trigger photo verification if shipping proofs exist and not yet verified
+    if (transaction.shipping_proof_urls?.length > 0 && !transaction.photo_verification) {
+      try {
+        const { runPhotoVerification } = await import("@/lib/photo-verification");
+        await runPhotoVerification(escrow_id, supabase);
+        console.log(`Auto photo verification triggered for escrow ${escrow_id} (dispute opened)`);
+      } catch (pvErr) {
+        console.warn("Auto photo verification on dispute failed:", pvErr);
+      }
+    }
+
     // Send emails
     const [buyerRes, sellerRes, listingRes] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", transaction.buyer_id).single(),

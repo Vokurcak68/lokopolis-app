@@ -669,8 +669,35 @@ export interface EscrowTransaction {
   st_status: string | null;
   st_alert_sent: boolean;
   hold_reason: string | null;
+  shipping_proof_urls: string[];
+  photo_verification: PhotoVerificationResult | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface PhotoVerificationResult {
+  verified_at: string;
+  overall_score: number;
+  results: PhotoVerificationDetail[];
+  matching: {
+    tracking_match: boolean;
+    date_after_payment: boolean;
+    city_match: boolean;
+    zip_match: boolean;
+  };
+}
+
+export interface PhotoVerificationDetail {
+  image_url: string;
+  tracking_number: string | null;
+  date: string | null;
+  recipient_name: string | null;
+  recipient_city: string | null;
+  recipient_zip: string | null;
+  carrier: string | null;
+  is_legitimate_document: boolean;
+  confidence: number;
+  notes: string | null;
 }
 
 export interface EscrowTransactionWithRelations extends EscrowTransaction {

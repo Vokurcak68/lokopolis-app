@@ -4,6 +4,7 @@ import { useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import type { EscrowTransaction } from "@/types/database";
 import DisputeForm from "./DisputeForm";
+import ShippingProofUpload from "./ShippingProofUpload";
 
 const CARRIERS = [
   { value: "ceska-posta", label: "Česká pošta" },
@@ -15,6 +16,7 @@ const CARRIERS = [
   { value: "wedo", label: "WE|DO (České pošta)" },
   { value: "intime", label: "InTime" },
   { value: "toptrans", label: "TopTrans" },
+  { value: "geis", label: "Geis" },
   { value: "osobni-predani", label: "Osobní předání" },
   { value: "other", label: "Jiné..." },
 ];
@@ -62,6 +64,7 @@ export default function EscrowActions({ transaction, role, roles, onUpdate }: Es
   const [shipPhoto, setShipPhoto] = useState<File | null>(null);
   const [shipPhotoPreview, setShipPhotoPreview] = useState<string | null>(null);
   const shipPhotoRef = useRef<HTMLInputElement>(null);
+  const [shippingProofFiles, setShippingProofFiles] = useState<File[]>([]);
   const [partialAmount, setPartialAmount] = useState("");
   const [adminNote, setAdminNote] = useState(transaction.admin_note || "");
 
@@ -89,20 +92,33 @@ export default function EscrowActions({ transaction, role, roles, onUpdate }: Es
     setLoading(true);
     setError("");
     try {
-      // Upload photo
+      // Upload main photo
       const ext = shipPhoto.name.split(".").pop() || "jpg";
       const path = `escrow/${transaction.id}/shipping_${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage.from("images").upload(path, shipPhoto);
       if (upErr) throw new Error("Nepodařilo se nahrát fotku: " + upErr.message);
       const { data: urlData } = supabase.storage.from("images").getPublicUrl(path);
 
+      // Upload shipping proof photos (optional)
+      const shippingProofUrls: string[] = [];
+      for (const proofFile of shippingProofFiles) {
+        const proofExt = proofFile.name.split(".").pop() || "jpg";
+        const proofPath = `escrow-proofs/${transaction.id}/proof_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${proofExt}`;
+        const { error: proofUpErr } = await supabase.storage.from("images").upload(proofPath, proofFile);
+        if (proofUpErr) throw new Error("Nepodařilo se nahrát důkaz odeslání: " + proofUpErr.message);
+        const { data: proofUrlData } = supabase.storage.from("images").getPublicUrl(proofPath);
+        shippingProofUrls.push(proofUrlData.publicUrl);
+      }
+
       await apiCall("ship", {
         escrow_id: transaction.id,
         tracking_number: trackingNumber.trim(),
         carrier: effectiveCarrier,
         shipping_photo: urlData.publicUrl,
+        shipping_proof_urls: shippingProofUrls.length > 0 ? shippingProofUrls : undefined,
       });
       setShowShipForm(false);
+      setShippingProofFiles([]);
       onUpdate();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Chyba");
@@ -406,6 +422,13 @@ export default function EscrowActions({ transaction, role, roles, onUpdate }: Es
               Např. podací lístek, potvrzení z appky přepravce, screenshot trackingu
             </p>
           </div>
+
+          {/* Shipping proof upload (optional, for AI verification) */}
+          <ShippingProofUpload
+            carrier={carrier}
+            files={shippingProofFiles}
+            onFilesChange={setShippingProofFiles}
+          />
 
           <div style={{ display: "flex", gap: "10px" }}>
             <button

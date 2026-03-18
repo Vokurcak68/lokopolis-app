@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { escrow_id, tracking_number, carrier, shipping_photo } = body;
+    const { escrow_id, tracking_number, carrier, shipping_photo, shipping_proof_urls } = body;
     if (!escrow_id) {
       return NextResponse.json({ error: "Chybí escrow_id" }, { status: 400 });
     }
@@ -42,16 +42,23 @@ export async function POST(req: NextRequest) {
     const autoCompleteAt = new Date();
     autoCompleteAt.setDate(autoCompleteAt.getDate() + autoCompleteDays);
 
+    const updatePayload: Record<string, unknown> = {
+      status: "shipped",
+      tracking_number: tracking_number || null,
+      carrier: carrier || null,
+      shipping_photo: shipping_photo || null,
+      shipped_at: new Date().toISOString(),
+      auto_complete_at: autoCompleteAt.toISOString(),
+    };
+
+    // Save shipping proof URLs if provided
+    if (shipping_proof_urls && Array.isArray(shipping_proof_urls) && shipping_proof_urls.length > 0) {
+      updatePayload.shipping_proof_urls = shipping_proof_urls;
+    }
+
     const { error: updateError } = await supabase
       .from("escrow_transactions")
-      .update({
-        status: "shipped",
-        tracking_number: tracking_number || null,
-        carrier: carrier || null,
-        shipping_photo: shipping_photo || null,
-        shipped_at: new Date().toISOString(),
-        auto_complete_at: autoCompleteAt.toISOString(),
-      })
+      .update(updatePayload)
       .eq("id", escrow_id);
 
     if (updateError) {

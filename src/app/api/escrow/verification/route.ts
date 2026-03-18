@@ -61,6 +61,23 @@ export async function GET(req: NextRequest) {
 
         // Alert admin při nízkém skóre (< 40) — pokud ještě nebyl poslán
         if (score !== null && score < 40 && !transaction.st_alert_sent) {
+          // Auto-trigger photo verification when ST score < 40 and shipping proofs exist
+          try {
+            const { data: fullTx } = await supabase
+              .from("escrow_transactions")
+              .select("shipping_proof_urls, photo_verification")
+              .eq("id", escrowId)
+              .single();
+
+            if (fullTx?.shipping_proof_urls?.length > 0 && !fullTx?.photo_verification) {
+              const { runPhotoVerification } = await import("@/lib/photo-verification");
+              await runPhotoVerification(escrowId, supabase);
+              console.log(`Auto photo verification triggered for escrow ${escrowId} (ST score < 40)`);
+            }
+          } catch (pvErr) {
+            console.warn("Auto photo verification failed:", pvErr);
+          }
+
           try {
             const settings = await getEscrowSettings();
 

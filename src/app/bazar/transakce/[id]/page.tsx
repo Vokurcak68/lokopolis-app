@@ -12,7 +12,8 @@ import EscrowTimeline from "@/components/Escrow/EscrowTimeline";
 import EscrowActions from "@/components/Escrow/EscrowActions";
 import EscrowReviewForm from "@/components/Escrow/EscrowReviewForm";
 import ShieldTrackVerification from "@/components/Escrow/ShieldTrackVerification";
-import type { EscrowTransaction, EscrowDispute, EscrowReview, Profile, Listing } from "@/types/database";
+import PhotoVerificationDisplay from "@/components/Escrow/PhotoVerificationDisplay";
+import type { EscrowTransaction, EscrowDispute, EscrowReview, Profile, Listing, PhotoVerificationResult } from "@/types/database";
 
 function czechToIBAN(account: string): string {
   const parts = account.replace(/\s/g, "").split("/");
@@ -447,6 +448,15 @@ export default function TransactionDetailPage() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Shipping proof photos + AI verification */}
+      {transaction.shipping_proof_urls && transaction.shipping_proof_urls.length > 0 && (
+        <PhotoVerificationDisplay
+          shippingProofUrls={transaction.shipping_proof_urls}
+          photoVerification={transaction.photo_verification as PhotoVerificationResult | null}
+          isAdmin={isAdmin}
+        />
       )}
 
       {/* ShieldTrack verifikace — pro shipped+ stavy */}
