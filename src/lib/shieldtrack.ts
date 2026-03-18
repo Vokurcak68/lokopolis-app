@@ -94,9 +94,82 @@ export async function registerShipment(
 
 /**
  * Získá detail zásilky včetně verifikačních dat
+ * Mapuje ShieldTrack API formát na Lokopolis formát
  */
 export async function getShipmentVerification(
   shipmentId: string
 ): Promise<ShieldTrackShipment> {
-  return shieldtrackFetch<ShieldTrackShipment>(`/shipments/${shipmentId}`);
+  const raw = await shieldtrackFetch<{
+    shipment: { id: string; tracking_number: string; external_order_id: string; created_at: string };
+    events: unknown[];
+    verification: {
+      results: unknown[];
+      report: {
+        score: number;
+        status: "verified" | "partial" | "failed" | "pending";
+        checks: Array<{
+          type: string;
+          result: "pass" | "fail" | "warning" | "pending";
+          points: number;
+          maxPoints: number;
+          details: string;
+          label: string;
+        }>;
+        summary: string;
+      };
+    };
+  }>(`/shipments/${shipmentId}`);
+
+  const report = raw.verification?.report;
+
+  if (!report) {
+    return {
+      id: raw.shipment.id,
+      tracking_number: raw.shipment.tracking_number,
+      external_order_id: raw.shipment.external_order_id,
+      verification: null,
+      created_at: raw.shipment.created_at,
+    };
+  }
+
+  // Mapovat result → status (pass→passed, fail→failed)
+  const statusMap: Record<string, "passed" | "failed" | "warning" | "pending"> = {
+    pass: "passed",
+    fail: "failed",
+    warning: "warning",
+    pending: "pending",
+  };
+
+  const checks: ShieldTrackCheck[] = report.checks.map((c) => ({
+    name: c.type,
+    status: statusMap[c.result] || "pending",
+    detail: c.details,
+  }));
+
+  // Zjistit address match z city_match a zip_match kontrol
+  const cityCheck = report.checks.find((c) => c.type === "city_match");
+  const zipCheck = report.checks.find((c) => c.type === "zip_match");
+  const addressMatch =
+    cityCheck || zipCheck
+      ? {
+          city: cityCheck?.result === "pass",
+          zip: zipCheck?.result === "pass",
+        }
+      : null;
+
+  return {
+    id: raw.shipment.id,
+    tracking_number: raw.shipment.tracking_number,
+    external_order_id: raw.shipment.external_order_id,
+    verification: {
+      shipment_id: raw.shipment.id,
+      status: report.status,
+      score: report.score,
+      checks,
+      address_match: addressMatch,
+      verified_at: new Date().toISOString(),
+      created_at: raw.shipment.created_at,
+    },
+    created_at: raw.shipment.created_at,
+  };
 }

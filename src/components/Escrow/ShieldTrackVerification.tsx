@@ -34,9 +34,15 @@ const CHECK_STATUS_ICON: Record<string, string> = {
 };
 
 const CHECK_NAME_CS: Record<string, string> = {
+  tracking_exists: "Tracking číslo existuje",
+  tracking_active: "Zásilka je aktivní",
+  city_match: "Shoda města doručení",
+  zip_match: "Shoda PSČ",
+  timeline_valid: "Platná časová osa",
+  delivery_confirmed: "Potvrzení doručení",
+  // Legacy fallbacks
   tracking_valid: "Platnost trackovacího čísla",
   carrier_detected: "Detekce dopravce",
-  delivery_confirmed: "Potvrzení doručení",
   address_match: "Shoda adresy",
   signature_verified: "Ověření podpisu",
   timeline_consistent: "Konzistence časové osy",
