@@ -2,6 +2,10 @@
   "framework": "nextjs",
   "crons": [
     {
+      "path": "/api/escrow/fio-sync",
+      "schedule": "0 8 * * *"
+    },
+    {
       "path": "/api/escrow/auto-complete",
       "schedule": "0 9 * * *"
     }
