@@ -533,6 +533,41 @@ export default function AdminEscrowPage() {
                       </span>
                     </div>
 
+                    {/* Kódy platby */}
+                    <div style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                      gap: "8px",
+                      marginBottom: "8px",
+                    }}>
+                      <div style={{
+                        padding: "8px 10px",
+                        borderRadius: "8px",
+                        border: "1px solid var(--border)",
+                        background: "var(--bg-secondary)",
+                      }}>
+                        <div style={{ color: "var(--text-dimmer)", fontSize: "11px", marginBottom: "2px" }}>
+                          VS (čísla)
+                        </div>
+                        <div style={{ color: "var(--text-primary)", fontSize: "13px", fontWeight: 700, fontFamily: "monospace" }}>
+                          {t.payment_reference.replace(/\D/g, "") || "-"}
+                        </div>
+                      </div>
+                      <div style={{
+                        padding: "8px 10px",
+                        borderRadius: "8px",
+                        border: "1px solid var(--border)",
+                        background: "var(--bg-secondary)",
+                      }}>
+                        <div style={{ color: "var(--text-dimmer)", fontSize: "11px", marginBottom: "2px" }}>
+                          Reference
+                        </div>
+                        <div style={{ color: "var(--text-primary)", fontSize: "13px", fontWeight: 700, fontFamily: "monospace" }}>
+                          {t.payment_reference || "-"}
+                        </div>
+                      </div>
+                    </div>
+
                     {/* Info řádek: stav, částka, kupující/prodávající, ST skóre */}
                     <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center", fontSize: "13px", marginBottom: "6px" }}>
                       <span style={{
