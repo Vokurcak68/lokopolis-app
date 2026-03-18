@@ -75,6 +75,9 @@ export default function AdminEscrowPage() {
   const [holdReasonInput, setHoldReasonInput] = useState("");
   const [holdLoading, setHoldLoading] = useState(false);
   const [verifyPhotoLoading, setVerifyPhotoLoading] = useState<string | null>(null);
+  const [fioSyncLoading, setFioSyncLoading] = useState(false);
+  const [fioSyncResult, setFioSyncResult] = useState<string | null>(null);
+  const [fioSyncError, setFioSyncError] = useState<string | null>(null);
 
   async function authAdmin() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -239,6 +242,38 @@ export default function AdminEscrowPage() {
     setSettings(data.settings || settings);
   }
 
+  async function runFioSync() {
+    setFioSyncLoading(true);
+    setFioSyncError(null);
+    setFioSyncResult(null);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || "";
+
+      const res = await fetch("/api/escrow/fio-sync", {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "FIO sync selhal");
+
+      const stats = data?.stats;
+      const summary = stats
+        ? `Načteno ${stats.fetched}, nové ${stats.newRows}, párováno paid ${stats.paid}, partial ${stats.partial}, overpaid ${stats.overpaid}, unmatched ${stats.unmatched}, chyby ${stats.errors}`
+        : "FIO sync proběhl";
+
+      setFioSyncResult(summary);
+      await fetchAll();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "FIO sync selhal";
+      setFioSyncError(message);
+    } finally {
+      setFioSyncLoading(false);
+    }
+  }
+
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
       setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -267,6 +302,40 @@ export default function AdminEscrowPage() {
         <MiniStat label="Provize" value={`${stats.totalCommission.toLocaleString("cs-CZ")} Kč`} />
         <MiniStat label="Otevřené spory" value={stats.openDisputes} color={stats.openDisputes > 0 ? "#ef4444" : undefined} />
         <MiniStat label="Problémové" value={stats.problematic} color={stats.problematic > 0 ? "#ef4444" : undefined} />
+      </div>
+
+      {/* Debug: ruční FIO sync */}
+      <div style={{
+        marginBottom: "16px",
+        padding: "12px",
+        borderRadius: "10px",
+        border: "1px solid var(--border)",
+        background: "var(--bg-card)",
+        display: "flex",
+        flexWrap: "wrap",
+        alignItems: "center",
+        gap: "10px",
+      }}>
+        <div style={{ color: "var(--text-muted)", fontSize: "13px" }}>
+          🧪 <strong>Admin debug:</strong> ruční spuštění FIO synchronizace plateb
+        </div>
+        <button
+          onClick={runFioSync}
+          disabled={fioSyncLoading}
+          style={{
+            ...btnAction("#0ea5e9"),
+            opacity: fioSyncLoading ? 0.6 : 1,
+            cursor: fioSyncLoading ? "not-allowed" : "pointer",
+          }}
+        >
+          {fioSyncLoading ? "⏳ Spouštím FIO sync…" : "▶️ Spustit FIO sync"}
+        </button>
+        {fioSyncResult && (
+          <span style={{ color: "#22c55e", fontSize: "12px" }}>{fioSyncResult}</span>
+        )}
+        {fioSyncError && (
+          <span style={{ color: "#ef4444", fontSize: "12px" }}>❌ {fioSyncError}</span>
+        )}
       </div>
 
       {/* Hlavní záložky */}
