@@ -167,74 +167,89 @@ function maskTokenInUrl(url: string, rawToken: string): string {
 }
 
 function sanitizeFioToken(token: string): string {
-  return token.trim().replace(/^['"]+|['"]+$/g, "");
+  return token.trim().replace(/^['"]+|['"]+$/g, "").replace(/\s+/g, "");
 }
 
 async function fetchFioPayload(token: string, fromDate: string, toDate: string): Promise<{ payload: unknown; usedUrl: string }> {
   const cleanToken = sanitizeFioToken(token);
+  if (!cleanToken) {
+    throw new Error("FIO_API_TOKEN je prázdný");
+  }
+
   const encodedToken = encodeURIComponent(cleanToken);
 
-  const defaultBases = [
-    "https://fioapi.fio.cz/v1/rest",
-    "https://www.fio.cz/ib_api/rest",
-  ];
-
+  const defaultBase = "https://fioapi.fio.cz/v1/rest";
   const envBase = process.env.FIO_API_BASE?.trim();
-  const bases = envBase
-    ? [envBase, ...defaultBases.filter((b) => b !== envBase)]
-    : defaultBases;
+  const chosenBase = envBase || defaultBase;
+
+  const isLikelyBadBase = /www\.fio\.cz\/ib_api\/rest/i.test(chosenBase);
+  if (isLikelyBadBase) {
+    throw new Error(
+      `FIO_API_BASE je nastavené na webový endpoint (${chosenBase}), který vrací HTML. Nastav FIO_API_BASE na ${defaultBase} nebo env úplně smaž.`
+    );
+  }
+
+  const base = chosenBase.replace(/\/+$/, "");
+  const urls = [
+    safeJoinUrl(base, `periods/${encodedToken}/${fromDate}/${toDate}/transactions.json`),
+    safeJoinUrl(base, `last/${encodedToken}/transactions.json`),
+  ];
 
   const attempts: FioHttpAttempt[] = [];
 
-  for (const base of bases) {
-    const urls = [
-      safeJoinUrl(base, `periods/${encodedToken}/${fromDate}/${toDate}/transactions.json`),
-      safeJoinUrl(base, `last/${encodedToken}/transactions.json`),
-    ];
+  for (const url of urls) {
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        cache: "no-store",
+        redirect: "manual",
+        headers: {
+          "User-Agent": "Lokopolis-Escrow-FIO-Sync",
+        },
+      });
 
-    for (const url of urls) {
-      try {
-        const response = await fetch(url, {
-          method: "GET",
-          cache: "no-store",
-          headers: {
-            "User-Agent": "Lokopolis-Escrow-FIO-Sync",
-          },
-        });
-
-        const bodyText = await response.text();
-        const bodyPreview = bodyText.slice(0, 400);
-
+      const location = response.headers.get("location");
+      if (location && (response.status === 301 || response.status === 302 || response.status === 307 || response.status === 308)) {
         attempts.push({
           url,
           status: response.status,
-          bodyPreview,
+          bodyPreview: `Redirect na ${location}`,
         });
+        continue;
+      }
 
-        if (!response.ok) {
-          continue;
-        }
+      const bodyText = await response.text();
+      const bodyPreview = bodyText.slice(0, 400);
 
-        let payload: unknown;
-        try {
-          payload = bodyText ? JSON.parse(bodyText) : null;
-        } catch {
-          attempts.push({
-            url,
-            status: response.status,
-            bodyPreview: `Neplatný JSON odpovědi: ${bodyPreview}`,
-          });
-          continue;
-        }
+      attempts.push({
+        url,
+        status: response.status,
+        bodyPreview,
+      });
 
-        return { payload, usedUrl: maskTokenInUrl(url, cleanToken) };
-      } catch (error) {
+      if (!response.ok) {
+        continue;
+      }
+
+      let payload: unknown;
+      try {
+        payload = bodyText ? JSON.parse(bodyText) : null;
+      } catch {
         attempts.push({
           url,
-          status: 0,
-          bodyPreview: error instanceof Error ? error.message : "Network error",
+          status: response.status,
+          bodyPreview: `Neplatný JSON odpovědi: ${bodyPreview}`,
         });
+        continue;
       }
+
+      return { payload, usedUrl: maskTokenInUrl(url, cleanToken) };
+    } catch (error) {
+      attempts.push({
+        url,
+        status: 0,
+        bodyPreview: error instanceof Error ? error.message : "Network error",
+      });
     }
   }
 
