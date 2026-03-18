@@ -657,6 +657,7 @@ export interface EscrowTransaction {
   partial_amount: number | null;
   notes: string | null;
   admin_note: string | null;
+  shieldtrack_shipment_id: string | null;
   created_at: string;
   updated_at: string;
 }

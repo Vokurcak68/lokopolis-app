@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateUser, getServiceClient, getEscrowSettings } from "@/lib/escrow-helpers";
 import { sendEmail } from "@/lib/email";
 import { escrowShipped } from "@/lib/email-templates";
+import { registerShipment } from "@/lib/shieldtrack";
 
 export async function POST(req: NextRequest) {
   try {
@@ -57,14 +58,43 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Nepodařilo se aktualizovat transakci" }, { status: 500 });
     }
 
-    // Send email to buyer
-    const [buyerRes, listingRes] = await Promise.all([
+    // Fetch buyer + seller + listing data (needed for ShieldTrack + email)
+    const [buyerRes, listingRes, sellerRes] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", transaction.buyer_id).single(),
       supabase.from("listings").select("*").eq("id", transaction.listing_id).single(),
+      supabase.from("profiles").select("*").eq("id", transaction.seller_id).single(),
     ]);
 
-    const buyer = buyerRes.data;
-    const listing = listingRes.data;
+    // ShieldTrack — registrace zásilky (non-blocking)
+    if (tracking_number) {
+      try {
+        const deliveryAddress = transaction.delivery_address as { name?: string; street?: string; city?: string; zip?: string } | null;
+        const sellerProfile = sellerRes.data;
+
+        const stResult = await registerShipment({
+          tracking_number,
+          recipient_name: deliveryAddress?.name || "",
+          recipient_city: deliveryAddress?.city || "",
+          recipient_zip: deliveryAddress?.zip || "",
+          recipient_address: deliveryAddress?.street || "",
+          external_order_id: transaction.payment_reference,
+          sender_name: sellerProfile?.display_name || sellerProfile?.username || "",
+        });
+
+        // Uložit shieldtrack_shipment_id
+        if (stResult?.id) {
+          await supabase
+            .from("escrow_transactions")
+            .update({ shieldtrack_shipment_id: stResult.id })
+            .eq("id", escrow_id);
+        }
+      } catch (stError) {
+        console.warn("ShieldTrack registration failed (non-blocking):", stError);
+      }
+    }
+
+    const buyer = buyerRes?.data;
+    const listing = listingRes?.data;
 
     if (buyer?.email && listing) {
       try {

@@ -11,6 +11,7 @@ import { getImageVariant } from "@/lib/image-variants";
 import EscrowTimeline from "@/components/Escrow/EscrowTimeline";
 import EscrowActions from "@/components/Escrow/EscrowActions";
 import EscrowReviewForm from "@/components/Escrow/EscrowReviewForm";
+import ShieldTrackVerification from "@/components/Escrow/ShieldTrackVerification";
 import type { EscrowTransaction, EscrowDispute, EscrowReview, Profile, Listing } from "@/types/database";
 
 function czechToIBAN(account: string): string {
@@ -321,6 +322,13 @@ export default function TransactionDetailPage() {
               <p style={{ fontSize: "11px", color: "var(--text-dimmer)", marginTop: "4px" }}>📷 Potvrzení o odeslání</p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ShieldTrack verifikace — pro shipped+ stavy */}
+      {transaction.tracking_number && ["shipped", "delivered", "completed", "auto_completed", "payout_sent", "payout_confirmed", "disputed"].includes(transaction.status) && (
+        <div style={{ marginBottom: "24px" }}>
+          <ShieldTrackVerification escrowId={transaction.id} />
         </div>
       )}
 
