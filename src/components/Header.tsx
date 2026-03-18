@@ -13,6 +13,7 @@ import AdminNotifications from "./AdminNotifications";
 interface NavLink {
   label: string;
   href: string;
+  key: string;
 }
 
 interface NavGroup {
@@ -26,40 +27,68 @@ function isGroup(item: NavItem): item is NavGroup {
   return "children" in item;
 }
 
-const navItems: NavItem[] = [
-  { label: "Domů", href: "/" },
-  { label: "Články", href: "/clanky" },
+// Master definition — filtered at runtime by menu settings
+const ALL_NAV_ITEMS: NavItem[] = [
+  { label: "Domů", href: "/", key: "home" },
+  { label: "Články", href: "/clanky", key: "articles" },
   {
     label: "Komunita",
     children: [
-      { label: "Fórum", href: "/forum" },
-      { label: "Galerie", href: "/galerie" },
-      { label: "Akce", href: "/akce" },
-      { label: "Soutěž", href: "/soutez" },
+      { label: "Fórum", href: "/forum", key: "forum" },
+      { label: "Galerie", href: "/galerie", key: "gallery" },
+      { label: "Akce", href: "/akce", key: "events" },
+      { label: "Soutěž", href: "/soutez", key: "competition" },
     ],
   },
   {
     label: "Obchod",
     children: [
-      { label: "Shop", href: "/shop" },
-      { label: "Bazar", href: "/bazar" },
-      { label: "Ke stažení", href: "/ke-stazeni" },
+      { label: "Shop", href: "/shop", key: "shop" },
+      { label: "Bazar", href: "/bazar", key: "bazar" },
+      { label: "Ke stažení", href: "/ke-stazeni", key: "downloads" },
     ],
   },
 ];
 
-// All links flattened (for mobile menu)
-const allLinks: NavLink[] = [
-  { label: "Domů", href: "/" },
-  { label: "Články", href: "/clanky" },
-  { label: "Fórum", href: "/forum" },
-  { label: "Galerie", href: "/galerie" },
-  { label: "Akce", href: "/akce" },
-  { label: "Soutěž", href: "/soutez" },
-  { label: "Shop", href: "/shop" },
-  { label: "Bazar", href: "/bazar" },
-  { label: "Ke stažení", href: "/ke-stazeni" },
+const ALL_LINKS: NavLink[] = [
+  { label: "Domů", href: "/", key: "home" },
+  { label: "Články", href: "/clanky", key: "articles" },
+  { label: "Fórum", href: "/forum", key: "forum" },
+  { label: "Galerie", href: "/galerie", key: "gallery" },
+  { label: "Akce", href: "/akce", key: "events" },
+  { label: "Soutěž", href: "/soutez", key: "competition" },
+  { label: "Shop", href: "/shop", key: "shop" },
+  { label: "Bazar", href: "/bazar", key: "bazar" },
+  { label: "Ke stažení", href: "/ke-stazeni", key: "downloads" },
 ];
+
+type MenuSettings = Record<string, boolean>;
+
+function filterNavItems(items: NavItem[], settings: MenuSettings): NavItem[] {
+  const result: NavItem[] = [];
+  for (const item of items) {
+    if (isGroup(item)) {
+      const visibleChildren = item.children.filter(c => settings[c.key] !== false);
+      if (visibleChildren.length > 0) {
+        // If only 1 child left, flatten to direct link
+        if (visibleChildren.length === 1) {
+          result.push(visibleChildren[0]);
+        } else {
+          result.push({ label: item.label, children: visibleChildren });
+        }
+      }
+    } else {
+      if (settings[item.key] !== false) {
+        result.push(item);
+      }
+    }
+  }
+  return result;
+}
+
+function filterLinks(links: NavLink[], settings: MenuSettings): NavLink[] {
+  return links.filter(l => settings[l.key] !== false);
+}
 
 function NavDropdown({ item }: { item: NavGroup }) {
   const [open, setOpen] = useState(false);
@@ -221,7 +250,16 @@ export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { user, profile } = useAuth();
   const [pendingCount, setPendingCount] = useState(0);
+  const [menuSettings, setMenuSettings] = useState<MenuSettings>({});
   const isAdmin = profile?.role === "admin";
+
+  useEffect(() => {
+    // Load menu visibility settings
+    fetch("/api/admin/menu-sections")
+      .then(r => r.ok ? r.json() : {})
+      .then(data => setMenuSettings(data))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -234,6 +272,9 @@ export default function Header() {
         if (count !== null) setPendingCount(count);
       });
   }, [isAdmin]);
+
+  const navItems = filterNavItems(ALL_NAV_ITEMS, menuSettings);
+  const allLinks = filterLinks(ALL_LINKS, menuSettings);
 
   return (
     <header

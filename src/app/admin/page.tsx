@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 
 const adminSections = [
   { href: "/admin/homepage", icon: "🏠", title: "Homepage", desc: "Viditelnost sekcí na hlavní stránce" },
+  { href: "/admin/menu", icon: "📋", title: "Menu", desc: "Zapínání a vypínání položek v navigaci" },
   { href: "/admin/shop", icon: "🛒", title: "Shop", desc: "Produkty, objednávky, kategorie, kupóny" },
   { href: "/admin/clanky", icon: "📝", title: "Články", desc: "Správa a moderování článků" },
   { href: "/admin/zakaznici", icon: "👥", title: "Zákazníci", desc: "Přehled registrovaných uživatelů" },
