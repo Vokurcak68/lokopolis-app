@@ -94,22 +94,39 @@ export async function registerShipment(
 
 /**
  * Získá detail zásilky včetně verifikačních dat
- * Mapuje ShieldTrack API formát na Lokopolis formát
+ * Preferuje DB results (verification.results) před on-the-fly report
+ * protože report generuje verifyShipment(shipment, null) bez tracking dat
  */
 export async function getShipmentVerification(
   shipmentId: string
 ): Promise<ShieldTrackShipment> {
   const raw = await shieldtrackFetch<{
-    shipment: { id: string; tracking_number: string; external_order_id: string; created_at: string };
+    shipment: {
+      id: string;
+      tracking_number: string;
+      external_order_id: string;
+      created_at: string;
+      verification_score: number | null;
+      verification_details: {
+        status?: string;
+        summary?: string;
+        lastChecked?: string;
+      } | null;
+    };
     events: unknown[];
     verification: {
-      results: unknown[];
+      results: Array<{
+        check_type: string;
+        result: "pass" | "fail" | "warning" | "pending";
+        details: string;
+        checked_at: string;
+      }>;
       report: {
         score: number;
-        status: "verified" | "partial" | "failed" | "pending";
+        status: string;
         checks: Array<{
           type: string;
-          result: "pass" | "fail" | "warning" | "pending";
+          result: string;
           points: number;
           maxPoints: number;
           details: string;
@@ -120,15 +137,17 @@ export async function getShipmentVerification(
     };
   }>(`/shipments/${shipmentId}`);
 
-  const report = raw.verification?.report;
+  const dbResults = raw.verification?.results;
+  const shipment = raw.shipment;
 
-  if (!report) {
+  // Pokud nemáme žádná DB results, verifikace ještě neproběhla
+  if (!dbResults || dbResults.length === 0) {
     return {
-      id: raw.shipment.id,
-      tracking_number: raw.shipment.tracking_number,
-      external_order_id: raw.shipment.external_order_id,
+      id: shipment.id,
+      tracking_number: shipment.tracking_number,
+      external_order_id: shipment.external_order_id,
       verification: null,
-      created_at: raw.shipment.created_at,
+      created_at: shipment.created_at,
     };
   }
 
@@ -140,15 +159,15 @@ export async function getShipmentVerification(
     pending: "pending",
   };
 
-  const checks: ShieldTrackCheck[] = report.checks.map((c) => ({
-    name: c.type,
-    status: statusMap[c.result] || "pending",
-    detail: c.details,
+  const checks: ShieldTrackCheck[] = dbResults.map((r) => ({
+    name: r.check_type,
+    status: statusMap[r.result] || "pending",
+    detail: r.details,
   }));
 
-  // Zjistit address match z city_match a zip_match kontrol
-  const cityCheck = report.checks.find((c) => c.type === "city_match");
-  const zipCheck = report.checks.find((c) => c.type === "zip_match");
+  // Address match z city_match a zip_match kontrol
+  const cityCheck = dbResults.find((r) => r.check_type === "city_match");
+  const zipCheck = dbResults.find((r) => r.check_type === "zip_match");
   const addressMatch =
     cityCheck || zipCheck
       ? {
@@ -157,19 +176,28 @@ export async function getShipmentVerification(
         }
       : null;
 
+  // Skóre a status z DB shipmentu (přesnější než report)
+  const score = shipment.verification_score ?? 0;
+  const dbStatus = shipment.verification_details?.status;
+  const status = (["verified", "partial", "failed", "pending"].includes(dbStatus || "")
+    ? dbStatus
+    : score >= 80 ? "verified" : score >= 40 ? "partial" : score > 0 ? "failed" : "pending") as "verified" | "partial" | "failed" | "pending";
+
+  const lastChecked = dbResults[0]?.checked_at || null;
+
   return {
-    id: raw.shipment.id,
-    tracking_number: raw.shipment.tracking_number,
-    external_order_id: raw.shipment.external_order_id,
+    id: shipment.id,
+    tracking_number: shipment.tracking_number,
+    external_order_id: shipment.external_order_id,
     verification: {
-      shipment_id: raw.shipment.id,
-      status: report.status,
-      score: report.score,
+      shipment_id: shipment.id,
+      status,
+      score,
       checks,
       address_match: addressMatch,
-      verified_at: new Date().toISOString(),
-      created_at: raw.shipment.created_at,
+      verified_at: lastChecked,
+      created_at: shipment.created_at,
     },
-    created_at: raw.shipment.created_at,
+    created_at: shipment.created_at,
   };
 }
