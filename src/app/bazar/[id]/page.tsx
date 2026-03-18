@@ -82,6 +82,11 @@ export default function ListingDetailPage() {
   const [selectedBuyer, setSelectedBuyer] = useState<{ id: string; name: string } | null>(null);
   const [escrowEnabled, setEscrowEnabled] = useState(true);
   const [escrowLoading, setEscrowLoading] = useState(false);
+  const [showEscrowModal, setShowEscrowModal] = useState(false);
+  const [buyerAddress, setBuyerAddress] = useState({ name: "", street: "", city: "", zip: "", phone: "" });
+  const [savedAddresses, setSavedAddresses] = useState<{ id: string; full_name: string; street: string; city: string; zip: string; phone?: string; is_default?: boolean }[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState<string>("new");
+  const [saveNewAddress, setSaveNewAddress] = useState(false);
 
   const isOwner = user && listing && user.id === listing.seller_id;
   const isAdmin = profile?.role === "admin";
@@ -159,6 +164,18 @@ export default function ListingDetailPage() {
     fetchListing();
   }, [fetchListing]);
 
+  // Fetch saved addresses for buyer
+  useEffect(() => {
+    if (!user) return;
+    supabase.from("user_addresses").select("*").eq("user_id", user.id).order("is_default", { ascending: false }).then(({ data }) => {
+      if (data) {
+        setSavedAddresses(data);
+        const def = data.find((a: { is_default?: boolean }) => a.is_default);
+        if (def) setSelectedAddressId(def.id);
+      }
+    });
+  }, [user]);
+
   // Fetch incoming message senders for owner
   useEffect(() => {
     if (!user || !listing || user.id !== listing.seller_id) return;
@@ -231,22 +248,67 @@ export default function ListingDetailPage() {
     }
   }
 
-  async function handleCreateEscrow() {
+  function handleCreateEscrow() {
     if (!listing) return;
+    setShowEscrowModal(true);
+  }
+
+  async function handleConfirmEscrow() {
+    if (!listing) return;
+
+    // Validate address
+    const addr = selectedAddressId !== "new"
+      ? savedAddresses.find(a => a.id === selectedAddressId)
+      : null;
+    const addrData = addr
+      ? { name: addr.full_name, street: addr.street, city: addr.city, zip: addr.zip, phone: addr.phone || "" }
+      : buyerAddress;
+
+    if (!addrData.name.trim() || !addrData.street.trim() || !addrData.city.trim() || !addrData.zip.trim()) {
+      alert("Vyplňte prosím dodací adresu (jméno, ulice, město, PSČ).");
+      return;
+    }
+
     setEscrowLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token || "";
+
+      // Save new address if requested
+      if (saveNewAddress && selectedAddressId === "new" && buyerAddress.name.trim()) {
+        await supabase.from("user_addresses").insert({
+          user_id: user!.id,
+          label: "Dodací adresa",
+          full_name: buyerAddress.name.trim(),
+          street: buyerAddress.street.trim(),
+          city: buyerAddress.city.trim(),
+          zip: buyerAddress.zip.trim(),
+          phone: buyerAddress.phone.trim() || null,
+          country: "CZ",
+          is_default: savedAddresses.length === 0,
+        });
+      }
+
       const res = await fetch("/api/escrow/create", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ listing_id: listing.id }),
+        body: JSON.stringify({
+          listing_id: listing.id,
+          delivery_address: {
+            name: addrData.name.trim(),
+            street: addrData.street.trim(),
+            city: addrData.city.trim(),
+            zip: addrData.zip.trim(),
+            phone: (addrData.phone || "").trim(),
+          },
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Nepodařilo se vytvořit transakci");
+      setShowEscrowModal(false);
       router.push(`/bazar/transakce/${data.transaction.id}`);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Chyba");
@@ -985,6 +1047,155 @@ export default function ListingDetailPage() {
             }}
           >
             {selectedImage + 1} / {images.length}
+          </div>
+        </div>
+      )}
+
+      {/* Escrow address modal for buyer */}
+      {showEscrowModal && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+          background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center",
+          justifyContent: "center", zIndex: 9999, padding: "20px",
+        }} onClick={() => { if (!escrowLoading) setShowEscrowModal(false); }}>
+          <div style={{
+            background: "var(--bg-card, #1a2236)", borderRadius: "12px",
+            padding: "24px", maxWidth: "500px", width: "100%",
+            border: "1px solid rgba(34,197,94,0.3)", maxHeight: "90vh", overflowY: "auto",
+          }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ fontSize: "18px", fontWeight: 700, marginBottom: "16px", color: "var(--text-primary)" }}>
+              🛡️ Bezpečná platba — dodací adresa
+            </div>
+            <p style={{ fontSize: "13px", color: "var(--text-muted)", marginBottom: "16px", lineHeight: 1.5 }}>
+              Zadejte dodací adresu, kam má být zboží doručeno. Adresa bude sdílena s prodávajícím pro odeslání zásilky.
+            </p>
+
+            {savedAddresses.length > 0 && (
+              <select
+                value={selectedAddressId}
+                onChange={(e) => setSelectedAddressId(e.target.value)}
+                style={{
+                  width: "100%", padding: "10px 14px", borderRadius: "8px",
+                  border: "1px solid var(--border-subtle, #333)",
+                  background: "var(--bg-input, #0d1117)", color: "var(--text-primary)",
+                  fontSize: "14px", marginBottom: "12px",
+                }}
+              >
+                {savedAddresses.map((addr) => (
+                  <option key={addr.id} value={addr.id}>
+                    {addr.full_name} — {addr.street}, {addr.city} {addr.zip}
+                    {addr.is_default ? " (výchozí)" : ""}
+                  </option>
+                ))}
+                <option value="new">+ Jiná adresa</option>
+              </select>
+            )}
+
+            {(selectedAddressId === "new" || savedAddresses.length === 0) && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div>
+                    <label style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "4px", display: "block" }}>Jméno a příjmení *</label>
+                    <input
+                      type="text" value={buyerAddress.name}
+                      onChange={(e) => setBuyerAddress(prev => ({ ...prev, name: e.target.value }))}
+                      placeholder="Jan Novák"
+                      style={{
+                        width: "100%", padding: "10px 14px", borderRadius: "8px",
+                        border: "1px solid var(--border-subtle, #333)",
+                        background: "var(--bg-input, #0d1117)", color: "var(--text-primary)", fontSize: "14px",
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "4px", display: "block" }}>Telefon</label>
+                    <input
+                      type="text" value={buyerAddress.phone}
+                      onChange={(e) => setBuyerAddress(prev => ({ ...prev, phone: e.target.value }))}
+                      placeholder="+420 123 456 789"
+                      style={{
+                        width: "100%", padding: "10px 14px", borderRadius: "8px",
+                        border: "1px solid var(--border-subtle, #333)",
+                        background: "var(--bg-input, #0d1117)", color: "var(--text-primary)", fontSize: "14px",
+                      }}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "4px", display: "block" }}>Ulice a číslo *</label>
+                  <input
+                    type="text" value={buyerAddress.street}
+                    onChange={(e) => setBuyerAddress(prev => ({ ...prev, street: e.target.value }))}
+                    placeholder="Hlavní 123"
+                    style={{
+                      width: "100%", padding: "10px 14px", borderRadius: "8px",
+                      border: "1px solid var(--border-subtle, #333)",
+                      background: "var(--bg-input, #0d1117)", color: "var(--text-primary)", fontSize: "14px",
+                    }}
+                  />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "12px" }}>
+                  <div>
+                    <label style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "4px", display: "block" }}>Město *</label>
+                    <input
+                      type="text" value={buyerAddress.city}
+                      onChange={(e) => setBuyerAddress(prev => ({ ...prev, city: e.target.value }))}
+                      placeholder="Praha"
+                      style={{
+                        width: "100%", padding: "10px 14px", borderRadius: "8px",
+                        border: "1px solid var(--border-subtle, #333)",
+                        background: "var(--bg-input, #0d1117)", color: "var(--text-primary)", fontSize: "14px",
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "4px", display: "block" }}>PSČ *</label>
+                    <input
+                      type="text" value={buyerAddress.zip}
+                      onChange={(e) => setBuyerAddress(prev => ({ ...prev, zip: e.target.value }))}
+                      placeholder="110 00"
+                      style={{
+                        width: "100%", padding: "10px 14px", borderRadius: "8px",
+                        border: "1px solid var(--border-subtle, #333)",
+                        background: "var(--bg-input, #0d1117)", color: "var(--text-primary)", fontSize: "14px",
+                      }}
+                    />
+                  </div>
+                </div>
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "13px", color: "var(--text-muted)" }}>
+                  <input
+                    type="checkbox" checked={saveNewAddress}
+                    onChange={(e) => setSaveNewAddress(e.target.checked)}
+                    style={{ accentColor: "var(--accent)" }}
+                  />
+                  Uložit adresu pro příště
+                </label>
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end", marginTop: "20px" }}>
+              <button
+                onClick={() => setShowEscrowModal(false)}
+                disabled={escrowLoading}
+                style={{
+                  padding: "10px 24px", borderRadius: "8px", border: "1px solid var(--border-subtle, #333)",
+                  background: "transparent", color: "var(--text-muted)", cursor: "pointer", fontSize: "14px",
+                }}
+              >
+                Zrušit
+              </button>
+              <button
+                onClick={handleConfirmEscrow}
+                disabled={escrowLoading}
+                style={{
+                  padding: "10px 24px", borderRadius: "8px", border: "none",
+                  background: "#22c55e", color: "#fff", cursor: escrowLoading ? "not-allowed" : "pointer",
+                  fontSize: "14px", fontWeight: 600, opacity: escrowLoading ? 0.7 : 1,
+                }}
+              >
+                {escrowLoading ? "Vytvářím..." : "🛡️ Potvrdit a zaplatit"}
+              </button>
+            </div>
           </div>
         </div>
       )}

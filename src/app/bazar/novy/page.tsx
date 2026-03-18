@@ -6,7 +6,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/components/Auth/AuthProvider";
 import ImageUpload from "@/components/Bazar/ImageUpload";
-import type { ListingCategory, ListingCondition, ListingScale, UserAddress } from "@/types/database";
+import type { ListingCategory, ListingCondition, ListingScale } from "@/types/database";
 
 const CATEGORIES: { value: ListingCategory; label: string }[] = [
   { value: "lokomotivy", label: "🚂 Lokomotivy" },
@@ -74,10 +74,7 @@ function NewListingPage() {
   const [showBrandSuggestions, setShowBrandSuggestions] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<string[]>(["cash", "transfer"]);
   const [escrowCommission, setEscrowCommission] = useState<{rate: number, min: number} | null>(null);
-  const [savedAddresses, setSavedAddresses] = useState<UserAddress[]>([]);
-  const [selectedAddressId, setSelectedAddressId] = useState<string>("new");
-  const [newAddress, setNewAddress] = useState({name: "", street: "", city: "", zip: "", phone: ""});
-  const [saveNewAddress, setSaveNewAddress] = useState(false);
+  const [showEscrowConfirm, setShowEscrowConfirm] = useState(false);
   const brandRef = useRef<HTMLDivElement>(null);
 
   // Fetch escrow commission settings
@@ -90,15 +87,7 @@ function NewListingPage() {
     });
   }, [user]);
 
-  // Fetch saved addresses
-  useEffect(() => {
-    if (!user) return;
-    supabase.from("user_addresses").select("*").eq("user_id", user.id).order("is_default", { ascending: false }).then(({data}) => {
-      if (data) setSavedAddresses(data as UserAddress[]);
-      const def = (data as UserAddress[] | null)?.find(a => a.is_default);
-      if (def) setSelectedAddressId(def.id);
-    });
-  }, [user]);
+
 
   // When shipping is unchecked, remove COD from payment methods
   useEffect(() => {
@@ -186,33 +175,10 @@ function NewListingPage() {
       setError("Dobírka vyžaduje možnost zaslání");
       return;
     }
-    if (paymentMethods.includes("escrow")) {
-      const hasAddress = selectedAddressId !== "new"
-        || (newAddress.name.trim() && newAddress.street.trim() && newAddress.city.trim() && newAddress.zip.trim());
-      if (!hasAddress) {
-        setError("Pro Bezpečnou platbu je nutné vyplnit dodací adresu");
-        return;
-      }
-    }
-
     setError(null);
     setSubmitting(true);
 
     try {
-      // Save new address if requested
-      if (paymentMethods.includes("escrow") && saveNewAddress && selectedAddressId === "new" && newAddress.name.trim()) {
-        await supabase.from("user_addresses").insert({
-          user_id: user.id,
-          label: "Dodací adresa",
-          full_name: newAddress.name.trim(),
-          street: newAddress.street.trim(),
-          city: newAddress.city.trim(),
-          zip: newAddress.zip.trim(),
-          phone: newAddress.phone.trim() || null,
-          country: "CZ",
-          is_default: savedAddresses.length === 0,
-        });
-      }
 
       const { data, error: insertError } = await supabase
         .from("listings")
@@ -508,7 +474,9 @@ function NewListingPage() {
                     checked={checked}
                     disabled={disabled}
                     onChange={(e) => {
-                      if (e.target.checked) {
+                      if (pm.value === "escrow" && e.target.checked) {
+                        setShowEscrowConfirm(true);
+                      } else if (e.target.checked) {
                         setPaymentMethods(prev => [...prev, pm.value]);
                       } else {
                         setPaymentMethods(prev => prev.filter(m => m !== pm.value));
@@ -528,124 +496,78 @@ function NewListingPage() {
           )}
         </div>
 
-        {/* Escrow info + address (shown when escrow is selected) */}
+        {/* Escrow info (shown when escrow is selected) */}
         {paymentMethods.includes("escrow") && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-            {/* Escrow info box */}
-            <div
-              style={{
-                background: "rgba(34,197,94,0.08)",
-                border: "1px solid rgba(34,197,94,0.2)",
-                borderRadius: "10px",
-                padding: "16px",
-              }}
-            >
-              <div style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "8px" }}>
-                🛡️ Bezpečná platba chrání obě strany transakce
-              </div>
-              <p style={{ fontSize: "13px", color: "var(--text-body)", lineHeight: 1.6, margin: 0 }}>
-                Aktivací Bezpečné platby výrazně zvyšujete důvěryhodnost svého inzerátu
-                a šanci na rychlý prodej. Kupující ocení jistotu, že peníze uvolníme
-                prodejci až po potvrzení doručení — a vy získáte ochranu proti podvodným
-                reklamacím.
-              </p>
-              {escrowCommission && (
-                <p style={{ fontSize: "13px", color: "var(--text-muted)", marginTop: "8px", marginBottom: 0 }}>
-                  <strong>Provize:</strong> {escrowCommission.rate} % z ceny inzerátu (min. {escrowCommission.min} Kč) — strhne se automaticky z výplaty.
-                </p>
-              )}
-              <p style={{ fontSize: "13px", color: "var(--text-muted)", marginTop: "8px", marginBottom: 0 }}>
-                Pro aktivaci Bezpečné platby je nutné vyplnit dodací adresu — slouží
-                výhradně k ověření identity a zajištění bezpečného průběhu transakce.
-              </p>
+          <div
+            style={{
+              background: "rgba(34,197,94,0.08)",
+              border: "1px solid rgba(34,197,94,0.2)",
+              borderRadius: "10px",
+              padding: "16px",
+            }}
+          >
+            <div style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "8px" }}>
+              🛡️ Bezpečná platba aktivována
             </div>
+            <p style={{ fontSize: "13px", color: "var(--text-body)", lineHeight: 1.6, margin: 0 }}>
+              Kupující bude moci zvolit Bezpečnou platbu. Peníze uvolníme prodejci
+              až po potvrzení doručení — ochrana pro obě strany.
+            </p>
+            {escrowCommission && (
+              <p style={{ fontSize: "13px", color: "var(--text-muted)", marginTop: "8px", marginBottom: 0 }}>
+                <strong>Provize:</strong> {escrowCommission.rate} % z ceny (min. {escrowCommission.min} Kč) — strhne se z výplaty.
+              </p>
+            )}
+          </div>
+        )}
 
-            {/* Delivery address */}
-            <div>
-              <label style={labelStyle}>Dodací adresa pro Bezpečnou platbu *</label>
-              {savedAddresses.length > 0 && (
-                <select
-                  value={selectedAddressId}
-                  onChange={(e) => setSelectedAddressId(e.target.value)}
-                  style={{ ...inputStyle, marginBottom: "12px" }}
+        {/* Escrow confirmation dialog */}
+        {showEscrowConfirm && (
+          <div style={{
+            position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+            background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center",
+            justifyContent: "center", zIndex: 9999, padding: "20px",
+          }} onClick={() => setShowEscrowConfirm(false)}>
+            <div style={{
+              background: "var(--bg-card, #1a2236)", borderRadius: "12px",
+              padding: "24px", maxWidth: "440px", width: "100%",
+              border: "1px solid rgba(34,197,94,0.3)",
+            }} onClick={(e) => e.stopPropagation()}>
+              <div style={{ fontSize: "18px", fontWeight: 700, marginBottom: "12px", color: "var(--text-primary)" }}>
+                🛡️ Aktivovat Bezpečnou platbu?
+              </div>
+              <p style={{ fontSize: "14px", color: "var(--text-body)", lineHeight: 1.6, margin: "0 0 8px" }}>
+                Aktivací Bezpečné platby umožníte kupujícím využít escrow službu.
+              </p>
+              <ul style={{ fontSize: "13px", color: "var(--text-muted)", lineHeight: 1.8, margin: "0 0 16px", paddingLeft: "20px" }}>
+                <li>Peníze budou drženy na escrow účtu do potvrzení doručení</li>
+                <li>Provize {escrowCommission ? `${escrowCommission.rate} % (min. ${escrowCommission.min} Kč)` : "5 %"} se strhne z výplaty</li>
+                <li>Zvyšuje důvěryhodnost vašeho inzerátu</li>
+              </ul>
+              <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
+                <button
+                  onClick={() => setShowEscrowConfirm(false)}
+                  style={{
+                    padding: "8px 20px", borderRadius: "8px", border: "1px solid var(--border-subtle, #333)",
+                    background: "transparent", color: "var(--text-muted)", cursor: "pointer", fontSize: "14px",
+                  }}
                 >
-                  {savedAddresses.map((addr) => (
-                    <option key={addr.id} value={addr.id}>
-                      {addr.full_name} — {addr.street}, {addr.city} {addr.zip}
-                      {addr.is_default ? " (výchozí)" : ""}
-                    </option>
-                  ))}
-                  <option value="new">+ Jiná adresa</option>
-                </select>
-              )}
-
-              {(selectedAddressId === "new" || savedAddresses.length === 0) && (
-                <>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                    <div>
-                      <label style={{ ...labelStyle, fontSize: "12px" }}>Jméno a příjmení *</label>
-                      <input
-                        type="text"
-                        value={newAddress.name}
-                        onChange={(e) => setNewAddress(prev => ({ ...prev, name: e.target.value }))}
-                        placeholder="Jan Novák"
-                        style={inputStyle}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ ...labelStyle, fontSize: "12px" }}>Telefon</label>
-                      <input
-                        type="text"
-                        value={newAddress.phone}
-                        onChange={(e) => setNewAddress(prev => ({ ...prev, phone: e.target.value }))}
-                        placeholder="+420 123 456 789"
-                        style={inputStyle}
-                      />
-                    </div>
-                  </div>
-                  <div style={{ marginTop: "12px" }}>
-                    <label style={{ ...labelStyle, fontSize: "12px" }}>Ulice a číslo *</label>
-                    <input
-                      type="text"
-                      value={newAddress.street}
-                      onChange={(e) => setNewAddress(prev => ({ ...prev, street: e.target.value }))}
-                      placeholder="Hlavní 123"
-                      style={inputStyle}
-                    />
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "12px", marginTop: "12px" }}>
-                    <div>
-                      <label style={{ ...labelStyle, fontSize: "12px" }}>Město *</label>
-                      <input
-                        type="text"
-                        value={newAddress.city}
-                        onChange={(e) => setNewAddress(prev => ({ ...prev, city: e.target.value }))}
-                        placeholder="Praha"
-                        style={inputStyle}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ ...labelStyle, fontSize: "12px" }}>PSČ *</label>
-                      <input
-                        type="text"
-                        value={newAddress.zip}
-                        onChange={(e) => setNewAddress(prev => ({ ...prev, zip: e.target.value }))}
-                        placeholder="110 00"
-                        style={inputStyle}
-                      />
-                    </div>
-                  </div>
-                  <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "13px", color: "var(--text-muted)", marginTop: "12px" }}>
-                    <input
-                      type="checkbox"
-                      checked={saveNewAddress}
-                      onChange={(e) => setSaveNewAddress(e.target.checked)}
-                      style={{ accentColor: "var(--accent)" }}
-                    />
-                    Uložit adresu pro příště
-                  </label>
-                </>
-              )}
+                  Zrušit
+                </button>
+                <button
+                  onClick={() => {
+                    setPaymentMethods(prev => [...prev, "escrow"]);
+                    setShowEscrowConfirm(false);
+                  }}
+                  style={{
+                    padding: "8px 20px", borderRadius: "8px", border: "none",
+                    background: "#22c55e", color: "#fff", cursor: "pointer",
+                    fontSize: "14px", fontWeight: 600,
+                  }}
+                >
+                  ✅ Aktivovat
+                </button>
+              </div>
             </div>
           </div>
         )}

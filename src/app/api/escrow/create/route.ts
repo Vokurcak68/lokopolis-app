@@ -11,9 +11,12 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { listing_id } = body;
+    const { listing_id, delivery_address } = body;
     if (!listing_id) {
       return NextResponse.json({ error: "Chybí listing_id" }, { status: 400 });
+    }
+    if (!delivery_address || !delivery_address.name || !delivery_address.street || !delivery_address.city || !delivery_address.zip) {
+      return NextResponse.json({ error: "Vyplňte dodací adresu (jméno, ulice, město, PSČ)" }, { status: 400 });
     }
 
     const supabase = getServiceClient();
@@ -85,6 +88,7 @@ export async function POST(req: NextRequest) {
         seller_payout: sellerPayout,
         status: "created",
         payment_reference: paymentReference,
+        delivery_address,
       })
       .select()
       .single();
