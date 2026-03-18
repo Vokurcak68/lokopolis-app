@@ -655,6 +655,13 @@ export interface EscrowTransaction {
   auto_complete_at: string | null;
   payment_reference: string;
   partial_amount: number | null;
+  delivery_address: {
+    name?: string;
+    street?: string;
+    city?: string;
+    zip?: string;
+    phone?: string;
+  } | null;
   notes: string | null;
   admin_note: string | null;
   shieldtrack_shipment_id: string | null;

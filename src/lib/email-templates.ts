@@ -426,6 +426,15 @@ export function escrowPaid(seller: any, listing: any, transaction: any, shipping
       <span style="color:#ccc;">Po odeslání zadejte číslo zásilky v detailu transakce.</span>
     </div>
 
+    ${transaction.delivery_address ? `
+    <div style="margin:16px 0;padding:16px;background:#16162b;border-radius:8px;border-left:3px solid #3b82f6;">
+      <strong style="color:#3b82f6;">📍 Dodací adresa kupujícího</strong><br>
+      ${transaction.delivery_address.name ? `<span style="color:#fff;font-weight:600;">${esc(transaction.delivery_address.name)}</span><br>` : ''}
+      ${transaction.delivery_address.street ? `<span style="color:#ccc;">${esc(transaction.delivery_address.street)}</span><br>` : ''}
+      ${transaction.delivery_address.zip || transaction.delivery_address.city ? `<span style="color:#ccc;">${esc([transaction.delivery_address.zip, transaction.delivery_address.city].filter(Boolean).join(' '))}</span><br>` : ''}
+      ${transaction.delivery_address.phone ? `<span style="color:#999;">📞 ${esc(transaction.delivery_address.phone)}</span>` : ''}
+    </div>` : ''}
+
     <div style="margin-top:24px;text-align:center;">
       <a href="https://lokopolis.cz/bazar/transakce/${esc(transaction.id)}" style="display:inline-block;padding:12px 28px;background:#f0a030;color:#1a1a2e;font-weight:700;border-radius:8px;text-decoration:none;">Zadat tracking →</a>
     </div>
@@ -474,6 +483,14 @@ export function escrowShipped(buyer: any, listing: any, transaction: any, settin
       <span style="color:#ccc;">Číslo zásilky: <strong>${esc(transaction.tracking_number)}</strong></span>
       ${transaction.carrier ? `<br><span style="color:#ccc;">Dopravce: ${esc(transaction.carrier)}</span>` : ""}
     </div>` : ""}
+
+    ${transaction.delivery_address ? `
+    <div style="margin:16px 0;padding:16px;background:#16162b;border-radius:8px;border-left:3px solid #3b82f6;">
+      <strong style="color:#3b82f6;">📍 Zásilka bude doručena na adresu</strong><br>
+      ${transaction.delivery_address.name ? `<span style="color:#fff;font-weight:600;">${esc(transaction.delivery_address.name)}</span><br>` : ''}
+      ${transaction.delivery_address.street ? `<span style="color:#ccc;">${esc(transaction.delivery_address.street)}</span><br>` : ''}
+      ${transaction.delivery_address.zip || transaction.delivery_address.city ? `<span style="color:#ccc;">${esc([transaction.delivery_address.zip, transaction.delivery_address.city].filter(Boolean).join(' '))}</span>` : ''}
+    </div>` : ''}
 
     <p style="color:#ccc;">Až zboží obdržíte, potvrďte prosím přijetí v detailu transakce. Pokud nepotvrdíte do stanovené lhůty, peníze budou automaticky uvolněny prodejci.</p>
 

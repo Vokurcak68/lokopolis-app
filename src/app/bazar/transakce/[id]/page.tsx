@@ -288,6 +288,64 @@ export default function TransactionDetailPage() {
         </div>
       )}
 
+      {/* Dodací adresa kupujícího — viditelná prodávajícímu a adminovi po zaplacení */}
+      {(isSeller || isAdmin) && transaction.delivery_address && ["paid", "shipped", "delivered", "completed", "auto_completed", "payout_sent", "payout_confirmed", "disputed"].includes(transaction.status) && (() => {
+        const addr = transaction.delivery_address as { name?: string; street?: string; city?: string; zip?: string; phone?: string };
+        return (
+          <div
+            style={{
+              padding: "16px",
+              borderRadius: "12px",
+              background: "linear-gradient(135deg, rgba(59,130,246,0.08) 0%, rgba(139,92,246,0.08) 100%)",
+              border: "1px solid rgba(59,130,246,0.25)",
+              marginBottom: "24px",
+            }}
+          >
+            <h3 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "12px" }}>
+              📍 Dodací adresa kupujícího
+            </h3>
+            <div style={{ fontSize: "14px", color: "var(--text-body)", lineHeight: 1.7 }}>
+              {addr.name && <div><strong>{addr.name}</strong></div>}
+              {addr.street && <div>{addr.street}</div>}
+              {(addr.zip || addr.city) && <div>{[addr.zip, addr.city].filter(Boolean).join(" ")}</div>}
+              {addr.phone && (
+                <div style={{ marginTop: "8px", color: "var(--text-muted)" }}>
+                  📞 <a href={`tel:${addr.phone}`} style={{ color: "var(--accent)", textDecoration: "none" }}>{addr.phone}</a>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Dodací adresa — kupující vidí svou adresu pro kontrolu */}
+      {isBuyer && transaction.delivery_address && ["shipped", "delivered", "completed", "auto_completed", "payout_sent", "payout_confirmed", "disputed"].includes(transaction.status) && (() => {
+        const addr = transaction.delivery_address as { name?: string; street?: string; city?: string; zip?: string; phone?: string };
+        return (
+          <div
+            style={{
+              padding: "16px",
+              borderRadius: "12px",
+              background: "var(--bg-card)",
+              border: "1px solid var(--border)",
+              marginBottom: "24px",
+            }}
+          >
+            <h3 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "12px" }}>
+              📍 Vaše dodací adresa
+            </h3>
+            <div style={{ fontSize: "14px", color: "var(--text-body)", lineHeight: 1.7 }}>
+              {addr.name && <div><strong>{addr.name}</strong></div>}
+              {addr.street && <div>{addr.street}</div>}
+              {(addr.zip || addr.city) && <div>{[addr.zip, addr.city].filter(Boolean).join(" ")}</div>}
+              {addr.phone && (
+                <div style={{ marginTop: "8px", color: "var(--text-muted)" }}>📞 {addr.phone}</div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Tracking info */}
       {transaction.tracking_number && (
         <div
