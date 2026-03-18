@@ -14,6 +14,12 @@ import {
 
 type FioTransaction = Record<string, unknown>;
 
+type FioHttpAttempt = {
+  url: string;
+  status: number;
+  bodyPreview: string;
+};
+
 type ParsedTx = {
   bankTxId: string;
   amount: number;
@@ -146,6 +152,79 @@ function getFioTransactions(payload: unknown): FioTransaction[] {
   if (Array.isArray(tx)) return tx.filter((x) => x && typeof x === "object") as FioTransaction[];
   if (typeof tx === "object") return [tx as FioTransaction];
   return [];
+}
+
+function safeJoinUrl(base: string, path: string): string {
+  const trimmedBase = base.replace(/\/+$/, "");
+  const trimmedPath = path.replace(/^\/+/, "");
+  return `${trimmedBase}/${trimmedPath}`;
+}
+
+async function fetchFioPayload(token: string, fromDate: string, toDate: string): Promise<{ payload: unknown; usedUrl: string }> {
+  const defaultBases = [
+    "https://www.fio.cz/ib_api/rest",
+    "https://fioapi.fio.cz/v1/rest",
+  ];
+
+  const envBase = process.env.FIO_API_BASE?.trim();
+  const bases = envBase
+    ? [envBase, ...defaultBases.filter((b) => b !== envBase)]
+    : defaultBases;
+
+  const attempts: FioHttpAttempt[] = [];
+
+  for (const base of bases) {
+    const url = safeJoinUrl(base, `periods/${token}/${fromDate}/${toDate}/transactions.json`);
+
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        cache: "no-store",
+        headers: {
+          "User-Agent": "Lokopolis-Escrow-FIO-Sync",
+        },
+      });
+
+      const bodyText = await response.text();
+      const bodyPreview = bodyText.slice(0, 400);
+
+      attempts.push({
+        url,
+        status: response.status,
+        bodyPreview,
+      });
+
+      if (!response.ok) {
+        continue;
+      }
+
+      let payload: unknown;
+      try {
+        payload = bodyText ? JSON.parse(bodyText) : null;
+      } catch {
+        attempts.push({
+          url,
+          status: response.status,
+          bodyPreview: `Neplatný JSON odpovědi: ${bodyPreview}`,
+        });
+        continue;
+      }
+
+      return { payload, usedUrl: url };
+    } catch (error) {
+      attempts.push({
+        url,
+        status: 0,
+        bodyPreview: error instanceof Error ? error.message : "Network error",
+      });
+    }
+  }
+
+  const best = attempts[attempts.length - 1] || { url: "", status: 0, bodyPreview: "Bez odpovědi" };
+
+  throw new Error(
+    `FIO API request failed | status=${best.status} | url=${best.url} | body=${best.bodyPreview}`
+  );
 }
 
 async function markPartialPaid(
@@ -285,7 +364,6 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Chybí FIO_API_TOKEN" }, { status: 500 });
     }
 
-    const base = process.env.FIO_API_BASE || "https://fioapi.fio.cz/v1/rest";
     const lookbackDays = Number(process.env.FIO_SYNC_LOOKBACK_DAYS || 14);
 
     const to = new Date();
@@ -293,29 +371,25 @@ export async function GET(req: NextRequest) {
     from.setDate(from.getDate() - lookbackDays);
 
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
-    const fioUrl = `${base}/periods/${fioToken}/${fmt(from)}/${fmt(to)}/transactions.json`;
 
-    const response = await fetch(fioUrl, {
-      method: "GET",
-      cache: "no-store",
-      headers: {
-        "User-Agent": "Lokopolis-Escrow-FIO-Sync",
-      },
-    });
+    let payload: unknown;
+    let usedUrl = "";
 
-    if (!response.ok) {
-      const text = await response.text();
+    try {
+      const fio = await fetchFioPayload(fioToken, fmt(from), fmt(to));
+      payload = fio.payload;
+      usedUrl = fio.usedUrl;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "FIO API request failed";
       return NextResponse.json(
         {
           error: "FIO API request failed",
-          status: response.status,
-          body: text.slice(0, 400),
+          detail: message,
         },
         { status: 502 }
       );
     }
 
-    const payload = await response.json();
     const transactions = getFioTransactions(payload);
 
     const supabase = getServiceClient();
@@ -489,6 +563,9 @@ export async function GET(req: NextRequest) {
       range: {
         from: fmt(from),
         to: fmt(to),
+      },
+      debug: {
+        usedUrl,
       },
     });
   } catch (error) {

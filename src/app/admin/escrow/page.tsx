@@ -279,7 +279,7 @@ export default function AdminEscrowPage() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "FIO sync selhal");
+      if (!res.ok) throw new Error(data.detail || data.error || "FIO sync selhal");
 
       const stats = data?.stats;
       const summary = stats
