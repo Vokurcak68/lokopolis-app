@@ -160,10 +160,23 @@ function safeJoinUrl(base: string, path: string): string {
   return `${trimmedBase}/${trimmedPath}`;
 }
 
+function maskTokenInUrl(url: string, rawToken: string): string {
+  if (!rawToken) return url;
+  const encoded = encodeURIComponent(rawToken);
+  return url.replaceAll(rawToken, "***REDACTED***").replaceAll(encoded, "***REDACTED***");
+}
+
+function sanitizeFioToken(token: string): string {
+  return token.trim().replace(/^['"]+|['"]+$/g, "");
+}
+
 async function fetchFioPayload(token: string, fromDate: string, toDate: string): Promise<{ payload: unknown; usedUrl: string }> {
+  const cleanToken = sanitizeFioToken(token);
+  const encodedToken = encodeURIComponent(cleanToken);
+
   const defaultBases = [
-    "https://www.fio.cz/ib_api/rest",
     "https://fioapi.fio.cz/v1/rest",
+    "https://www.fio.cz/ib_api/rest",
   ];
 
   const envBase = process.env.FIO_API_BASE?.trim();
@@ -174,56 +187,61 @@ async function fetchFioPayload(token: string, fromDate: string, toDate: string):
   const attempts: FioHttpAttempt[] = [];
 
   for (const base of bases) {
-    const url = safeJoinUrl(base, `periods/${token}/${fromDate}/${toDate}/transactions.json`);
+    const urls = [
+      safeJoinUrl(base, `periods/${encodedToken}/${fromDate}/${toDate}/transactions.json`),
+      safeJoinUrl(base, `last/${encodedToken}/transactions.json`),
+    ];
 
-    try {
-      const response = await fetch(url, {
-        method: "GET",
-        cache: "no-store",
-        headers: {
-          "User-Agent": "Lokopolis-Escrow-FIO-Sync",
-        },
-      });
-
-      const bodyText = await response.text();
-      const bodyPreview = bodyText.slice(0, 400);
-
-      attempts.push({
-        url,
-        status: response.status,
-        bodyPreview,
-      });
-
-      if (!response.ok) {
-        continue;
-      }
-
-      let payload: unknown;
+    for (const url of urls) {
       try {
-        payload = bodyText ? JSON.parse(bodyText) : null;
-      } catch {
+        const response = await fetch(url, {
+          method: "GET",
+          cache: "no-store",
+          headers: {
+            "User-Agent": "Lokopolis-Escrow-FIO-Sync",
+          },
+        });
+
+        const bodyText = await response.text();
+        const bodyPreview = bodyText.slice(0, 400);
+
         attempts.push({
           url,
           status: response.status,
-          bodyPreview: `Neplatný JSON odpovědi: ${bodyPreview}`,
+          bodyPreview,
         });
-        continue;
-      }
 
-      return { payload, usedUrl: url };
-    } catch (error) {
-      attempts.push({
-        url,
-        status: 0,
-        bodyPreview: error instanceof Error ? error.message : "Network error",
-      });
+        if (!response.ok) {
+          continue;
+        }
+
+        let payload: unknown;
+        try {
+          payload = bodyText ? JSON.parse(bodyText) : null;
+        } catch {
+          attempts.push({
+            url,
+            status: response.status,
+            bodyPreview: `Neplatný JSON odpovědi: ${bodyPreview}`,
+          });
+          continue;
+        }
+
+        return { payload, usedUrl: maskTokenInUrl(url, cleanToken) };
+      } catch (error) {
+        attempts.push({
+          url,
+          status: 0,
+          bodyPreview: error instanceof Error ? error.message : "Network error",
+        });
+      }
     }
   }
 
   const best = attempts[attempts.length - 1] || { url: "", status: 0, bodyPreview: "Bez odpovědi" };
 
   throw new Error(
-    `FIO API request failed | status=${best.status} | url=${best.url} | body=${best.bodyPreview}`
+    `FIO API request failed | status=${best.status} | url=${maskTokenInUrl(best.url, cleanToken)} | body=${best.bodyPreview}`
   );
 }
 
