@@ -485,6 +485,51 @@ export async function GET(req: NextRequest) {
         if (insertError) {
           // Duplicate tx id = already processed (idempotence)
           if (String(insertError.message).toLowerCase().includes("duplicate") || String(insertError.message).includes("unique")) {
+            // Check if this duplicate was previously matched but escrow stayed partial
+            // (e.g. old sync stored the row but didn't accumulate partial_amount correctly)
+            const { data: existingRow } = await supabase
+              .from("escrow_bank_payments")
+              .select("id, escrow_id, matched, processing_status")
+              .eq("bank_tx_id", parsed.bankTxId)
+              .single();
+
+            if (existingRow?.matched && existingRow.escrow_id && existingRow.processing_status === "partial") {
+              // Re-evaluate: find the escrow and check if partial_amount needs update
+              const matchedEscrow = (openEscrows || []).find((e) => e.id === existingRow.escrow_id);
+              if (matchedEscrow) {
+                const prevPaid = Number(matchedEscrow.partial_amount || 0);
+                const expectedAmt = Number(matchedEscrow.amount);
+                // If still underpaid, the amount was already counted — skip
+                // But if somehow partial_amount didn't include this payment, recalc from bank rows
+                const { data: allBankRows } = await supabase
+                  .from("escrow_bank_payments")
+                  .select("amount")
+                  .eq("escrow_id", existingRow.escrow_id)
+                  .eq("matched", true);
+
+                const bankTotal = Number(
+                  (allBankRows || []).reduce((sum, r) => sum + Number(r.amount || 0), 0).toFixed(2)
+                );
+                const realTotal = Math.max(bankTotal, prevPaid);
+
+                if (realTotal + tolerance >= expectedAmt && ["created", "partial_paid"].includes(matchedEscrow.status)) {
+                  const overpaid = Number((realTotal - expectedAmt).toFixed(2));
+                  await markPaid(supabase, matchedEscrow, overpaid > tolerance ? overpaid : 0);
+                  await supabase
+                    .from("escrow_bank_payments")
+                    .update({ processing_status: overpaid > tolerance ? "overpaid" : "paid", processed_at: new Date().toISOString() })
+                    .eq("id", existingRow.id);
+                  const idx = (openEscrows || []).indexOf(matchedEscrow);
+                  if (idx >= 0) openEscrows!.splice(idx, 1);
+                  stats.paid += 1;
+                } else if (realTotal > prevPaid) {
+                  // Update partial_amount to real bank total
+                  await markPartialPaid(supabase, matchedEscrow, realTotal);
+                  matchedEscrow.partial_amount = realTotal;
+                }
+              }
+            }
+
             stats.duplicates += 1;
             continue;
           }
