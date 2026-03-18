@@ -547,8 +547,15 @@ export async function GET(req: NextRequest) {
           .eq("escrow_id", escrow.id)
           .eq("matched", true);
 
-        const cumulativePaid = Number(
+        const bankCumulativePaid = Number(
           (paidRows || []).reduce((sum, row) => sum + Number(row.amount || 0), 0).toFixed(2)
+        );
+
+        // Fallback for legacy/manual partials where older incoming payments
+        // may not exist in escrow_bank_payments yet.
+        const escrowPartialKnown = Number(escrow.partial_amount || 0);
+        const cumulativePaid = Number(
+          Math.max(bankCumulativePaid, escrowPartialKnown + Number(parsed.amount)).toFixed(2)
         );
 
         const expectedAmount = Number(escrow.amount);
