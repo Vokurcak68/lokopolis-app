@@ -11,6 +11,21 @@ type TxGroup = "action" | "active" | "done" | "all";
 type SortKey = "date" | "score" | "amount";
 type SortDir = "asc" | "desc";
 
+type BankPaymentRow = {
+  id: string;
+  bank_tx_id: string;
+  escrow_id: string | null;
+  payment_reference: string | null;
+  variable_symbol: string | null;
+  amount: number | string;
+  currency: string | null;
+  paid_at: string | null;
+  matched: boolean;
+  processing_status: string;
+  error_message: string | null;
+  created_at: string;
+};
+
 // Stavy vyžadující akci admina
 const ACTION_STATUSES = ["created", "partial_paid", "hold", "completed", "auto_completed", "payout_sent"];
 // Aktivní (v procesu) — admin nemusí nic dělat
@@ -78,6 +93,7 @@ export default function AdminEscrowPage() {
   const [fioSyncLoading, setFioSyncLoading] = useState(false);
   const [fioSyncResult, setFioSyncResult] = useState<string | null>(null);
   const [fioSyncError, setFioSyncError] = useState<string | null>(null);
+  const [bankPayments, setBankPayments] = useState<BankPaymentRow[]>([]);
 
   async function authAdmin() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -91,13 +107,19 @@ export default function AdminEscrowPage() {
     const admin = await authAdmin();
     if (!admin) return;
 
-    const [{ data: tx }, { data: dsp }] = await Promise.all([
+    const [{ data: tx }, { data: dsp }, { data: bp }] = await Promise.all([
       supabase.from("escrow_transactions").select("*").order("created_at", { ascending: false }),
       supabase.from("escrow_disputes").select("*").order("created_at", { ascending: false }),
+      supabase
+        .from("escrow_bank_payments")
+        .select("id, bank_tx_id, escrow_id, payment_reference, variable_symbol, amount, currency, paid_at, matched, processing_status, error_message, created_at")
+        .order("created_at", { ascending: false })
+        .limit(20),
     ]);
     const txList = (tx || []) as EscrowTransaction[];
     setTransactions(txList);
     setDisputes((dsp || []) as EscrowDispute[]);
+    setBankPayments((bp || []) as BankPaymentRow[]);
 
     // Fetch listing titles
     const listingIds = [...new Set(txList.map(t => t.listing_id))];
@@ -335,6 +357,67 @@ export default function AdminEscrowPage() {
         )}
         {fioSyncError && (
           <span style={{ color: "#ef4444", fontSize: "12px" }}>❌ {fioSyncError}</span>
+        )}
+      </div>
+
+      {/* Mini audit tabulka bankovních plateb */}
+      <div style={{
+        marginBottom: "18px",
+        borderRadius: "10px",
+        border: "1px solid var(--border)",
+        background: "var(--bg-card)",
+        overflow: "hidden",
+      }}>
+        <div style={{
+          padding: "10px 12px",
+          borderBottom: "1px solid var(--border)",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: "8px",
+          flexWrap: "wrap",
+        }}>
+          <div style={{ color: "var(--text-primary)", fontSize: "13px", fontWeight: 700 }}>
+            🏦 Posledních 20 bankovních plateb (FIO)
+          </div>
+          <div style={{ color: "var(--text-dimmer)", fontSize: "11px" }}>
+            Audit log z `escrow_bank_payments`
+          </div>
+        </div>
+
+        {bankPayments.length === 0 ? (
+          <div style={{ padding: "12px", color: "var(--text-dimmer)", fontSize: "12px" }}>
+            Zatím žádná zpracovaná bankovní platba.
+          </div>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+              <thead>
+                <tr style={{ background: "var(--bg-secondary)" }}>
+                  <th style={thCell}>Čas</th>
+                  <th style={thCell}>VS</th>
+                  <th style={thCell}>Reference</th>
+                  <th style={thCell}>Částka</th>
+                  <th style={thCell}>Stav</th>
+                  <th style={thCell}>Match</th>
+                  <th style={thCell}>Detail</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bankPayments.map((p) => (
+                  <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
+                    <td style={tdCell}>{p.created_at ? new Date(p.created_at).toLocaleString("cs-CZ") : "-"}</td>
+                    <td style={tdCell}>{p.variable_symbol || "-"}</td>
+                    <td style={tdCell}>{p.payment_reference || "-"}</td>
+                    <td style={tdCell}>{Number(p.amount || 0).toLocaleString("cs-CZ")} {p.currency || "CZK"}</td>
+                    <td style={tdCell}>{statusBadge(p.processing_status)}</td>
+                    <td style={tdCell}>{p.matched ? "✅" : "❌"}</td>
+                    <td style={tdCell}>{p.error_message ? <span style={{ color: "#ef4444" }}>{p.error_message}</span> : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
@@ -699,6 +782,50 @@ function btnAction(color: string): React.CSSProperties {
     background: `${typeof color === "string" && color.startsWith("#") ? color + "15" : "transparent"}`,
     color, cursor: "pointer", fontWeight: 600, fontSize: "12px",
   };
+}
+
+const thCell: React.CSSProperties = {
+  textAlign: "left",
+  padding: "8px 10px",
+  color: "var(--text-dimmer)",
+  fontWeight: 700,
+  whiteSpace: "nowrap",
+};
+
+const tdCell: React.CSSProperties = {
+  padding: "8px 10px",
+  color: "var(--text-muted)",
+  whiteSpace: "nowrap",
+  verticalAlign: "top",
+};
+
+function statusBadge(status: string): React.ReactNode {
+  const map: Record<string, { label: string; color: string }> = {
+    new: { label: "new", color: "#6b7280" },
+    partial: { label: "partial", color: "#f97316" },
+    paid: { label: "paid", color: "#22c55e" },
+    overpaid: { label: "overpaid", color: "#eab308" },
+    ignored: { label: "ignored", color: "#9ca3af" },
+    error: { label: "error", color: "#ef4444" },
+  };
+
+  const x = map[status] || { label: status, color: "#6b7280" };
+
+  return (
+    <span
+      style={{
+        padding: "2px 8px",
+        borderRadius: "10px",
+        fontSize: "11px",
+        fontWeight: 700,
+        color: x.color,
+        background: `${x.color}22`,
+        border: `1px solid ${x.color}55`,
+      }}
+    >
+      {x.label}
+    </span>
+  );
 }
 
 function MiniStat({ label, value, color }: { label: string; value: string | number; color?: string }) {
