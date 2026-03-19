@@ -1,9 +1,14 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+
+const YOUTUBE_VIDEO_ID = "9RI87qlP3XU";
+const YOUTUBE_URL = `https://www.youtube.com/watch?v=${YOUTUBE_VIDEO_ID}`;
+const THUMBNAIL_URL = `https://img.youtube.com/vi/${YOUTUBE_VIDEO_ID}/maxresdefault.jpg`;
 
 export const metadata: Metadata = {
   title: "Kolejiště LIVE 🔴 | Lokopolis",
   description:
-    "Sledujte naše modelové kolejiště v reálném čase přes živou kameru. YouTube Live stream z Lokopolis.",
+    "Sledujte naše modelové kolejiště v reálném čase přes živou kameru na YouTube.",
 };
 
 export default function KameraPage() {
@@ -27,32 +32,108 @@ export default function KameraPage() {
         </p>
       </div>
 
-      {/* YouTube embed — responsive 16:9 */}
-      <div
+      {/* YouTube thumbnail with play button */}
+      <Link
+        href={YOUTUBE_URL}
+        target="_blank"
+        rel="noopener noreferrer"
         style={{
+          display: "block",
           position: "relative",
           width: "100%",
-          paddingBottom: "56.25%", // 16:9
           borderRadius: "12px",
           overflow: "hidden",
-          background: "var(--bg-card)",
           border: "1px solid var(--border)",
+          textDecoration: "none",
         }}
       >
-        <iframe
-          src="https://www.youtube.com/embed/9RI87qlP3XU?autoplay=1&mute=1"
-          title="Lokopolis – Kolejiště LIVE"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-          allowFullScreen
+        {/* Thumbnail */}
+        <img
+          src={THUMBNAIL_URL}
+          alt="Lokopolis – Kolejiště LIVE"
           style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
             width: "100%",
-            height: "100%",
-            border: "none",
+            display: "block",
+            aspectRatio: "16/9",
+            objectFit: "cover",
+            background: "var(--bg-card)",
           }}
         />
+        {/* Play button overlay */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "rgba(0,0,0,0.3)",
+            transition: "background 0.2s",
+          }}
+        >
+          <div
+            style={{
+              width: "80px",
+              height: "80px",
+              borderRadius: "50%",
+              background: "rgba(255,0,0,0.85)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+            }}
+          >
+            <svg
+              width="36"
+              height="36"
+              viewBox="0 0 24 24"
+              fill="white"
+              style={{ marginLeft: "4px" }}
+            >
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          </div>
+        </div>
+        {/* LIVE badge */}
+        <div
+          style={{
+            position: "absolute",
+            top: "16px",
+            left: "16px",
+            background: "#ff0000",
+            color: "white",
+            padding: "4px 12px",
+            borderRadius: "4px",
+            fontSize: "13px",
+            fontWeight: 700,
+            letterSpacing: "1px",
+          }}
+        >
+          🔴 LIVE
+        </div>
+      </Link>
+
+      {/* CTA button */}
+      <div style={{ marginTop: "16px", textAlign: "center" }}>
+        <Link
+          href={YOUTUBE_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "12px 28px",
+            background: "#ff0000",
+            color: "white",
+            borderRadius: "8px",
+            fontSize: "16px",
+            fontWeight: 600,
+            textDecoration: "none",
+          }}
+        >
+          ▶ Sledovat na YouTube
+        </Link>
       </div>
 
       {/* Info under video */}
@@ -84,8 +165,8 @@ export default function KameraPage() {
           }}
         >
           Kamera snímá naše kolejiště 24/7. Přenos se spouští automaticky —
-          pokud zrovna neběží, zkuste to později. Pro nejlepší zážitek zapněte
-          zvuk a přepněte na fullscreen.
+          pokud zrovna neběží, zkuste to později. Kliknutím na náhled výše
+          otevřete stream přímo na YouTube.
         </p>
       </div>
     </div>
