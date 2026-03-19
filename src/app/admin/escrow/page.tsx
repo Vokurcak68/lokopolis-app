@@ -315,6 +315,10 @@ export default function AdminEscrowPage() {
         <span style={{ color: "var(--text-muted)" }}>Escrow</span>
       </div>
 
+      <div style={{ marginBottom: "8px" }}>
+        <Link href="/admin/platby" style={{ color: "var(--accent)", textDecoration: "none", fontSize: "13px" }}>💳 Platby</Link>
+      </div>
+
       <h1 style={{ fontSize: "28px", fontWeight: 800, color: "var(--text-primary)", marginBottom: "8px" }}>🛡️ Escrow</h1>
 
       {/* Rychlý přehled čísel */}

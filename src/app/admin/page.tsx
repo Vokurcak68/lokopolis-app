@@ -13,6 +13,7 @@ const adminSections = [
   { href: "/admin/zakaznici", icon: "👥", title: "Zákazníci", desc: "Přehled registrovaných uživatelů" },
   { href: "/admin/sablony", icon: "📧", title: "Šablony", desc: "E-mailové šablony" },
   { href: "/admin/escrow", icon: "🛡️", title: "Escrow", desc: "Bezpečná platba, spory, nastavení" },
+  { href: "/admin/platby", icon: "💳", title: "Platby", desc: "Přijaté platby, výplaty prodávajícím, přiřazování" },
   { href: "/admin/bannery", icon: "🖼️", title: "Bannery", desc: "Homepage bannery, reklama, pozice, plánování" },
 ];
 
