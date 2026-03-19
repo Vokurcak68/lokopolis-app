@@ -38,6 +38,7 @@ const ALL_NAV_ITEMS: NavItem[] = [
       { label: "Galerie", href: "/galerie", key: "gallery" },
       { label: "Akce", href: "/akce", key: "events" },
       { label: "Soutěž", href: "/soutez", key: "competition" },
+      { label: "Live 🔴", href: "/kamera", key: "camera" },
     ],
   },
   {
@@ -60,6 +61,7 @@ const ALL_LINKS: NavLink[] = [
   { label: "Shop", href: "/shop", key: "shop" },
   { label: "Bazar", href: "/bazar", key: "bazar" },
   { label: "Ke stažení", href: "/ke-stazeni", key: "downloads" },
+  { label: "Live 🔴", href: "/kamera", key: "camera" },
 ];
 
 type MenuSettings = Record<string, boolean>;
