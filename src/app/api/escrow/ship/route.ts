@@ -72,6 +72,19 @@ export async function POST(req: NextRequest) {
       supabase.from("profiles").select("*").eq("id", transaction.seller_id).single(),
     ]);
 
+    // Mapování carrier z Lokopolis (label) na ShieldTrack (slug)
+    const carrierToShieldTrack: Record<string, string> = {
+      "Česká pošta": "ceska_posta",
+      "Zásilkovna": "zasilkovna",
+      "PPL": "ppl",
+      "DPD": "dpd",
+      "GLS": "gls",
+      "Geis": "geis",
+      "Balíkovna": "balikovna",
+      "InTime": "intime",
+    };
+    const stCarrier = carrier ? (carrierToShieldTrack[carrier] || carrier.toLowerCase().replace(/\s+/g, '_')) : undefined;
+
     // ShieldTrack — registrace zásilky (non-blocking)
     if (tracking_number) {
       try {
@@ -80,6 +93,7 @@ export async function POST(req: NextRequest) {
 
         const stResult = await registerShipment({
           tracking_number,
+          carrier: stCarrier,
           recipient_name: deliveryAddress?.name || "",
           recipient_city: deliveryAddress?.city || "",
           recipient_zip: deliveryAddress?.zip || "",

@@ -12,6 +12,7 @@ const SHIELDTRACK_API_KEY = process.env.SHIELDTRACK_API_KEY || "";
 
 export interface ShieldTrackRegisterData {
   tracking_number: string;
+  carrier?: string;
   recipient_name: string;
   recipient_city: string;
   recipient_zip: string;
