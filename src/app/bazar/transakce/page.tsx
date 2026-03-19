@@ -46,53 +46,28 @@ export default function TransactionsPage() {
 
   useEffect(() => {
     if (!user) return;
-    const userId = user.id;
 
     async function fetchTransactions() {
       setLoading(true);
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { router.push("/prihlaseni"); return; }
 
-      // Fetch all escrow transactions where user is buyer or seller
-      let query = supabase
-        .from("escrow_transactions")
-        .select("*")
-        .order("created_at", { ascending: false });
+      try {
+        const params = new URLSearchParams();
+        if (roleFilter !== "all") params.set("role", roleFilter);
+        if (statusFilter) params.set("status", statusFilter);
 
-      if (roleFilter === "buyer") {
-        query = query.eq("buyer_id", userId);
-      } else if (roleFilter === "seller") {
-        query = query.eq("seller_id", userId);
-      } else {
-        query = query.or(`buyer_id.eq.${userId},seller_id.eq.${userId}`);
-      }
+        const res = await fetch(`/api/escrow/my-transactions?${params}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
 
-      if (statusFilter) {
-        query = query.eq("status", statusFilter);
-      }
-
-      const { data } = await query;
-
-      if (data && data.length > 0) {
-        // Fetch listing titles and other party names
-        const listingIds = [...new Set(data.map(t => t.listing_id))];
-        const otherIds = [...new Set(data.map(t => t.buyer_id === userId ? t.seller_id : t.buyer_id))];
-
-        const [listingsRes, profilesRes] = await Promise.all([
-          supabase.from("listings").select("id, title, images").in("id", listingIds),
-          supabase.from("profiles").select("id, display_name, username").in("id", otherIds),
-        ]);
-
-        const listingsMap = new Map((listingsRes.data || []).map((l: { id: string; title: string; images?: string[] | null }) => [l.id, l]));
-        const profilesMap = new Map((profilesRes.data || []).map((p: { id: string; display_name: string | null; username: string }) => [p.id, p.display_name || p.username]));
-
-        setTransactions(data.map(t => ({
-          ...t,
-          listing_title: listingsMap.get(t.listing_id)?.title || "Neznámý inzerát",
-          listing_image: listingsMap.get(t.listing_id)?.images?.[0] || null,
-          other_name: profilesMap.get(t.buyer_id === userId ? t.seller_id : t.buyer_id) || "Anonym",
-        })));
-      } else {
+        if (res.ok) {
+          const json = await res.json();
+          setTransactions(json.transactions || []);
+        } else {
+          setTransactions([]);
+        }
+      } catch {
         setTransactions([]);
       }
       setLoading(false);
