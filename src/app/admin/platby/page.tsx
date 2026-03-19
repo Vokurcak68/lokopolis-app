@@ -674,6 +674,7 @@ export default function AdminPlatbyPage() {
               <thead>
                 <tr>
                   <th style={thStyle}>Datum</th>
+                  <th style={thStyle}>Reference</th>
                   <th style={thStyle}>Inzerát</th>
                   <th style={thStyle}>Prodávající</th>
                   <th style={thStyle}>Celkem</th>
@@ -685,13 +686,16 @@ export default function AdminPlatbyPage() {
               </thead>
               <tbody>
                 {filteredPayouts.length === 0 && (
-                  <tr><td colSpan={8} style={{ ...tdStyle, textAlign: "center", color: "var(--text-dim)" }}>Žádné transakce</td></tr>
+                  <tr><td colSpan={9} style={{ ...tdStyle, textAlign: "center", color: "var(--text-dim)" }}>Žádné transakce</td></tr>
                 )}
                 {filteredPayouts.map(t => {
                   const sLabel = payoutStatusLabel(t.status);
                   return (
                     <tr key={t.id}>
                       <td style={tdStyle}>{fmtDate(t.completed_at || t.created_at)}</td>
+                      <td style={{ ...tdStyle, fontFamily: "monospace", fontSize: "12px", color: "var(--accent)" }}>
+                        {t.payment_reference || "—"}
+                      </td>
                       <td style={{ ...tdStyle, maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {listingMap[t.listing_id] || t.listing_id}
                       </td>
