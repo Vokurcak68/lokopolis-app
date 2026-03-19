@@ -199,6 +199,13 @@ export default function AdminPlatbyPage() {
   const [otherNoteInput, setOtherNoteInput] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
+  // FIO payout
+  const [selectedPayouts, setSelectedPayouts] = useState<Set<string>>(new Set());
+  const [fioModalOpen, setFioModalOpen] = useState(false);
+  const [fioLoading, setFioLoading] = useState(false);
+  const [fioResult, setFioResult] = useState<{ success?: boolean; error?: string; results?: Array<{ escrow_id: string; payment_reference: string; status: string; error?: string }>; orders_count?: number } | null>(null);
+  const [sellerBankMap, setSellerBankMap] = useState<Record<string, string>>({});
+
   // ── Auth & fetch ───────────────────────────────────────────────
 
   useEffect(() => {
@@ -241,16 +248,21 @@ export default function AdminPlatbyPage() {
       setListingMap(map);
     }
 
-    // Fetch seller usernames
+    // Fetch seller usernames + bank accounts
     const sellerIds = [...new Set(transactions.map(t => t.seller_id).filter(Boolean))];
     if (sellerIds.length > 0) {
       const { data: sellers } = await supabase
         .from("profiles")
-        .select("id, username")
+        .select("id, username, bank_account")
         .in("id", sellerIds);
-      const map: Record<string, string> = {};
-      sellers?.forEach(s => { map[s.id] = s.username || s.id; });
-      setSellerMap(map);
+      const nameMap: Record<string, string> = {};
+      const bankMap: Record<string, string> = {};
+      sellers?.forEach(s => {
+        nameMap[s.id] = s.username || s.id;
+        if (s.bank_account) bankMap[s.id] = s.bank_account;
+      });
+      setSellerMap(nameMap);
+      setSellerBankMap(bankMap);
     }
   }
 
@@ -327,6 +339,53 @@ export default function AdminPlatbyPage() {
       await fetchAll();
     } finally {
       setActionLoading(null);
+    }
+  }
+
+  // ── FIO payout ──────────────────────────────────────────────
+
+  const pendingPayouts = useMemo(() => {
+    return escrowTransactions.filter(t => ["completed", "auto_completed"].includes(t.status));
+  }, [escrowTransactions]);
+
+  function togglePayoutSelection(id: string) {
+    setSelectedPayouts(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function selectAllPayouts() {
+    setSelectedPayouts(new Set(pendingPayouts.map(t => t.id)));
+  }
+
+  function deselectAllPayouts() {
+    setSelectedPayouts(new Set());
+  }
+
+  async function sendFioPayout() {
+    if (selectedPayouts.size === 0) return;
+    setFioLoading(true);
+    setFioResult(null);
+    try {
+      const token = await getToken();
+      const res = await fetch("/api/escrow/fio-payout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ escrow_ids: [...selectedPayouts] }),
+      });
+      const data = await res.json();
+      setFioResult(data);
+      if (data.success) {
+        setSelectedPayouts(new Set());
+        await fetchAll();
+      }
+    } catch (e) {
+      setFioResult({ error: "Chyba při odesílání" });
+    } finally {
+      setFioLoading(false);
     }
   }
 
@@ -658,14 +717,39 @@ export default function AdminPlatbyPage() {
             </div>
           </div>
 
-          {/* Filters */}
-          <div style={{ ...cardStyle, display: "flex", gap: "8px", alignItems: "center" }}>
+          {/* Filters + FIO button */}
+          <div style={{ ...cardStyle, display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
             <span style={{ fontSize: "11px", color: "var(--text-dim)" }}>Filtr:</span>
             {(["pending", "sent", "confirmed", "all"] as PayoutFilter[]).map(f => (
               <button key={f} style={filterBtnStyle(payoutFilter === f)} onClick={() => setPayoutFilter(f)}>
                 {{ pending: "Čeká na výplatu", sent: "Odesláno", confirmed: "Potvrzeno", all: "Všechny" }[f]}
               </button>
             ))}
+            <div style={{ flex: 1 }} />
+            {pendingPayouts.length > 0 && (
+              <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                <button style={btnStyle("var(--text-dim)")} onClick={selectedPayouts.size === pendingPayouts.length ? deselectAllPayouts : selectAllPayouts}>
+                  {selectedPayouts.size === pendingPayouts.length ? "Zrušit výběr" : "Vybrat všechny"}
+                </button>
+                <button
+                  style={{
+                    padding: "6px 16px",
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    border: "none",
+                    borderRadius: "8px",
+                    background: selectedPayouts.size > 0 ? "#3b82f6" : "#555",
+                    color: "white",
+                    cursor: selectedPayouts.size > 0 ? "pointer" : "not-allowed",
+                    opacity: selectedPayouts.size > 0 ? 1 : 0.5,
+                  }}
+                  disabled={selectedPayouts.size === 0}
+                  onClick={() => setFioModalOpen(true)}
+                >
+                  📤 Odeslat do FIO ({selectedPayouts.size})
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Table */}
@@ -673,6 +757,7 @@ export default function AdminPlatbyPage() {
             <table style={tableStyle}>
               <thead>
                 <tr>
+                  <th style={{ ...thStyle, width: "32px" }}></th>
                   <th style={thStyle}>Datum</th>
                   <th style={thStyle}>Reference</th>
                   <th style={thStyle}>Inzerát</th>
@@ -686,12 +771,22 @@ export default function AdminPlatbyPage() {
               </thead>
               <tbody>
                 {filteredPayouts.length === 0 && (
-                  <tr><td colSpan={9} style={{ ...tdStyle, textAlign: "center", color: "var(--text-dim)" }}>Žádné transakce</td></tr>
+                  <tr><td colSpan={10} style={{ ...tdStyle, textAlign: "center", color: "var(--text-dim)" }}>Žádné transakce</td></tr>
                 )}
                 {filteredPayouts.map(t => {
                   const sLabel = payoutStatusLabel(t.status);
                   return (
                     <tr key={t.id}>
+                      <td style={tdStyle}>
+                        {["completed", "auto_completed"].includes(t.status) && (
+                          <input
+                            type="checkbox"
+                            checked={selectedPayouts.has(t.id)}
+                            onChange={() => togglePayoutSelection(t.id)}
+                            style={{ cursor: "pointer", width: "16px", height: "16px" }}
+                          />
+                        )}
+                      </td>
                       <td style={tdStyle}>{fmtDate(t.completed_at || t.created_at)}</td>
                       <td style={{ ...tdStyle, fontFamily: "monospace", fontSize: "12px", color: "var(--accent)" }}>
                         {t.payment_reference || "—"}
@@ -821,6 +916,153 @@ export default function AdminPlatbyPage() {
             >
               Zavřít
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════ */}
+      {/* FIO Payout Modal                                           */}
+      {/* ═══════════════════════════════════════════════════════════ */}
+      {fioModalOpen && (
+        <div style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0,0,0,0.6)",
+          zIndex: 100,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "20px",
+        }} onClick={() => { if (!fioLoading) { setFioModalOpen(false); setFioResult(null); } }}>
+          <div style={{
+            background: "var(--bg-card)",
+            border: "1px solid var(--border)",
+            borderRadius: "16px",
+            padding: "24px",
+            maxWidth: "700px",
+            width: "100%",
+            maxHeight: "80vh",
+            overflowY: "auto",
+          }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px" }}>
+              📤 Platební příkaz do FIO banky
+            </h3>
+
+            {!fioResult && (
+              <>
+                <p style={{ fontSize: "13px", color: "var(--text-dim)", marginBottom: "16px" }}>
+                  Pro každou vybranou transakci se vytvoří <strong>dva platební příkazy</strong>:
+                  výplata prodávajícímu a provize na admin účet.
+                </p>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "20px" }}>
+                  {[...selectedPayouts].map(id => {
+                    const t = escrowTransactions.find(e => e.id === id);
+                    if (!t) return null;
+                    const sellerBank = sellerBankMap[t.seller_id];
+                    const hasBank = !!sellerBank;
+                    return (
+                      <div key={id} style={{
+                        border: `1px solid ${hasBank ? "var(--border)" : "#ef4444"}`,
+                        borderRadius: "8px",
+                        padding: "10px 12px",
+                        fontSize: "13px",
+                      }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                          <span style={{ fontWeight: 600, color: "var(--accent)", fontFamily: "monospace" }}>{t.payment_reference}</span>
+                          <span style={{ fontWeight: 600 }}>{fmtMoney(t.amount)}</span>
+                        </div>
+                        <div style={{ fontSize: "12px", color: "var(--text-dim)" }}>
+                          {listingMap[t.listing_id] || "?"} · {sellerMap[t.seller_id] || "?"}
+                        </div>
+                        <div style={{ display: "flex", gap: "16px", marginTop: "6px", fontSize: "12px" }}>
+                          <span>💸 Prodávající: <strong>{fmtMoney(t.seller_payout)}</strong> → {hasBank ? sellerBank : <span style={{ color: "#ef4444" }}>⚠️ chybí účet</span>}</span>
+                          <span>🏦 Provize: <strong>{fmtMoney(t.commission_amount)}</strong></span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                  <button
+                    style={btnStyle("var(--text-dim)")}
+                    onClick={() => { setFioModalOpen(false); setFioResult(null); }}
+                    disabled={fioLoading}
+                  >
+                    Zrušit
+                  </button>
+                  <button
+                    style={{
+                      padding: "8px 20px",
+                      fontSize: "14px",
+                      fontWeight: 700,
+                      border: "none",
+                      borderRadius: "8px",
+                      background: "#3b82f6",
+                      color: "white",
+                      cursor: fioLoading ? "wait" : "pointer",
+                      opacity: fioLoading ? 0.6 : 1,
+                    }}
+                    disabled={fioLoading}
+                    onClick={sendFioPayout}
+                  >
+                    {fioLoading ? "Odesílám…" : `✅ Potvrdit a odeslat (${selectedPayouts.size})`}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {fioResult && (
+              <>
+                {fioResult.success ? (
+                  <div style={{ padding: "16px", background: "rgba(34,197,94,0.1)", borderRadius: "8px", marginBottom: "16px" }}>
+                    <div style={{ fontSize: "16px", fontWeight: 700, color: "#22c55e", marginBottom: "4px" }}>
+                      ✅ Platební příkaz odeslán
+                    </div>
+                    <div style={{ fontSize: "13px", color: "var(--text-dim)" }}>
+                      {fioResult.orders_count} příkaz(ů) odesláno do FIO banky
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ padding: "16px", background: "rgba(239,68,68,0.1)", borderRadius: "8px", marginBottom: "16px" }}>
+                    <div style={{ fontSize: "16px", fontWeight: 700, color: "#ef4444", marginBottom: "4px" }}>
+                      ❌ Chyba
+                    </div>
+                    <div style={{ fontSize: "13px", color: "var(--text-dim)" }}>
+                      {fioResult.error}
+                    </div>
+                  </div>
+                )}
+
+                {fioResult.results && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "4px", marginBottom: "16px" }}>
+                    {fioResult.results.map((r, i) => (
+                      <div key={i} style={{
+                        padding: "8px 12px",
+                        borderRadius: "6px",
+                        fontSize: "12px",
+                        border: `1px solid ${r.status === "ok" ? "#22c55e" : "#ef4444"}`,
+                        display: "flex",
+                        justifyContent: "space-between",
+                      }}>
+                        <span style={{ fontFamily: "monospace" }}>{r.payment_reference}</span>
+                        <span style={{ color: r.status === "ok" ? "#22c55e" : "#ef4444", fontWeight: 600 }}>
+                          {r.status === "ok" ? "✅ OK" : `❌ ${r.error}`}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <button
+                  style={{ ...btnStyle("var(--text-dim)"), width: "100%", textAlign: "center", padding: "8px" }}
+                  onClick={() => { setFioModalOpen(false); setFioResult(null); }}
+                >
+                  Zavřít
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
