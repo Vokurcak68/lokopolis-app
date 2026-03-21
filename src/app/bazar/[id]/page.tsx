@@ -87,6 +87,13 @@ export default function ListingDetailPage() {
   const [savedAddresses, setSavedAddresses] = useState<{ id: string; full_name: string; street: string; city: string; zip: string; phone?: string; is_default?: boolean }[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string>("new");
   const [saveNewAddress, setSaveNewAddress] = useState(false);
+  const [escrowTermsAccepted, setEscrowTermsAccepted] = useState(false);
+  const [escrowDeadlines, setEscrowDeadlines] = useState({
+    payment_deadline_hours: "24",
+    shipping_deadline_days: "5",
+    confirmation_deadline_days: "7",
+    auto_complete_days: "14",
+  });
 
   const isOwner = user && listing && user.id === listing.seller_id;
   const isAdmin = profile?.role === "admin";
@@ -124,6 +131,20 @@ export default function ListingDetailPage() {
       if (escrowSetting?.value) {
         setEscrowEnabled(escrowSetting.value === "true");
       }
+
+      // Fetch escrow deadlines from public settings
+      try {
+        const psRes = await fetch("/api/escrow/public-settings");
+        if (psRes.ok) {
+          const ps = await psRes.json();
+          setEscrowDeadlines({
+            payment_deadline_hours: ps.payment_deadline_hours || "24",
+            shipping_deadline_days: ps.shipping_deadline_days || "5",
+            confirmation_deadline_days: ps.confirmation_deadline_days || "7",
+            auto_complete_days: ps.auto_complete_days || "14",
+          });
+        }
+      } catch { /* use defaults */ }
 
       // Increment view count (fire and forget)
       supabase
@@ -250,6 +271,7 @@ export default function ListingDetailPage() {
 
   function handleCreateEscrow() {
     if (!listing) return;
+    setEscrowTermsAccepted(false);
     setShowEscrowModal(true);
   }
 
@@ -1173,6 +1195,46 @@ export default function ListingDetailPage() {
               </div>
             )}
 
+            {/* Podmínky escrow */}
+            <div style={{
+              marginTop: "20px", padding: "14px 16px", borderRadius: "8px",
+              background: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.2)",
+            }}>
+              <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "8px" }}>
+                📋 Podmínky Bezpečné platby
+              </div>
+              <ul style={{
+                fontSize: "12px", color: "var(--text-muted)", lineHeight: 1.7,
+                margin: 0, paddingLeft: "18px",
+              }}>
+                <li>Platbu je nutné odeslat do <strong>{escrowDeadlines.payment_deadline_hours} hodin</strong> od vytvoření transakce.</li>
+                <li>Po potvrzení přijetí zboží nebo po uplynutí <strong>{escrowDeadlines.auto_complete_days} dní</strong> od doručení bude platba automaticky uvolněna prodávajícímu.</li>
+                <li>Pokud do <strong>{escrowDeadlines.confirmation_deadline_days} dní</strong> od doručení nepotvrdíte přijetí ani neotevřete spor, transakce bude automaticky dokončena.</li>
+                <li>Prodávající musí odeslat zásilku do <strong>{escrowDeadlines.shipping_deadline_days} dní</strong> od přijetí platby.</li>
+              </ul>
+              <div style={{ fontSize: "11px", color: "var(--text-dimmer)", marginTop: "8px" }}>
+                Kompletní podmínky: <Link href="/bazar/podminky-escrow" target="_blank" style={{ color: "#22c55e", textDecoration: "underline" }}>Podmínky Bezpečné platby</Link>
+              </div>
+            </div>
+
+            <label style={{
+              display: "flex", alignItems: "flex-start", gap: "8px", cursor: "pointer",
+              fontSize: "13px", color: "var(--text-primary)", marginTop: "12px",
+            }}>
+              <input
+                type="checkbox" checked={escrowTermsAccepted}
+                onChange={(e) => setEscrowTermsAccepted(e.target.checked)}
+                style={{ accentColor: "#22c55e", marginTop: "2px", flexShrink: 0 }}
+              />
+              <span>
+                Souhlasím s{" "}
+                <Link href="/bazar/podminky-escrow" target="_blank" style={{ color: "#22c55e", textDecoration: "underline" }}>
+                  podmínkami Bezpečné platby
+                </Link>{" "}
+                a beru na vědomí výše uvedené lhůty.
+              </span>
+            </label>
+
             <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end", marginTop: "20px" }}>
               <button
                 onClick={() => setShowEscrowModal(false)}
@@ -1186,11 +1248,13 @@ export default function ListingDetailPage() {
               </button>
               <button
                 onClick={handleConfirmEscrow}
-                disabled={escrowLoading}
+                disabled={escrowLoading || !escrowTermsAccepted}
                 style={{
                   padding: "10px 24px", borderRadius: "8px", border: "none",
-                  background: "#22c55e", color: "#fff", cursor: escrowLoading ? "not-allowed" : "pointer",
-                  fontSize: "14px", fontWeight: 600, opacity: escrowLoading ? 0.7 : 1,
+                  background: "#22c55e", color: "#fff",
+                  cursor: (escrowLoading || !escrowTermsAccepted) ? "not-allowed" : "pointer",
+                  fontSize: "14px", fontWeight: 600,
+                  opacity: (escrowLoading || !escrowTermsAccepted) ? 0.5 : 1,
                 }}
               >
                 {escrowLoading ? "Vytvářím..." : "🛡️ Potvrdit a zaplatit"}
