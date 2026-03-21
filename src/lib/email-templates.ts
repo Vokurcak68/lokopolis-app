@@ -808,6 +808,39 @@ export function escrowAutoCompleted(user: any, listing: any, transaction: any, r
 
 // ─── Escrow on hold ──────────────────────────────────────────────────────────
 
+export function escrowExpiredBuyer(buyer: any, listing: any, transaction: any, settings?: Record<string, any>): string {
+  return emailWrapper(`
+    <h2 style="color:#ef4444;margin:0 0 20px;">❌ Transakce zrušena — platba nepřijata</h2>
+    <p>Dobrý den, <strong style="color:#f0a030;">${esc(buyer.display_name || buyer.username)}</strong>,</p>
+    <p>vaše bezpečná platba za inzerát <strong>"${esc(listing.title)}"</strong> byla automaticky zrušena, protože platba nebyla přijata ve stanovené lhůtě.</p>
+
+    ${listingInfoBlock(listing, transaction)}
+
+    <p style="color:#ccc;">Inzerát je opět dostupný k prodeji. Pokud máte stále zájem, můžete vytvořit novou transakci.</p>
+    <p style="color:#888;">Pokud jste platbu odeslali a myslíte si, že došlo k chybě, kontaktujte nás na info@lokopolis.cz.</p>
+
+    <div style="margin-top:24px;text-align:center;">
+      <a href="https://lokopolis.cz/bazar/${esc(listing.id)}" style="display:inline-block;padding:12px 28px;background:#f0a030;color:#1a1a2e;font-weight:700;border-radius:8px;text-decoration:none;">Zobrazit inzerát →</a>
+    </div>
+  `, settings);
+}
+
+export function escrowExpiredSeller(seller: any, listing: any, transaction: any, settings?: Record<string, any>): string {
+  return emailWrapper(`
+    <h2 style="color:#f59e0b;margin:0 0 20px;">ℹ️ Transakce zrušena — kupující nezaplatil</h2>
+    <p>Dobrý den, <strong style="color:#f0a030;">${esc(seller.display_name || seller.username)}</strong>,</p>
+    <p>bezpečná platba za váš inzerát <strong>"${esc(listing.title)}"</strong> byla automaticky zrušena, protože kupující neodeslal platbu ve stanovené lhůtě.</p>
+
+    ${listingInfoBlock(listing, transaction)}
+
+    <p style="color:#ccc;">Váš inzerát je opět aktivní a dostupný ostatním kupujícím.</p>
+
+    <div style="margin-top:24px;text-align:center;">
+      <a href="https://lokopolis.cz/bazar/${esc(listing.id)}" style="display:inline-block;padding:12px 28px;background:#f0a030;color:#1a1a2e;font-weight:700;border-radius:8px;text-decoration:none;">Zobrazit inzerát →</a>
+    </div>
+  `, settings);
+}
+
 export function escrowOnHold(user: any, listing: any, transaction: any, reason: string, settings?: Record<string, any>): string {
   return emailWrapper(`
     <h2 style="color:#ef4444;margin:0 0 20px;">⚠️ Výplata pozastavena</h2>

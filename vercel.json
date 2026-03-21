@@ -6,6 +6,10 @@
       "schedule": "0 8 * * *"
     },
     {
+      "path": "/api/escrow/expire-unpaid",
+      "schedule": "30 8 * * *"
+    },
+    {
       "path": "/api/escrow/auto-complete",
       "schedule": "0 9 * * *"
     }
