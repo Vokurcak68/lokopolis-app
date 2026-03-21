@@ -520,19 +520,22 @@ export function escrowShipped(buyer: any, listing: any, transaction: any, settin
 
 export function escrowDeliveryReminder(buyer: any, transaction: any, daysLeft: number, listing?: any, settings?: Record<string, any>): string {
   return emailWrapper(`
-    <h2 style="color:#f0a030;margin:0 0 20px;">⏰ Potvrďte přijetí zboží</h2>
+    <h2 style="color:#f59e0b;margin:0 0 20px;">⏰ Potvrďte přijetí zboží</h2>
     <p>Dobrý den, <strong style="color:#f0a030;">${esc(buyer.display_name || buyer.username)}</strong>,</p>
-    <p>zásilka z vaší bezpečné platby <strong>${esc(transaction.payment_reference)}</strong> byla odeslána. Potvrďte prosím přijetí zboží.</p>
+    <p>zásilka z vaší bezpečné platby <strong>${esc(transaction.payment_reference)}</strong>${listing ? ` za inzerát <strong>"${esc(listing.title)}"</strong>` : ""} byla doručena, ale zatím jste nepotvrdili přijetí.</p>
 
     ${listing ? listingInfoBlock(listing, transaction) : `<div style="margin:12px 0;padding:12px 16px;background:#16162b;border-radius:8px;font-size:13px;color:#ccc;">🏷️ <strong>Reference:</strong> ${esc(transaction.payment_reference)}</div>`}
 
     <div style="margin:20px 0;padding:16px;background:#16162b;border-radius:8px;border-left:3px solid #f59e0b;">
-      <strong style="color:#f59e0b;">⏰ Zbývá ${daysLeft} dní</strong><br>
-      <span style="color:#ccc;">Pokud nepotvrdíte přijetí, peníze budou automaticky uvolněny prodejci.</span>
+      <strong style="color:#f59e0b;">⚠️ Zbývá přibližně ${daysLeft} dní</strong><br>
+      <span style="color:#ccc;">Pokud do této doby nepotvrdíte přijetí ani neotevřete spor, peníze budou automaticky uvolněny prodávajícímu.</span>
     </div>
 
+    <p style="color:#ccc;">Pokud je vše v pořádku, potvrďte přijetí. Pokud zboží neodpovídá popisu nebo jste ho neobdrželi, otevřete spor.</p>
+
     <div style="margin-top:24px;text-align:center;">
-      <a href="https://lokopolis.cz/bazar/transakce/${esc(transaction.id)}" style="display:inline-block;padding:12px 28px;background:#f0a030;color:#1a1a2e;font-weight:700;border-radius:8px;text-decoration:none;">Potvrdit přijetí →</a>
+      <a href="https://lokopolis.cz/bazar/transakce/${esc(transaction.id)}" style="display:inline-block;padding:12px 28px;background:#22c55e;color:#fff;font-weight:700;border-radius:8px;text-decoration:none;margin-right:12px;">✅ Potvrdit přijetí →</a>
+      <a href="https://lokopolis.cz/bazar/transakce/${esc(transaction.id)}" style="display:inline-block;padding:12px 28px;background:#ef4444;color:#fff;font-weight:700;border-radius:8px;text-decoration:none;">⚠️ Otevřít spor →</a>
     </div>
   `, settings);
 }
@@ -746,8 +749,8 @@ export function escrowDelivered(buyer: any, listing: any, transaction: any, sett
     </div>
 
     <div style="margin:16px 0;padding:16px;background:#16162b;border-radius:8px;border-left:3px solid #f59e0b;">
-      <strong style="color:#f59e0b;">⏰ Máte 14 dní na potvrzení</strong><br>
-      <span style="color:#ccc;">Pokud tak neučiníte do 14 dnů, peníze budou automaticky uvolněny prodávajícímu.</span>
+      <strong style="color:#f59e0b;">⏰ Potvrďte do ${settings?.confirmation_deadline_days || 7} dní</strong><br>
+      <span style="color:#ccc;">Pokud do ${settings?.confirmation_deadline_days || 7} dní nepotvrdíte přijetí ani neotevřete spor, peníze budou po ${settings?.auto_complete_days || 14} dnech automaticky uvolněny prodávajícímu.</span>
     </div>
 
     <div style="margin-top:24px;text-align:center;">
@@ -768,7 +771,7 @@ export function escrowDeliveredSeller(seller: any, listing: any, transaction: an
 
     <div style="margin:20px 0;padding:16px;background:#16162b;border-radius:8px;border-left:3px solid #3b82f6;">
       <strong style="color:#3b82f6;">⏳ Čekáme na potvrzení kupujícího</strong><br>
-      <span style="color:#ccc;">Kupující má 14 dní na potvrzení přijetí zboží. Pokud nepotvrdí, peníze vám budou uvolněny automaticky.</span>
+      <span style="color:#ccc;">Kupující má ${settings?.confirmation_deadline_days || 7} dní na potvrzení přijetí zboží. Pokud nepotvrdí, peníze vám budou automaticky uvolněny po ${settings?.auto_complete_days || 14} dnech od doručení.</span>
     </div>
 
     <div style="margin-top:24px;text-align:center;">
