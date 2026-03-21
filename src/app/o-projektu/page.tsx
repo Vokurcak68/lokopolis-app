@@ -53,10 +53,15 @@ export default function AboutPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             {[
               { icon: "📝", title: "Články a návody", desc: "Recenze modelů, stavební postupy, tipy a triky od zkušených modelářů" },
+              { icon: "💬", title: "Fórum", desc: "Diskuzní fórum — poradna, recenze, novinky ze světa a prezentace vašeho kolejiště" },
+              { icon: "🛒", title: "Bazar", desc: "Prodávejte a nakupujte modely, příslušenství a díly přímo v komunitě" },
+              { icon: "🛡️", title: "Bezpečná platba", desc: "Escrow služba pro bezpečný obchod — peníze držíme, dokud zboží nedorazí" },
+              { icon: "🏪", title: "Shop", desc: "Digitální produkty — kolejové plány, návody a materiály ke stažení" },
               { icon: "📸", title: "Galerie", desc: "Fotky a videa kolejišť, modelů a přestaveb z celé komunity" },
-              { icon: "📥", title: "Ke stažení", desc: "Kolejové plány, STL modely pro 3D tisk, návody a další soubory" },
               { icon: "📅", title: "Akce", desc: "Přehled výstav, burzí a setkání modelářů v České republice i okolí" },
-              { icon: "💬", title: "Fórum", desc: "Diskuzní fórum pro výměnu zkušeností, poradnu a bazar" },
+              { icon: "🏆", title: "Soutěž", desc: "Kolejiště měsíce — hlasujte o nejlepší kolejiště a soutěžte o uznání komunity" },
+              { icon: "📥", title: "Ke stažení", desc: "Kolejové plány, STL modely pro 3D tisk a další soubory zdarma" },
+              { icon: "🔴", title: "Live kamera", desc: "Sledujte modelové kolejiště v přímém přenosu přes YouTube Live" },
             ].map((item) => (
               <div
                 key={item.title}
