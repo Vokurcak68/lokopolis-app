@@ -808,6 +808,79 @@ export function escrowAutoCompleted(user: any, listing: any, transaction: any, r
 
 // ─── Escrow on hold ──────────────────────────────────────────────────────────
 
+export function escrowShippingReminder(seller: any, listing: any, transaction: any, deadlineDate: string, settings?: Record<string, any>): string {
+  return emailWrapper(`
+    <h2 style="color:#f59e0b;margin:0 0 20px;">⚠️ Připomínka — odešlete zboží</h2>
+    <p>Dobrý den, <strong style="color:#f0a030;">${esc(seller.display_name || seller.username)}</strong>,</p>
+    <p>ještě jste neodeslali zásilku k inzerátu <strong>"${esc(listing.title)}"</strong>.</p>
+
+    ${listingInfoBlock(listing, transaction)}
+
+    <div style="margin:20px 0;padding:16px;background:#16162b;border-radius:8px;border-left:3px solid #ef4444;">
+      <strong style="color:#ef4444;">⏰ Lhůta pro odeslání vyprší: ${esc(deadlineDate)}</strong><br>
+      <span style="color:#ccc;font-size:13px;">Pokud zásilku neodešlete a nezadáte sledovací číslo do tohoto termínu, transakce bude <strong>automaticky zrušena</strong> a platba vrácena kupujícímu.</span>
+    </div>
+
+    <div style="margin-top:24px;text-align:center;">
+      <a href="https://lokopolis.cz/bazar/transakce/${esc(transaction.id)}" style="display:inline-block;padding:12px 28px;background:#f0a030;color:#1a1a2e;font-weight:700;border-radius:8px;text-decoration:none;">Zadat tracking →</a>
+    </div>
+  `, settings);
+}
+
+export function escrowUnshippedBuyer(buyer: any, listing: any, transaction: any, settings?: Record<string, any>): string {
+  return emailWrapper(`
+    <h2 style="color:#ef4444;margin:0 0 20px;">❌ Transakce zrušena — zboží nebylo odesláno</h2>
+    <p>Dobrý den, <strong style="color:#f0a030;">${esc(buyer.display_name || buyer.username)}</strong>,</p>
+    <p>transakce za inzerát <strong>"${esc(listing.title)}"</strong> byla automaticky zrušena, protože prodávající neodeslal zásilku ve stanovené lhůtě.</p>
+
+    ${listingInfoBlock(listing, transaction)}
+
+    <div style="margin:20px 0;padding:16px;background:#16162b;border-radius:8px;border-left:3px solid #22c55e;">
+      <strong style="color:#22c55e;">💰 Vaše platba vám bude vrácena</strong><br>
+      <span style="color:#ccc;font-size:13px;">Peníze budou vráceny na váš účet. O odeslání vratky vás budeme informovat e-mailem.</span>
+    </div>
+
+    <p style="color:#888;">Pokud máte dotazy, kontaktujte nás na info@lokopolis.cz.</p>
+  `, settings);
+}
+
+export function escrowUnshippedSeller(seller: any, listing: any, transaction: any, settings?: Record<string, any>): string {
+  return emailWrapper(`
+    <h2 style="color:#ef4444;margin:0 0 20px;">❌ Transakce zrušena — zboží nebylo odesláno včas</h2>
+    <p>Dobrý den, <strong style="color:#f0a030;">${esc(seller.display_name || seller.username)}</strong>,</p>
+    <p>transakce za váš inzerát <strong>"${esc(listing.title)}"</strong> byla automaticky zrušena, protože jste neodeslali zásilku ve stanovené lhůtě.</p>
+
+    ${listingInfoBlock(listing, transaction)}
+
+    <p style="color:#ccc;">Platba bude vrácena kupujícímu. Váš inzerát je opět aktivní a dostupný k prodeji.</p>
+    <p style="color:#888;">Pokud máte dotazy, kontaktujte nás na info@lokopolis.cz.</p>
+
+    <div style="margin-top:24px;text-align:center;">
+      <a href="https://lokopolis.cz/bazar/${esc(listing.id)}" style="display:inline-block;padding:12px 28px;background:#f0a030;color:#1a1a2e;font-weight:700;border-radius:8px;text-decoration:none;">Zobrazit inzerát →</a>
+    </div>
+  `, settings);
+}
+
+export function escrowUnshippedAdmin(buyer: any, seller: any, listing: any, transaction: any, settings?: Record<string, any>): string {
+  return emailWrapper(`
+    <h2 style="color:#ef4444;margin:0 0 20px;">🔄 Refund potřeba — prodávající neodeslal</h2>
+    <p>Transakce <strong>${esc(transaction.payment_reference)}</strong> byla automaticky zrušena kvůli neodeslání zásilky.</p>
+
+    ${listingInfoBlock(listing, transaction)}
+
+    <div style="margin:20px 0;padding:16px;background:#16162b;border-radius:8px;border-left:3px solid #ef4444;">
+      <strong style="color:#ef4444;">💰 Vrátit kupujícímu:</strong><br>
+      <span style="color:#ccc;">Částka: <strong>${formatPrice(Number(transaction.amount))}</strong></span><br>
+      <span style="color:#ccc;">Kupující: <strong>${esc(buyer.display_name || buyer.username)}</strong> (${esc(buyer.email)})</span><br>
+      <span style="color:#ccc;">Prodávající: <strong>${esc(seller.display_name || seller.username)}</strong> (${esc(seller.email)})</span>
+    </div>
+
+    <div style="margin-top:24px;text-align:center;">
+      <a href="https://lokopolis.cz/admin/platby" style="display:inline-block;padding:12px 28px;background:#ef4444;color:#fff;font-weight:700;border-radius:8px;text-decoration:none;">Administrace plateb →</a>
+    </div>
+  `, settings);
+}
+
 export function escrowExpiredBuyer(buyer: any, listing: any, transaction: any, settings?: Record<string, any>): string {
   return emailWrapper(`
     <h2 style="color:#ef4444;margin:0 0 20px;">❌ Transakce zrušena — platba nepřijata</h2>

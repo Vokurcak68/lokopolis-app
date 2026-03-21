@@ -10,8 +10,16 @@
       "schedule": "30 8 * * *"
     },
     {
-      "path": "/api/escrow/auto-complete",
+      "path": "/api/escrow/shipping-reminder",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/escrow/expire-unshipped",
+      "schedule": "30 9 * * *"
+    },
+    {
+      "path": "/api/escrow/auto-complete",
+      "schedule": "0 10 * * *"
     }
   ]
 }
