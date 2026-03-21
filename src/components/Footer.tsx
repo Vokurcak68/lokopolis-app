@@ -70,7 +70,6 @@ export default function Footer() {
             <h4 style={sectionHeading}>Komunita & obchod</h4>
             {show("forum") && <FooterLink href="/forum">Fórum</FooterLink>}
             {show("bazar") && <FooterLink href="/bazar">Bazar</FooterLink>}
-            {show("bazar") && <FooterLink href="/bazar/jak-to-funguje">Jak funguje bazar</FooterLink>}
             {show("shop") && <FooterLink href="/shop">Shop</FooterLink>}
             {show("competition") && <FooterLink href="/soutez">Soutěž</FooterLink>}
             <FooterLink href="/pravidla">Pravidla</FooterLink>
@@ -84,6 +83,7 @@ export default function Footer() {
             <FooterLink href="/kontakt">Kontakt</FooterLink>
             <FooterLink href="/obchodni-podminky">Obchodní podmínky</FooterLink>
             <FooterLink href="/ochrana-udaju">Ochrana osobních údajů</FooterLink>
+            {show("bazar") && <FooterLink href="/bazar/jak-to-funguje">Jak funguje bazar</FooterLink>}
             {show("bazar") && <FooterLink href="/bazar/podminky-escrow">Podmínky Bezpečné platby</FooterLink>}
           </div>
         </div>
