@@ -105,11 +105,12 @@ export default function BazarPage() {
             Kupujte a prodávejte modely železnic, příslušenství a díly
           </p>
         </div>
-        <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+        <div className="bazar-actions" style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
           {user && (
             <>
               <Link
                 href="/bazar/moje"
+                className="bazar-action-btn"
                 style={{
                   padding: "10px 20px",
                   border: "1px solid var(--border)",
@@ -119,12 +120,14 @@ export default function BazarPage() {
                   fontWeight: 600,
                   textDecoration: "none",
                   transition: "border-color 0.2s",
+                  whiteSpace: "nowrap",
                 }}
               >
                 📋 Moje inzeráty
               </Link>
               <Link
                 href="/bazar/zpravy"
+                className="bazar-action-btn"
                 style={{
                   padding: "10px 20px",
                   border: "1px solid var(--border)",
@@ -133,12 +136,14 @@ export default function BazarPage() {
                   fontSize: "14px",
                   fontWeight: 600,
                   textDecoration: "none",
+                  whiteSpace: "nowrap",
                 }}
               >
                 💬 Zprávy
               </Link>
               <Link
                 href="/bazar/transakce"
+                className="bazar-action-btn"
                 style={{
                   padding: "10px 20px",
                   border: "1px solid var(--border)",
@@ -147,12 +152,14 @@ export default function BazarPage() {
                   fontSize: "14px",
                   fontWeight: 600,
                   textDecoration: "none",
+                  whiteSpace: "nowrap",
                 }}
               >
-                🛡️ Moje transakce
+                🛡️ Transakce
               </Link>
               <Link
                 href="/bazar/novy"
+                className="bazar-action-btn bazar-action-btn-primary"
                 style={{
                   padding: "10px 20px",
                   background: "var(--accent)",
@@ -162,6 +169,7 @@ export default function BazarPage() {
                   fontWeight: 600,
                   textDecoration: "none",
                   border: "none",
+                  whiteSpace: "nowrap",
                 }}
               >
                 + Přidat inzerát
@@ -313,6 +321,26 @@ export default function BazarPage() {
           Zjistit více o Bezpečné platbě →
         </Link>
       </div>
+
+      <style>{`
+        @media (max-width: 640px) {
+          .bazar-actions {
+            width: 100%;
+            display: grid !important;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px !important;
+          }
+          .bazar-action-btn {
+            padding: 8px 12px !important;
+            font-size: 13px !important;
+            text-align: center;
+            justify-content: center;
+          }
+          .bazar-action-btn-primary {
+            grid-column: 1 / -1;
+          }
+        }
+      `}</style>
     </div>
   );
 }
