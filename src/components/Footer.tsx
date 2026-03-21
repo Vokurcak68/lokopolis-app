@@ -1,7 +1,26 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import BadgeLogo from "./BadgeLogo";
 
+type MenuSettings = Record<string, boolean>;
+
 export default function Footer() {
+  const [menu, setMenu] = useState<MenuSettings>({
+    home: true, articles: true, forum: true, gallery: true,
+    events: true, competition: true, shop: true, bazar: true, downloads: true,
+  });
+
+  useEffect(() => {
+    fetch("/api/admin/menu-sections")
+      .then(r => r.json())
+      .then(d => setMenu(prev => ({ ...prev, ...d })))
+      .catch(() => {});
+  }, []);
+
+  const show = (key: string) => menu[key] !== false;
+
   return (
     <footer style={{ marginTop: "64px", background: "var(--bg-header)", borderTop: "1px solid var(--border)", padding: "48px 0 24px" }}>
       <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 20px" }}>
@@ -18,7 +37,7 @@ export default function Footer() {
               </Link>
             </div>
             <p style={{ fontSize: "13px", color: "var(--text-dimmer)", maxWidth: "280px" }}>
-              Česká komunita modelové železnice. Články, návody, recenze, galerie a vše pro vaše kolejiště.
+              Česká komunita modelové železnice. Články, návody, bazar, galerie a vše pro vaše kolejiště.
             </p>
             {/* Social */}
             <div style={{ marginTop: "16px", display: "flex", gap: "12px" }}>
@@ -38,92 +57,33 @@ export default function Footer() {
 
           {/* Obsah */}
           <div>
-            <h4
-              style={{
-                fontSize: "13px",
-                fontWeight: 600,
-                color: "var(--text-primary)",
-                textTransform: "uppercase",
-                letterSpacing: "1px",
-                marginBottom: "16px",
-              }}
-            >
-              Obsah
-            </h4>
-            <Link href="/clanky" style={{ display: "block", fontSize: "13px", color: "var(--text-dimmer)", padding: "4px 0", textDecoration: "none" }}>
-              Články
-            </Link>
-            <Link href="/galerie" style={{ display: "block", fontSize: "13px", color: "var(--text-dimmer)", padding: "4px 0", textDecoration: "none" }}>
-              Galerie
-            </Link>
-            <Link href="/ke-stazeni" style={{ display: "block", fontSize: "13px", color: "var(--text-dimmer)", padding: "4px 0", textDecoration: "none" }}>
-              Ke stažení
-            </Link>
-            <Link href="/akce" style={{ display: "block", fontSize: "13px", color: "var(--text-dimmer)", padding: "4px 0", textDecoration: "none" }}>
-              Akce
-            </Link>
+            <h4 style={sectionHeading}>Obsah</h4>
+            {show("articles") && <FooterLink href="/clanky">Články</FooterLink>}
+            {show("gallery") && <FooterLink href="/galerie">Galerie</FooterLink>}
+            {show("downloads") && <FooterLink href="/ke-stazeni">Ke stažení</FooterLink>}
+            {show("events") && <FooterLink href="/akce">Akce</FooterLink>}
+            <FooterLink href="/kamera">Live kamera</FooterLink>
           </div>
 
-          {/* Komunita */}
+          {/* Komunita & Obchod */}
           <div>
-            <h4
-              style={{
-                fontSize: "13px",
-                fontWeight: 600,
-                color: "var(--text-primary)",
-                textTransform: "uppercase",
-                letterSpacing: "1px",
-                marginBottom: "16px",
-              }}
-            >
-              Komunita
-            </h4>
-            <Link href="/forum" style={{ display: "block", fontSize: "13px", color: "var(--text-dimmer)", padding: "4px 0", textDecoration: "none" }}>
-              Fórum
-            </Link>
-            <Link href="/komunita" style={{ display: "block", fontSize: "13px", color: "var(--text-dimmer)", padding: "4px 0", textDecoration: "none" }}>
-              Členové
-            </Link>
-            <Link href="/pravidla" style={{ display: "block", fontSize: "13px", color: "var(--text-dimmer)", padding: "4px 0", textDecoration: "none" }}>
-              Pravidla
-            </Link>
-            <Link href="/forum/nove-vlakno" style={{ display: "block", fontSize: "13px", color: "var(--text-dimmer)", padding: "4px 0", textDecoration: "none" }}>
-              Nový příspěvek
-            </Link>
+            <h4 style={sectionHeading}>Komunita & obchod</h4>
+            {show("forum") && <FooterLink href="/forum">Fórum</FooterLink>}
+            {show("bazar") && <FooterLink href="/bazar">Bazar</FooterLink>}
+            {show("shop") && <FooterLink href="/shop">Shop</FooterLink>}
+            {show("competition") && <FooterLink href="/soutez">Soutěž</FooterLink>}
+            <FooterLink href="/pravidla">Pravidla</FooterLink>
+            <FooterLink href="/podporte-nas">Podpořte nás</FooterLink>
           </div>
 
           {/* Info */}
           <div>
-            <h4
-              style={{
-                fontSize: "13px",
-                fontWeight: 600,
-                color: "var(--text-primary)",
-                textTransform: "uppercase",
-                letterSpacing: "1px",
-                marginBottom: "16px",
-              }}
-            >
-              Info
-            </h4>
-            <Link href="/o-projektu" style={{ display: "block", fontSize: "13px", color: "var(--text-dimmer)", padding: "4px 0", textDecoration: "none" }}>
-              O projektu
-            </Link>
-            <Link href="/kontakt" style={{ display: "block", fontSize: "13px", color: "var(--text-dimmer)", padding: "4px 0", textDecoration: "none" }}>
-              Kontakt
-            </Link>
-            <Link href="/podporte-nas" style={{ display: "block", fontSize: "13px", color: "var(--text-dimmer)", padding: "4px 0", textDecoration: "none" }}>
-              Podpořte nás
-            </Link>
-            <Link href="/obchodni-podminky" style={{ display: "block", fontSize: "13px", color: "var(--text-dimmer)", padding: "4px 0", textDecoration: "none" }}>
-              Obchodní podmínky
-            </Link>
-            <Link href="/ochrana-udaju" style={{ display: "block", fontSize: "13px", color: "var(--text-dimmer)", padding: "4px 0", textDecoration: "none" }}>
-              Ochrana osobních údajů
-            </Link>
-            <Link href="/bazar/podminky-escrow" style={{ display: "block", fontSize: "13px", color: "var(--text-dimmer)", padding: "4px 0", textDecoration: "none" }}>
-              Podmínky Bezpečné platby
-            </Link>
+            <h4 style={sectionHeading}>Info</h4>
+            <FooterLink href="/o-projektu">O projektu</FooterLink>
+            <FooterLink href="/kontakt">Kontakt</FooterLink>
+            <FooterLink href="/obchodni-podminky">Obchodní podmínky</FooterLink>
+            <FooterLink href="/ochrana-udaju">Ochrana osobních údajů</FooterLink>
+            {show("bazar") && <FooterLink href="/bazar/podminky-escrow">Podmínky Bezpečné platby</FooterLink>}
           </div>
         </div>
 
@@ -145,5 +105,31 @@ export default function Footer() {
         </div>
       </div>
     </footer>
+  );
+}
+
+const sectionHeading: React.CSSProperties = {
+  fontSize: "13px",
+  fontWeight: 600,
+  color: "var(--text-primary)",
+  textTransform: "uppercase",
+  letterSpacing: "1px",
+  marginBottom: "16px",
+};
+
+function FooterLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      style={{
+        display: "block",
+        fontSize: "13px",
+        color: "var(--text-dimmer)",
+        padding: "4px 0",
+        textDecoration: "none",
+      }}
+    >
+      {children}
+    </Link>
   );
 }
