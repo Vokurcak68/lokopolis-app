@@ -120,6 +120,8 @@ export async function POST(req: NextRequest) {
           buyer, seller, listing, transaction,
           settings.bank_account || "",
           settings.bank_iban || "",
+          undefined,
+          Number(settings.payment_deadline_hours) || 24,
         );
         await sendEmail(buyer.email, `🛡️ Bezpečná platba vytvořena — ${paymentReference}`, html);
       } catch (e) {

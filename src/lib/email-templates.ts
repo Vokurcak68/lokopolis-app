@@ -386,7 +386,7 @@ function escrowQrUrl(iban: string, amount: number, variableSymbol: string, refer
   return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(spd)}`;
 }
 
-export function escrowCreated(buyer: any, seller: any, listing: any, transaction: any, bankAccount: string, bankIban: string, settings?: Record<string, any>): string {
+export function escrowCreated(buyer: any, seller: any, listing: any, transaction: any, bankAccount: string, bankIban: string, settings?: Record<string, any>, paymentDeadlineHours?: number): string {
   const { reference, variableSymbol } = escrowPaymentCodes(transaction);
   const iban = bankIban || (bankAccount ? czechToIBAN(bankAccount) : "");
   const qrUrl = escrowQrUrl(iban, Number(transaction.amount), variableSymbol, reference);
@@ -410,6 +410,11 @@ export function escrowCreated(buyer: any, seller: any, listing: any, transaction
       <span style="color:#ccc;">Číslo účtu: <strong>${esc(bankAccount || iban)}</strong></span>
       ${qrUrl ? `<br><br><img src="${qrUrl}" alt="QR platba" width="180" height="180" style="border-radius:8px;" />
       <br><span style="color:#888;font-size:12px;">Naskenujte QR kód v bankovní aplikaci</span>` : ""}
+    </div>
+
+    <div style="margin:16px 0;padding:14px 16px;background:#16162b;border-radius:8px;border-left:3px solid #ef4444;">
+      <strong style="color:#ef4444;">⏰ Lhůta pro platbu: ${paymentDeadlineHours || 24} hodin</strong><br>
+      <span style="color:#ccc;font-size:13px;">Platbu odešlete do <strong>${paymentDeadlineHours || 24} hodin</strong> od vytvoření transakce. Po uplynutí lhůty může být transakce zrušena.</span>
     </div>
 
     <p style="color:#ccc;">Po přijetí platby bude prodejce vyzván k odeslání zboží. Peníze mu budou uvolněny až po vašem potvrzení doručení.</p>
