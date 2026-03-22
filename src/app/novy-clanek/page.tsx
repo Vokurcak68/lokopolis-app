@@ -412,7 +412,9 @@ export default function NewArticlePage() {
                   alt="Cover"
                   width={64}
                   height={40}
-                  className="object-cover rounded-lg border border-white/10"
+                  unoptimized
+                  className="rounded-lg border border-white/10"
+                  style={{ objectFit: "contain", background: "var(--bg-page)" }}
                 />
                 <button
                   type="button"

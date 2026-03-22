@@ -207,8 +207,9 @@ export default function ArticleDetailContent({
             alt={article.title}
             width={1200}
             height={500}
-            className="w-full object-cover"
-            style={{ maxHeight: "500px" }}
+            unoptimized
+            className="w-full"
+            style={{ maxHeight: "500px", objectFit: "contain", background: "var(--bg-page)" }}
             sizes="(max-width: 1200px) 100vw, 1200px"
             priority
           />

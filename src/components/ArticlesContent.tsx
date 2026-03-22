@@ -92,6 +92,7 @@ export default function ArticlesContent({ articles, categories }: ArticlesConten
                     src={article.cover_image_url}
                     alt={article.title}
                     fill
+                    unoptimized
                     className="object-cover group-hover:scale-105 transition-transform duration-300"
                     sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                   />
