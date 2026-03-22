@@ -113,36 +113,54 @@ Den 14:  ✅ Auto-complete → peníze prodávajícímu
 
 ## 5. Crony (automatizované úlohy)
 
-Všechny crony jsou v `vercel.json` a volají se jednou denně (UTC):
+### Master cron: `/api/escrow/daily-jobs`
 
-| Čas (UTC) | Endpoint | Funkce |
-|-----------|----------|--------|
-| **08:00** | `/api/escrow/fio-sync` | Napáruje platby z FIO banky dle VS |
-| **08:30** | `/api/escrow/expire-unpaid` | Zruší nezaplacené transakce (`created`/`partial_paid`) po `payment_deadline_hours` + 24h grace |
-| **09:00** | `/api/escrow/shipping-reminder` | Upozorní prodávajícího 24-48h před deadline odeslání |
-| **09:30** | `/api/escrow/expire-unshipped` | Zruší neodeslaná (`paid`) po `shipping_deadline_days` + 24h grace. Listing zpět active. E-mail admin pro refund |
-| **10:00** | `/api/escrow/delivery-reminder` | Wave 1 (den 5-7): upomínka kupujícímu. Wave 2 (den 13): 🚨 finální varování |
-| **10:30** | `/api/escrow/auto-complete` | Dokončí doručené transakce po `auto_complete_days` |
+Kvůli limitu Vercel Hobby plánu (max 2 crony) jsou všechny escrow úlohy sloučeny do jednoho master cronu, který je volá sekvenčně přes interní fetch:
+
+```
+8:00 UTC → /api/escrow/daily-jobs
+  ├─ 1. fio-sync           — napáruje platby z FIO banky dle VS
+  ├─ 2. expire-unpaid      — zruší nezaplacené (payment_deadline_hours + 24h grace)
+  ├─ 3. shipping-reminder  — upozorní prodávajícího 24-48h před deadline
+  ├─ 4. expire-unshipped   — zruší neodeslaná (shipping_deadline_days + 24h grace)
+  ├─ 5. delivery-reminder  — Wave 1 (den 5-7): upomínka. Wave 2 (den 13): finální varování
+  └─ 6. auto-complete      — dokončí doručené po auto_complete_days
+```
 
 ### Pořadí je důležité!
-Crony běží sekvenčně s rozestupy 30 minut. FIO sync musí být první (napáruje platby), teprve pak expiry a remindery.
+FIO sync musí být první (napáruje platby), teprve pak expiry a remindery. Master cron je volá vždy ve stejném pořadí.
 
 ### Vercel cron konfigurace (`vercel.json`):
 ```json
 {
   "crons": [
-    { "path": "/api/escrow/fio-sync", "schedule": "0 8 * * *" },
-    { "path": "/api/escrow/expire-unpaid", "schedule": "30 8 * * *" },
-    { "path": "/api/escrow/shipping-reminder", "schedule": "0 9 * * *" },
-    { "path": "/api/escrow/expire-unshipped", "schedule": "30 9 * * *" },
-    { "path": "/api/escrow/delivery-reminder", "schedule": "0 10 * * *" },
-    { "path": "/api/escrow/auto-complete", "schedule": "30 10 * * *" }
+    { "path": "/api/escrow/daily-jobs", "schedule": "0 8 * * *" }
   ]
 }
 ```
 
-### Zabezpečení cronů:
-Všechny crony vyžadují `Authorization: Bearer <CRON_SECRET>` header. Vercel ho nastavuje automaticky.
+### Jednotlivé joby:
+
+| # | Endpoint | Funkce |
+|---|----------|--------|
+| 1 | `/api/escrow/fio-sync` | Napáruje platby z FIO banky dle VS |
+| 2 | `/api/escrow/expire-unpaid` | Zruší nezaplacené (`created`/`partial_paid`) po `payment_deadline_hours` + 24h grace |
+| 3 | `/api/escrow/shipping-reminder` | Upozorní prodávajícího 24-48h před deadline odeslání |
+| 4 | `/api/escrow/expire-unshipped` | Zruší neodeslaná (`paid`) po `shipping_deadline_days` + 24h grace. Listing zpět active. E-mail admin pro refund |
+| 5 | `/api/escrow/delivery-reminder` | Wave 1 (den 5-7): upomínka kupujícímu. Wave 2 (den 13): 🚨 finální varování |
+| 6 | `/api/escrow/auto-complete` | Dokončí doručené transakce po `auto_complete_days` |
+
+### Odolnost proti chybám:
+Selhání jednoho jobu **neblokuje** ostatní — master cron pokračuje dál a loguje výsledek každého jobu (HTTP status + čas).
+
+### Manuální spuštění:
+Jednotlivé endpointy zůstávají funkční. Můžeš spustit konkrétní job ručně:
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" https://lokopolis.cz/api/escrow/fio-sync
+```
+
+### Zabezpečení:
+Všechny endpointy (master cron i jednotlivé joby) vyžadují `Authorization: Bearer <CRON_SECRET>` header. Vercel ho pro cron nastavuje automaticky.
 
 ### Duplicate flagy (ochrana proti opakovanému odeslání):
 | Flag | Na čem | Účel |
@@ -497,8 +515,8 @@ Všechny migrace uloženy v `supabase/migrations/`.
 
 ### Cron neběží
 - Zkontroluj Vercel dashboard → Cron Jobs
-- Hobby plan: max 2 crony zdarma, Pro plan neomezeno
-- ⚠️ Na Hobby plánu Vercel povoluje jen 2 crony! Pro 6 cronů je potřeba Pro plán nebo alternativní scheduler.
+- Na Hobby plánu je jeden master cron `daily-jobs` — zkontroluj jeho logy
+- Pro detailní diagnostiku spusť konkrétní job manuálně (viz manuální spuštění výše)
 
 ---
 
