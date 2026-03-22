@@ -540,6 +540,28 @@ export function escrowDeliveryReminder(buyer: any, transaction: any, daysLeft: n
   `, settings);
 }
 
+export function escrowDeliveryFinalWarning(buyer: any, transaction: any, deadlineDate: string, listing?: any, settings?: Record<string, any>): string {
+  return emailWrapper(`
+    <h2 style="color:#ef4444;margin:0 0 20px;">🚨 Poslední den — zítra proběhne automatické uvolnění platby</h2>
+    <p>Dobrý den, <strong style="color:#f0a030;">${esc(buyer.display_name || buyer.username)}</strong>,</p>
+    <p>stále jste nepotvrdili přijetí zboží z transakce <strong>${esc(transaction.payment_reference)}</strong>${listing ? ` za inzerát <strong>"${esc(listing.title)}"</strong>` : ""}.</p>
+
+    ${listing ? listingInfoBlock(listing, transaction) : ""}
+
+    <div style="margin:20px 0;padding:16px;background:#16162b;border-radius:8px;border-left:3px solid #ef4444;">
+      <strong style="color:#ef4444;">⏰ Automatické uvolnění platby: ${esc(deadlineDate)}</strong><br>
+      <span style="color:#ccc;font-size:13px;">Pokud do tohoto termínu nepotvrdíte přijetí ani neotevřete spor, platba bude <strong>automaticky uvolněna prodávajícímu</strong> a transakce bude uzavřena.</span>
+    </div>
+
+    <p style="color:#ccc;">Pokud je vše v pořádku, potvrďte přijetí. Pokud zboží neodpovídá popisu nebo jste ho neobdrželi, otevřete spor — <strong>po uvolnění platby to již nebude možné</strong>.</p>
+
+    <div style="margin-top:24px;text-align:center;">
+      <a href="https://lokopolis.cz/bazar/transakce/${esc(transaction.id)}" style="display:inline-block;padding:12px 28px;background:#22c55e;color:#fff;font-weight:700;border-radius:8px;text-decoration:none;margin-right:12px;">✅ Potvrdit přijetí →</a>
+      <a href="https://lokopolis.cz/bazar/transakce/${esc(transaction.id)}" style="display:inline-block;padding:12px 28px;background:#ef4444;color:#fff;font-weight:700;border-radius:8px;text-decoration:none;">⚠️ Otevřít spor →</a>
+    </div>
+  `, settings);
+}
+
 export function escrowCompleted(seller: any, transaction: any, listing?: any, settings?: Record<string, any>): string {
   return emailWrapper(`
     <h2 style="color:#f0a030;margin:0 0 20px;">✅ Peníze uvolněny</h2>
