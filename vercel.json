@@ -2,28 +2,8 @@
   "framework": "nextjs",
   "crons": [
     {
-      "path": "/api/escrow/fio-sync",
+      "path": "/api/escrow/daily-jobs",
       "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/escrow/expire-unpaid",
-      "schedule": "30 8 * * *"
-    },
-    {
-      "path": "/api/escrow/shipping-reminder",
-      "schedule": "0 9 * * *"
-    },
-    {
-      "path": "/api/escrow/expire-unshipped",
-      "schedule": "30 9 * * *"
-    },
-    {
-      "path": "/api/escrow/delivery-reminder",
-      "schedule": "0 10 * * *"
-    },
-    {
-      "path": "/api/escrow/auto-complete",
-      "schedule": "30 10 * * *"
     }
   ]
 }
