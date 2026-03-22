@@ -301,10 +301,9 @@ export default function EditArticlePage() {
     setError(null);
 
     const isAdmin = user.role === "admin";
-    const newSlug = slugify(title);
+    // Slug se při editaci NEMĚNÍ — zachováváme původní URL
     const updateData: Record<string, unknown> = {
       title: title.trim(),
-      slug: newSlug,
       excerpt: excerpt.trim() || null,
       content,
       category_id: categoryId,
@@ -339,7 +338,7 @@ export default function EditArticlePage() {
     if (asDraft) {
       router.push("/clanky");
     } else if (isAdmin) {
-      router.push(`/clanky/${newSlug}`);
+      router.push(`/clanky/${slug}`);
     } else {
       // Non-admin: article goes back to pending verification
       router.push("/clanky");
