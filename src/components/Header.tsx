@@ -324,6 +324,25 @@ export default function Header() {
           <ThemeToggle />
           {user ? (
             <>
+              {isAdmin && (
+                <Link
+                  href="/admin"
+                  style={{
+                    padding: "8px 12px",
+                    border: "1px solid var(--border-nav)",
+                    borderRadius: "8px",
+                    color: "var(--text-muted)",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    textDecoration: "none",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "5px",
+                  }}
+                >
+                  ⚙️ Admin
+                </Link>
+              )}
               {isAdmin && <AdminNotifications />}
               {isAdmin && pendingCount > 0 && (
                 <Link
@@ -457,6 +476,23 @@ export default function Header() {
             <div style={{ paddingTop: "12px", borderTop: "1px solid var(--border)", marginTop: "8px" }}>
               {user ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {isAdmin && (
+                    <Link
+                      href="/admin"
+                      style={{
+                        color: "var(--text-muted)",
+                        fontSize: "14px",
+                        fontWeight: 600,
+                        textDecoration: "none",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                      }}
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      ⚙️ Admin panel
+                    </Link>
+                  )}
                   {isAdmin && <AdminNotifications />}
                   {isAdmin && pendingCount > 0 && (
                     <Link
