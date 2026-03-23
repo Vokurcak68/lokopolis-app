@@ -17,7 +17,9 @@ function optimizeContentImages(html: string): string {
   return html.replace(
     /(<img[^>]+src=["'])(https:\/\/psbeoiaqoreergwqzqoz\.supabase\.co\/storage\/v1\/object\/public\/)([^"']+)(["'][^>]*>)/gi,
     (match, prefix, baseUrl, path, suffix) => {
-      const renderUrl = `https://${SUPABASE_PROJECT_ID}.supabase.co/storage/v1/render/image/public/${path}?width=800&quality=75`;
+      // Strip any existing query params from the path before adding render params
+      const cleanPath = path.split(/[?&]/)[0];
+      const renderUrl = `https://${SUPABASE_PROJECT_ID}.supabase.co/storage/v1/render/image/public/${cleanPath}?width=800&quality=75`;
       // Add loading=lazy if not already present
       let tag = `${prefix}${renderUrl}${suffix}`;
       if (!tag.includes("loading=")) {
