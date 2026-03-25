@@ -1,5 +1,5 @@
 import type { BoardConfig, PlacedTrack } from "./track-designer-store";
-import type { TrackPieceDefinition, TrackScale } from "./track-library";
+import type { TrackPieceDefinition, TrackScale, ExplicitSegment } from "./track-library";
 
 export interface ViewTransform {
   zoom: number; // px per mm
@@ -82,7 +82,26 @@ function localDirToWorld(localDir: LocalPoint, rotation: number, flipZ?: boolean
   };
 }
 
+function explicitToPathSegment(es: ExplicitSegment): PathSegment {
+  if (es.kind === "line") {
+    return { kind: "line", from: { x: es.fromX, z: es.fromZ }, to: { x: es.toX, z: es.toZ } };
+  }
+  return {
+    kind: "arc",
+    center: { x: es.centerX, z: es.centerZ },
+    radius: es.radius,
+    startAngle: (es.startAngleDeg * Math.PI) / 180,
+    endAngle: (es.endAngleDeg * Math.PI) / 180,
+    ccw: es.ccw,
+  };
+}
+
 function getPieceSegmentsLocal(piece: TrackPieceDefinition): PathSegment[] {
+  // Use explicit segments when defined (IBW, ABW, DW, DKW Baeseler etc.)
+  if (piece.explicitSegments && piece.explicitSegments.length > 0) {
+    return piece.explicitSegments.map(explicitToPathSegment);
+  }
+
   if (piece.type === "straight") {
     const b = piece.connections.find((c) => c.id === "b");
     return [{ kind: "line", from: { x: 0, z: 0 }, to: { x: b?.position.x ?? piece.length ?? 0, z: 0 } }];

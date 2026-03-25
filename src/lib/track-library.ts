@@ -24,6 +24,11 @@ export interface ConnectionPoint {
   id: string;
 }
 
+/** Explicit segment override for complex pieces (IBW, ABW, DW, DKW Baeseler) */
+export type ExplicitSegment =
+  | { kind: "line"; fromX: number; fromZ: number; toX: number; toZ: number }
+  | { kind: "arc"; centerX: number; centerZ: number; radius: number; startAngleDeg: number; endAngleDeg: number; ccw: boolean };
+
 export interface TrackPieceDefinition {
   id: string;
   catalogNumber?: string;
@@ -44,6 +49,8 @@ export interface TrackPieceDefinition {
   category: string;
   /** Manufacturer name */
   manufacturer: string;
+  /** Explicit path segments for complex pieces — overrides auto-generated segments */
+  explicitSegments?: ExplicitSegment[];
 }
 
 // ============================================================
@@ -219,7 +226,6 @@ export const TILLIG_TT: TrackPieceDefinition[] = [
     direction: "right",
     connections: [
       { position: { x: 0, y: 0, z: 0 }, angle: Math.PI, id: "a" },
-      // Hlavní směr: oblouk R631mm/15° vpravo
       {
         position: {
           x: 631 * Math.sin((15 * Math.PI) / 180),
@@ -229,7 +235,6 @@ export const TILLIG_TT: TrackPieceDefinition[] = [
         angle: -(15 * Math.PI) / 180,
         id: "b",
       },
-      // Odbočka: oblouk R310mm/30° vpravo (strmější)
       {
         position: {
           x: 310 * Math.sin((30 * Math.PI) / 180),
@@ -239,6 +244,12 @@ export const TILLIG_TT: TrackPieceDefinition[] = [
         angle: -(30 * Math.PI) / 180,
         id: "c",
       },
+    ],
+    explicitSegments: [
+      // Hlavní: R631mm/15° vpravo (center below, CW)
+      { kind: "arc", centerX: 0, centerZ: -631, radius: 631, startAngleDeg: 90, endAngleDeg: 75, ccw: true },
+      // Odbočka: R310mm/30° vpravo (center below, CW)
+      { kind: "arc", centerX: 0, centerZ: -310, radius: 310, startAngleDeg: 90, endAngleDeg: 60, ccw: true },
     ],
     category: "Výhybky",
     manufacturer: "Tillig",
@@ -254,7 +265,6 @@ export const TILLIG_TT: TrackPieceDefinition[] = [
     direction: "left",
     connections: [
       { position: { x: 0, y: 0, z: 0 }, angle: Math.PI, id: "a" },
-      // Hlavní směr: oblouk R631mm/15° vlevo
       {
         position: {
           x: 631 * Math.sin((15 * Math.PI) / 180),
@@ -264,7 +274,6 @@ export const TILLIG_TT: TrackPieceDefinition[] = [
         angle: (15 * Math.PI) / 180,
         id: "b",
       },
-      // Odbočka: oblouk R310mm/30° vlevo (strmější)
       {
         position: {
           x: 310 * Math.sin((30 * Math.PI) / 180),
@@ -274,6 +283,12 @@ export const TILLIG_TT: TrackPieceDefinition[] = [
         angle: (30 * Math.PI) / 180,
         id: "c",
       },
+    ],
+    explicitSegments: [
+      // Hlavní: R631mm/15° vlevo (center above, CCW)
+      { kind: "arc", centerX: 0, centerZ: 631, radius: 631, startAngleDeg: -90, endAngleDeg: -75, ccw: false },
+      // Odbočka: R310mm/30° vlevo (center above, CCW)
+      { kind: "arc", centerX: 0, centerZ: 310, radius: 310, startAngleDeg: -90, endAngleDeg: -60, ccw: false },
     ],
     category: "Výhybky",
     manufacturer: "Tillig",
@@ -291,7 +306,6 @@ export const TILLIG_TT: TrackPieceDefinition[] = [
     angle: 7.5,
     connections: [
       { position: { x: 0, y: 0, z: 0 }, angle: Math.PI, id: "a" },
-      // Směr 1: R1273mm/7.5° vlevo
       {
         position: {
           x: 1273 * Math.sin((7.5 * Math.PI) / 180),
@@ -301,7 +315,6 @@ export const TILLIG_TT: TrackPieceDefinition[] = [
         angle: (7.5 * Math.PI) / 180,
         id: "b",
       },
-      // Směr 2: R1273mm/7.5° vpravo
       {
         position: {
           x: 1273 * Math.sin((7.5 * Math.PI) / 180),
@@ -311,6 +324,12 @@ export const TILLIG_TT: TrackPieceDefinition[] = [
         angle: -(7.5 * Math.PI) / 180,
         id: "c",
       },
+    ],
+    explicitSegments: [
+      // Směr vlevo: R1273mm/7.5° (center above)
+      { kind: "arc", centerX: 0, centerZ: 1273, radius: 1273, startAngleDeg: -90, endAngleDeg: -82.5, ccw: false },
+      // Směr vpravo: R1273mm/7.5° (center below)
+      { kind: "arc", centerX: 0, centerZ: -1273, radius: 1273, startAngleDeg: 90, endAngleDeg: 82.5, ccw: true },
     ],
     category: "Výhybky",
     manufacturer: "Tillig",
@@ -327,7 +346,6 @@ export const TILLIG_TT: TrackPieceDefinition[] = [
     angle: 6,
     connections: [
       { position: { x: 0, y: 0, z: 0 }, angle: Math.PI, id: "a" },
-      // Směr 1: R1986mm/6° vlevo
       {
         position: {
           x: 1986 * Math.sin((6 * Math.PI) / 180),
@@ -337,7 +355,6 @@ export const TILLIG_TT: TrackPieceDefinition[] = [
         angle: (6 * Math.PI) / 180,
         id: "b",
       },
-      // Směr 2: R1986mm/6° vpravo
       {
         position: {
           x: 1986 * Math.sin((6 * Math.PI) / 180),
@@ -347,6 +364,12 @@ export const TILLIG_TT: TrackPieceDefinition[] = [
         angle: -(6 * Math.PI) / 180,
         id: "c",
       },
+    ],
+    explicitSegments: [
+      // Směr vlevo: R1986mm/6° (center above)
+      { kind: "arc", centerX: 0, centerZ: 1986, radius: 1986, startAngleDeg: -90, endAngleDeg: -84, ccw: false },
+      // Směr vpravo: R1986mm/6° (center below)
+      { kind: "arc", centerX: 0, centerZ: -1986, radius: 1986, startAngleDeg: 90, endAngleDeg: 84, ccw: true },
     ],
     category: "Výhybky",
     manufacturer: "Tillig",
@@ -363,9 +386,7 @@ export const TILLIG_TT: TrackPieceDefinition[] = [
     angle: 15,
     connections: [
       { position: { x: 0, y: 0, z: 0 }, angle: Math.PI, id: "a" },
-      // Rovně
       { position: { x: 166, y: 0, z: 0 }, angle: 0, id: "b" },
-      // Odbočka vlevo 15°
       {
         position: {
           x: 310 * Math.sin((15 * Math.PI) / 180),
@@ -375,7 +396,6 @@ export const TILLIG_TT: TrackPieceDefinition[] = [
         angle: (15 * Math.PI) / 180,
         id: "c",
       },
-      // Odbočka vpravo 15°
       {
         position: {
           x: 310 * Math.sin((15 * Math.PI) / 180),
@@ -385,6 +405,14 @@ export const TILLIG_TT: TrackPieceDefinition[] = [
         angle: -(15 * Math.PI) / 180,
         id: "d",
       },
+    ],
+    explicitSegments: [
+      // Rovně
+      { kind: "line", fromX: 0, fromZ: 0, toX: 166, toZ: 0 },
+      // Odbočka vlevo: R310mm/15°
+      { kind: "arc", centerX: 0, centerZ: 310, radius: 310, startAngleDeg: -90, endAngleDeg: -75, ccw: false },
+      // Odbočka vpravo: R310mm/15°
+      { kind: "arc", centerX: 0, centerZ: -310, radius: 310, startAngleDeg: 90, endAngleDeg: 75, ccw: true },
     ],
     category: "Výhybky",
     manufacturer: "Tillig",
