@@ -1196,23 +1196,43 @@ function drawPortal(
     ctx.fillStyle = "rgba(180, 160, 110, 0.9)";
     ctx.fillRect(-3, -radius - 2, 6, 6);
   } else {
-    // Bridge pillar
-    const pw = Math.max(4, radius * 0.35);
+    // Bridge pillar — steel blue
+    const pw = Math.max(5, radius * 0.4);
+
+    // Vertical pillar
     ctx.beginPath();
     ctx.rect(-pw / 2, -radius, pw, radius * 2);
-    ctx.fillStyle = "rgba(110, 100, 90, 0.8)";
+    ctx.fillStyle = "rgba(70, 100, 150, 0.85)";
     ctx.fill();
-    ctx.strokeStyle = "#555";
+    ctx.strokeStyle = "rgba(100, 140, 200, 0.9)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Cross braces (X shape)
+    ctx.beginPath();
+    ctx.moveTo(-radius * 0.7, -radius * 0.6);
+    ctx.lineTo(radius * 0.7, radius * 0.6);
+    ctx.moveTo(radius * 0.7, -radius * 0.6);
+    ctx.lineTo(-radius * 0.7, radius * 0.6);
+    ctx.strokeStyle = "rgba(80, 120, 180, 0.6)";
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    // Cross brace
+    // Horizontal beam at top
     ctx.beginPath();
-    ctx.moveTo(-radius * 0.6, -radius * 0.3);
-    ctx.lineTo(radius * 0.6, -radius * 0.3);
-    ctx.strokeStyle = "rgba(80, 70, 60, 0.6)";
-    ctx.lineWidth = 1.5;
+    ctx.moveTo(-radius * 0.8, -radius * 0.15);
+    ctx.lineTo(radius * 0.8, -radius * 0.15);
+    ctx.strokeStyle = "rgba(100, 140, 200, 0.7)";
+    ctx.lineWidth = 2;
     ctx.stroke();
+
+    // Rivets / bolts
+    for (const y of [-radius * 0.5, 0, radius * 0.5]) {
+      ctx.beginPath();
+      ctx.arc(0, y, 2, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(140, 170, 210, 0.8)";
+      ctx.fill();
+    }
   }
 
   ctx.restore();
@@ -1322,53 +1342,114 @@ export function drawTerrainZones(
         ctx.fillText("🏔️ TUNEL", mid.x, mid.y - portalRadius - 6);
       }
     } else {
-      // Bridge — draw deck along track path
+      // Bridge — steel/blue-gray color scheme
       if (screenPath.length >= 2) {
-        // Deck
+        // Shadow underneath the bridge (slightly offset down)
+        ctx.beginPath();
+        ctx.moveTo(screenPath[0].x + 2, screenPath[0].y + 3);
+        for (let i = 1; i < screenPath.length; i++) {
+          ctx.lineTo(screenPath[i].x + 2, screenPath[i].y + 3);
+        }
+        ctx.strokeStyle = "rgba(0, 0, 0, 0.2)";
+        ctx.lineWidth = pathWidth * 1.3;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.stroke();
+
+        // Main deck — steel blue
         ctx.beginPath();
         ctx.moveTo(screenPath[0].x, screenPath[0].y);
         for (let i = 1; i < screenPath.length; i++) {
           ctx.lineTo(screenPath[i].x, screenPath[i].y);
         }
-        ctx.strokeStyle = "rgba(100, 90, 75, 0.45)";
-        ctx.lineWidth = pathWidth;
+        ctx.strokeStyle = "rgba(70, 100, 140, 0.55)";
+        ctx.lineWidth = pathWidth * 1.2;
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
         ctx.stroke();
 
-        // Railing lines (offset from path)
+        // Lighter deck core
+        ctx.beginPath();
+        ctx.moveTo(screenPath[0].x, screenPath[0].y);
+        for (let i = 1; i < screenPath.length; i++) {
+          ctx.lineTo(screenPath[i].x, screenPath[i].y);
+        }
+        ctx.strokeStyle = "rgba(90, 125, 170, 0.45)";
+        ctx.lineWidth = pathWidth * 0.7;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.stroke();
+
+        // Steel railing lines (both sides) — bright and visible
         for (const side of [-1, 1]) {
           ctx.beginPath();
           for (let i = 0; i < screenPath.length; i++) {
-            // Approximate normal from neighbors
             const prev = screenPath[Math.max(0, i - 1)];
             const next = screenPath[Math.min(screenPath.length - 1, i + 1)];
             const dx = next.x - prev.x;
             const dy = next.y - prev.y;
             const len = Math.hypot(dx, dy) || 1;
-            const nx = (-dy / len) * (pathWidth / 2 + 1) * side;
-            const ny = (dx / len) * (pathWidth / 2 + 1) * side;
+            const offset = pathWidth * 0.6 + 2;
+            const nx = (-dy / len) * offset * side;
+            const ny = (dx / len) * offset * side;
             if (i === 0) ctx.moveTo(screenPath[i].x + nx, screenPath[i].y + ny);
             else ctx.lineTo(screenPath[i].x + nx, screenPath[i].y + ny);
           }
-          ctx.strokeStyle = "rgba(80, 70, 60, 0.5)";
-          ctx.lineWidth = 1;
+          ctx.strokeStyle = "rgba(100, 140, 190, 0.8)";
+          ctx.lineWidth = 2;
           ctx.stroke();
         }
+
+        // Vertical railing posts every ~20px
+        for (let i = 0; i < screenPath.length; i += Math.max(3, Math.floor(screenPath.length / 8))) {
+          const pt = screenPath[i];
+          const prev = screenPath[Math.max(0, i - 1)];
+          const next = screenPath[Math.min(screenPath.length - 1, i + 1)];
+          const dx = next.x - prev.x;
+          const dy = next.y - prev.y;
+          const len = Math.hypot(dx, dy) || 1;
+          const offset = pathWidth * 0.6 + 2;
+          const nx = -dy / len;
+          const ny = dx / len;
+
+          for (const side of [-1, 1]) {
+            ctx.beginPath();
+            ctx.moveTo(pt.x + nx * offset * side, pt.y + ny * offset * side);
+            ctx.lineTo(pt.x + nx * (offset + 5) * side, pt.y + ny * (offset + 5) * side);
+            ctx.strokeStyle = "rgba(80, 120, 170, 0.7)";
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+          }
+        }
+
+        // Cross-hatch pattern on deck (structural girders)
+        ctx.setLineDash([3, 6]);
+        ctx.beginPath();
+        ctx.moveTo(screenPath[0].x, screenPath[0].y);
+        for (let i = 1; i < screenPath.length; i++) {
+          ctx.lineTo(screenPath[i].x, screenPath[i].y);
+        }
+        ctx.strokeStyle = "rgba(140, 170, 210, 0.25)";
+        ctx.lineWidth = pathWidth * 0.5;
+        ctx.stroke();
+        ctx.setLineDash([]);
       }
 
-      // Pillars — end portal faces opposite direction
+      // Steel bridge pillars — end portal faces opposite
       const endTanFlippedBridge = { x: -endData.tangent.x, z: -endData.tangent.z };
       drawPortal(ctx, startScreen, startData.tangent, portalRadius, "bridge", transform);
       drawPortal(ctx, endScreen, endTanFlippedBridge, portalRadius, "bridge", transform);
 
-      // Label
+      // Label — bright on dark
       if (screenPath.length > 2) {
         const mid = screenPath[Math.floor(screenPath.length / 2)];
-        ctx.font = `bold ${Math.max(10, 12 * transform.zoom)}px sans-serif`;
-        ctx.fillStyle = "rgba(100, 90, 75, 0.75)";
+        const fontSize = Math.max(11, 14 * transform.zoom);
+        ctx.font = `bold ${fontSize}px sans-serif`;
+        ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
         ctx.textAlign = "center";
-        ctx.fillText("🌉 most", mid.x, mid.y - portalRadius - 6);
+        ctx.fillText("🌉 MOST", mid.x + 1, mid.y - portalRadius - 5);
+        ctx.fillStyle = "rgba(160, 200, 255, 0.95)";
+        ctx.fillText("🌉 MOST", mid.x, mid.y - portalRadius - 6);
       }
     }
 
