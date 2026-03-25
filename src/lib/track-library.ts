@@ -135,6 +135,10 @@ function crossing(
 ): TrackPieceDefinition {
   const angleRad = (angleDeg * Math.PI) / 180;
   const halfLen = length / 2;
+  // Crossing = "X": kolej 1 rovně (A→B), kolej 2 šikmo přes střed (C→D)
+  // Střed křížení je na (halfLen, 0). Kolej 2 prochází středem pod úhlem angleDeg.
+  // C je na jedné straně středu, D na druhé — symetricky kolem středu.
+  const halfDiag = halfLen; // délka od středu k C/D po šikmé koleji
   return {
     id,
     catalogNumber,
@@ -148,18 +152,18 @@ function crossing(
       { position: { x: length, y: 0, z: 0 }, angle: 0, id: "b" },
       {
         position: {
-          x: halfLen - halfLen * Math.cos(angleRad),
+          x: halfLen - halfDiag * Math.cos(angleRad),
           y: 0,
-          z: halfLen * Math.sin(angleRad),
+          z: -halfDiag * Math.sin(angleRad),
         },
         angle: Math.PI + angleRad,
         id: "c",
       },
       {
         position: {
-          x: halfLen + halfLen * Math.cos(angleRad),
+          x: halfLen + halfDiag * Math.cos(angleRad),
           y: 0,
-          z: halfLen * Math.sin(angleRad),
+          z: halfDiag * Math.sin(angleRad),
         },
         angle: angleRad,
         id: "d",
@@ -419,7 +423,7 @@ export const TILLIG_TT: TrackPieceDefinition[] = [
   },
 
   // ─── DKW — Křížová výhybka 160mm / 15° ───
-  // 4 připojovací body, 2 přestavníky
+  // "X" tvar: kolej 1 rovně (A→B), kolej 2 šikmo přes střed (C→D)
   {
     id: "tt-dkw",
     catalogNumber: "83300",
@@ -435,7 +439,7 @@ export const TILLIG_TT: TrackPieceDefinition[] = [
         position: {
           x: 80 - 80 * Math.cos((15 * Math.PI) / 180),
           y: 0,
-          z: 80 * Math.sin((15 * Math.PI) / 180),
+          z: -(80 * Math.sin((15 * Math.PI) / 180)),
         },
         angle: Math.PI + (15 * Math.PI) / 180,
         id: "c",
@@ -471,7 +475,7 @@ export const TILLIG_TT: TrackPieceDefinition[] = [
         position: {
           x: 104.3 - 104.3 * Math.cos((15 * Math.PI) / 180),
           y: 0,
-          z: 104.3 * Math.sin((15 * Math.PI) / 180),
+          z: -(104.3 * Math.sin((15 * Math.PI) / 180)),
         },
         angle: Math.PI + (15 * Math.PI) / 180,
         id: "c",
