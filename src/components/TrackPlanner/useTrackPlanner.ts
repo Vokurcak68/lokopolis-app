@@ -139,26 +139,37 @@ export function useTrackPlanner() {
       let rotation = preferredRotation;
       let snapMatch: { targetInstanceId: string; targetConnId: string; fromConnId: string } | null = null;
 
-      for (const fromConn of piece.connections) {
-        for (const free of freeConnections) {
-          const placement = computeSnapPlacement(free.worldPos, free.worldAngle, piece, fromConn.id);
+      // Find the nearest free connection to the click point (max 60mm)
+      let bestFree: (typeof freeConnections)[number] | null = null;
+      let bestDist = 60; // max snap distance in mm
+      for (const free of freeConnections) {
+        const dist = Math.hypot(free.worldPos.x - worldX, free.worldPos.z - worldZ);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestFree = free;
+        }
+      }
+
+      if (bestFree) {
+        // Try snap only to this nearest free connection
+        for (const fromConn of piece.connections) {
+          const placement = computeSnapPlacement(bestFree.worldPos, bestFree.worldAngle, piece, fromConn.id);
           if (!placement) continue;
 
           const fromWorld = connectionToWorld(fromConn, placement.position, placement.rotation);
           if (
-            canSnap(fromWorld, { position: free.worldPos, angle: free.worldAngle }, 6)
+            canSnap(fromWorld, { position: bestFree.worldPos, angle: bestFree.worldAngle }, 6)
           ) {
             position = placement.position;
             rotation = placement.rotation;
             snapMatch = {
-              targetInstanceId: free.instanceId,
-              targetConnId: free.connId,
+              targetInstanceId: bestFree.instanceId,
+              targetConnId: bestFree.connId,
               fromConnId: fromConn.id,
             };
             break;
           }
         }
-        if (snapMatch) break;
       }
 
       if (!snapMatch) {
@@ -203,11 +214,11 @@ export function useTrackPlanner() {
 
       const freeOthers = freeConnections.filter((f) => f.instanceId !== track.instanceId);
       for (const conn of piece.connections) {
-        const connWorld = connectionToWorld(conn, track.position, track.rotation);
+        const connWorld = connectionToWorld(conn, track.position, track.rotation, track.flipZ);
         for (const target of freeOthers) {
           if (!canSnap(connWorld, { position: target.worldPos, angle: target.worldAngle }, 8)) continue;
 
-          const placement = computeSnapPlacement(target.worldPos, target.worldAngle, piece, conn.id);
+          const placement = computeSnapPlacement(target.worldPos, target.worldAngle, piece, conn.id, track.flipZ);
           if (!placement) continue;
 
           return {
@@ -272,6 +283,17 @@ export function useTrackPlanner() {
     };
   }, [catalogMap, freeConnections.length, state.tracks]);
 
+  const flipSelectedTrack = useCallback(() => {
+    if (!state.selectedTrackId) return;
+    const track = state.tracks.find((t) => t.instanceId === state.selectedTrackId);
+    if (!track) return;
+    const piece = catalogMap[track.pieceId];
+    if (!piece) return;
+    // Only flip non-straight pieces (curves, turnouts, crossings)
+    if (piece.type === "straight") return;
+    dispatch({ type: "UPDATE_TRACK", instanceId: track.instanceId, updates: { flipZ: !track.flipZ } });
+  }, [state.selectedTrackId, state.tracks, catalogMap]);
+
   return {
     state,
     dispatch,
@@ -298,6 +320,7 @@ export function useTrackPlanner() {
     removeTrack,
     placeTrackAt,
     snapDraggedTrack,
+    flipSelectedTrack,
     exportShoppingList,
     canUndo: state.historyPast.length > 0,
     canRedo: state.historyFuture.length > 0,

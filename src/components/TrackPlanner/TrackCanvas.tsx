@@ -172,6 +172,7 @@ export function TrackCanvas({
   const onPointerDown: React.PointerEventHandler<HTMLCanvasElement> = (e) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    e.preventDefault();
 
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -194,6 +195,18 @@ export function TrackCanvas({
 
     const world = screenToWorld(x, y, transform);
     const rightOrMiddle = e.button === 1 || e.button === 2;
+
+    // Single finger touch without active piece = PAN
+    if (e.pointerType === "touch" && inter.touchPoints.size === 1 && !activePiece) {
+      inter.mode = "pan";
+      inter.pointerId = e.pointerId;
+      inter.startX = x;
+      inter.startY = y;
+      inter.startOffsetX = transform.offsetX;
+      inter.startOffsetY = transform.offsetY;
+      canvas.setPointerCapture(e.pointerId);
+      return;
+    }
 
     if (rightOrMiddle || inter.isSpacePressed) {
       inter.mode = "pan";
@@ -229,6 +242,7 @@ export function TrackCanvas({
   const onPointerMove: React.PointerEventHandler<HTMLCanvasElement> = (e) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    e.preventDefault();
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
@@ -329,7 +343,7 @@ export function TrackCanvas({
     <div ref={containerRef} className="relative h-full w-full overflow-hidden" style={{ background: "var(--bg-page)" }}>
       <canvas
         ref={canvasRef}
-        className="block h-full w-full touch-none"
+        className="block h-full w-full touch-manipulation"
         onContextMenu={onContextMenu}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}

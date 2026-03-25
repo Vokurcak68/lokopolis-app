@@ -62,21 +62,23 @@ function worldToScreen(p: LocalPoint, transform: ViewTransform) {
   };
 }
 
-export function localToWorld(local: LocalPoint, track: Pick<PlacedTrack, "position" | "rotation">): LocalPoint {
+export function localToWorld(local: LocalPoint, track: Pick<PlacedTrack, "position" | "rotation" | "flipZ">): LocalPoint {
+  const z = track.flipZ ? -local.z : local.z;
   const cos = Math.cos(track.rotation);
   const sin = Math.sin(track.rotation);
   return {
-    x: track.position.x + local.x * cos - local.z * sin,
-    z: track.position.z + local.x * sin + local.z * cos,
+    x: track.position.x + local.x * cos - z * sin,
+    z: track.position.z + local.x * sin + z * cos,
   };
 }
 
-function localDirToWorld(localDir: LocalPoint, rotation: number): LocalPoint {
+function localDirToWorld(localDir: LocalPoint, rotation: number, flipZ?: boolean): LocalPoint {
+  const z = flipZ ? -localDir.z : localDir.z;
   const cos = Math.cos(rotation);
   const sin = Math.sin(rotation);
   return {
-    x: localDir.x * cos - localDir.z * sin,
-    z: localDir.x * sin + localDir.z * cos,
+    x: localDir.x * cos - z * sin,
+    z: localDir.x * sin + z * cos,
   };
 }
 
@@ -187,7 +189,7 @@ function drawPolyline(ctx: CanvasRenderingContext2D, points: LocalPoint[], trans
 
 function sampleSegmentWorld(
   seg: PathSegment,
-  track: Pick<PlacedTrack, "position" | "rotation">,
+  track: Pick<PlacedTrack, "position" | "rotation" | "flipZ">,
   stepMm: number,
 ): LocalPoint[] {
   const len = segmentLength(seg);
@@ -423,7 +425,7 @@ function drawTrackPiece(
       const t = i / count;
       const { point, tangent } = pointAndTangentAt(seg, t);
       const worldPoint = localToWorld(point, track);
-      const tangentWorld = localDirToWorld(tangent, track.rotation);
+      const tangentWorld = localDirToWorld(tangent, track.rotation, track.flipZ);
       const nLen = Math.hypot(tangentWorld.x, tangentWorld.z) || 1;
       const nx = -tangentWorld.z / nLen;
       const nz = tangentWorld.x / nLen;
@@ -457,7 +459,7 @@ function drawTrackPiece(
       for (let i = 0; i <= samples; i++) {
         const t = i / samples;
         const { point, tangent } = pointAndTangentAt(seg, t);
-        const tangentWorld = localDirToWorld(tangent, track.rotation);
+        const tangentWorld = localDirToWorld(tangent, track.rotation, track.flipZ);
         const l = Math.hypot(tangentWorld.x, tangentWorld.z) || 1;
         const nx = -tangentWorld.z / l;
         const nz = tangentWorld.x / l;
@@ -487,7 +489,7 @@ function drawTrackPiece(
         for (let i = 0; i <= samples; i++) {
           const t = i / samples;
           const { point, tangent } = pointAndTangentAt(seg, t);
-          const tangentWorld = localDirToWorld(tangent, track.rotation);
+          const tangentWorld = localDirToWorld(tangent, track.rotation, track.flipZ);
           const l = Math.hypot(tangentWorld.x, tangentWorld.z) || 1;
           const nx = -tangentWorld.z / l;
           const nz = tangentWorld.x / l;
@@ -580,7 +582,7 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
 
 export function distancePointToTrackMm(
   worldPoint: LocalPoint,
-  track: Pick<PlacedTrack, "position" | "rotation">,
+  track: Pick<PlacedTrack, "position" | "rotation" | "flipZ">,
   piece: TrackPieceDefinition,
 ): number {
   const segs = getPieceSegmentsLocal(piece);
@@ -598,10 +600,15 @@ export function distancePointToTrackMm(
     const distCenter = Math.hypot(worldPoint.x - center.x, worldPoint.z - center.z);
     const angle = Math.atan2(worldPoint.z - center.z, worldPoint.x - center.x);
 
-    const start = normalizeAngle(seg.startAngle + track.rotation);
-    const end = normalizeAngle(seg.endAngle + track.rotation);
+    // When flipZ, local angles are mirrored: localAngle -> -localAngle, ccw flips
+    const effStartAngle = track.flipZ ? -seg.startAngle : seg.startAngle;
+    const effEndAngle = track.flipZ ? -seg.endAngle : seg.endAngle;
+    const effCcw = track.flipZ ? !seg.ccw : seg.ccw;
+
+    const start = normalizeAngle(effStartAngle + track.rotation);
+    const end = normalizeAngle(effEndAngle + track.rotation);
     const a = normalizeAngle(angle);
-    const between = isAngleBetween(a, start, end, seg.ccw);
+    const between = isAngleBetween(a, start, end, effCcw);
 
     if (between) {
       min = Math.min(min, Math.abs(distCenter - seg.radius));

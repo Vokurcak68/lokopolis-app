@@ -2,6 +2,7 @@
 
 import type { BoardShape, LCorner } from "@/lib/track-designer-store";
 import type { TrackScale } from "@/lib/track-library";
+import { getManufacturer } from "@/lib/track-library";
 
 interface TrackTopBarProps {
   scale: TrackScale;
@@ -93,6 +94,10 @@ export function TrackTopBar(props: TrackTopBarProps) {
             </button>
           ))}
         </div>
+
+        <span className="text-sm font-medium" style={{ color: "var(--text-dim)" }}>
+          {scale} — {getManufacturer(scale)}
+        </span>
 
         <div className="flex items-center gap-1 rounded-lg border p-1" style={{ borderColor: "var(--border)" }}>
           {([

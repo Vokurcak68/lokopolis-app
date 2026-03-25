@@ -19,6 +19,12 @@ export default function TrackPlanner() {
         return;
       }
 
+      if (e.key.toLowerCase() === "f" && planner.state.selectedTrackId) {
+        e.preventDefault();
+        planner.flipSelectedTrack();
+        return;
+      }
+
       if (e.key.toLowerCase() === "r" && planner.state.selectedTrackId) {
         e.preventDefault();
         const track = planner.state.tracks.find((t) => t.instanceId === planner.state.selectedTrackId);
@@ -102,12 +108,13 @@ export default function TrackPlanner() {
         <TrackCatalogPanel
           grouped={planner.catalogGrouped}
           activePieceId={planner.state.activePieceId}
+          scale={planner.state.board.scale}
           openMobile={planner.catalogOpenMobile}
           onCloseMobile={() => planner.setCatalogOpenMobile(false)}
           onTogglePiece={(pieceId) => planner.setActivePiece(planner.state.activePieceId === pieceId ? null : pieceId)}
         />
 
-        <div className="min-w-0 flex-1">
+        <div className="relative min-w-0 flex-1">
           <TrackCanvas
             state={planner.state}
             catalog={planner.catalogMap}
@@ -121,6 +128,41 @@ export default function TrackPlanner() {
             onUpdateTrack={planner.updateTrack}
             onSnapDraggedTrack={planner.snapDraggedTrack}
           />
+
+          {planner.state.selectedTrackId && (() => {
+            const selTrack = planner.state.tracks.find((t) => t.instanceId === planner.state.selectedTrackId);
+            const selPiece = selTrack ? planner.catalogMap[selTrack.pieceId] : null;
+            const canFlip = selPiece && selPiece.type !== "straight";
+            return (
+              <div
+                className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-lg border px-3 py-2 shadow-lg"
+                style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}
+              >
+                {canFlip && (
+                  <button
+                    onClick={planner.flipSelectedTrack}
+                    className="h-8 rounded-md border px-3 text-sm font-medium transition"
+                    style={{
+                      borderColor: selTrack?.flipZ ? "var(--accent)" : "var(--border)",
+                      color: selTrack?.flipZ ? "var(--accent)" : "var(--text-body)",
+                      background: selTrack?.flipZ ? "var(--accent-bg)" : "transparent",
+                    }}
+                    title="Zrcadlit oblouk (F)"
+                  >
+                    ↔ Zrcadlit
+                  </button>
+                )}
+                <button
+                  onClick={() => planner.removeTrack(planner.state.selectedTrackId!)}
+                  className="h-8 rounded-md border px-3 text-sm font-medium transition"
+                  style={{ borderColor: "var(--border)", color: "#ef4444" }}
+                  title="Smazat (Delete)"
+                >
+                  🗑 Smazat
+                </button>
+              </div>
+            );
+          })()}
         </div>
       </div>
 

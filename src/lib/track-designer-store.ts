@@ -27,6 +27,8 @@ export interface PlacedTrack {
   isBridge?: boolean;
   /** Is this inside a tunnel */
   isTunnel?: boolean;
+  /** Mirror the piece in Z axis (flips curves/turnouts to other direction) */
+  flipZ?: boolean;
 }
 
 export type BoardShape = "rectangle" | "l-shape" | "u-shape";
@@ -274,16 +276,20 @@ export function connectionToWorld(
   conn: { position: Vec3; angle: number },
   trackPos: Vec3,
   trackRotation: number,
+  flipZ?: boolean,
 ): { position: Vec3; angle: number } {
+  // If flipped, mirror Z coordinate and negate angle
+  const localZ = flipZ ? -conn.position.z : conn.position.z;
+  const localAngle = flipZ ? -conn.angle : conn.angle;
   const cos = Math.cos(trackRotation);
   const sin = Math.sin(trackRotation);
   return {
     position: {
-      x: trackPos.x + conn.position.x * cos - conn.position.z * sin,
+      x: trackPos.x + conn.position.x * cos - localZ * sin,
       y: trackPos.y + conn.position.y,
-      z: trackPos.z + conn.position.x * sin + conn.position.z * cos,
+      z: trackPos.z + conn.position.x * sin + localZ * cos,
     },
-    angle: trackRotation + conn.angle,
+    angle: trackRotation + localAngle,
   };
 }
 
@@ -320,7 +326,7 @@ export function findFreeConnections(
 
     for (const conn of piece.connections) {
       if (!track.snappedConnections[conn.id]) {
-        const world = connectionToWorld(conn, track.position, track.rotation);
+        const world = connectionToWorld(conn, track.position, track.rotation, track.flipZ);
         free.push({
           instanceId: track.instanceId,
           connId: conn.id,
@@ -341,24 +347,29 @@ export function computeSnapPlacement(
   targetWorldAngle: number,
   newPiece: TrackPieceDefinition,
   fromConnId: string,
+  flipZ?: boolean,
 ): { position: Vec3; rotation: number } | null {
   const conn = newPiece.connections.find((c) => c.id === fromConnId);
   if (!conn) return null;
+
+  // If flipped, mirror Z coordinate and negate angle
+  const localZ = flipZ ? -conn.position.z : conn.position.z;
+  const localAngle = flipZ ? -conn.angle : conn.angle;
 
   // The new piece's connection should face opposite to the target
   // targetWorldAngle points OUTWARD from target, new piece's connection also points OUTWARD
   // They should face each other: new_conn_world_angle = targetWorldAngle + PI
   const desiredConnWorldAngle = targetWorldAngle + Math.PI;
-  // rotation + conn.angle = desiredConnWorldAngle
-  const rotation = desiredConnWorldAngle - conn.angle;
+  // rotation + localAngle = desiredConnWorldAngle
+  const rotation = desiredConnWorldAngle - localAngle;
 
   // Position: target world pos minus rotated conn local offset
   const cos = Math.cos(rotation);
   const sin = Math.sin(rotation);
   const position: Vec3 = {
-    x: targetWorldPos.x - (conn.position.x * cos - conn.position.z * sin),
+    x: targetWorldPos.x - (conn.position.x * cos - localZ * sin),
     y: targetWorldPos.y - conn.position.y,
-    z: targetWorldPos.z - (conn.position.x * sin + conn.position.z * cos),
+    z: targetWorldPos.z - (conn.position.x * sin + localZ * cos),
   };
 
   return { position, rotation };

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { TrackPieceDefinition } from "@/lib/track-library";
+import type { TrackPieceDefinition, TrackScale } from "@/lib/track-library";
+import { getManufacturer } from "@/lib/track-library";
 import { drawTrackPiecePreview } from "@/lib/track-canvas-renderer";
 
 interface CatalogItemProps {
@@ -45,12 +46,13 @@ function CatalogItem({ piece, active, onClick }: CatalogItemProps) {
 interface TrackCatalogPanelProps {
   grouped: Record<string, TrackPieceDefinition[]>;
   activePieceId: string | null;
+  scale: TrackScale;
   openMobile: boolean;
   onCloseMobile: () => void;
   onTogglePiece: (pieceId: string) => void;
 }
 
-export function TrackCatalogPanel({ grouped, activePieceId, openMobile, onCloseMobile, onTogglePiece }: TrackCatalogPanelProps) {
+export function TrackCatalogPanel({ grouped, activePieceId, scale, openMobile, onCloseMobile, onTogglePiece }: TrackCatalogPanelProps) {
   return (
     <>
       {openMobile && (
@@ -78,7 +80,7 @@ export function TrackCatalogPanel({ grouped, activePieceId, openMobile, onCloseM
         <div className="sticky top-0 z-10 border-b px-3 py-3 md:static md:border-b-0 md:p-3" style={{ borderColor: "var(--border)", background: "var(--bg-card)" }}>
           <div className="flex items-center justify-between">
             <div className="text-sm font-bold uppercase tracking-wide" style={{ color: "var(--accent)" }}>
-              Katalog
+              Katalog — {getManufacturer(scale)} {scale}
             </div>
             <button className="md:hidden text-sm" onClick={onCloseMobile} style={{ color: "var(--text-body)" }}>
               ✕
