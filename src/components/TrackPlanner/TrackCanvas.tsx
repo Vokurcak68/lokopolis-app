@@ -24,7 +24,9 @@ interface TrackCanvasProps {
   onToggleSelectTrack: (instanceId: string) => void;
   onSelectTracks: (instanceIds: string[]) => void;
   onMoveSelectedTracks: (dx: number, dz: number) => void;
-  onSnapGroupDrag: (trackIds: string[]) => { dx: number; dz: number } | null;
+  onSnapGroupDrag: (trackIds: string[]) => { dx: number; dz: number; snap?: { fromInstanceId: string; fromConnId: string; toInstanceId: string; toConnId: string } } | null;
+  onUnsnapTracks: (instanceIds: string[]) => void;
+  onSnapConnection: (fromInstanceId: string, fromConnId: string, toInstanceId: string, toConnId: string) => void;
   onHitTestTerrainZone: (worldX: number, worldZ: number) => string | null;
   onSetSelectedZone: (zoneId: string | null) => void;
   onSetHoveredTrack: (instanceId: string | null) => void;
@@ -64,6 +66,8 @@ export function TrackCanvas({
   onSelectTracks,
   onMoveSelectedTracks,
   onSnapGroupDrag,
+  onUnsnapTracks,
+  onSnapConnection,
   onHitTestTerrainZone,
   onSetSelectedZone,
   onSetHoveredTrack,
@@ -316,6 +320,8 @@ export function TrackCanvas({
 
       // If clicking on an already-selected track in a group → start group drag
       if (state.selectedTrackIds.length > 1 && state.selectedTrackIds.includes(hit.instanceId)) {
+        // Unsnap all tracks in the group (disconnect from external tracks)
+        onUnsnapTracks(state.selectedTrackIds);
         inter.mode = "group-drag";
         inter.pointerId = e.pointerId;
         inter.dragStartWorld = world;
@@ -328,7 +334,8 @@ export function TrackCanvas({
         return;
       }
 
-      // Single select + start drag
+      // Single select + start drag — unsnap this track
+      onUnsnapTracks([hit.instanceId]);
       onSetSelectedTrack(hit.instanceId);
       inter.mode = "drag";
       inter.pointerId = e.pointerId;
@@ -506,14 +513,23 @@ export function TrackCanvas({
       if (current) {
         const snapped = onSnapDraggedTrack(current);
         onUpdateTrack(current.instanceId, { position: snapped.position, rotation: snapped.rotation });
+        // Register snap connection if found
+        const snapInfo = (snapped as { _snapInfo?: { fromConnId: string; toInstanceId: string; toConnId: string } })._snapInfo;
+        if (snapInfo) {
+          onSnapConnection(current.instanceId, snapInfo.fromConnId, snapInfo.toInstanceId, snapInfo.toConnId);
+        }
       }
     }
 
     if (inter.mode === "group-drag" && state.selectedTrackIds.length > 0) {
       // Try to snap the group to the nearest free connection
-      const snapOffset = onSnapGroupDrag(state.selectedTrackIds);
-      if (snapOffset) {
-        onMoveSelectedTracks(snapOffset.dx, snapOffset.dz);
+      const snapResult = onSnapGroupDrag(state.selectedTrackIds);
+      if (snapResult) {
+        onMoveSelectedTracks(snapResult.dx, snapResult.dz);
+        // Register snap connection if found
+        if (snapResult.snap) {
+          onSnapConnection(snapResult.snap.fromInstanceId, snapResult.snap.fromConnId, snapResult.snap.toInstanceId, snapResult.snap.toConnId);
+        }
       }
     }
 

@@ -112,6 +112,7 @@ export type DesignerAction =
   | { type: "AI_SUCCESS"; tracks: PlacedTrack[] }
   | { type: "AI_ERROR"; error: string }
   | { type: "SNAP_CONNECTION"; fromInstanceId: string; fromConnId: string; toInstanceId: string; toConnId: string }
+  | { type: "UNSNAP_TRACKS"; instanceIds: string[] }
   | { type: "ADD_TERRAIN_ZONE"; zone: TerrainZone }
   | { type: "REMOVE_TERRAIN_ZONE"; zoneId: string }
   | { type: "UNDO" }
@@ -315,6 +316,32 @@ export function designerReducer(state: DesignerState, action: DesignerAction): D
     case "REMOVE_TERRAIN_ZONE": {
       const next = pushHistory(state);
       return { ...next, terrainZones: next.terrainZones.filter((z) => z.id !== action.zoneId) };
+    }
+
+    case "UNSNAP_TRACKS": {
+      // Remove all snap connections involving the given tracks (both sides)
+      const unsnapSet = new Set(action.instanceIds);
+      const next = pushHistory(state);
+      return {
+        ...next,
+        tracks: next.tracks.map((t) => {
+          if (unsnapSet.has(t.instanceId)) {
+            // Clear all snaps on this track
+            return { ...t, snappedConnections: {} };
+          }
+          // Remove references to unsnapped tracks from other tracks
+          const filtered = Object.fromEntries(
+            Object.entries(t.snappedConnections).filter(([, v]) => {
+              const refId = v.split(":")[0];
+              return !unsnapSet.has(refId);
+            }),
+          );
+          if (Object.keys(filtered).length !== Object.keys(t.snappedConnections).length) {
+            return { ...t, snappedConnections: filtered };
+          }
+          return t;
+        }),
+      };
     }
 
     case "SNAP_CONNECTION": {

@@ -227,6 +227,10 @@ export function useTrackPlanner() {
   const toggleSelectTrack = useCallback((instanceId: string) => dispatch({ type: "TOGGLE_SELECT_TRACK", instanceId }), []);
   const selectTracks = useCallback((instanceIds: string[]) => dispatch({ type: "SELECT_TRACKS", instanceIds }), []);
   const moveSelectedTracks = useCallback((dx: number, dz: number) => dispatch({ type: "MOVE_SELECTED_TRACKS", dx, dz }), []);
+  const unsnapTracks = useCallback((instanceIds: string[]) => dispatch({ type: "UNSNAP_TRACKS", instanceIds }), []);
+  const snapConnection = useCallback((fromInstanceId: string, fromConnId: string, toInstanceId: string, toConnId: string) => {
+    dispatch({ type: "SNAP_CONNECTION", fromInstanceId, fromConnId, toInstanceId, toConnId });
+  }, []);
   const setHoveredTrack = useCallback((instanceId: string | null) => dispatch({ type: "HOVER_TRACK", instanceId }), []);
 
   /** Save current project (or create new if none) */
@@ -438,7 +442,7 @@ export function useTrackPlanner() {
   );
 
   const snapDraggedTrack = useCallback(
-    (track: PlacedTrack): PlacedTrack => {
+    (track: PlacedTrack): PlacedTrack & { _snapInfo?: { fromConnId: string; toInstanceId: string; toConnId: string } } => {
       const piece = catalogMap[track.pieceId];
       if (!piece) return track;
 
@@ -455,6 +459,11 @@ export function useTrackPlanner() {
             ...track,
             position: placement.position,
             rotation: placement.rotation,
+            _snapInfo: {
+              fromConnId: conn.id,
+              toInstanceId: target.instanceId,
+              toConnId: target.connId,
+            },
           };
         }
       }
@@ -464,15 +473,15 @@ export function useTrackPlanner() {
     [catalogMap, freeConnections],
   );
 
-  /** Snap a group of tracks: find the best snap for any track in the group against external free connections, return {dx,dz} offset */
+  /** Snap a group of tracks: find the best snap for any track in the group against external free connections, return {dx,dz} offset + snap info */
   const snapGroupDrag = useCallback(
-    (trackIds: string[]): { dx: number; dz: number } | null => {
+    (trackIds: string[]): { dx: number; dz: number; snap?: { fromInstanceId: string; fromConnId: string; toInstanceId: string; toConnId: string } } | null => {
       const groupSet = new Set(trackIds);
       const freeOthers = freeConnections.filter((f) => !groupSet.has(f.instanceId));
       if (freeOthers.length === 0) return null;
 
       let bestDist = 8; // max snap distance in mm
-      let bestOffset: { dx: number; dz: number } | null = null;
+      let bestResult: { dx: number; dz: number; snap?: { fromInstanceId: string; fromConnId: string; toInstanceId: string; toConnId: string } } | null = null;
 
       for (const id of trackIds) {
         const track = state.tracks.find((t) => t.instanceId === id);
@@ -492,12 +501,15 @@ export function useTrackPlanner() {
             const dx = placement.position.x - track.position.x;
             const dz = placement.position.z - track.position.z;
             bestDist = dist;
-            bestOffset = { dx, dz };
+            bestResult = {
+              dx, dz,
+              snap: { fromInstanceId: id, fromConnId: conn.id, toInstanceId: target.instanceId, toConnId: target.connId },
+            };
           }
         }
       }
 
-      return bestOffset;
+      return bestResult;
     },
     [catalogMap, freeConnections, state.tracks],
   );
@@ -677,6 +689,8 @@ export function useTrackPlanner() {
     selectTracks,
     moveSelectedTracks,
     snapGroupDrag,
+    unsnapTracks,
+    snapConnection,
     setHoveredTrack,
     saveToLocalStorage: saveProject,
     saveProjectAs,
