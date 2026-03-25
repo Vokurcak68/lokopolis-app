@@ -37,6 +37,9 @@ export interface TrackPoint {
   trackId: string;
   /** Parameter along the piece's primary path (0 = connection A end, 1 = connection B end) */
   t: number;
+  /** Cached world position at time of placement (for accurate rendering) */
+  worldX?: number;
+  worldZ?: number;
 }
 
 export type TerrainZoneKind = "tunnel" | "bridge";

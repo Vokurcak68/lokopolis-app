@@ -333,7 +333,7 @@ export function useTrackPlanner() {
       const hit = closestPointOnAnyTrack({ x: worldX, z: worldZ }, state.tracks, catalogMap);
       if (!hit || hit.distance > 15) return false; // must click near a track (15mm tolerance)
 
-      const point: TrackPoint = { trackId: hit.trackId, t: hit.t };
+      const point: TrackPoint = { trackId: hit.trackId, t: hit.t, worldX: hit.worldPos.x, worldZ: hit.worldPos.z };
 
       if (!terrainFirstPoint) {
         // First click — set start portal

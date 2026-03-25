@@ -877,21 +877,45 @@ export function closestPointOnAnyTrack(
 
 /**
  * Compute world position for a TrackPoint (trackId + t).
+ * Uses cached worldX/worldZ if available.
  */
 export function trackPointToWorld(
   tp: TrackPoint,
   tracks: PlacedTrack[],
   catalog: Record<string, TrackPieceDefinition>,
 ): LocalPoint | null {
-  const r = trackPointToWorldWithTangent(tp, tracks, catalog);
+  // Use cached world position if set
+  if (tp.worldX !== undefined && tp.worldZ !== undefined) {
+    return { x: tp.worldX, z: tp.worldZ };
+  }
+  const r = computeTrackPointFromT(tp, tracks, catalog);
   return r ? r.pos : null;
 }
 
 /**
  * Compute world position AND tangent direction for a TrackPoint.
- * Tangent is a unit vector along the track at that point.
+ * Uses cached world pos but always computes tangent from t.
  */
 function trackPointToWorldWithTangent(
+  tp: TrackPoint,
+  tracks: PlacedTrack[],
+  catalog: Record<string, TrackPieceDefinition>,
+): { pos: LocalPoint; tangent: LocalPoint } | null {
+  const computed = computeTrackPointFromT(tp, tracks, catalog);
+  if (!computed) return null;
+
+  // Use cached world position if available, otherwise computed
+  const pos = (tp.worldX !== undefined && tp.worldZ !== undefined)
+    ? { x: tp.worldX, z: tp.worldZ }
+    : computed.pos;
+
+  return { pos, tangent: computed.tangent };
+}
+
+/**
+ * Internal: compute position + tangent from track + t parameter.
+ */
+function computeTrackPointFromT(
   tp: TrackPoint,
   tracks: PlacedTrack[],
   catalog: Record<string, TrackPieceDefinition>,
