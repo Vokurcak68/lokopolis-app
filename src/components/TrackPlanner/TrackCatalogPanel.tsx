@@ -1,23 +1,24 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useMemo } from "react";
 import type { TrackPieceDefinition, TrackScale } from "@/lib/track-library";
 import { getManufacturer } from "@/lib/track-library";
-import { drawTrackPiecePreview } from "@/lib/track-canvas-renderer";
+import { drawTrackPiecePreview, getTrackPieceExtentMm } from "@/lib/track-canvas-renderer";
 
 interface CatalogItemProps {
   piece: TrackPieceDefinition;
   active: boolean;
+  maxExtentMm: number;
   onClick: () => void;
 }
 
-function CatalogItem({ piece, active, onClick }: CatalogItemProps) {
+function CatalogItem({ piece, active, maxExtentMm, onClick }: CatalogItemProps) {
   const previewRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
     if (!previewRef.current) return;
-    drawTrackPiecePreview(previewRef.current, piece, active);
-  }, [piece, active]);
+    drawTrackPiecePreview(previewRef.current, piece, active, maxExtentMm);
+  }, [piece, active, maxExtentMm]);
 
   return (
     <button
@@ -53,6 +54,19 @@ interface TrackCatalogPanelProps {
 }
 
 export function TrackCatalogPanel({ grouped, activePieceId, scale, openMobile, onCloseMobile, onTogglePiece }: TrackCatalogPanelProps) {
+  // Compute max extent per group so previews are proportional within each group
+  const groupMaxExtent = useMemo(() => {
+    const result: Record<string, number> = {};
+    for (const [groupName, pieces] of Object.entries(grouped)) {
+      let maxExt = 0;
+      for (const piece of pieces) {
+        maxExt = Math.max(maxExt, getTrackPieceExtentMm(piece));
+      }
+      result[groupName] = maxExt;
+    }
+    return result;
+  }, [grouped]);
+
   return (
     <>
       {openMobile && (
@@ -100,6 +114,7 @@ export function TrackCatalogPanel({ grouped, activePieceId, scale, openMobile, o
                     key={piece.id}
                     piece={piece}
                     active={piece.id === activePieceId}
+                    maxExtentMm={groupMaxExtent[groupName] || 0}
                     onClick={() => onTogglePiece(piece.id)}
                   />
                 ))}

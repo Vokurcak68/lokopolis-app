@@ -676,7 +676,26 @@ function isAngleBetween(a: number, start: number, end: number, ccw: boolean): bo
   return a <= start || a >= end;
 }
 
-export function drawTrackPiecePreview(canvas: HTMLCanvasElement, piece: TrackPieceDefinition, active = false) {
+/**
+ * Get the bounding extent (max of width/height in mm) of a track piece.
+ * Used to compute a shared reference zoom for consistent preview sizing.
+ */
+export function getTrackPieceExtentMm(piece: TrackPieceDefinition): number {
+  const segs = getPieceSegmentsLocal(piece);
+  const bounds = getSegmentsBounds(segs);
+  // Include gauge width in Z extent so straight pieces have non-zero height
+  const gaugeMm = getGaugeMm(piece.scale);
+  const extentX = bounds.maxX - bounds.minX;
+  const extentZ = Math.max(bounds.maxZ - bounds.minZ, gaugeMm * 2.5);
+  return Math.max(extentX, extentZ);
+}
+
+/**
+ * Draw a track piece preview in a catalog canvas.
+ * @param maxExtentMm — if provided, used as the reference extent for zoom so all pieces
+ *   in the same group render at consistent scale (short pieces look short, long pieces look long).
+ */
+export function drawTrackPiecePreview(canvas: HTMLCanvasElement, piece: TrackPieceDefinition, active = false, maxExtentMm?: number) {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
 
@@ -694,26 +713,57 @@ export function drawTrackPiecePreview(canvas: HTMLCanvasElement, piece: TrackPie
   const segs = getPieceSegmentsLocal(piece);
   const bounds = getSegmentsBounds(segs);
   const pad = 4;
-  const scaleX = (width - pad * 2) / Math.max(1, bounds.maxX - bounds.minX);
-  const scaleY = (height - pad * 2) / Math.max(1, bounds.maxZ - bounds.minZ);
-  const scale = Math.min(scaleX, scaleY);
 
-  const transform: ViewTransform = {
-    zoom: scale,
-    offsetX: pad - bounds.minX * scale,
-    offsetY: pad - bounds.minZ * scale,
-  };
+  // Include gauge so straight pieces have visible height
+  const gaugeMm = getGaugeMm(piece.scale);
+  const pieceW = bounds.maxX - bounds.minX;
+  const pieceH = Math.max(bounds.maxZ - bounds.minZ, gaugeMm * 2.5);
 
-  const fakeTrack: PlacedTrack = {
-    instanceId: "preview",
-    pieceId: piece.id,
-    position: { x: 0, y: 0, z: 0 },
-    rotation: 0,
-    elevation: 0,
-    snappedConnections: {},
-  };
+  if (maxExtentMm && maxExtentMm > 0) {
+    // Fixed scale based on the largest piece in the group
+    const scale = (Math.min(width, height) - pad * 2) / maxExtentMm;
+    // Center the piece in the canvas
+    const drawnW = pieceW * scale;
+    const drawnH = pieceH * scale;
+    const transform: ViewTransform = {
+      zoom: scale,
+      offsetX: (width - drawnW) / 2 - bounds.minX * scale,
+      offsetY: (height - drawnH) / 2 - Math.min(bounds.minZ, -gaugeMm * 1.25) * scale,
+    };
 
-  drawTrackPiece(ctx, fakeTrack, piece, transform, active ? "selected" : "normal");
+    const fakeTrack: PlacedTrack = {
+      instanceId: "preview",
+      pieceId: piece.id,
+      position: { x: 0, y: 0, z: 0 },
+      rotation: 0,
+      elevation: 0,
+      snappedConnections: {},
+    };
+
+    drawTrackPiece(ctx, fakeTrack, piece, transform, active ? "selected" : "normal");
+  } else {
+    // Fallback: fit to canvas (old behavior)
+    const scaleX = (width - pad * 2) / Math.max(1, pieceW);
+    const scaleY = (height - pad * 2) / Math.max(1, pieceH);
+    const scale = Math.min(scaleX, scaleY);
+
+    const transform: ViewTransform = {
+      zoom: scale,
+      offsetX: pad - bounds.minX * scale,
+      offsetY: pad - Math.min(bounds.minZ, -gaugeMm * 1.25) * scale,
+    };
+
+    const fakeTrack: PlacedTrack = {
+      instanceId: "preview",
+      pieceId: piece.id,
+      position: { x: 0, y: 0, z: 0 },
+      rotation: 0,
+      elevation: 0,
+      snappedConnections: {},
+    };
+
+    drawTrackPiece(ctx, fakeTrack, piece, transform, active ? "selected" : "normal");
+  }
 }
 
 function getSegmentsBounds(segs: PathSegment[]) {
