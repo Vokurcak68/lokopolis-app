@@ -9,8 +9,11 @@ import {
   designerReducer,
   findFreeConnections,
   generateInstanceId,
+  generateZoneId,
   type DesignerState,
   type PlacedTrack,
+  type TerrainZoneKind,
+  type TrackPoint,
 } from "@/lib/track-designer-store";
 import {
   getCatalogByScale,
@@ -19,7 +22,7 @@ import {
   type TrackPieceDefinition,
   type TrackScale,
 } from "@/lib/track-library";
-import { getBoardPathMm, isPointInsidePolygon, type ViewTransform } from "@/lib/track-canvas-renderer";
+import { getBoardPathMm, isPointInsidePolygon, closestPointOnAnyTrack, type ViewTransform } from "@/lib/track-canvas-renderer";
 
 const STORAGE_KEY = "lokopolis-track-planner-v1";
 
@@ -52,6 +55,10 @@ export function useTrackPlanner() {
     },
   );
   const [catalogOpenMobile, setCatalogOpenMobile] = useState(false);
+
+  // Terrain zone placement mode
+  const [terrainMode, setTerrainMode] = useState<TerrainZoneKind | null>(null);
+  const [terrainFirstPoint, setTerrainFirstPoint] = useState<TrackPoint | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -306,6 +313,53 @@ export function useTrackPlanner() {
     });
   }, [state.selectedTrackId, state.tracks]);
 
+  const startTerrainMode = useCallback((kind: TerrainZoneKind) => {
+    setTerrainMode(kind);
+    setTerrainFirstPoint(null);
+    // Deselect current piece/track so clicks go to terrain placement
+    dispatch({ type: "SET_ACTIVE_PIECE", pieceId: null });
+    dispatch({ type: "SELECT_TRACK", instanceId: null });
+  }, []);
+
+  const cancelTerrainMode = useCallback(() => {
+    setTerrainMode(null);
+    setTerrainFirstPoint(null);
+  }, []);
+
+  const placeTerrainPoint = useCallback(
+    (worldX: number, worldZ: number) => {
+      if (!terrainMode) return false;
+
+      const hit = closestPointOnAnyTrack({ x: worldX, z: worldZ }, state.tracks, catalogMap);
+      if (!hit || hit.distance > 15) return false; // must click near a track (15mm tolerance)
+
+      const point: TrackPoint = { trackId: hit.trackId, t: hit.t };
+
+      if (!terrainFirstPoint) {
+        // First click — set start portal
+        setTerrainFirstPoint(point);
+        return true;
+      }
+
+      // Second click — create zone
+      const zone = {
+        id: generateZoneId(),
+        kind: terrainMode,
+        start: terrainFirstPoint,
+        end: point,
+      };
+      dispatch({ type: "ADD_TERRAIN_ZONE", zone });
+      setTerrainMode(null);
+      setTerrainFirstPoint(null);
+      return true;
+    },
+    [terrainMode, terrainFirstPoint, state.tracks, catalogMap],
+  );
+
+  const removeTerrainZone = useCallback((zoneId: string) => {
+    dispatch({ type: "REMOVE_TERRAIN_ZONE", zoneId });
+  }, []);
+
   const toggleSelectedBridge = useCallback(() => {
     if (!state.selectedTrackId) return;
     const track = state.tracks.find((t) => t.instanceId === state.selectedTrackId);
@@ -347,6 +401,12 @@ export function useTrackPlanner() {
     flipSelectedTrack,
     toggleSelectedTunnel,
     toggleSelectedBridge,
+    terrainMode,
+    terrainFirstPoint,
+    startTerrainMode,
+    cancelTerrainMode,
+    placeTerrainPoint,
+    removeTerrainZone,
     exportShoppingList,
     canUndo: state.historyPast.length > 0,
     canRedo: state.historyFuture.length > 0,

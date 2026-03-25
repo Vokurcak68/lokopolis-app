@@ -32,6 +32,10 @@ interface TrackTopBarProps {
   onSave: () => void;
   onExportList: () => void;
   onToggleCatalogMobile: () => void;
+  terrainMode: "tunnel" | "bridge" | null;
+  onStartTunnel: () => void;
+  onStartBridge: () => void;
+  onCancelTerrain: () => void;
 }
 
 export function TrackTopBar(props: TrackTopBarProps) {
@@ -63,6 +67,10 @@ export function TrackTopBar(props: TrackTopBarProps) {
     onSave,
     onExportList,
     onToggleCatalogMobile,
+    terrainMode,
+    onStartTunnel,
+    onStartBridge,
+    onCancelTerrain,
   } = props;
 
   const btnBase =
@@ -222,6 +230,30 @@ export function TrackTopBar(props: TrackTopBarProps) {
         )}
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
+          <button
+            onClick={terrainMode === "tunnel" ? onCancelTerrain : onStartTunnel}
+            className={btnBase}
+            style={{
+              borderColor: terrainMode === "tunnel" ? "#6366f1" : "var(--border)",
+              color: terrainMode === "tunnel" ? "#fff" : "var(--text-body)",
+              background: terrainMode === "tunnel" ? "#6366f1" : "transparent",
+            }}
+            title="Vložit tunel"
+          >
+            🏔️ Tunel
+          </button>
+          <button
+            onClick={terrainMode === "bridge" ? onCancelTerrain : onStartBridge}
+            className={btnBase}
+            style={{
+              borderColor: terrainMode === "bridge" ? "#f59e0b" : "var(--border)",
+              color: terrainMode === "bridge" ? "#fff" : "var(--text-body)",
+              background: terrainMode === "bridge" ? "#f59e0b" : "transparent",
+            }}
+            title="Vložit most"
+          >
+            🌉 Most
+          </button>
           <button onClick={onUndo} disabled={!canUndo} className={btnBase} style={{ borderColor: "var(--border)", color: "var(--text-body)" }}>
             Undo
           </button>

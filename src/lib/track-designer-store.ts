@@ -31,6 +31,26 @@ export interface PlacedTrack {
   flipZ?: boolean;
 }
 
+/** A point on the track layout, referenced by track instance + parameter t (0..1 along piece) */
+export interface TrackPoint {
+  /** Track instance id */
+  trackId: string;
+  /** Parameter along the piece's primary path (0 = connection A end, 1 = connection B end) */
+  t: number;
+}
+
+export type TerrainZoneKind = "tunnel" | "bridge";
+
+/** A terrain zone (tunnel or bridge) defined by two portal points on the track */
+export interface TerrainZone {
+  id: string;
+  kind: TerrainZoneKind;
+  /** First portal */
+  start: TrackPoint;
+  /** Second portal */
+  end: TrackPoint;
+}
+
 export type BoardShape = "rectangle" | "l-shape" | "u-shape";
 export type LCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
@@ -57,6 +77,7 @@ export interface BoardConfig {
 interface DesignerSnapshot {
   board: BoardConfig;
   tracks: PlacedTrack[];
+  terrainZones: TerrainZone[];
   selectedTrackId: string | null;
   hoveredTrackId: string | null;
   activePieceId: string | null;
@@ -83,6 +104,8 @@ export type DesignerAction =
   | { type: "AI_SUCCESS"; tracks: PlacedTrack[] }
   | { type: "AI_ERROR"; error: string }
   | { type: "SNAP_CONNECTION"; fromInstanceId: string; fromConnId: string; toInstanceId: string; toConnId: string }
+  | { type: "ADD_TERRAIN_ZONE"; zone: TerrainZone }
+  | { type: "REMOVE_TERRAIN_ZONE"; zoneId: string }
   | { type: "UNDO" }
   | { type: "REDO" };
 
@@ -94,6 +117,7 @@ export function createInitialState(): DesignerState {
   return {
     board: { width: 200, depth: 100, scale: "TT", shape: "rectangle" },
     tracks: [],
+    terrainZones: [],
     selectedTrackId: null,
     hoveredTrackId: null,
     activePieceId: null,
@@ -114,6 +138,7 @@ function toSnapshot(state: DesignerState): DesignerSnapshot {
   return {
     board: state.board,
     tracks: state.tracks,
+    terrainZones: state.terrainZones,
     selectedTrackId: state.selectedTrackId,
     hoveredTrackId: state.hoveredTrackId,
     activePieceId: state.activePieceId,
@@ -218,7 +243,7 @@ export function designerReducer(state: DesignerState, action: DesignerAction): D
 
     case "CLEAR_TRACKS": {
       const next = pushHistory(state);
-      return { ...next, tracks: [], selectedTrackId: null };
+      return { ...next, tracks: [], terrainZones: [], selectedTrackId: null };
     }
 
     case "AI_START":
@@ -231,6 +256,16 @@ export function designerReducer(state: DesignerState, action: DesignerAction): D
 
     case "AI_ERROR":
       return { ...state, aiGenerating: false, aiError: action.error };
+
+    case "ADD_TERRAIN_ZONE": {
+      const next = pushHistory(state);
+      return { ...next, terrainZones: [...next.terrainZones, action.zone] };
+    }
+
+    case "REMOVE_TERRAIN_ZONE": {
+      const next = pushHistory(state);
+      return { ...next, terrainZones: next.terrainZones.filter((z) => z.id !== action.zoneId) };
+    }
 
     case "SNAP_CONNECTION": {
       const next = pushHistory(state);
@@ -269,6 +304,11 @@ let _idCounter = 0;
 export function generateInstanceId(): string {
   _idCounter++;
   return `track-${Date.now()}-${_idCounter}`;
+}
+
+export function generateZoneId(): string {
+  _idCounter++;
+  return `zone-${Date.now()}-${_idCounter}`;
 }
 
 /** Convert connection point from local to world space */

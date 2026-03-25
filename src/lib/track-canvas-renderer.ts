@@ -1,4 +1,4 @@
-import type { BoardConfig, PlacedTrack } from "./track-designer-store";
+import type { BoardConfig, PlacedTrack, TerrainZone, TrackPoint } from "./track-designer-store";
 import type { TrackPieceDefinition, TrackScale, ExplicitSegment } from "./track-library";
 
 export interface ViewTransform {
@@ -13,6 +13,7 @@ export interface RenderTrackCanvasParams {
   height: number;
   board: BoardConfig;
   tracks: PlacedTrack[];
+  terrainZones: TerrainZone[];
   catalog: Record<string, TrackPieceDefinition>;
   selectedTrackId: string | null;
   hoveredTrackId: string | null;
@@ -96,7 +97,7 @@ function explicitToPathSegment(es: ExplicitSegment): PathSegment {
   };
 }
 
-function getPieceSegmentsLocal(piece: TrackPieceDefinition): PathSegment[] {
+export function getPieceSegmentsLocal(piece: TrackPieceDefinition): PathSegment[] {
   // Use explicit segments when defined (IBW, ABW, DW, DKW Baeseler etc.)
   if (piece.explicitSegments && piece.explicitSegments.length > 0) {
     return piece.explicitSegments.map(explicitToPathSegment);
@@ -174,7 +175,7 @@ function segmentLength(seg: PathSegment): number {
   return seg.radius * Math.abs(seg.endAngle - seg.startAngle);
 }
 
-function pointAndTangentAt(seg: PathSegment, t: number): { point: LocalPoint; tangent: LocalPoint } {
+export function pointAndTangentAt(seg: PathSegment, t: number): { point: LocalPoint; tangent: LocalPoint } {
   if (seg.kind === "line") {
     const x = seg.from.x + (seg.to.x - seg.from.x) * t;
     const z = seg.from.z + (seg.to.z - seg.from.z) * t;
@@ -558,7 +559,7 @@ function drawConnectionDots(
 }
 
 export function renderTrackCanvas(params: RenderTrackCanvasParams) {
-  const { ctx, width, height, board, tracks, catalog, selectedTrackId, hoveredTrackId, transform } = params;
+  const { ctx, width, height, board, tracks, terrainZones, catalog, selectedTrackId, hoveredTrackId, transform } = params;
   ctx.clearRect(0, 0, width, height);
 
   drawGrid(ctx, width, height, transform);
@@ -610,6 +611,11 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
   }
 
   drawConnectionDots(ctx, dots, transform);
+
+  // Draw terrain zones (tunnels/bridges) on top of tracks
+  if (terrainZones.length > 0) {
+    drawTerrainZones(ctx, terrainZones, tracks, catalog, transform);
+  }
 }
 
 export function distancePointToTrackMm(
@@ -806,4 +812,212 @@ function getSegmentsBounds(segs: PathSegment[]) {
   }
 
   return { minX, maxX, minZ, maxZ };
+}
+
+// ============================================================
+// Terrain zones (tunnels & bridges) — point-on-track utilities
+// ============================================================
+
+/** Get primary path segments for a piece (first path = segments[0] branch).
+ *  For simple pieces this is all segments. For turnouts/crossings we only use
+ *  segments that form the straight-through path (index 0 in explicitSegments or the first segment). */
+function getPrimarySegments(piece: TrackPieceDefinition): PathSegment[] {
+  return getPieceSegmentsLocal(piece);
+}
+
+/**
+ * Find the closest point on any track to a world coordinate.
+ * Returns trackId, parameter t (0..1), distance, and world position.
+ */
+export function closestPointOnAnyTrack(
+  worldPoint: LocalPoint,
+  tracks: PlacedTrack[],
+  catalog: Record<string, TrackPieceDefinition>,
+): { trackId: string; t: number; distance: number; worldPos: LocalPoint } | null {
+  let best: { trackId: string; t: number; distance: number; worldPos: LocalPoint } | null = null;
+
+  for (const track of tracks) {
+    const piece = catalog[track.pieceId];
+    if (!piece) continue;
+
+    const segs = getPrimarySegments(piece);
+    // Total length and cumulative offsets for mapping t
+    let totalLen = 0;
+    const segLens: number[] = [];
+    for (const seg of segs) {
+      const len = segmentLength(seg);
+      segLens.push(len);
+      totalLen += len;
+    }
+    if (totalLen < 0.01) continue;
+
+    let cumLen = 0;
+    for (let si = 0; si < segs.length; si++) {
+      const seg = segs[si];
+      const len = segLens[si];
+      // Sample along this segment
+      const samples = Math.max(16, Math.ceil(len / 2));
+      for (let i = 0; i <= samples; i++) {
+        const segT = i / samples;
+        const localPt = pointAndTangentAt(seg, segT).point;
+        const worldPt = localToWorld(localPt, track);
+        const dist = Math.hypot(worldPt.x - worldPoint.x, worldPt.z - worldPoint.z);
+        const globalT = (cumLen + segT * len) / totalLen;
+
+        if (!best || dist < best.distance) {
+          best = { trackId: track.instanceId, t: globalT, distance: dist, worldPos: worldPt };
+        }
+      }
+      cumLen += len;
+    }
+  }
+
+  return best;
+}
+
+/**
+ * Compute world position for a TrackPoint (trackId + t).
+ */
+export function trackPointToWorld(
+  tp: TrackPoint,
+  tracks: PlacedTrack[],
+  catalog: Record<string, TrackPieceDefinition>,
+): LocalPoint | null {
+  const track = tracks.find((t) => t.instanceId === tp.trackId);
+  if (!track) return null;
+  const piece = catalog[track.pieceId];
+  if (!piece) return null;
+
+  const segs = getPrimarySegments(piece);
+  let totalLen = 0;
+  const segLens: number[] = [];
+  for (const seg of segs) {
+    const len = segmentLength(seg);
+    segLens.push(len);
+    totalLen += len;
+  }
+  if (totalLen < 0.01) return null;
+
+  const targetLen = tp.t * totalLen;
+  let cumLen = 0;
+  for (let si = 0; si < segs.length; si++) {
+    const len = segLens[si];
+    if (cumLen + len >= targetLen || si === segs.length - 1) {
+      const segT = Math.min(1, Math.max(0, (targetLen - cumLen) / Math.max(0.01, len)));
+      const localPt = pointAndTangentAt(segs[si], segT).point;
+      return localToWorld(localPt, track);
+    }
+    cumLen += len;
+  }
+  return null;
+}
+
+/**
+ * Draw terrain zone portals and visual indicators.
+ */
+export function drawTerrainZones(
+  ctx: CanvasRenderingContext2D,
+  zones: TerrainZone[],
+  tracks: PlacedTrack[],
+  catalog: Record<string, TrackPieceDefinition>,
+  transform: ViewTransform,
+) {
+  for (const zone of zones) {
+    const startWorld = trackPointToWorld(zone.start, tracks, catalog);
+    const endWorld = trackPointToWorld(zone.end, tracks, catalog);
+    if (!startWorld || !endWorld) continue;
+
+    const startScreen = worldToScreen(startWorld, transform);
+    const endScreen = worldToScreen(endWorld, transform);
+
+    const portalRadius = Math.max(6, 10 * transform.zoom);
+
+    if (zone.kind === "tunnel") {
+      // Portal arches
+      ctx.save();
+      for (const pt of [startScreen, endScreen]) {
+        // Dark semi-circle (tunnel mouth)
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, portalRadius, Math.PI, 0, false);
+        ctx.fillStyle = "rgba(60, 50, 40, 0.85)";
+        ctx.fill();
+        ctx.strokeStyle = "#333";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Rock texture dots
+        ctx.fillStyle = "#555";
+        ctx.beginPath();
+        ctx.arc(pt.x - portalRadius * 0.4, pt.y - portalRadius * 0.5, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(pt.x + portalRadius * 0.3, pt.y - portalRadius * 0.6, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Dashed line between portals
+      ctx.beginPath();
+      ctx.moveTo(startScreen.x, startScreen.y);
+      ctx.lineTo(endScreen.x, endScreen.y);
+      ctx.setLineDash([6, 4]);
+      ctx.strokeStyle = "rgba(80, 70, 60, 0.5)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Label
+      const midX = (startScreen.x + endScreen.x) / 2;
+      const midY = (startScreen.y + endScreen.y) / 2;
+      ctx.font = `${Math.max(9, 11 * transform.zoom)}px sans-serif`;
+      ctx.fillStyle = "rgba(80, 70, 60, 0.8)";
+      ctx.textAlign = "center";
+      ctx.fillText("🏔️ tunel", midX, midY - portalRadius - 4);
+      ctx.restore();
+    } else {
+      // Bridge
+      ctx.save();
+      for (const pt of [startScreen, endScreen]) {
+        // Bridge pillar
+        ctx.beginPath();
+        ctx.rect(pt.x - 3, pt.y - portalRadius, 6, portalRadius * 2);
+        ctx.fillStyle = "rgba(120, 110, 100, 0.7)";
+        ctx.fill();
+        ctx.strokeStyle = "#666";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+
+      // Bridge deck line
+      ctx.beginPath();
+      ctx.moveTo(startScreen.x, startScreen.y);
+      ctx.lineTo(endScreen.x, endScreen.y);
+      ctx.strokeStyle = "rgba(100, 90, 80, 0.6)";
+      ctx.lineWidth = Math.max(3, 8 * transform.zoom);
+      ctx.stroke();
+
+      // Railing lines
+      const dx = endScreen.x - startScreen.x;
+      const dy = endScreen.y - startScreen.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len * 4;
+      const ny = dx / len * 4;
+      ctx.beginPath();
+      ctx.moveTo(startScreen.x + nx, startScreen.y + ny);
+      ctx.lineTo(endScreen.x + nx, endScreen.y + ny);
+      ctx.moveTo(startScreen.x - nx, startScreen.y - ny);
+      ctx.lineTo(endScreen.x - nx, endScreen.y - ny);
+      ctx.strokeStyle = "rgba(80, 70, 60, 0.4)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Label
+      const midX = (startScreen.x + endScreen.x) / 2;
+      const midY = (startScreen.y + endScreen.y) / 2;
+      ctx.font = `${Math.max(9, 11 * transform.zoom)}px sans-serif`;
+      ctx.fillStyle = "rgba(100, 90, 80, 0.8)";
+      ctx.textAlign = "center";
+      ctx.fillText("🌉 most", midX, midY - portalRadius - 4);
+      ctx.restore();
+    }
+  }
 }

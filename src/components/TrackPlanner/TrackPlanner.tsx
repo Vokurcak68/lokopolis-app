@@ -25,15 +25,9 @@ export default function TrackPlanner() {
         return;
       }
 
-      if (e.key.toLowerCase() === "t" && planner.state.selectedTrackId) {
+      if (e.key === "Escape" && planner.terrainMode) {
         e.preventDefault();
-        planner.toggleSelectedTunnel();
-        return;
-      }
-
-      if (e.key.toLowerCase() === "b" && planner.state.selectedTrackId) {
-        e.preventDefault();
-        planner.toggleSelectedBridge();
+        planner.cancelTerrainMode();
         return;
       }
 
@@ -124,6 +118,10 @@ export default function TrackPlanner() {
         onExportList={handleExportList}
         onSave={planner.saveToLocalStorage}
         onToggleCatalogMobile={() => planner.setCatalogOpenMobile((v) => !v)}
+        terrainMode={planner.terrainMode}
+        onStartTunnel={() => planner.startTerrainMode("tunnel")}
+        onStartBridge={() => planner.startTerrainMode("bridge")}
+        onCancelTerrain={planner.cancelTerrainMode}
       />
 
       <div className="relative flex min-h-0 flex-1">
@@ -156,16 +154,40 @@ export default function TrackPlanner() {
               </button>
             </div>
           )}
+          {planner.terrainMode && (
+            <div
+              className="absolute left-0 right-0 top-0 z-20 flex items-center justify-between border-b px-3 py-2"
+              style={{
+                background: planner.terrainMode === "tunnel" ? "#6366f1" : "#f59e0b",
+                borderColor: "var(--border)",
+              }}
+            >
+              <span className="text-sm font-medium text-white">
+                {planner.terrainMode === "tunnel" ? "🏔️" : "🌉"}{" "}
+                {planner.terrainFirstPoint
+                  ? "Klikni na trať — druhý portál (konec)"
+                  : "Klikni na trať — první portál (začátek)"}
+              </span>
+              <button
+                onClick={planner.cancelTerrainMode}
+                className="flex items-center gap-1 rounded-md bg-white/20 px-3 py-1 text-sm font-medium text-white transition hover:bg-white/30"
+              >
+                ✕ Zrušit
+              </button>
+            </div>
+          )}
           <TrackCanvas
             state={planner.state}
             catalog={planner.catalogMap}
             activePiece={planner.activePiece}
             transform={planner.transform}
             canvasRef={planner.canvasRef}
+            terrainMode={!!planner.terrainMode}
             onTransformChange={(fn) => planner.setTransform((prev) => fn(prev))}
             onSetSelectedTrack={planner.setSelectedTrack}
             onSetHoveredTrack={planner.setHoveredTrack}
             onPlaceTrack={planner.placeTrackAt}
+            onPlaceTerrainPoint={planner.placeTerrainPoint}
             onDeactivatePiece={() => planner.setActivePiece(null)}
             onUpdateTrack={planner.updateTrack}
             onSnapDraggedTrack={planner.snapDraggedTrack}
@@ -194,30 +216,7 @@ export default function TrackPlanner() {
                     ↔ Zrcadlit
                   </button>
                 )}
-                <button
-                  onClick={() => planner.toggleSelectedTunnel()}
-                  className="h-8 rounded-md border px-3 text-sm font-medium transition"
-                  style={{
-                    borderColor: selTrack?.isTunnel ? "#6366f1" : "var(--border)",
-                    color: selTrack?.isTunnel ? "#6366f1" : "var(--text-body)",
-                    background: selTrack?.isTunnel ? "rgba(99,102,241,0.12)" : "transparent",
-                  }}
-                  title="Tunel (T)"
-                >
-                  🏔️ Tunel
-                </button>
-                <button
-                  onClick={() => planner.toggleSelectedBridge()}
-                  className="h-8 rounded-md border px-3 text-sm font-medium transition"
-                  style={{
-                    borderColor: selTrack?.isBridge ? "#f59e0b" : "var(--border)",
-                    color: selTrack?.isBridge ? "#f59e0b" : "var(--text-body)",
-                    background: selTrack?.isBridge ? "rgba(245,158,11,0.12)" : "transparent",
-                  }}
-                  title="Most (B)"
-                >
-                  🌉 Most
-                </button>
+
                 <button
                   onClick={() => planner.removeTrack(planner.state.selectedTrackId!)}
                   className="h-8 rounded-md border px-3 text-sm font-medium transition"

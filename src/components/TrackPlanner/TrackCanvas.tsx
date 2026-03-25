@@ -16,10 +16,12 @@ interface TrackCanvasProps {
   activePiece: TrackPieceDefinition | null;
   transform: ViewTransform;
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
+  terrainMode: boolean;
   onTransformChange: (fn: (prev: ViewTransform) => ViewTransform) => void;
   onSetSelectedTrack: (instanceId: string | null) => void;
   onSetHoveredTrack: (instanceId: string | null) => void;
   onPlaceTrack: (piece: TrackPieceDefinition, worldX: number, worldZ: number, preferredRotation?: number) => void;
+  onPlaceTerrainPoint: (worldX: number, worldZ: number) => boolean;
   onDeactivatePiece: () => void;
   onUpdateTrack: (instanceId: string, updates: Partial<PlacedTrack>) => void;
   onSnapDraggedTrack: (track: PlacedTrack) => PlacedTrack;
@@ -45,10 +47,12 @@ export function TrackCanvas({
   activePiece,
   transform,
   canvasRef,
+  terrainMode,
   onTransformChange,
   onSetSelectedTrack,
   onSetHoveredTrack,
   onPlaceTrack,
+  onPlaceTerrainPoint,
   onUpdateTrack,
   onSnapDraggedTrack,
   onDeactivatePiece,
@@ -136,6 +140,7 @@ export function TrackCanvas({
         height: size.height,
         board: state.board,
         tracks: state.tracks,
+        terrainZones: state.terrainZones ?? [],
         catalog,
         selectedTrackId: state.selectedTrackId,
         hoveredTrackId: state.hoveredTrackId,
@@ -144,7 +149,7 @@ export function TrackCanvas({
     });
 
     return () => cancelAnimationFrame(raf);
-  }, [canvasRef, catalog, size.height, size.width, state.board, state.hoveredTrackId, state.selectedTrackId, state.tracks, transform]);
+  }, [canvasRef, catalog, size.height, size.width, state.board, state.hoveredTrackId, state.selectedTrackId, state.tracks, state.terrainZones, transform]);
 
   const hitTrack = (world: LocalPoint): PlacedTrack | null => {
     let best: PlacedTrack | null = null;
@@ -224,6 +229,14 @@ export function TrackCanvas({
       inter.startOffsetX = transform.offsetX;
       inter.startOffsetY = transform.offsetY;
       canvas.setPointerCapture(e.pointerId);
+      return;
+    }
+
+    // Terrain zone placement mode — click places portal
+    if (terrainMode) {
+      const handled = onPlaceTerrainPoint(world.x, world.z);
+      if (handled) return;
+      // If not near a track, ignore click
       return;
     }
 
@@ -314,15 +327,20 @@ export function TrackCanvas({
     const canvas = canvasRef.current;
     inter.touchPoints.delete(e.pointerId);
 
-    // Touch-pending that didn't move = TAP → select/deselect track
+    // Touch-pending that didn't move = TAP → terrain mode or select/deselect track
     if (inter.mode === "touch-pending" && !inter.touchMoved) {
       const rect = canvas?.getBoundingClientRect();
       if (rect) {
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
         const world = screenToWorld(x, y, transform);
-        const hit = hitTrack(world);
-        onSetSelectedTrack(hit?.instanceId ?? null);
+
+        if (terrainMode) {
+          onPlaceTerrainPoint(world.x, world.z);
+        } else {
+          const hit = hitTrack(world);
+          onSetSelectedTrack(hit?.instanceId ?? null);
+        }
       }
     }
 
