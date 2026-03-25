@@ -230,6 +230,9 @@ export default function TrackPlanner() {
             placementRotation={planner.placementRotation}
             onTransformChange={(fn) => planner.setTransform((prev) => fn(prev))}
             onSetSelectedTrack={planner.setSelectedTrack}
+            onToggleSelectTrack={planner.toggleSelectTrack}
+            onSelectTracks={planner.selectTracks}
+            onMoveSelectedTracks={planner.moveSelectedTracks}
             onHitTestTerrainZone={planner.hitTestTerrainZone}
             onSetSelectedZone={planner.setSelectedZoneId}
             onSetHoveredTrack={planner.setHoveredTrack}

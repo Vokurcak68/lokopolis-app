@@ -81,6 +81,7 @@ function dataToState(data: PersistedData): DesignerState {
     tracks: data.tracks ?? [],
     terrainZones: data.terrainZones ?? [],
     selectedTrackId: null,
+    selectedTrackIds: [],
     hoveredTrackId: null,
     activePieceId: null,
     aiGenerating: false,
@@ -223,6 +224,9 @@ export function useTrackPlanner() {
   const setActivePiece = useCallback((pieceId: string | null) => dispatch({ type: "SET_ACTIVE_PIECE", pieceId }), []);
 
   const setSelectedTrack = useCallback((instanceId: string | null) => dispatch({ type: "SELECT_TRACK", instanceId }), []);
+  const toggleSelectTrack = useCallback((instanceId: string) => dispatch({ type: "TOGGLE_SELECT_TRACK", instanceId }), []);
+  const selectTracks = useCallback((instanceIds: string[]) => dispatch({ type: "SELECT_TRACKS", instanceIds }), []);
+  const moveSelectedTracks = useCallback((dx: number, dz: number) => dispatch({ type: "MOVE_SELECTED_TRACKS", dx, dz }), []);
   const setHoveredTrack = useCallback((instanceId: string | null) => dispatch({ type: "HOVER_TRACK", instanceId }), []);
 
   /** Save current project (or create new if none) */
@@ -631,6 +635,9 @@ export function useTrackPlanner() {
     setBoardSize,
     setActivePiece,
     setSelectedTrack,
+    toggleSelectTrack,
+    selectTracks,
+    moveSelectedTracks,
     setHoveredTrack,
     saveToLocalStorage: saveProject,
     saveProjectAs,

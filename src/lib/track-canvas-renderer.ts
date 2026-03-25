@@ -16,6 +16,8 @@ export interface RenderTrackCanvasParams {
   terrainZones: TerrainZone[];
   catalog: Record<string, TrackPieceDefinition>;
   selectedTrackId: string | null;
+  /** Multi-select track IDs */
+  selectedTrackIds?: string[];
   hoveredTrackId: string | null;
   transform: ViewTransform;
   /** Skip clearing, grid and board — for overlay rendering (ghost) */
@@ -703,7 +705,8 @@ function drawConnectionDots(
 }
 
 export function renderTrackCanvas(params: RenderTrackCanvasParams) {
-  const { ctx, width, height, board, tracks, terrainZones, catalog, selectedTrackId, hoveredTrackId, transform, skipBackground } = params;
+  const { ctx, width, height, board, tracks, terrainZones, catalog, selectedTrackId, selectedTrackIds, hoveredTrackId, transform, skipBackground } = params;
+  const multiSelected = new Set(selectedTrackIds ?? []);
 
   if (!skipBackground) {
     ctx.clearRect(0, 0, width, height);
@@ -721,12 +724,13 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
     else normal.push(t);
   }
 
-  // Within each layer, draw selected track last so its highlight is on top
+  // Within each layer, draw selected tracks last so their highlight is on top
+  const isSelected = (id: string) => id === selectedTrackId || multiSelected.has(id);
   const sortSelected = (arr: PlacedTrack[]) =>
     [...arr].sort((a, b) => {
-      if (a.instanceId === selectedTrackId) return 1;
-      if (b.instanceId === selectedTrackId) return -1;
-      return 0;
+      const aS = isSelected(a.instanceId) ? 1 : 0;
+      const bS = isSelected(b.instanceId) ? 1 : 0;
+      return aS - bS;
     });
 
   for (const layer of [sortSelected(tunnels), sortSelected(normal), sortSelected(bridges)]) {
@@ -735,7 +739,7 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
       if (!piece) continue;
 
       const state: "normal" | "selected" | "hover" =
-        track.instanceId === selectedTrackId
+        isSelected(track.instanceId)
           ? "selected"
           : track.instanceId === hoveredTrackId
             ? "hover"

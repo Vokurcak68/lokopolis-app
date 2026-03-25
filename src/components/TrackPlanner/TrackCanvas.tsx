@@ -21,6 +21,9 @@ interface TrackCanvasProps {
   placementRotation: number;
   onTransformChange: (fn: (prev: ViewTransform) => ViewTransform) => void;
   onSetSelectedTrack: (instanceId: string | null) => void;
+  onToggleSelectTrack: (instanceId: string) => void;
+  onSelectTracks: (instanceIds: string[]) => void;
+  onMoveSelectedTracks: (dx: number, dz: number) => void;
   onHitTestTerrainZone: (worldX: number, worldZ: number) => string | null;
   onSetSelectedZone: (zoneId: string | null) => void;
   onSetHoveredTrack: (instanceId: string | null) => void;
@@ -56,6 +59,9 @@ export function TrackCanvas({
   placementRotation,
   onTransformChange,
   onSetSelectedTrack,
+  onToggleSelectTrack,
+  onSelectTracks,
+  onMoveSelectedTracks,
   onHitTestTerrainZone,
   onSetSelectedZone,
   onSetHoveredTrack,
@@ -69,8 +75,10 @@ export function TrackCanvas({
   const [size, setSize] = useState({ width: 1200, height: 700 });
   const [mouseWorld, setMouseWorld] = useState<LocalPoint | null>(null);
 
+  const [marquee, setMarquee] = useState<{ startX: number; startY: number; endX: number; endY: number } | null>(null);
+
   const interactionRef = useRef<{
-    mode: "none" | "pan" | "drag" | "touch-pending";
+    mode: "none" | "pan" | "drag" | "group-drag" | "marquee" | "touch-pending";
     pointerId: number | null;
     startX: number;
     startY: number;
@@ -79,12 +87,15 @@ export function TrackCanvas({
     dragTrackId: string | null;
     dragStartWorld: LocalPoint | null;
     dragTrackStartPos: { x: number; z: number } | null;
+    /** Group drag: starting positions of all selected tracks */
+    groupDragStarts: Map<string, { x: number; z: number }>;
     isSpacePressed: boolean;
     pinchDistance: number | null;
     pinchCenter: { x: number; y: number } | null;
     touchPoints: Map<number, { x: number; y: number }>;
     touchStartTime: number;
     touchMoved: boolean;
+    ctrlOrShift: boolean;
   }>({
     mode: "none",
     pointerId: null,
@@ -95,12 +106,14 @@ export function TrackCanvas({
     dragTrackId: null,
     dragStartWorld: null,
     dragTrackStartPos: null,
+    groupDragStarts: new Map(),
     isSpacePressed: false,
     pinchDistance: null,
     pinchCenter: null,
     touchPoints: new Map(),
     touchStartTime: 0,
     touchMoved: false,
+    ctrlOrShift: false,
   });
 
   useEffect(() => {
@@ -152,6 +165,7 @@ export function TrackCanvas({
         terrainZones: state.terrainZones ?? [],
         catalog,
         selectedTrackId: state.selectedTrackId,
+        selectedTrackIds: state.selectedTrackIds,
         hoveredTrackId: state.hoveredTrackId,
         transform,
       });
@@ -186,7 +200,7 @@ export function TrackCanvas({
     });
 
     return () => cancelAnimationFrame(raf);
-  }, [activePiece, canvasRef, catalog, mouseWorld, placementRotation, size.height, size.width, state.board, state.hoveredTrackId, state.selectedTrackId, state.tracks, state.terrainZones, transform]);
+  }, [activePiece, canvasRef, catalog, mouseWorld, placementRotation, size.height, size.width, state.board, state.hoveredTrackId, state.selectedTrackId, state.selectedTrackIds, state.tracks, state.terrainZones, transform]);
 
   const hitTrack = (world: LocalPoint): PlacedTrack | null => {
     let best: PlacedTrack | null = null;
@@ -286,8 +300,33 @@ export function TrackCanvas({
     }
 
     const hit = hitTrack(world);
+    const multiKey = e.ctrlKey || e.metaKey || e.shiftKey;
+    inter.ctrlOrShift = multiKey;
+
     if (hit && !activePiece) {
       onSetSelectedZone(null);
+
+      if (multiKey) {
+        // Ctrl/Shift+click → toggle this track in multi-selection
+        onToggleSelectTrack(hit.instanceId);
+        return;
+      }
+
+      // If clicking on an already-selected track in a group → start group drag
+      if (state.selectedTrackIds.length > 1 && state.selectedTrackIds.includes(hit.instanceId)) {
+        inter.mode = "group-drag";
+        inter.pointerId = e.pointerId;
+        inter.dragStartWorld = world;
+        inter.groupDragStarts = new Map();
+        for (const id of state.selectedTrackIds) {
+          const t = state.tracks.find((tr) => tr.instanceId === id);
+          if (t) inter.groupDragStarts.set(id, { x: t.position.x, z: t.position.z });
+        }
+        canvas.setPointerCapture(e.pointerId);
+        return;
+      }
+
+      // Single select + start drag
       onSetSelectedTrack(hit.instanceId);
       inter.mode = "drag";
       inter.pointerId = e.pointerId;
@@ -300,6 +339,19 @@ export function TrackCanvas({
 
     if (activePiece) {
       onPlaceTrack(activePiece, world.x, world.z, 0);
+      return;
+    }
+
+    // No hit, no active piece → start marquee select (rectangle)
+    if (!multiKey) {
+      inter.mode = "marquee";
+      inter.pointerId = e.pointerId;
+      inter.startX = x;
+      inter.startY = y;
+      setMarquee({ startX: x, startY: y, endX: x, endY: y });
+      canvas.setPointerCapture(e.pointerId);
+      onSetSelectedTrack(null);
+      onSetSelectedZone(null);
       return;
     }
 
@@ -347,6 +399,23 @@ export function TrackCanvas({
       const dx = x - inter.startX;
       const dy = y - inter.startY;
       onTransformChange((prev) => ({ ...prev, offsetX: inter.startOffsetX + dx, offsetY: inter.startOffsetY + dy }));
+      return;
+    }
+
+    if (inter.mode === "marquee" && inter.pointerId === e.pointerId) {
+      setMarquee((prev) => prev ? { ...prev, endX: x, endY: y } : null);
+      return;
+    }
+
+    if (inter.mode === "group-drag" && inter.pointerId === e.pointerId && inter.dragStartWorld) {
+      const world = screenToWorld(x, y, transform);
+      const dx = world.x - inter.dragStartWorld.x;
+      const dz = world.z - inter.dragStartWorld.z;
+      for (const [id, startPos] of inter.groupDragStarts) {
+        onUpdateTrack(id, {
+          position: { x: startPos.x + dx, y: 0, z: startPos.z + dz },
+        });
+      }
       return;
     }
 
@@ -400,6 +469,36 @@ export function TrackCanvas({
       }
     }
 
+    if (inter.mode === "marquee") {
+      // Finalize rectangle select — find all tracks inside marquee
+      if (marquee) {
+        const minSX = Math.min(marquee.startX, marquee.endX);
+        const maxSX = Math.max(marquee.startX, marquee.endX);
+        const minSY = Math.min(marquee.startY, marquee.endY);
+        const maxSY = Math.max(marquee.startY, marquee.endY);
+
+        // Only select if marquee is larger than 5px (not accidental click)
+        if (maxSX - minSX > 5 || maxSY - minSY > 5) {
+          const worldTL = screenToWorld(minSX, minSY, transform);
+          const worldBR = screenToWorld(maxSX, maxSY, transform);
+          const selected: string[] = [];
+          for (const tr of state.tracks) {
+            // Check if track center is inside marquee
+            if (
+              tr.position.x >= worldTL.x && tr.position.x <= worldBR.x &&
+              tr.position.z >= worldTL.z && tr.position.z <= worldBR.z
+            ) {
+              selected.push(tr.instanceId);
+            }
+          }
+          if (selected.length > 0) {
+            onSelectTracks(selected);
+          }
+        }
+        setMarquee(null);
+      }
+    }
+
     if (inter.mode === "drag" && inter.dragTrackId) {
       const current = state.tracks.find((t) => t.instanceId === inter.dragTrackId);
       if (current) {
@@ -408,11 +507,17 @@ export function TrackCanvas({
       }
     }
 
+    if (inter.mode === "group-drag") {
+      // Snap the first selected track, apply delta to all
+      // (simplified — just leave them where they are for now)
+    }
+
     inter.mode = "none";
     inter.pointerId = null;
     inter.dragTrackId = null;
     inter.dragStartWorld = null;
     inter.dragTrackStartPos = null;
+    inter.groupDragStarts = new Map();
     inter.pinchDistance = null;
     inter.pinchCenter = null;
   };
@@ -459,11 +564,26 @@ export function TrackCanvas({
         onWheel={onWheel}
       />
 
+      {/* Marquee rectangle overlay */}
+      {marquee && (
+        <div
+          className="pointer-events-none absolute border-2 border-dashed"
+          style={{
+            left: Math.min(marquee.startX, marquee.endX),
+            top: Math.min(marquee.startY, marquee.endY),
+            width: Math.abs(marquee.endX - marquee.startX),
+            height: Math.abs(marquee.endY - marquee.startY),
+            borderColor: "var(--accent)",
+            background: "rgba(240,160,48,0.1)",
+          }}
+        />
+      )}
+
       <div
         className="pointer-events-none absolute left-3 top-3 rounded-md border px-2 py-1 text-xs"
         style={{ borderColor: "var(--border)", background: "var(--bg-card)", color: "var(--text-dim)" }}
       >
-        Pan: pravé/prostřední tlačítko nebo mezerník + tah | Zoom: kolečko/pinch | Rotace: Shift+scroll
+        Pan: pravé/prostřední tlačítko nebo mezerník + tah | Zoom: kolečko/pinch | Rotace: Shift+scroll | Multi-select: Ctrl+klik nebo tažení
       </div>
 
       <div

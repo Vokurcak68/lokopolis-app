@@ -82,6 +82,8 @@ interface DesignerSnapshot {
   tracks: PlacedTrack[];
   terrainZones: TerrainZone[];
   selectedTrackId: string | null;
+  /** Multi-select: array of selected track IDs */
+  selectedTrackIds: string[];
   hoveredTrackId: string | null;
   activePieceId: string | null;
   aiGenerating: boolean;
@@ -99,6 +101,9 @@ export type DesignerAction =
   | { type: "REMOVE_TRACK"; instanceId: string }
   | { type: "UPDATE_TRACK"; instanceId: string; updates: Partial<PlacedTrack> }
   | { type: "SELECT_TRACK"; instanceId: string | null }
+  | { type: "TOGGLE_SELECT_TRACK"; instanceId: string }
+  | { type: "SELECT_TRACKS"; instanceIds: string[] }
+  | { type: "MOVE_SELECTED_TRACKS"; dx: number; dz: number }
   | { type: "HOVER_TRACK"; instanceId: string | null }
   | { type: "SET_ACTIVE_PIECE"; pieceId: string | null }
   | { type: "SET_TRACKS"; tracks: PlacedTrack[] }
@@ -123,6 +128,7 @@ export function createInitialState(): DesignerState {
     tracks: [],
     terrainZones: [],
     selectedTrackId: null,
+    selectedTrackIds: [],
     hoveredTrackId: null,
     activePieceId: null,
     aiGenerating: false,
@@ -144,6 +150,7 @@ function toSnapshot(state: DesignerState): DesignerSnapshot {
     tracks: state.tracks,
     terrainZones: state.terrainZones,
     selectedTrackId: state.selectedTrackId,
+    selectedTrackIds: state.selectedTrackIds,
     hoveredTrackId: state.hoveredTrackId,
     activePieceId: state.activePieceId,
     aiGenerating: state.aiGenerating,
@@ -235,7 +242,43 @@ export function designerReducer(state: DesignerState, action: DesignerAction): D
     }
 
     case "SELECT_TRACK":
-      return { ...state, selectedTrackId: action.instanceId };
+      return {
+        ...state,
+        selectedTrackId: action.instanceId,
+        selectedTrackIds: action.instanceId ? [action.instanceId] : [],
+      };
+
+    case "TOGGLE_SELECT_TRACK": {
+      const ids = state.selectedTrackIds;
+      const has = ids.includes(action.instanceId);
+      const next = has ? ids.filter((id) => id !== action.instanceId) : [...ids, action.instanceId];
+      return {
+        ...state,
+        selectedTrackIds: next,
+        selectedTrackId: next.length === 1 ? next[0] : next.length === 0 ? null : state.selectedTrackId,
+      };
+    }
+
+    case "SELECT_TRACKS":
+      return {
+        ...state,
+        selectedTrackIds: action.instanceIds,
+        selectedTrackId: action.instanceIds.length === 1 ? action.instanceIds[0] : action.instanceIds.length === 0 ? null : state.selectedTrackId,
+      };
+
+    case "MOVE_SELECTED_TRACKS": {
+      if (state.selectedTrackIds.length === 0) return state;
+      const next = pushHistory(state);
+      const movedIds = new Set(next.selectedTrackIds);
+      return {
+        ...next,
+        tracks: next.tracks.map((t) =>
+          movedIds.has(t.instanceId)
+            ? { ...t, position: { ...t.position, x: t.position.x + action.dx, z: t.position.z + action.dz } }
+            : t,
+        ),
+      };
+    }
 
     case "HOVER_TRACK":
       return { ...state, hoveredTrackId: action.instanceId };
