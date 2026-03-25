@@ -694,6 +694,8 @@ export function getTrackPieceExtentMm(piece: TrackPieceDefinition): number {
  * Draw a track piece preview in a catalog canvas.
  * @param maxExtentMm — if provided, used as the reference extent for zoom so all pieces
  *   in the same group render at consistent scale (short pieces look short, long pieces look long).
+ *   The piece is always fit-to-canvas but zoom is capped at the group reference so
+ *   short pieces appear proportionally shorter than long ones.
  */
 export function drawTrackPiecePreview(canvas: HTMLCanvasElement, piece: TrackPieceDefinition, active = false, maxExtentMm?: number) {
   const ctx = canvas.getContext("2d");
@@ -716,54 +718,45 @@ export function drawTrackPiecePreview(canvas: HTMLCanvasElement, piece: TrackPie
 
   // Include gauge so straight pieces have visible height
   const gaugeMm = getGaugeMm(piece.scale);
-  const pieceW = bounds.maxX - bounds.minX;
+  const pieceW = Math.max(bounds.maxX - bounds.minX, 1);
   const pieceH = Math.max(bounds.maxZ - bounds.minZ, gaugeMm * 2.5);
 
+  // Fit-to-canvas zoom for THIS piece
+  const fitScaleX = (width - pad * 2) / pieceW;
+  const fitScaleY = (height - pad * 2) / pieceH;
+  const fitScale = Math.min(fitScaleX, fitScaleY);
+
+  // If we have a group reference, cap the zoom so short pieces look shorter
+  // but also ensure a minimum visibility (at least 30% of canvas width)
+  let scale = fitScale;
   if (maxExtentMm && maxExtentMm > 0) {
-    // Fixed scale based on the largest piece in the group
-    const scale = (Math.min(width, height) - pad * 2) / maxExtentMm;
-    // Center the piece in the canvas
-    const drawnW = pieceW * scale;
-    const drawnH = pieceH * scale;
-    const transform: ViewTransform = {
-      zoom: scale,
-      offsetX: (width - drawnW) / 2 - bounds.minX * scale,
-      offsetY: (height - drawnH) / 2 - Math.min(bounds.minZ, -gaugeMm * 1.25) * scale,
-    };
-
-    const fakeTrack: PlacedTrack = {
-      instanceId: "preview",
-      pieceId: piece.id,
-      position: { x: 0, y: 0, z: 0 },
-      rotation: 0,
-      elevation: 0,
-      snappedConnections: {},
-    };
-
-    drawTrackPiece(ctx, fakeTrack, piece, transform, active ? "selected" : "normal");
-  } else {
-    // Fallback: fit to canvas (old behavior)
-    const scaleX = (width - pad * 2) / Math.max(1, pieceW);
-    const scaleY = (height - pad * 2) / Math.max(1, pieceH);
-    const scale = Math.min(scaleX, scaleY);
-
-    const transform: ViewTransform = {
-      zoom: scale,
-      offsetX: pad - bounds.minX * scale,
-      offsetY: pad - Math.min(bounds.minZ, -gaugeMm * 1.25) * scale,
-    };
-
-    const fakeTrack: PlacedTrack = {
-      instanceId: "preview",
-      pieceId: piece.id,
-      position: { x: 0, y: 0, z: 0 },
-      rotation: 0,
-      elevation: 0,
-      snappedConnections: {},
-    };
-
-    drawTrackPiece(ctx, fakeTrack, piece, transform, active ? "selected" : "normal");
+    const refScale = (width - pad * 2) / maxExtentMm;
+    // Use the reference scale but don't let pieces become too tiny
+    // Minimum: piece should fill at least 25% of canvas width
+    const minScale = (width - pad * 2) * 0.25 / pieceW;
+    scale = Math.max(Math.min(fitScale, refScale), minScale);
   }
+
+  // Center the piece in the canvas
+  const drawnW = pieceW * scale;
+  const drawnH = pieceH * scale;
+  const minBoundsZ = Math.min(bounds.minZ, -gaugeMm * 1.25);
+  const transform: ViewTransform = {
+    zoom: scale,
+    offsetX: (width - drawnW) / 2 - bounds.minX * scale,
+    offsetY: (height - drawnH) / 2 - minBoundsZ * scale,
+  };
+
+  const fakeTrack: PlacedTrack = {
+    instanceId: "preview",
+    pieceId: piece.id,
+    position: { x: 0, y: 0, z: 0 },
+    rotation: 0,
+    elevation: 0,
+    snappedConnections: {},
+  };
+
+  drawTrackPiece(ctx, fakeTrack, piece, transform, active ? "selected" : "normal");
 }
 
 function getSegmentsBounds(segs: PathSegment[]) {
