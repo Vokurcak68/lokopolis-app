@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import type { BoardShape, LCorner } from "@/lib/track-designer-store";
 import type { TrackScale } from "@/lib/track-library";
 import { getManufacturer } from "@/lib/track-library";
+import type { SavedProject } from "./useTrackPlanner";
 
 interface TrackTopBarProps {
   scale: TrackScale;
@@ -30,6 +32,12 @@ interface TrackTopBarProps {
   onClear: () => void;
   onExportPng: () => void;
   onSave: () => void;
+  onSaveAs: (name: string) => void;
+  onLoadProject: (id: string) => void;
+  onDeleteProject: (id: string) => void;
+  onNewProject: () => void;
+  listProjects: () => SavedProject[];
+  currentProjectName: string | null;
   saveToast?: "ok" | "fail" | null;
   onExportList: () => void;
   onToggleCatalogMobile: () => void;
@@ -66,6 +74,12 @@ export function TrackTopBar(props: TrackTopBarProps) {
     onClear,
     onExportPng,
     onSave,
+    onSaveAs,
+    onLoadProject,
+    onDeleteProject,
+    onNewProject,
+    listProjects,
+    currentProjectName,
     saveToast,
     onExportList,
     onToggleCatalogMobile,
@@ -271,18 +285,152 @@ export function TrackTopBar(props: TrackTopBarProps) {
           <button onClick={onExportList} className={btnBase} style={{ borderColor: "var(--border)", color: "var(--text-body)" }}>
             Nákupní seznam
           </button>
-          <button
-            onClick={onSave}
-            className={`${btnBase} border-0 transition-all`}
-            style={{
-              background: saveToast === "ok" ? "#22c55e" : saveToast === "fail" ? "#ef4444" : "var(--accent)",
-              color: "#111",
-            }}
-          >
-            {saveToast === "ok" ? "✓ Uloženo" : saveToast === "fail" ? "✗ Chyba" : "💾 Uložit"}
-          </button>
+          <ProjectMenu
+            onSave={onSave}
+            onSaveAs={onSaveAs}
+            onLoadProject={onLoadProject}
+            onDeleteProject={onDeleteProject}
+            onNewProject={onNewProject}
+            listProjects={listProjects}
+            currentProjectName={currentProjectName}
+            saveToast={saveToast}
+            btnBase={btnBase}
+          />
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ─── Project dropdown menu ─── */
+function ProjectMenu({
+  onSave,
+  onSaveAs,
+  onLoadProject,
+  onDeleteProject,
+  onNewProject,
+  listProjects,
+  currentProjectName,
+  saveToast,
+  btnBase,
+}: {
+  onSave: () => void;
+  onSaveAs: (name: string) => void;
+  onLoadProject: (id: string) => void;
+  onDeleteProject: (id: string) => void;
+  onNewProject: () => void;
+  listProjects: () => SavedProject[];
+  currentProjectName: string | null;
+  saveToast?: "ok" | "fail" | null;
+  btnBase: string;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const handleSaveAs = () => {
+    const name = prompt("Název projektu:", currentProjectName || "Nový plán");
+    if (!name?.trim()) return;
+    onSaveAs(name.trim());
+    setOpen(false);
+  };
+
+  const handleNew = () => {
+    if (!confirm("Opravdu vytvořit nový prázdný projekt?")) return;
+    onNewProject();
+    setOpen(false);
+  };
+
+  const handleLoad = (id: string) => {
+    onLoadProject(id);
+    setOpen(false);
+  };
+
+  const handleDelete = (id: string, name: string) => {
+    if (!confirm(`Smazat projekt "${name}"?`)) return;
+    onDeleteProject(id);
+  };
+
+  const projects = open ? listProjects() : [];
+
+  return (
+    <div className="relative">
+      <div className="flex">
+        <button
+          onClick={onSave}
+          className={`${btnBase} rounded-r-none border-0 transition-all`}
+          style={{
+            background: saveToast === "ok" ? "#22c55e" : saveToast === "fail" ? "#ef4444" : "var(--accent)",
+            color: "#111",
+          }}
+        >
+          {saveToast === "ok" ? "✓ Uloženo" : saveToast === "fail" ? "✗ Chyba" : "💾 Uložit"}
+        </button>
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className={`${btnBase} rounded-l-none border-0 border-l px-1.5`}
+          style={{ background: "var(--accent)", color: "#111", borderColor: "rgba(0,0,0,0.2)" }}
+          title="Projekty"
+        >
+          ▾
+        </button>
+      </div>
+
+      {open && (
+        <>
+          {/* Backdrop */}
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+
+          <div
+            className="absolute right-0 z-50 mt-1 w-72 overflow-hidden rounded-lg border shadow-xl"
+            style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}
+          >
+            {/* Current project header */}
+            <div className="border-b px-3 py-2" style={{ borderColor: "var(--border)" }}>
+              <div className="text-xs opacity-60">Aktuální projekt:</div>
+              <div className="truncate text-sm font-semibold" style={{ color: "var(--text-heading)" }}>
+                {currentProjectName || "Neuložený"}
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="border-b p-2" style={{ borderColor: "var(--border)" }}>
+              <button onClick={handleSaveAs} className="w-full rounded px-3 py-1.5 text-left text-sm hover:opacity-80" style={{ color: "var(--text-body)" }}>
+                📋 Uložit jako…
+              </button>
+              <button onClick={handleNew} className="w-full rounded px-3 py-1.5 text-left text-sm hover:opacity-80" style={{ color: "var(--text-body)" }}>
+                ✨ Nový prázdný projekt
+              </button>
+            </div>
+
+            {/* Project list */}
+            <div className="max-h-48 overflow-y-auto p-2">
+              {projects.length === 0 ? (
+                <div className="px-3 py-2 text-center text-sm opacity-50">Žádné uložené projekty</div>
+              ) : (
+                projects.map((p) => (
+                  <div key={p.id} className="group flex items-center gap-1 rounded px-2 py-1.5 hover:bg-black/5 dark:hover:bg-white/5">
+                    <button
+                      onClick={() => handleLoad(p.id)}
+                      className="min-w-0 flex-1 text-left"
+                    >
+                      <div className="truncate text-sm font-medium" style={{ color: "var(--text-heading)" }}>{p.name}</div>
+                      <div className="text-xs opacity-50">
+                        {p.data.tracks.length} kolejí · {new Date(p.updatedAt).toLocaleDateString("cs")}
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => handleDelete(p.id, p.name)}
+                      className="shrink-0 rounded p-1 text-xs opacity-0 transition-opacity hover:bg-red-500/20 group-hover:opacity-100"
+                      title="Smazat"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

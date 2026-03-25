@@ -110,7 +110,8 @@ export type DesignerAction =
   | { type: "ADD_TERRAIN_ZONE"; zone: TerrainZone }
   | { type: "REMOVE_TERRAIN_ZONE"; zoneId: string }
   | { type: "UNDO" }
-  | { type: "REDO" };
+  | { type: "REDO" }
+  | { type: "LOAD_STATE"; state: DesignerState };
 
 // ============================================================
 // Initial state
@@ -195,6 +196,9 @@ export function designerReducer(state: DesignerState, action: DesignerAction): D
         historyFuture: state.historyFuture.slice(1),
       };
     }
+
+    case "LOAD_STATE":
+      return action.state;
 
     case "SET_BOARD": {
       const next = pushHistory(state);

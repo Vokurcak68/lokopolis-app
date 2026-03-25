@@ -25,12 +25,8 @@ import {
 import { getBoardPathMm, isPointInsidePolygon, closestPointOnAnyTrack, type ViewTransform } from "@/lib/track-canvas-renderer";
 
 const STORAGE_KEY = "lokopolis-track-planner-v1";
-
-/** Only persist the essential data — no undo history (saves space) */
-interface PersistedPlanner {
-  state: DesignerState;
-  transform: ViewTransform;
-}
+const PROJECTS_KEY = "lokopolis-track-projects";
+const CURRENT_PROJECT_KEY = "lokopolis-track-current-project";
 
 /** Stripped-down version for storage (no history stacks) */
 interface PersistedData {
@@ -40,41 +36,101 @@ interface PersistedData {
   transform: ViewTransform;
 }
 
-function loadPersisted(): PersistedPlanner | null {
+export interface SavedProject {
+  id: string;
+  name: string;
+  updatedAt: number;
+  data: PersistedData;
+}
+
+function generateProjectId(): string {
+  return `prj-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
+function getAllProjects(): SavedProject[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(PROJECTS_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as SavedProject[];
+  } catch {
+    return [];
+  }
+}
+
+function saveAllProjects(projects: SavedProject[]) {
+  window.localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
+}
+
+function getCurrentProjectId(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(CURRENT_PROJECT_KEY);
+}
+
+function setCurrentProjectId(id: string | null) {
+  if (id) {
+    window.localStorage.setItem(CURRENT_PROJECT_KEY, id);
+  } else {
+    window.localStorage.removeItem(CURRENT_PROJECT_KEY);
+  }
+}
+
+function dataToState(data: PersistedData): DesignerState {
+  return {
+    board: data.board,
+    tracks: data.tracks ?? [],
+    terrainZones: data.terrainZones ?? [],
+    selectedTrackId: null,
+    hoveredTrackId: null,
+    activePieceId: null,
+    aiGenerating: false,
+    aiError: null,
+    historyPast: [],
+    historyFuture: [],
+  };
+}
+
+/** Load current project, or migrate old single-save format */
+function loadPersisted(): { state: DesignerState; transform: ViewTransform; projectId: string | null; projectName: string | null } | null {
   if (typeof window === "undefined") return null;
   try {
+    // Try loading current project
+    const currentId = getCurrentProjectId();
+    if (currentId) {
+      const projects = getAllProjects();
+      const project = projects.find((p) => p.id === currentId);
+      if (project) {
+        return {
+          state: dataToState(project.data),
+          transform: project.data.transform,
+          projectId: project.id,
+          projectName: project.name,
+        };
+      }
+    }
+
+    // Migrate old format
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    // Support both old format (full state) and new format (stripped)
+
+    let data: PersistedData | null = null;
     if (parsed?.board && parsed?.tracks) {
-      // New stripped format
-      const data = parsed as PersistedData;
-      return {
-        state: {
-          board: data.board,
-          tracks: data.tracks ?? [],
-          terrainZones: data.terrainZones ?? [],
-          selectedTrackId: null,
-          hoveredTrackId: null,
-          activePieceId: null,
-          aiGenerating: false,
-          aiError: null,
-          historyPast: [],
-          historyFuture: [],
-        },
-        transform: data.transform,
-      };
+      data = parsed as PersistedData;
+    } else if (parsed?.state?.board) {
+      const s = parsed.state;
+      data = { board: s.board, tracks: s.tracks ?? [], terrainZones: s.terrainZones ?? [], transform: parsed.transform };
     }
-    if (parsed?.state?.board) {
-      // Old format — strip history to save memory
-      const s = parsed as PersistedPlanner;
-      return {
-        state: { ...s.state, historyPast: [], historyFuture: [] },
-        transform: s.transform,
-      };
-    }
-    return null;
+    if (!data) return null;
+
+    // Migrate to named project
+    const id = generateProjectId();
+    const project: SavedProject = { id, name: "Můj první plán", updatedAt: Date.now(), data };
+    saveAllProjects([project]);
+    setCurrentProjectId(id);
+    window.localStorage.removeItem(STORAGE_KEY);
+
+    return { state: dataToState(data), transform: data.transform, projectId: id, projectName: project.name };
   } catch {
     return null;
   }
@@ -93,6 +149,8 @@ export function useTrackPlanner() {
       offsetY: 120,
     },
   );
+  const [currentProjectId, setCurrentProjectIdState] = useState<string | null>(persistedRef.current?.projectId ?? null);
+  const [currentProjectName, setCurrentProjectName] = useState<string | null>(persistedRef.current?.projectName ?? null);
   const [catalogOpenMobile, setCatalogOpenMobile] = useState(false);
 
   // Placement rotation for free-placement (no snap) — persists between placements
@@ -167,16 +225,63 @@ export function useTrackPlanner() {
   const setSelectedTrack = useCallback((instanceId: string | null) => dispatch({ type: "SELECT_TRACK", instanceId }), []);
   const setHoveredTrack = useCallback((instanceId: string | null) => dispatch({ type: "HOVER_TRACK", instanceId }), []);
 
-  const saveToLocalStorage = useCallback((): boolean => {
+  /** Save current project (or create new if none) */
+  const saveProject = useCallback((nameOverride?: string): boolean => {
     if (typeof window === "undefined") return false;
     try {
-      const payload: PersistedData = {
+      const data: PersistedData = {
         board: state.board,
         tracks: state.tracks,
         terrainZones: state.terrainZones,
         transform,
       };
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      const projects = getAllProjects();
+
+      if (currentProjectId) {
+        // Update existing
+        const idx = projects.findIndex((p) => p.id === currentProjectId);
+        if (idx >= 0) {
+          projects[idx].data = data;
+          projects[idx].updatedAt = Date.now();
+          if (nameOverride) projects[idx].name = nameOverride;
+          saveAllProjects(projects);
+          if (nameOverride) setCurrentProjectName(nameOverride);
+          return true;
+        }
+      }
+
+      // Create new
+      const name = nameOverride || "Nový plán";
+      const id = generateProjectId();
+      projects.push({ id, name, updatedAt: Date.now(), data });
+      saveAllProjects(projects);
+      setCurrentProjectId(id);
+      setCurrentProjectIdState(id);
+      setCurrentProjectName(name);
+      return true;
+    } catch (e) {
+      console.error("Nepodařilo se uložit:", e);
+      return false;
+    }
+  }, [state.board, state.tracks, state.terrainZones, transform, currentProjectId]);
+
+  /** Save As — prompt for name */
+  const saveProjectAs = useCallback((name: string): boolean => {
+    if (typeof window === "undefined") return false;
+    try {
+      const data: PersistedData = {
+        board: state.board,
+        tracks: state.tracks,
+        terrainZones: state.terrainZones,
+        transform,
+      };
+      const id = generateProjectId();
+      const projects = getAllProjects();
+      projects.push({ id, name, updatedAt: Date.now(), data });
+      saveAllProjects(projects);
+      setCurrentProjectId(id);
+      setCurrentProjectIdState(id);
+      setCurrentProjectName(name);
       return true;
     } catch (e) {
       console.error("Nepodařilo se uložit:", e);
@@ -184,24 +289,62 @@ export function useTrackPlanner() {
     }
   }, [state.board, state.tracks, state.terrainZones, transform]);
 
-  // Auto-save debounced (2s after last change)
+  /** Load a saved project */
+  const loadProject = useCallback((projectId: string) => {
+    const projects = getAllProjects();
+    const project = projects.find((p) => p.id === projectId);
+    if (!project) return false;
+    dispatch({ type: "LOAD_STATE", state: dataToState(project.data) });
+    setTransform(project.data.transform);
+    setCurrentProjectId(projectId);
+    setCurrentProjectIdState(projectId);
+    setCurrentProjectName(project.name);
+    return true;
+  }, []);
+
+  /** Delete a saved project */
+  const deleteProject = useCallback((projectId: string) => {
+    const projects = getAllProjects().filter((p) => p.id !== projectId);
+    saveAllProjects(projects);
+    if (currentProjectId === projectId) {
+      setCurrentProjectIdState(null);
+      setCurrentProjectName(null);
+      setCurrentProjectId(null);
+    }
+  }, [currentProjectId]);
+
+  /** New empty project */
+  const newProject = useCallback(() => {
+    dispatch({ type: "CLEAR_TRACKS" });
+    setCurrentProjectIdState(null);
+    setCurrentProjectName(null);
+    setCurrentProjectId(null);
+  }, []);
+
+  /** List all saved projects */
+  const listProjects = useCallback((): SavedProject[] => {
+    return getAllProjects().sort((a, b) => b.updatedAt - a.updatedAt);
+  }, []);
+
+  // Auto-save debounced (2s after last change) — only if project exists
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || !currentProjectId) return;
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     autoSaveTimer.current = setTimeout(() => {
       try {
-        const payload: PersistedData = {
-          board: state.board,
-          tracks: state.tracks,
-          terrainZones: state.terrainZones,
-          transform,
-        };
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        const data: PersistedData = { board: state.board, tracks: state.tracks, terrainZones: state.terrainZones, transform };
+        const projects = getAllProjects();
+        const idx = projects.findIndex((p) => p.id === currentProjectId);
+        if (idx >= 0) {
+          projects[idx].data = data;
+          projects[idx].updatedAt = Date.now();
+          saveAllProjects(projects);
+        }
       } catch { /* ignore auto-save errors */ }
     }, 2000);
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
-  }, [state.board, state.tracks, state.terrainZones, transform]);
+  }, [state.board, state.tracks, state.terrainZones, transform, currentProjectId]);
 
   const clearAll = useCallback(() => dispatch({ type: "CLEAR_TRACKS" }), []);
   const undo = useCallback(() => dispatch({ type: "UNDO" }), []);
@@ -489,7 +632,14 @@ export function useTrackPlanner() {
     setActivePiece,
     setSelectedTrack,
     setHoveredTrack,
-    saveToLocalStorage,
+    saveToLocalStorage: saveProject,
+    saveProjectAs,
+    loadProject,
+    deleteProject,
+    newProject,
+    listProjects,
+    currentProjectId,
+    currentProjectName,
     clearAll,
     undo,
     redo,

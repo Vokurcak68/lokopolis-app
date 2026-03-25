@@ -79,10 +79,18 @@ export default function TrackPlanner() {
   const [saveToast, setSaveToast] = useState<"ok" | "fail" | null>(null);
 
   const handleSave = useCallback(() => {
-    const ok = planner.saveToLocalStorage();
-    setSaveToast(ok ? "ok" : "fail");
+    if (!planner.currentProjectId) {
+      // First save — ask for name
+      const name = prompt("Název projektu:", "Nový plán");
+      if (!name?.trim()) return;
+      const ok = planner.saveToLocalStorage(name.trim());
+      setSaveToast(ok ? "ok" : "fail");
+    } else {
+      const ok = planner.saveToLocalStorage();
+      setSaveToast(ok ? "ok" : "fail");
+    }
     setTimeout(() => setSaveToast(null), 2000);
-  }, [planner.saveToLocalStorage]);
+  }, [planner.saveToLocalStorage, planner.currentProjectId]);
 
   const handleExportPng = () => {
     const canvas = planner.canvasRef.current;
@@ -140,6 +148,16 @@ export default function TrackPlanner() {
         onExportPng={handleExportPng}
         onExportList={handleExportList}
         onSave={handleSave}
+        onSaveAs={(name) => {
+          const ok = planner.saveProjectAs(name);
+          setSaveToast(ok ? "ok" : "fail");
+          setTimeout(() => setSaveToast(null), 2000);
+        }}
+        onLoadProject={planner.loadProject}
+        onDeleteProject={planner.deleteProject}
+        onNewProject={planner.newProject}
+        listProjects={planner.listProjects}
+        currentProjectName={planner.currentProjectName}
         saveToast={saveToast}
         onToggleCatalogMobile={() => planner.setCatalogOpenMobile((v) => !v)}
         terrainMode={planner.terrainMode}
