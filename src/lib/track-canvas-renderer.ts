@@ -818,16 +818,34 @@ function getSegmentsBounds(segs: PathSegment[]) {
 // Terrain zones (tunnels & bridges) — point-on-track utilities
 // ============================================================
 
-/** Get primary path segments for a piece (first path = segments[0] branch).
- *  For simple pieces this is all segments. For turnouts/crossings we only use
- *  segments that form the straight-through path (index 0 in explicitSegments or the first segment). */
+/** Get the SINGLE primary path for a piece (the straight-through route A→B).
+ *  For curves/straights = all segments. For turnouts = ONLY straight branch.
+ *  For crossings = ONLY first path (A→B). This ensures t maps 0→1 along one path only. */
 function getPrimarySegments(piece: TrackPieceDefinition): PathSegment[] {
-  return getPieceSegmentsLocal(piece);
+  const all = getPieceSegmentsLocal(piece);
+
+  if (piece.type === "straight" || piece.type === "curve") {
+    return all; // single segment
+  }
+
+  if (piece.type === "turnout") {
+    // First segment = straight through, second = diverging branch
+    return all.length > 0 ? [all[0]] : all;
+  }
+
+  if (piece.type === "crossing") {
+    // First path = A→B
+    return all.length > 0 ? [all[0]] : all;
+  }
+
+  // Explicit segments (IBW, ABW etc.) — take first only
+  return all.length > 0 ? [all[0]] : all;
 }
 
 /**
  * Find the closest point on any track to a world coordinate.
- * Returns trackId, parameter t (0..1), distance, and world position.
+ * Returns trackId, parameter t (0..1 along primary path), distance, and world position.
+ * Searches ALL segments (all branches) but maps t onto the primary path only.
  */
 export function closestPointOnAnyTrack(
   worldPoint: LocalPoint,
@@ -840,11 +858,11 @@ export function closestPointOnAnyTrack(
     const piece = catalog[track.pieceId];
     if (!piece) continue;
 
-    const segs = getPrimarySegments(piece);
-    // Total length and cumulative offsets for mapping t
+    // Search on primary path (for t mapping)
+    const primarySegs = getPrimarySegments(piece);
     let totalLen = 0;
     const segLens: number[] = [];
-    for (const seg of segs) {
+    for (const seg of primarySegs) {
       const len = segmentLength(seg);
       segLens.push(len);
       totalLen += len;
@@ -852,11 +870,10 @@ export function closestPointOnAnyTrack(
     if (totalLen < 0.01) continue;
 
     let cumLen = 0;
-    for (let si = 0; si < segs.length; si++) {
-      const seg = segs[si];
+    for (let si = 0; si < primarySegs.length; si++) {
+      const seg = primarySegs[si];
       const len = segLens[si];
-      // Sample along this segment
-      const samples = Math.max(16, Math.ceil(len / 2));
+      const samples = Math.max(20, Math.ceil(len / 1.5));
       for (let i = 0; i <= samples; i++) {
         const segT = i / samples;
         const localPt = pointAndTangentAt(seg, segT).point;
@@ -869,6 +886,44 @@ export function closestPointOnAnyTrack(
         }
       }
       cumLen += len;
+    }
+
+    // Also search secondary paths (diverging branches) — but map to nearest primary t
+    const allSegs = getPieceSegmentsLocal(piece);
+    if (allSegs.length > primarySegs.length) {
+      for (let si = primarySegs.length; si < allSegs.length; si++) {
+        const seg = allSegs[si];
+        const len = segmentLength(seg);
+        const samples = Math.max(20, Math.ceil(len / 1.5));
+        for (let i = 0; i <= samples; i++) {
+          const segT = i / samples;
+          const localPt = pointAndTangentAt(seg, segT).point;
+          const worldPt = localToWorld(localPt, track);
+          const dist = Math.hypot(worldPt.x - worldPoint.x, worldPt.z - worldPoint.z);
+
+          if (!best || dist < best.distance) {
+            // Map to closest point on primary path
+            let bestPrimaryT = 0;
+            let bestPrimaryDist = Infinity;
+            let cum2 = 0;
+            for (let psi = 0; psi < primarySegs.length; psi++) {
+              const pSeg = primarySegs[psi];
+              const pLen = segLens[psi];
+              for (let j = 0; j <= 20; j++) {
+                const pt = j / 20;
+                const pp = pointAndTangentAt(pSeg, pt).point;
+                const d = Math.hypot(pp.x - localPt.x, pp.z - localPt.z);
+                if (d < bestPrimaryDist) {
+                  bestPrimaryDist = d;
+                  bestPrimaryT = (cum2 + pt * pLen) / totalLen;
+                }
+              }
+              cum2 += pLen;
+            }
+            best = { trackId: track.instanceId, t: bestPrimaryT, distance: dist, worldPos: worldPt };
+          }
+        }
+      }
     }
   }
 
