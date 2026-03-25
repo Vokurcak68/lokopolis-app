@@ -1165,25 +1165,36 @@ function drawPortal(
   ctx.rotate(angle);
 
   if (kind === "tunnel") {
-    // Tunnel portal arch — semi-circle perpendicular to track
+    // Outer stone ring (bright, visible on dark backgrounds)
     ctx.beginPath();
-    ctx.arc(0, 0, radius, Math.PI, 0, false);
+    ctx.arc(0, 0, radius + 3, Math.PI, 0, false);
     ctx.closePath();
-    ctx.fillStyle = "rgba(55, 45, 35, 0.9)";
+    ctx.fillStyle = "rgba(160, 140, 100, 0.95)";
     ctx.fill();
-    ctx.strokeStyle = "#222";
-    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = "rgba(200, 180, 120, 0.9)";
+    ctx.lineWidth = 2;
     ctx.stroke();
 
-    // Stone texture
-    ctx.strokeStyle = "rgba(120, 110, 90, 0.5)";
-    ctx.lineWidth = 1;
+    // Inner dark tunnel mouth
     ctx.beginPath();
-    ctx.arc(0, 0, radius * 0.85, Math.PI, 0, false);
+    ctx.arc(0, 0, radius * 0.75, Math.PI, 0, false);
+    ctx.closePath();
+    ctx.fillStyle = "rgba(25, 20, 15, 0.95)";
+    ctx.fill();
+
+    // Stone blocks on arch (3 decorative lines)
+    ctx.strokeStyle = "rgba(130, 115, 80, 0.7)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * 0.9, Math.PI, 0, false);
     ctx.stroke();
     ctx.beginPath();
-    ctx.arc(0, 0, radius * 0.7, Math.PI * 0.85, Math.PI * 0.15, true);
+    ctx.arc(0, 0, radius * 0.6, Math.PI * 0.8, Math.PI * 0.2, true);
     ctx.stroke();
+
+    // Keystone at top
+    ctx.fillStyle = "rgba(180, 160, 110, 0.9)";
+    ctx.fillRect(-3, -radius - 2, 6, 6);
   } else {
     // Bridge pillar
     const pw = Math.max(4, radius * 0.35);
@@ -1229,49 +1240,84 @@ export function drawTerrainZones(
     const pathPoints = sampleTrackPath(zone, tracks, catalog, 40);
     const screenPath = pathPoints.map((p) => worldToScreen(p, transform));
 
-    const portalRadius = Math.max(10, 16 * transform.zoom);
-    const pathWidth = Math.max(6, 14 * transform.zoom);
+    const portalRadius = Math.max(14, 22 * transform.zoom);
+    const pathWidth = Math.max(10, 22 * transform.zoom);
 
     ctx.save();
 
     if (zone.kind === "tunnel") {
-      // Draw covered track overlay (semi-transparent fill along path)
+      // Green hill/mountain overlay along the tunnel path
       if (screenPath.length >= 2) {
+        // Wide green hill shape
         ctx.beginPath();
         ctx.moveTo(screenPath[0].x, screenPath[0].y);
         for (let i = 1; i < screenPath.length; i++) {
           ctx.lineTo(screenPath[i].x, screenPath[i].y);
         }
-        ctx.strokeStyle = "rgba(70, 60, 50, 0.35)";
+        ctx.strokeStyle = "rgba(60, 120, 50, 0.5)";
+        ctx.lineWidth = pathWidth * 1.8;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.stroke();
+
+        // Darker core
+        ctx.beginPath();
+        ctx.moveTo(screenPath[0].x, screenPath[0].y);
+        for (let i = 1; i < screenPath.length; i++) {
+          ctx.lineTo(screenPath[i].x, screenPath[i].y);
+        }
+        ctx.strokeStyle = "rgba(45, 90, 35, 0.55)";
         ctx.lineWidth = pathWidth;
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
         ctx.stroke();
 
-        // Dashed center line along track
+        // Dashed track hint through the hill
         ctx.beginPath();
         ctx.moveTo(screenPath[0].x, screenPath[0].y);
         for (let i = 1; i < screenPath.length; i++) {
           ctx.lineTo(screenPath[i].x, screenPath[i].y);
         }
-        ctx.setLineDash([5, 4]);
-        ctx.strokeStyle = "rgba(100, 90, 75, 0.5)";
+        ctx.setLineDash([4, 5]);
+        ctx.strokeStyle = "rgba(200, 190, 160, 0.4)";
         ctx.lineWidth = 1.5;
         ctx.stroke();
         ctx.setLineDash([]);
+
+        // Grass texture dots along the path
+        for (let i = 0; i < screenPath.length; i += 3) {
+          const pt = screenPath[i];
+          const prev = screenPath[Math.max(0, i - 1)];
+          const next = screenPath[Math.min(screenPath.length - 1, i + 1)];
+          const dx = next.x - prev.x;
+          const dy = next.y - prev.y;
+          const len = Math.hypot(dx, dy) || 1;
+          const nx = -dy / len;
+          const ny = dx / len;
+          const offset = (Math.sin(i * 1.7) * 0.5 + 0.5) * pathWidth * 0.6;
+          const side = i % 2 === 0 ? 1 : -1;
+          ctx.beginPath();
+          ctx.arc(pt.x + nx * offset * side, pt.y + ny * offset * side, 1.5, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(${40 + (i % 30)}, ${100 + (i % 40)}, ${30 + (i % 20)}, 0.5)`;
+          ctx.fill();
+        }
       }
 
-      // Portals
+      // Portals (drawn AFTER hill so they sit on top)
       drawPortal(ctx, startScreen, startData.tangent, portalRadius, "tunnel", transform);
       drawPortal(ctx, endScreen, endData.tangent, portalRadius, "tunnel", transform);
 
-      // Label at midpoint
+      // Label at midpoint — bright, readable
       if (screenPath.length > 2) {
         const mid = screenPath[Math.floor(screenPath.length / 2)];
-        ctx.font = `bold ${Math.max(10, 12 * transform.zoom)}px sans-serif`;
-        ctx.fillStyle = "rgba(70, 60, 50, 0.75)";
+        const fontSize = Math.max(11, 14 * transform.zoom);
+        ctx.font = `bold ${fontSize}px sans-serif`;
+        // Text shadow for readability on any background
+        ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
         ctx.textAlign = "center";
-        ctx.fillText("🏔️ tunel", mid.x, mid.y - portalRadius - 6);
+        ctx.fillText("🏔️ TUNEL", mid.x + 1, mid.y - portalRadius - 5);
+        ctx.fillStyle = "rgba(230, 220, 180, 0.95)";
+        ctx.fillText("🏔️ TUNEL", mid.x, mid.y - portalRadius - 6);
       }
     } else {
       // Bridge — draw deck along track path
