@@ -197,7 +197,7 @@ function turntable(
       position: {
         x: radius + radius * Math.cos(angleRad),
         y: 0,
-        z: radius * Math.sin(angleRad),
+        z: radius + radius * Math.sin(angleRad),
       },
       // Outward facing direction (away from center)
       angle: angleRad,
