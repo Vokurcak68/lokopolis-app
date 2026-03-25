@@ -883,6 +883,19 @@ export function trackPointToWorld(
   tracks: PlacedTrack[],
   catalog: Record<string, TrackPieceDefinition>,
 ): LocalPoint | null {
+  const r = trackPointToWorldWithTangent(tp, tracks, catalog);
+  return r ? r.pos : null;
+}
+
+/**
+ * Compute world position AND tangent direction for a TrackPoint.
+ * Tangent is a unit vector along the track at that point.
+ */
+function trackPointToWorldWithTangent(
+  tp: TrackPoint,
+  tracks: PlacedTrack[],
+  catalog: Record<string, TrackPieceDefinition>,
+): { pos: LocalPoint; tangent: LocalPoint } | null {
   const track = tracks.find((t) => t.instanceId === tp.trackId);
   if (!track) return null;
   const piece = catalog[track.pieceId];
@@ -904,8 +917,16 @@ export function trackPointToWorld(
     const len = segLens[si];
     if (cumLen + len >= targetLen || si === segs.length - 1) {
       const segT = Math.min(1, Math.max(0, (targetLen - cumLen) / Math.max(0.01, len)));
-      const localPt = pointAndTangentAt(segs[si], segT).point;
-      return localToWorld(localPt, track);
+      const { point: localPt, tangent: localTan } = pointAndTangentAt(segs[si], segT);
+      const pos = localToWorld(localPt, track);
+      // Rotate tangent by track rotation (and flip if flipZ)
+      const cos = Math.cos(track.rotation);
+      const sin = Math.sin(track.rotation);
+      let tx = localTan.x, tz = localTan.z;
+      if (track.flipZ) tz = -tz;
+      const worldTan = { x: tx * cos - tz * sin, z: tx * sin + tz * cos };
+      const tLen = Math.hypot(worldTan.x, worldTan.z) || 1;
+      return { pos, tangent: { x: worldTan.x / tLen, z: worldTan.z / tLen } };
     }
     cumLen += len;
   }
@@ -913,7 +934,110 @@ export function trackPointToWorld(
 }
 
 /**
- * Draw terrain zone portals and visual indicators.
+ * Sample world points along a track between two t-values.
+ * If start and end are on different tracks, sample each track portion separately.
+ */
+function sampleTrackPath(
+  zone: TerrainZone,
+  tracks: PlacedTrack[],
+  catalog: Record<string, TrackPieceDefinition>,
+  numSamples: number,
+): LocalPoint[] {
+  const points: LocalPoint[] = [];
+
+  if (zone.start.trackId === zone.end.trackId) {
+    // Same track — simple interpolation
+    const tMin = Math.min(zone.start.t, zone.end.t);
+    const tMax = Math.max(zone.start.t, zone.end.t);
+    for (let i = 0; i <= numSamples; i++) {
+      const t = tMin + (tMax - tMin) * (i / numSamples);
+      const wp = trackPointToWorld({ trackId: zone.start.trackId, t }, tracks, catalog);
+      if (wp) points.push(wp);
+    }
+  } else {
+    // Different tracks — sample start track from start.t to nearest end (0 or 1),
+    // then sample end track from nearest start to end.t
+    // For now: sample each half independently
+    const half = Math.floor(numSamples / 2);
+    for (let i = 0; i <= half; i++) {
+      const t = zone.start.t + (1 - zone.start.t) * (i / half);
+      const wp = trackPointToWorld({ trackId: zone.start.trackId, t: Math.min(1, t) }, tracks, catalog);
+      if (wp) points.push(wp);
+    }
+    for (let i = 0; i <= half; i++) {
+      const t = zone.end.t * (i / half);
+      const wp = trackPointToWorld({ trackId: zone.end.trackId, t }, tracks, catalog);
+      if (wp) points.push(wp);
+    }
+  }
+  return points;
+}
+
+/**
+ * Draw a portal (tunnel mouth or bridge pillar) perpendicular to the track.
+ */
+function drawPortal(
+  ctx: CanvasRenderingContext2D,
+  screenPos: { x: number; y: number },
+  tangent: LocalPoint,
+  radius: number,
+  kind: "tunnel" | "bridge",
+  transform: ViewTransform,
+) {
+  // Normal perpendicular to tangent (in screen space: tangent.x→screen X, tangent.z→screen Y)
+  const nx = -tangent.z;
+  const ny = tangent.x;
+  const angle = Math.atan2(ny, nx);
+
+  ctx.save();
+  ctx.translate(screenPos.x, screenPos.y);
+  ctx.rotate(angle);
+
+  if (kind === "tunnel") {
+    // Tunnel portal arch — semi-circle perpendicular to track
+    ctx.beginPath();
+    ctx.arc(0, 0, radius, Math.PI, 0, false);
+    ctx.closePath();
+    ctx.fillStyle = "rgba(55, 45, 35, 0.9)";
+    ctx.fill();
+    ctx.strokeStyle = "#222";
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    // Stone texture
+    ctx.strokeStyle = "rgba(120, 110, 90, 0.5)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * 0.85, Math.PI, 0, false);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * 0.7, Math.PI * 0.85, Math.PI * 0.15, true);
+    ctx.stroke();
+  } else {
+    // Bridge pillar
+    const pw = Math.max(4, radius * 0.35);
+    ctx.beginPath();
+    ctx.rect(-pw / 2, -radius, pw, radius * 2);
+    ctx.fillStyle = "rgba(110, 100, 90, 0.8)";
+    ctx.fill();
+    ctx.strokeStyle = "#555";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Cross brace
+    ctx.beginPath();
+    ctx.moveTo(-radius * 0.6, -radius * 0.3);
+    ctx.lineTo(radius * 0.6, -radius * 0.3);
+    ctx.strokeStyle = "rgba(80, 70, 60, 0.6)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+/**
+ * Draw terrain zone portals and path along the track.
  */
 export function drawTerrainZones(
   ctx: CanvasRenderingContext2D,
@@ -923,101 +1047,111 @@ export function drawTerrainZones(
   transform: ViewTransform,
 ) {
   for (const zone of zones) {
-    const startWorld = trackPointToWorld(zone.start, tracks, catalog);
-    const endWorld = trackPointToWorld(zone.end, tracks, catalog);
-    if (!startWorld || !endWorld) continue;
+    const startData = trackPointToWorldWithTangent(zone.start, tracks, catalog);
+    const endData = trackPointToWorldWithTangent(zone.end, tracks, catalog);
+    if (!startData || !endData) continue;
 
-    const startScreen = worldToScreen(startWorld, transform);
-    const endScreen = worldToScreen(endWorld, transform);
+    const startScreen = worldToScreen(startData.pos, transform);
+    const endScreen = worldToScreen(endData.pos, transform);
 
-    const portalRadius = Math.max(6, 10 * transform.zoom);
+    // Sample path along the track between portals
+    const pathPoints = sampleTrackPath(zone, tracks, catalog, 40);
+    const screenPath = pathPoints.map((p) => worldToScreen(p, transform));
+
+    const portalRadius = Math.max(10, 16 * transform.zoom);
+    const pathWidth = Math.max(6, 14 * transform.zoom);
+
+    ctx.save();
 
     if (zone.kind === "tunnel") {
-      // Portal arches
-      ctx.save();
-      for (const pt of [startScreen, endScreen]) {
-        // Dark semi-circle (tunnel mouth)
+      // Draw covered track overlay (semi-transparent fill along path)
+      if (screenPath.length >= 2) {
         ctx.beginPath();
-        ctx.arc(pt.x, pt.y, portalRadius, Math.PI, 0, false);
-        ctx.fillStyle = "rgba(60, 50, 40, 0.85)";
-        ctx.fill();
-        ctx.strokeStyle = "#333";
-        ctx.lineWidth = 2;
+        ctx.moveTo(screenPath[0].x, screenPath[0].y);
+        for (let i = 1; i < screenPath.length; i++) {
+          ctx.lineTo(screenPath[i].x, screenPath[i].y);
+        }
+        ctx.strokeStyle = "rgba(70, 60, 50, 0.35)";
+        ctx.lineWidth = pathWidth;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
         ctx.stroke();
 
-        // Rock texture dots
-        ctx.fillStyle = "#555";
+        // Dashed center line along track
         ctx.beginPath();
-        ctx.arc(pt.x - portalRadius * 0.4, pt.y - portalRadius * 0.5, 1.5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(pt.x + portalRadius * 0.3, pt.y - portalRadius * 0.6, 1.5, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // Dashed line between portals
-      ctx.beginPath();
-      ctx.moveTo(startScreen.x, startScreen.y);
-      ctx.lineTo(endScreen.x, endScreen.y);
-      ctx.setLineDash([6, 4]);
-      ctx.strokeStyle = "rgba(80, 70, 60, 0.5)";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      // Label
-      const midX = (startScreen.x + endScreen.x) / 2;
-      const midY = (startScreen.y + endScreen.y) / 2;
-      ctx.font = `${Math.max(9, 11 * transform.zoom)}px sans-serif`;
-      ctx.fillStyle = "rgba(80, 70, 60, 0.8)";
-      ctx.textAlign = "center";
-      ctx.fillText("🏔️ tunel", midX, midY - portalRadius - 4);
-      ctx.restore();
-    } else {
-      // Bridge
-      ctx.save();
-      for (const pt of [startScreen, endScreen]) {
-        // Bridge pillar
-        ctx.beginPath();
-        ctx.rect(pt.x - 3, pt.y - portalRadius, 6, portalRadius * 2);
-        ctx.fillStyle = "rgba(120, 110, 100, 0.7)";
-        ctx.fill();
-        ctx.strokeStyle = "#666";
+        ctx.moveTo(screenPath[0].x, screenPath[0].y);
+        for (let i = 1; i < screenPath.length; i++) {
+          ctx.lineTo(screenPath[i].x, screenPath[i].y);
+        }
+        ctx.setLineDash([5, 4]);
+        ctx.strokeStyle = "rgba(100, 90, 75, 0.5)";
         ctx.lineWidth = 1.5;
         ctx.stroke();
+        ctx.setLineDash([]);
       }
 
-      // Bridge deck line
-      ctx.beginPath();
-      ctx.moveTo(startScreen.x, startScreen.y);
-      ctx.lineTo(endScreen.x, endScreen.y);
-      ctx.strokeStyle = "rgba(100, 90, 80, 0.6)";
-      ctx.lineWidth = Math.max(3, 8 * transform.zoom);
-      ctx.stroke();
+      // Portals
+      drawPortal(ctx, startScreen, startData.tangent, portalRadius, "tunnel", transform);
+      drawPortal(ctx, endScreen, endData.tangent, portalRadius, "tunnel", transform);
 
-      // Railing lines
-      const dx = endScreen.x - startScreen.x;
-      const dy = endScreen.y - startScreen.y;
-      const len = Math.hypot(dx, dy) || 1;
-      const nx = -dy / len * 4;
-      const ny = dx / len * 4;
-      ctx.beginPath();
-      ctx.moveTo(startScreen.x + nx, startScreen.y + ny);
-      ctx.lineTo(endScreen.x + nx, endScreen.y + ny);
-      ctx.moveTo(startScreen.x - nx, startScreen.y - ny);
-      ctx.lineTo(endScreen.x - nx, endScreen.y - ny);
-      ctx.strokeStyle = "rgba(80, 70, 60, 0.4)";
-      ctx.lineWidth = 1;
-      ctx.stroke();
+      // Label at midpoint
+      if (screenPath.length > 2) {
+        const mid = screenPath[Math.floor(screenPath.length / 2)];
+        ctx.font = `bold ${Math.max(10, 12 * transform.zoom)}px sans-serif`;
+        ctx.fillStyle = "rgba(70, 60, 50, 0.75)";
+        ctx.textAlign = "center";
+        ctx.fillText("🏔️ tunel", mid.x, mid.y - portalRadius - 6);
+      }
+    } else {
+      // Bridge — draw deck along track path
+      if (screenPath.length >= 2) {
+        // Deck
+        ctx.beginPath();
+        ctx.moveTo(screenPath[0].x, screenPath[0].y);
+        for (let i = 1; i < screenPath.length; i++) {
+          ctx.lineTo(screenPath[i].x, screenPath[i].y);
+        }
+        ctx.strokeStyle = "rgba(100, 90, 75, 0.45)";
+        ctx.lineWidth = pathWidth;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.stroke();
+
+        // Railing lines (offset from path)
+        for (const side of [-1, 1]) {
+          ctx.beginPath();
+          for (let i = 0; i < screenPath.length; i++) {
+            // Approximate normal from neighbors
+            const prev = screenPath[Math.max(0, i - 1)];
+            const next = screenPath[Math.min(screenPath.length - 1, i + 1)];
+            const dx = next.x - prev.x;
+            const dy = next.y - prev.y;
+            const len = Math.hypot(dx, dy) || 1;
+            const nx = (-dy / len) * (pathWidth / 2 + 1) * side;
+            const ny = (dx / len) * (pathWidth / 2 + 1) * side;
+            if (i === 0) ctx.moveTo(screenPath[i].x + nx, screenPath[i].y + ny);
+            else ctx.lineTo(screenPath[i].x + nx, screenPath[i].y + ny);
+          }
+          ctx.strokeStyle = "rgba(80, 70, 60, 0.5)";
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+      }
+
+      // Pillars
+      drawPortal(ctx, startScreen, startData.tangent, portalRadius, "bridge", transform);
+      drawPortal(ctx, endScreen, endData.tangent, portalRadius, "bridge", transform);
 
       // Label
-      const midX = (startScreen.x + endScreen.x) / 2;
-      const midY = (startScreen.y + endScreen.y) / 2;
-      ctx.font = `${Math.max(9, 11 * transform.zoom)}px sans-serif`;
-      ctx.fillStyle = "rgba(100, 90, 80, 0.8)";
-      ctx.textAlign = "center";
-      ctx.fillText("🌉 most", midX, midY - portalRadius - 4);
-      ctx.restore();
+      if (screenPath.length > 2) {
+        const mid = screenPath[Math.floor(screenPath.length / 2)];
+        ctx.font = `bold ${Math.max(10, 12 * transform.zoom)}px sans-serif`;
+        ctx.fillStyle = "rgba(100, 90, 75, 0.75)";
+        ctx.textAlign = "center";
+        ctx.fillText("🌉 most", mid.x, mid.y - portalRadius - 6);
+      }
     }
+
+    ctx.restore();
   }
 }
