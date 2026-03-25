@@ -17,8 +17,11 @@ interface TrackCanvasProps {
   transform: ViewTransform;
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
   terrainMode: boolean;
+  selectedZoneId: string | null;
   onTransformChange: (fn: (prev: ViewTransform) => ViewTransform) => void;
   onSetSelectedTrack: (instanceId: string | null) => void;
+  onHitTestTerrainZone: (worldX: number, worldZ: number) => string | null;
+  onSetSelectedZone: (zoneId: string | null) => void;
   onSetHoveredTrack: (instanceId: string | null) => void;
   onPlaceTrack: (piece: TrackPieceDefinition, worldX: number, worldZ: number, preferredRotation?: number) => void;
   onPlaceTerrainPoint: (worldX: number, worldZ: number) => boolean;
@@ -48,8 +51,11 @@ export function TrackCanvas({
   transform,
   canvasRef,
   terrainMode,
+  selectedZoneId,
   onTransformChange,
   onSetSelectedTrack,
+  onHitTestTerrainZone,
+  onSetSelectedZone,
   onSetHoveredTrack,
   onPlaceTrack,
   onPlaceTerrainPoint,
@@ -240,8 +246,17 @@ export function TrackCanvas({
       return;
     }
 
+    // Check if clicking on a terrain zone portal
+    const zoneHit = onHitTestTerrainZone(world.x, world.z);
+    if (zoneHit && !activePiece) {
+      onSetSelectedZone(zoneHit);
+      onSetSelectedTrack(null);
+      return;
+    }
+
     const hit = hitTrack(world);
     if (hit && !activePiece) {
+      onSetSelectedZone(null);
       onSetSelectedTrack(hit.instanceId);
       inter.mode = "drag";
       inter.pointerId = e.pointerId;
@@ -258,6 +273,7 @@ export function TrackCanvas({
     }
 
     onSetSelectedTrack(null);
+    onSetSelectedZone(null);
   };
 
   const onPointerMove: React.PointerEventHandler<HTMLCanvasElement> = (e) => {
@@ -338,8 +354,15 @@ export function TrackCanvas({
         if (terrainMode) {
           onPlaceTerrainPoint(world.x, world.z);
         } else {
-          const hit = hitTrack(world);
-          onSetSelectedTrack(hit?.instanceId ?? null);
+          const zoneHit = onHitTestTerrainZone(world.x, world.z);
+          if (zoneHit) {
+            onSetSelectedZone(zoneHit);
+            onSetSelectedTrack(null);
+          } else {
+            const hit = hitTrack(world);
+            onSetSelectedTrack(hit?.instanceId ?? null);
+            onSetSelectedZone(null);
+          }
         }
       }
     }

@@ -59,6 +59,7 @@ export function useTrackPlanner() {
   // Terrain zone placement mode
   const [terrainMode, setTerrainMode] = useState<TerrainZoneKind | null>(null);
   const [terrainFirstPoint, setTerrainFirstPoint] = useState<TrackPoint | null>(null);
+  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -358,7 +359,30 @@ export function useTrackPlanner() {
 
   const removeTerrainZone = useCallback((zoneId: string) => {
     dispatch({ type: "REMOVE_TERRAIN_ZONE", zoneId });
-  }, []);
+    if (selectedZoneId === zoneId) setSelectedZoneId(null);
+  }, [selectedZoneId]);
+
+  /** Check if a world point is near any terrain zone path, return zone id */
+  const hitTestTerrainZone = useCallback(
+    (worldX: number, worldZ: number): string | null => {
+      for (const zone of state.terrainZones) {
+        // Check proximity to start/end portals
+        const startPos = zone.start.worldX !== undefined ? { x: zone.start.worldX, z: zone.start.worldZ! } : null;
+        const endPos = zone.end.worldX !== undefined ? { x: zone.end.worldX, z: zone.end.worldZ! } : null;
+        if (startPos && Math.hypot(worldX - startPos.x, worldZ - startPos.z) < 20) return zone.id;
+        if (endPos && Math.hypot(worldX - endPos.x, worldZ - endPos.z) < 20) return zone.id;
+      }
+      return null;
+    },
+    [state.terrainZones],
+  );
+
+  const deleteSelectedZone = useCallback(() => {
+    if (selectedZoneId) {
+      removeTerrainZone(selectedZoneId);
+      setSelectedZoneId(null);
+    }
+  }, [selectedZoneId, removeTerrainZone]);
 
   const toggleSelectedBridge = useCallback(() => {
     if (!state.selectedTrackId) return;
@@ -407,6 +431,10 @@ export function useTrackPlanner() {
     cancelTerrainMode,
     placeTerrainPoint,
     removeTerrainZone,
+    selectedZoneId,
+    setSelectedZoneId,
+    hitTestTerrainZone,
+    deleteSelectedZone,
     exportShoppingList,
     canUndo: state.historyPast.length > 0,
     canRedo: state.historyFuture.length > 0,

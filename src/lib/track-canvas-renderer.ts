@@ -1304,8 +1304,10 @@ export function drawTerrainZones(
       }
 
       // Portals (drawn AFTER hill so they sit on top)
+      // End portal faces opposite direction (180° flip)
+      const endTanFlipped = { x: -endData.tangent.x, z: -endData.tangent.z };
       drawPortal(ctx, startScreen, startData.tangent, portalRadius, "tunnel", transform);
-      drawPortal(ctx, endScreen, endData.tangent, portalRadius, "tunnel", transform);
+      drawPortal(ctx, endScreen, endTanFlipped, portalRadius, "tunnel", transform);
 
       // Label at midpoint — bright, readable
       if (screenPath.length > 2) {
@@ -1355,9 +1357,10 @@ export function drawTerrainZones(
         }
       }
 
-      // Pillars
+      // Pillars — end portal faces opposite direction
+      const endTanFlippedBridge = { x: -endData.tangent.x, z: -endData.tangent.z };
       drawPortal(ctx, startScreen, startData.tangent, portalRadius, "bridge", transform);
-      drawPortal(ctx, endScreen, endData.tangent, portalRadius, "bridge", transform);
+      drawPortal(ctx, endScreen, endTanFlippedBridge, portalRadius, "bridge", transform);
 
       // Label
       if (screenPath.length > 2) {

@@ -41,6 +41,12 @@ export default function TrackPlanner() {
         return;
       }
 
+      if ((e.key === "Delete" || e.key === "Backspace") && planner.selectedZoneId) {
+        e.preventDefault();
+        planner.deleteSelectedZone();
+        return;
+      }
+
       if ((e.key === "Delete" || e.key === "Backspace") && planner.state.selectedTrackId) {
         e.preventDefault();
         planner.removeTrack(planner.state.selectedTrackId);
@@ -183,8 +189,11 @@ export default function TrackPlanner() {
             transform={planner.transform}
             canvasRef={planner.canvasRef}
             terrainMode={!!planner.terrainMode}
+            selectedZoneId={planner.selectedZoneId}
             onTransformChange={(fn) => planner.setTransform((prev) => fn(prev))}
             onSetSelectedTrack={planner.setSelectedTrack}
+            onHitTestTerrainZone={planner.hitTestTerrainZone}
+            onSetSelectedZone={planner.setSelectedZoneId}
             onSetHoveredTrack={planner.setHoveredTrack}
             onPlaceTrack={planner.placeTrackAt}
             onPlaceTerrainPoint={planner.placeTerrainPoint}
@@ -193,7 +202,30 @@ export default function TrackPlanner() {
             onSnapDraggedTrack={planner.snapDraggedTrack}
           />
 
-          {planner.state.selectedTrackId && (() => {
+          {planner.selectedZoneId && (() => {
+            const zone = planner.state.terrainZones.find((z) => z.id === planner.selectedZoneId);
+            if (!zone) return null;
+            return (
+              <div
+                className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-lg border px-3 py-2 shadow-lg"
+                style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}
+              >
+                <span className="text-sm font-medium" style={{ color: "var(--text-body)" }}>
+                  {zone.kind === "tunnel" ? "🏔️ Tunel" : "🌉 Most"}
+                </span>
+                <button
+                  onClick={planner.deleteSelectedZone}
+                  className="h-8 rounded-md border px-3 text-sm font-medium transition"
+                  style={{ borderColor: "var(--border)", color: "#ef4444" }}
+                  title="Smazat (Delete)"
+                >
+                  🗑 Smazat
+                </button>
+              </div>
+            );
+          })()}
+
+          {planner.state.selectedTrackId && !planner.selectedZoneId && (() => {
             const selTrack = planner.state.tracks.find((t) => t.instanceId === planner.state.selectedTrackId);
             const selPiece = selTrack ? planner.catalogMap[selTrack.pieceId] : null;
             const canFlip = selPiece && selPiece.type !== "straight";
