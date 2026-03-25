@@ -294,6 +294,30 @@ export function useTrackPlanner() {
     dispatch({ type: "UPDATE_TRACK", instanceId: track.instanceId, updates: { flipZ: !track.flipZ } });
   }, [state.selectedTrackId, state.tracks, catalogMap]);
 
+  const toggleSelectedTunnel = useCallback(() => {
+    if (!state.selectedTrackId) return;
+    const track = state.tracks.find((t) => t.instanceId === state.selectedTrackId);
+    if (!track) return;
+    // Tunnel and bridge are mutually exclusive
+    dispatch({
+      type: "UPDATE_TRACK",
+      instanceId: track.instanceId,
+      updates: { isTunnel: !track.isTunnel, isBridge: track.isTunnel ? track.isBridge : false },
+    });
+  }, [state.selectedTrackId, state.tracks]);
+
+  const toggleSelectedBridge = useCallback(() => {
+    if (!state.selectedTrackId) return;
+    const track = state.tracks.find((t) => t.instanceId === state.selectedTrackId);
+    if (!track) return;
+    // Bridge and tunnel are mutually exclusive
+    dispatch({
+      type: "UPDATE_TRACK",
+      instanceId: track.instanceId,
+      updates: { isBridge: !track.isBridge, isTunnel: track.isBridge ? track.isTunnel : false },
+    });
+  }, [state.selectedTrackId, state.tracks]);
+
   return {
     state,
     dispatch,
@@ -321,6 +345,8 @@ export function useTrackPlanner() {
     placeTrackAt,
     snapDraggedTrack,
     flipSelectedTrack,
+    toggleSelectedTunnel,
+    toggleSelectedBridge,
     exportShoppingList,
     canUndo: state.historyPast.length > 0,
     canRedo: state.historyFuture.length > 0,

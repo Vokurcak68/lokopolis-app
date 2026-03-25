@@ -564,25 +564,38 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
   drawGrid(ctx, width, height, transform);
   drawBoard(ctx, board, transform);
 
-  // Draw non-selected first, selected last
-  const ordered = [...tracks].sort((a, b) => {
-    if (a.instanceId === selectedTrackId) return 1;
-    if (b.instanceId === selectedTrackId) return -1;
-    return 0;
-  });
+  // Z-order: tunnels (bottom) → normal → bridges (top). Selected track drawn last in its layer.
+  const tunnels: PlacedTrack[] = [];
+  const normal: PlacedTrack[] = [];
+  const bridges: PlacedTrack[] = [];
+  for (const t of tracks) {
+    if (t.isTunnel) tunnels.push(t);
+    else if (t.isBridge) bridges.push(t);
+    else normal.push(t);
+  }
 
-  for (const track of ordered) {
-    const piece = catalog[track.pieceId];
-    if (!piece) continue;
+  // Within each layer, draw selected track last so its highlight is on top
+  const sortSelected = (arr: PlacedTrack[]) =>
+    [...arr].sort((a, b) => {
+      if (a.instanceId === selectedTrackId) return 1;
+      if (b.instanceId === selectedTrackId) return -1;
+      return 0;
+    });
 
-    const state: "normal" | "selected" | "hover" =
-      track.instanceId === selectedTrackId
-        ? "selected"
-        : track.instanceId === hoveredTrackId
-          ? "hover"
-          : "normal";
+  for (const layer of [sortSelected(tunnels), sortSelected(normal), sortSelected(bridges)]) {
+    for (const track of layer) {
+      const piece = catalog[track.pieceId];
+      if (!piece) continue;
 
-    drawTrackPiece(ctx, track, piece, transform, state);
+      const state: "normal" | "selected" | "hover" =
+        track.instanceId === selectedTrackId
+          ? "selected"
+          : track.instanceId === hoveredTrackId
+            ? "hover"
+            : "normal";
+
+      drawTrackPiece(ctx, track, piece, transform, state);
+    }
   }
 
   const dots: WorldConnectionDot[] = [];

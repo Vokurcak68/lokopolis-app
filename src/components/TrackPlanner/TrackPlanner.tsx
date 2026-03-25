@@ -25,6 +25,18 @@ export default function TrackPlanner() {
         return;
       }
 
+      if (e.key.toLowerCase() === "t" && planner.state.selectedTrackId) {
+        e.preventDefault();
+        planner.toggleSelectedTunnel();
+        return;
+      }
+
+      if (e.key.toLowerCase() === "b" && planner.state.selectedTrackId) {
+        e.preventDefault();
+        planner.toggleSelectedBridge();
+        return;
+      }
+
       if (e.key.toLowerCase() === "r" && planner.state.selectedTrackId) {
         e.preventDefault();
         const track = planner.state.tracks.find((t) => t.instanceId === planner.state.selectedTrackId);
@@ -182,6 +194,30 @@ export default function TrackPlanner() {
                     ↔ Zrcadlit
                   </button>
                 )}
+                <button
+                  onClick={() => planner.toggleSelectedTunnel()}
+                  className="h-8 rounded-md border px-3 text-sm font-medium transition"
+                  style={{
+                    borderColor: selTrack?.isTunnel ? "#6366f1" : "var(--border)",
+                    color: selTrack?.isTunnel ? "#6366f1" : "var(--text-body)",
+                    background: selTrack?.isTunnel ? "rgba(99,102,241,0.12)" : "transparent",
+                  }}
+                  title="Tunel (T)"
+                >
+                  🏔️ Tunel
+                </button>
+                <button
+                  onClick={() => planner.toggleSelectedBridge()}
+                  className="h-8 rounded-md border px-3 text-sm font-medium transition"
+                  style={{
+                    borderColor: selTrack?.isBridge ? "#f59e0b" : "var(--border)",
+                    color: selTrack?.isBridge ? "#f59e0b" : "var(--text-body)",
+                    background: selTrack?.isBridge ? "rgba(245,158,11,0.12)" : "transparent",
+                  }}
+                  title="Most (B)"
+                >
+                  🌉 Most
+                </button>
                 <button
                   onClick={() => planner.removeTrack(planner.state.selectedTrackId!)}
                   className="h-8 rounded-md border px-3 text-sm font-medium transition"
