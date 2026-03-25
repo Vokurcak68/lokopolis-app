@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { TrackCanvas } from "./TrackCanvas";
 import { TrackCatalogPanel } from "./TrackCatalogPanel";
 import { TrackStatsBar } from "./TrackStatsBar";
@@ -76,6 +76,14 @@ export default function TrackPlanner() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [planner]);
 
+  const [saveToast, setSaveToast] = useState<"ok" | "fail" | null>(null);
+
+  const handleSave = useCallback(() => {
+    const ok = planner.saveToLocalStorage();
+    setSaveToast(ok ? "ok" : "fail");
+    setTimeout(() => setSaveToast(null), 2000);
+  }, [planner.saveToLocalStorage]);
+
   const handleExportPng = () => {
     const canvas = planner.canvasRef.current;
     if (!canvas) return;
@@ -131,7 +139,8 @@ export default function TrackPlanner() {
         onClear={planner.clearAll}
         onExportPng={handleExportPng}
         onExportList={handleExportList}
-        onSave={planner.saveToLocalStorage}
+        onSave={handleSave}
+        saveToast={saveToast}
         onToggleCatalogMobile={() => planner.setCatalogOpenMobile((v) => !v)}
         terrainMode={planner.terrainMode}
         onStartTunnel={() => planner.startTerrainMode("tunnel")}

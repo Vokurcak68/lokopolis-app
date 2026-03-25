@@ -167,8 +167,8 @@ export function useTrackPlanner() {
   const setSelectedTrack = useCallback((instanceId: string | null) => dispatch({ type: "SELECT_TRACK", instanceId }), []);
   const setHoveredTrack = useCallback((instanceId: string | null) => dispatch({ type: "HOVER_TRACK", instanceId }), []);
 
-  const saveToLocalStorage = useCallback(() => {
-    if (typeof window === "undefined") return;
+  const saveToLocalStorage = useCallback((): boolean => {
+    if (typeof window === "undefined") return false;
     try {
       const payload: PersistedData = {
         board: state.board,
@@ -177,9 +177,10 @@ export function useTrackPlanner() {
         transform,
       };
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      return true;
     } catch (e) {
       console.error("Nepodařilo se uložit:", e);
-      alert("Nepodařilo se uložit — příliš velký projekt. Zkuste exportovat jako PNG.");
+      return false;
     }
   }, [state.board, state.tracks, state.terrainZones, transform]);
 

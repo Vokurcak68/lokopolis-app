@@ -30,6 +30,7 @@ interface TrackTopBarProps {
   onClear: () => void;
   onExportPng: () => void;
   onSave: () => void;
+  saveToast?: "ok" | "fail" | null;
   onExportList: () => void;
   onToggleCatalogMobile: () => void;
   terrainMode: "tunnel" | "bridge" | null;
@@ -65,6 +66,7 @@ export function TrackTopBar(props: TrackTopBarProps) {
     onClear,
     onExportPng,
     onSave,
+    saveToast,
     onExportList,
     onToggleCatalogMobile,
     terrainMode,
@@ -271,10 +273,13 @@ export function TrackTopBar(props: TrackTopBarProps) {
           </button>
           <button
             onClick={onSave}
-            className={`${btnBase} border-0`}
-            style={{ background: "var(--accent)", color: "#111" }}
+            className={`${btnBase} border-0 transition-all`}
+            style={{
+              background: saveToast === "ok" ? "#22c55e" : saveToast === "fail" ? "#ef4444" : "var(--accent)",
+              color: "#111",
+            }}
           >
-            Uložit
+            {saveToast === "ok" ? "✓ Uloženo" : saveToast === "fail" ? "✗ Chyba" : "💾 Uložit"}
           </button>
         </div>
       </div>
