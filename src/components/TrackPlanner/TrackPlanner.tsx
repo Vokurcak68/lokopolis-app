@@ -38,6 +38,16 @@ export default function TrackPlanner() {
       if ((e.key === "Delete" || e.key === "Backspace") && planner.state.selectedTrackId) {
         e.preventDefault();
         planner.removeTrack(planner.state.selectedTrackId);
+        return;
+      }
+
+      if (e.key === "Escape") {
+        e.preventDefault();
+        if (planner.state.activePieceId) {
+          planner.setActivePiece(null);
+        } else if (planner.state.selectedTrackId) {
+          planner.setSelectedTrack(null);
+        }
       }
     };
 
@@ -125,6 +135,7 @@ export default function TrackPlanner() {
             onSetSelectedTrack={planner.setSelectedTrack}
             onSetHoveredTrack={planner.setHoveredTrack}
             onPlaceTrack={planner.placeTrackAt}
+            onDeactivatePiece={() => planner.setActivePiece(null)}
             onUpdateTrack={planner.updateTrack}
             onSnapDraggedTrack={planner.snapDraggedTrack}
           />

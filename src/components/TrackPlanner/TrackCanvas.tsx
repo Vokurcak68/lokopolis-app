@@ -20,6 +20,7 @@ interface TrackCanvasProps {
   onSetSelectedTrack: (instanceId: string | null) => void;
   onSetHoveredTrack: (instanceId: string | null) => void;
   onPlaceTrack: (piece: TrackPieceDefinition, worldX: number, worldZ: number, preferredRotation?: number) => void;
+  onDeactivatePiece: () => void;
   onUpdateTrack: (instanceId: string, updates: Partial<PlacedTrack>) => void;
   onSnapDraggedTrack: (track: PlacedTrack) => PlacedTrack;
 }
@@ -50,6 +51,7 @@ export function TrackCanvas({
   onPlaceTrack,
   onUpdateTrack,
   onSnapDraggedTrack,
+  onDeactivatePiece,
 }: TrackCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState({ width: 1200, height: 700 });
@@ -233,6 +235,10 @@ export function TrackCanvas({
 
     if (activePiece) {
       onPlaceTrack(activePiece, world.x, world.z, 0);
+      // Deactivate piece after placing unless Shift is held (for repeated placement)
+      if (!e.shiftKey) {
+        onDeactivatePiece();
+      }
       return;
     }
 
