@@ -18,6 +18,8 @@ export interface RenderTrackCanvasParams {
   selectedTrackId: string | null;
   hoveredTrackId: string | null;
   transform: ViewTransform;
+  /** Skip clearing, grid and board — for overlay rendering (ghost) */
+  skipBackground?: boolean;
 }
 
 export type LocalPoint = { x: number; z: number };
@@ -559,11 +561,13 @@ function drawConnectionDots(
 }
 
 export function renderTrackCanvas(params: RenderTrackCanvasParams) {
-  const { ctx, width, height, board, tracks, terrainZones, catalog, selectedTrackId, hoveredTrackId, transform } = params;
-  ctx.clearRect(0, 0, width, height);
+  const { ctx, width, height, board, tracks, terrainZones, catalog, selectedTrackId, hoveredTrackId, transform, skipBackground } = params;
 
-  drawGrid(ctx, width, height, transform);
-  drawBoard(ctx, board, transform);
+  if (!skipBackground) {
+    ctx.clearRect(0, 0, width, height);
+    drawGrid(ctx, width, height, transform);
+    drawBoard(ctx, board, transform);
+  }
 
   // Z-order: tunnels (bottom) → normal → bridges (top). Selected track drawn last in its layer.
   const tunnels: PlacedTrack[] = [];
@@ -613,7 +617,7 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
   drawConnectionDots(ctx, dots, transform);
 
   // Draw terrain zones (tunnels/bridges) on top of tracks
-  if (terrainZones.length > 0) {
+  if (!skipBackground && terrainZones.length > 0) {
     drawTerrainZones(ctx, terrainZones, tracks, catalog, transform);
   }
 }

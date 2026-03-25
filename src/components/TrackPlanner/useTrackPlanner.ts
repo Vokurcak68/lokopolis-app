@@ -56,6 +56,9 @@ export function useTrackPlanner() {
   );
   const [catalogOpenMobile, setCatalogOpenMobile] = useState(false);
 
+  // Placement rotation for free-placement (no snap) — persists between placements
+  const [placementRotation, setPlacementRotation] = useState(0);
+
   // Terrain zone placement mode
   const [terrainMode, setTerrainMode] = useState<TerrainZoneKind | null>(null);
   const [terrainFirstPoint, setTerrainFirstPoint] = useState<TrackPoint | null>(null);
@@ -142,9 +145,9 @@ export function useTrackPlanner() {
   const removeTrack = useCallback((instanceId: string) => dispatch({ type: "REMOVE_TRACK", instanceId }), []);
 
   const placeTrackAt = useCallback(
-    (piece: TrackPieceDefinition, worldX: number, worldZ: number, preferredRotation = 0) => {
+    (piece: TrackPieceDefinition, worldX: number, worldZ: number, preferredRotation?: number) => {
       let position = { x: worldX, y: 0, z: worldZ };
-      let rotation = preferredRotation;
+      let rotation = preferredRotation ?? placementRotation;
       let snapMatch: { targetInstanceId: string; targetConnId: string; fromConnId: string } | null = null;
 
       // Find the nearest free connection to the click point (max 60mm)
@@ -209,10 +212,13 @@ export function useTrackPlanner() {
         });
       }
 
+      // Remember rotation for next free placement
+      setPlacementRotation(rotation);
+
       dispatch({ type: "SELECT_TRACK", instanceId });
       return instanceId;
     },
-    [freeConnections],
+    [freeConnections, placementRotation],
   );
 
   const snapDraggedTrack = useCallback(
@@ -435,6 +441,10 @@ export function useTrackPlanner() {
     setSelectedZoneId,
     hitTestTerrainZone,
     deleteSelectedZone,
+    placementRotation,
+    rotatePlacement: useCallback((delta: number) => {
+      setPlacementRotation((prev) => prev + delta);
+    }, []),
     exportShoppingList,
     canUndo: state.historyPast.length > 0,
     canRedo: state.historyFuture.length > 0,

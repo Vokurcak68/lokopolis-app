@@ -31,13 +31,19 @@ export default function TrackPlanner() {
         return;
       }
 
-      if (e.key.toLowerCase() === "r" && planner.state.selectedTrackId) {
+      if (e.key.toLowerCase() === "r") {
         e.preventDefault();
-        const track = planner.state.tracks.find((t) => t.instanceId === planner.state.selectedTrackId);
-        if (!track) return;
-        planner.updateTrack(track.instanceId, {
-          rotation: track.rotation + (15 * Math.PI) / 180,
-        });
+        const step = e.shiftKey ? -(15 * Math.PI) / 180 : (15 * Math.PI) / 180;
+        if (planner.state.selectedTrackId) {
+          const track = planner.state.tracks.find((t) => t.instanceId === planner.state.selectedTrackId);
+          if (!track) return;
+          planner.updateTrack(track.instanceId, {
+            rotation: track.rotation + step,
+          });
+        } else if (planner.state.activePieceId) {
+          // Rotate ghost/placement angle
+          planner.rotatePlacement(step);
+        }
         return;
       }
 
@@ -151,6 +157,7 @@ export default function TrackPlanner() {
                 {planner.activePiece.catalogNumber && (
                   <span className="ml-1 opacity-75">({planner.activePiece.catalogNumber})</span>
                 )}
+                <span className="ml-2 opacity-60">(R = otočit {Math.round((planner.placementRotation * 180) / Math.PI) % 360}°)</span>
               </span>
               <button
                 onClick={() => planner.setActivePiece(null)}
@@ -190,6 +197,7 @@ export default function TrackPlanner() {
             canvasRef={planner.canvasRef}
             terrainMode={!!planner.terrainMode}
             selectedZoneId={planner.selectedZoneId}
+            placementRotation={planner.placementRotation}
             onTransformChange={(fn) => planner.setTransform((prev) => fn(prev))}
             onSetSelectedTrack={planner.setSelectedTrack}
             onHitTestTerrainZone={planner.hitTestTerrainZone}

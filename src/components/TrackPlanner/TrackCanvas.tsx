@@ -18,6 +18,7 @@ interface TrackCanvasProps {
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
   terrainMode: boolean;
   selectedZoneId: string | null;
+  placementRotation: number;
   onTransformChange: (fn: (prev: ViewTransform) => ViewTransform) => void;
   onSetSelectedTrack: (instanceId: string | null) => void;
   onHitTestTerrainZone: (worldX: number, worldZ: number) => string | null;
@@ -52,6 +53,7 @@ export function TrackCanvas({
   canvasRef,
   terrainMode,
   selectedZoneId,
+  placementRotation,
   onTransformChange,
   onSetSelectedTrack,
   onHitTestTerrainZone,
@@ -65,6 +67,7 @@ export function TrackCanvas({
 }: TrackCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState({ width: 1200, height: 700 });
+  const [mouseWorld, setMouseWorld] = useState<LocalPoint | null>(null);
 
   const interactionRef = useRef<{
     mode: "none" | "pan" | "drag" | "touch-pending";
@@ -152,10 +155,38 @@ export function TrackCanvas({
         hoveredTrackId: state.hoveredTrackId,
         transform,
       });
+
+      // Ghost preview of piece being placed
+      if (activePiece && mouseWorld) {
+        ctx.save();
+        ctx.globalAlpha = 0.4;
+        const ghostTrack: PlacedTrack = {
+          instanceId: "__ghost__",
+          pieceId: activePiece.id,
+          position: { x: mouseWorld.x, y: 0, z: mouseWorld.z },
+          rotation: placementRotation,
+          elevation: 0,
+          snappedConnections: {},
+        };
+        renderTrackCanvas({
+          ctx,
+          width: size.width,
+          height: size.height,
+          board: state.board,
+          tracks: [ghostTrack],
+          terrainZones: [],
+          catalog,
+          selectedTrackId: null,
+          hoveredTrackId: null,
+          transform,
+          skipBackground: true,
+        });
+        ctx.restore();
+      }
     });
 
     return () => cancelAnimationFrame(raf);
-  }, [canvasRef, catalog, size.height, size.width, state.board, state.hoveredTrackId, state.selectedTrackId, state.tracks, state.terrainZones, transform]);
+  }, [activePiece, canvasRef, catalog, mouseWorld, placementRotation, size.height, size.width, state.board, state.hoveredTrackId, state.selectedTrackId, state.tracks, state.terrainZones, transform]);
 
   const hitTrack = (world: LocalPoint): PlacedTrack | null => {
     let best: PlacedTrack | null = null;
@@ -334,6 +365,8 @@ export function TrackCanvas({
     }
 
     const world = screenToWorld(x, y, transform);
+    // Track mouse for ghost preview
+    if (activePiece) setMouseWorld(world);
     const hit = hitTrack(world);
     onSetHoveredTrack(hit?.instanceId ?? null);
   };
