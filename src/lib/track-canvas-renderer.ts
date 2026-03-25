@@ -958,8 +958,111 @@ function computeTrackPointFromT(
 }
 
 /**
- * Sample world points along a track between two t-values.
- * If start and end are on different tracks, sample each track portion separately.
+ * Find path of (trackId, tStart, tEnd) segments between two TrackPoints,
+ * following snapped connections. BFS over track graph.
+ */
+function findTrackPathSegments(
+  start: TrackPoint,
+  end: TrackPoint,
+  tracks: PlacedTrack[],
+): { trackId: string; tFrom: number; tTo: number }[] {
+  // Same track — trivial
+  if (start.trackId === end.trackId) {
+    return [{ trackId: start.trackId, tFrom: start.t, tTo: end.t }];
+  }
+
+  // Build adjacency: trackId → [{connId, neighborTrackId, neighborConnId}]
+  const trackMap = new Map<string, PlacedTrack>();
+  for (const t of tracks) trackMap.set(t.instanceId, t);
+
+  type Edge = { connId: string; neighborId: string; neighborConnId: string };
+  const adj = new Map<string, Edge[]>();
+  for (const t of tracks) {
+    const edges: Edge[] = [];
+    for (const [connId, snap] of Object.entries(t.snappedConnections)) {
+      const [neighborId, neighborConnId] = snap.split(":");
+      edges.push({ connId, neighborId, neighborConnId });
+    }
+    adj.set(t.instanceId, edges);
+  }
+
+  // BFS from start track to end track
+  const visited = new Set<string>([start.trackId]);
+  const parent = new Map<string, { fromTrackId: string; viaConnId: string; entryConnId: string }>();
+  const queue = [start.trackId];
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    if (current === end.trackId) break;
+
+    for (const edge of adj.get(current) ?? []) {
+      if (!visited.has(edge.neighborId)) {
+        visited.add(edge.neighborId);
+        parent.set(edge.neighborId, {
+          fromTrackId: current,
+          viaConnId: edge.connId,
+          entryConnId: edge.neighborConnId,
+        });
+        queue.push(edge.neighborId);
+      }
+    }
+  }
+
+  if (!parent.has(end.trackId)) {
+    // No connected path — just straight between portals
+    return [
+      { trackId: start.trackId, tFrom: start.t, tTo: start.t > 0.5 ? 1 : 0 },
+      { trackId: end.trackId, tFrom: end.t > 0.5 ? 1 : 0, tTo: end.t },
+    ];
+  }
+
+  // Reconstruct path
+  const path: string[] = [];
+  let cur = end.trackId;
+  while (cur !== start.trackId) {
+    path.unshift(cur);
+    cur = parent.get(cur)!.fromTrackId;
+  }
+  path.unshift(start.trackId);
+
+  // Build segments with t-ranges
+  // Connection "a" = t=0 end, connection "b"/"c"/"d" = t=1 end (simplified)
+  const connToT = (connId: string) => (connId === "a" ? 0 : 1);
+
+  const segments: { trackId: string; tFrom: number; tTo: number }[] = [];
+
+  for (let i = 0; i < path.length; i++) {
+    const tid = path[i];
+
+    if (i === 0) {
+      // First track: from start.t to the connection leading to next track
+      if (path.length === 1) {
+        segments.push({ trackId: tid, tFrom: start.t, tTo: end.t });
+      } else {
+        const p = parent.get(path[i + 1])!;
+        const exitT = connToT(p.viaConnId);
+        segments.push({ trackId: tid, tFrom: start.t, tTo: exitT });
+      }
+    } else if (i === path.length - 1) {
+      // Last track: from entry connection to end.t
+      const p = parent.get(tid)!;
+      const entryT = connToT(p.entryConnId);
+      segments.push({ trackId: tid, tFrom: entryT, tTo: end.t });
+    } else {
+      // Middle track: traverse fully from entry to exit
+      const pEntry = parent.get(tid)!;
+      const pExit = parent.get(path[i + 1])!;
+      const entryT = connToT(pEntry.entryConnId);
+      const exitT = connToT(pExit.viaConnId);
+      segments.push({ trackId: tid, tFrom: entryT, tTo: exitT });
+    }
+  }
+
+  return segments;
+}
+
+/**
+ * Sample world points along connected tracks between two TrackPoints.
  */
 function sampleTrackPath(
   zone: TerrainZone,
@@ -967,33 +1070,22 @@ function sampleTrackPath(
   catalog: Record<string, TrackPieceDefinition>,
   numSamples: number,
 ): LocalPoint[] {
+  const segments = findTrackPathSegments(zone.start, zone.end, tracks);
   const points: LocalPoint[] = [];
 
-  if (zone.start.trackId === zone.end.trackId) {
-    // Same track — simple interpolation
-    const tMin = Math.min(zone.start.t, zone.end.t);
-    const tMax = Math.max(zone.start.t, zone.end.t);
-    for (let i = 0; i <= numSamples; i++) {
-      const t = tMin + (tMax - tMin) * (i / numSamples);
-      const wp = trackPointToWorld({ trackId: zone.start.trackId, t }, tracks, catalog);
-      if (wp) points.push(wp);
-    }
-  } else {
-    // Different tracks — sample start track from start.t to nearest end (0 or 1),
-    // then sample end track from nearest start to end.t
-    // For now: sample each half independently
-    const half = Math.floor(numSamples / 2);
-    for (let i = 0; i <= half; i++) {
-      const t = zone.start.t + (1 - zone.start.t) * (i / half);
-      const wp = trackPointToWorld({ trackId: zone.start.trackId, t: Math.min(1, t) }, tracks, catalog);
-      if (wp) points.push(wp);
-    }
-    for (let i = 0; i <= half; i++) {
-      const t = zone.end.t * (i / half);
-      const wp = trackPointToWorld({ trackId: zone.end.trackId, t }, tracks, catalog);
-      if (wp) points.push(wp);
+  // Distribute samples proportionally to segment t-ranges
+  const totalSpan = segments.reduce((sum, s) => sum + Math.abs(s.tTo - s.tFrom), 0) || 1;
+
+  for (const seg of segments) {
+    const span = Math.abs(seg.tTo - seg.tFrom);
+    const n = Math.max(2, Math.round((span / totalSpan) * numSamples));
+    for (let i = 0; i <= n; i++) {
+      const t = seg.tFrom + (seg.tTo - seg.tFrom) * (i / n);
+      const wp = computeTrackPointFromT({ trackId: seg.trackId, t }, tracks, catalog);
+      if (wp) points.push(wp.pos);
     }
   }
+
   return points;
 }
 
