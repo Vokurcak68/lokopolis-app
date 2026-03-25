@@ -7,7 +7,7 @@
 // Types
 // ============================================================
 
-export type TrackType = "straight" | "curve" | "turnout" | "crossing";
+export type TrackType = "straight" | "curve" | "turnout" | "crossing" | "turntable";
 export type TrackScale = "TT" | "H0";
 
 export interface Vec3 {
@@ -51,6 +51,14 @@ export interface TrackPieceDefinition {
   manufacturer: string;
   /** Explicit path segments for complex pieces — overrides auto-generated segments */
   explicitSegments?: ExplicitSegment[];
+  /** Turntable-specific: pit diameter in mm */
+  pitDiameter?: number;
+  /** Turntable-specific: bridge length in mm */
+  bridgeLength?: number;
+  /** Turntable-specific: number of track positions around the circle */
+  positions?: number;
+  /** Turntable-specific: angle between positions in degrees */
+  positionAngle?: number;
 }
 
 // ============================================================
@@ -170,6 +178,45 @@ function crossing(
       },
     ],
     category: "Křížení",
+    manufacturer,
+  };
+}
+
+function turntable(
+  id: string, name: string, scale: TrackScale,
+  pitDiameter: number, bridgeLength: number, positions: number, positionAngle: number,
+  manufacturer: string, catalogNumber?: string,
+): TrackPieceDefinition {
+  const radius = pitDiameter / 2;
+  // Generate connection points around the circle
+  const connections: ConnectionPoint[] = [];
+  for (let i = 0; i < positions; i++) {
+    const angleDeg = i * positionAngle;
+    const angleRad = (angleDeg * Math.PI) / 180;
+    connections.push({
+      position: {
+        x: radius + radius * Math.cos(angleRad),
+        y: 0,
+        z: radius * Math.sin(angleRad),
+      },
+      // Outward facing direction (away from center)
+      angle: angleRad,
+      id: `p${i}`,
+    });
+  }
+
+  return {
+    id,
+    catalogNumber,
+    name,
+    type: "turntable",
+    scale,
+    pitDiameter,
+    bridgeLength,
+    positions,
+    positionAngle,
+    connections,
+    category: "Točny",
     manufacturer,
   };
 }
@@ -499,6 +546,9 @@ export const TILLIG_TT: TrackPieceDefinition[] = [
 
   // ─── Křížení K2 — 86mm / 30° ───
   crossing("tt-k2", "K2 křížení 86mm/30°", "TT", 86, 30, "Tillig", "83170"),
+
+  // ─── Točna ROCO 35900 ───
+  turntable("tt-turntable", "Točna ROCO 35900", "TT", 228, 183, 24, 15, "Roco", "35900"),
 ];
 
 // ============================================================

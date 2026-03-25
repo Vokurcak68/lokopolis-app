@@ -144,6 +144,19 @@ export function getPieceSegmentsLocal(piece: TrackPieceDefinition): PathSegment[
     ];
   }
 
+  if (piece.type === "turntable") {
+    // Return a full circle as arc segment for correct bounds + hit-testing
+    const r = (piece.pitDiameter ?? 228) / 2;
+    return [{
+      kind: "arc" as const,
+      center: { x: r, z: r },
+      radius: r,
+      startAngle: 0,
+      endAngle: Math.PI * 2 - 0.001,
+      ccw: false,
+    }];
+  }
+
   if (piece.type === "crossing") {
     const a = piece.connections.find((c) => c.id === "a");
     const b = piece.connections.find((c) => c.id === "b");
@@ -388,6 +401,129 @@ function drawBoard(ctx: CanvasRenderingContext2D, board: BoardConfig, transform:
   ctx.stroke();
 }
 
+function drawTurntable(
+  ctx: CanvasRenderingContext2D,
+  track: PlacedTrack,
+  piece: TrackPieceDefinition,
+  transform: ViewTransform,
+  state: "normal" | "selected" | "hover",
+) {
+  const pitDiameter = piece.pitDiameter ?? 228;
+  const bridgeLength = piece.bridgeLength ?? 183;
+  const positions = piece.positions ?? 24;
+  const posAngle = piece.positionAngle ?? 15;
+  const radius = pitDiameter / 2;
+  const gaugeMm = getGaugeMm(piece.scale);
+
+  // Center of turntable in world coords (piece origin is at the center of the bounding box)
+  const center = localToWorld({ x: radius, z: radius }, track);
+  const cs = worldToScreen(center, transform);
+  const rPx = radius * transform.zoom;
+  const bridgeHalf = (bridgeLength / 2) * transform.zoom;
+  const gaugePx = Math.max(3, gaugeMm * transform.zoom);
+  const railOffset = (gaugeMm / 2) * transform.zoom;
+
+  const highlight = state === "selected" ? COLOR.selected : state === "hover" ? COLOR.hover : null;
+
+  // Selection highlight ring
+  if (highlight) {
+    ctx.beginPath();
+    ctx.arc(cs.x, cs.y, rPx + 5, 0, Math.PI * 2);
+    ctx.strokeStyle = highlight;
+    ctx.lineWidth = 4;
+    ctx.stroke();
+  }
+
+  // Pit (dark circle)
+  ctx.beginPath();
+  ctx.arc(cs.x, cs.y, rPx, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(40,35,30,0.85)";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(100,90,75,0.8)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Pit inner ring (rails run on this)
+  ctx.beginPath();
+  ctx.arc(cs.x, cs.y, rPx * 0.92, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(120,110,95,0.5)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Track position indicators (small ticks on pit edge)
+  for (let i = 0; i < positions; i++) {
+    const angleDeg = i * posAngle;
+    const angleRad = (angleDeg * Math.PI) / 180 + track.rotation;
+    const outerX = cs.x + rPx * Math.cos(angleRad);
+    const outerY = cs.y + rPx * Math.sin(angleRad);
+    const innerX = cs.x + rPx * 0.85 * Math.cos(angleRad);
+    const innerY = cs.y + rPx * 0.85 * Math.sin(angleRad);
+
+    ctx.beginPath();
+    ctx.moveTo(outerX, outerY);
+    ctx.lineTo(innerX, innerY);
+    ctx.strokeStyle = "rgba(160,145,120,0.6)";
+    ctx.lineWidth = i % 6 === 0 ? 2 : 1; // Every 90° thicker
+    ctx.stroke();
+  }
+
+  // Bridge (the rotating part) — draw at 0° rotation (default position)
+  const bridgeAngle = track.rotation; // Bridge default = facing right
+  const cosA = Math.cos(bridgeAngle);
+  const sinA = Math.sin(bridgeAngle);
+
+  // Bridge deck
+  const deckWidth = gaugePx * 2;
+  ctx.save();
+  ctx.translate(cs.x, cs.y);
+  ctx.rotate(bridgeAngle);
+
+  // Bridge base plate
+  ctx.fillStyle = "rgba(80,75,65,0.7)";
+  ctx.fillRect(-bridgeHalf, -deckWidth / 2, bridgeHalf * 2, deckWidth);
+
+  // Sleepers on bridge
+  ctx.strokeStyle = COLOR.sleeper;
+  ctx.lineWidth = Math.max(1.2, gaugePx * 0.22);
+  const sleeperWidth = gaugeMm * 1.8 * transform.zoom;
+  const sleeperCount = Math.max(4, Math.floor(bridgeLength * transform.zoom / 6));
+  for (let i = 0; i <= sleeperCount; i++) {
+    const x = -bridgeHalf + (i / sleeperCount) * bridgeHalf * 2;
+    ctx.beginPath();
+    ctx.moveTo(x, -sleeperWidth / 2);
+    ctx.lineTo(x, sleeperWidth / 2);
+    ctx.stroke();
+  }
+
+  // Rails on bridge
+  ctx.strokeStyle = COLOR.rail;
+  ctx.lineWidth = Math.max(1.1, gaugePx * 0.16);
+  for (const side of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(-bridgeHalf, side * railOffset);
+    ctx.lineTo(bridgeHalf, side * railOffset);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+
+  // Center pivot
+  ctx.beginPath();
+  ctx.arc(cs.x, cs.y, Math.max(3, rPx * 0.06), 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(140,130,110,0.9)";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(100,90,75,0.8)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Outer wall (decorative)
+  ctx.beginPath();
+  ctx.arc(cs.x, cs.y, rPx + 1, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(90,80,65,0.6)";
+  ctx.lineWidth = 3;
+  ctx.stroke();
+}
+
 function drawTrackPiece(
   ctx: CanvasRenderingContext2D,
   track: PlacedTrack,
@@ -395,6 +531,12 @@ function drawTrackPiece(
   transform: ViewTransform,
   state: "normal" | "selected" | "hover",
 ) {
+  // Turntable has its own renderer
+  if (piece.type === "turntable") {
+    drawTurntable(ctx, track, piece, transform, state);
+    return;
+  }
+
   const gaugeMm = getGaugeMm(piece.scale);
   const gaugePx = Math.max(3, gaugeMm * transform.zoom);
   const ballastPx = Math.max(gaugePx * 1.8, 8);
