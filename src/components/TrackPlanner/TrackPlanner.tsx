@@ -37,9 +37,12 @@ export default function TrackPlanner() {
         if (planner.state.selectedTrackId) {
           const track = planner.state.tracks.find((t) => t.instanceId === planner.state.selectedTrackId);
           if (!track) return;
-          planner.updateTrack(track.instanceId, {
-            rotation: track.rotation + step,
-          });
+          // Only rotate if track has NO snapped connections
+          if (Object.keys(track.snappedConnections).length === 0) {
+            planner.updateTrack(track.instanceId, {
+              rotation: track.rotation + step,
+            });
+          }
         } else if (planner.state.activePieceId) {
           // Rotate ghost/placement angle
           planner.rotatePlacement(step);
