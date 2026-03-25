@@ -50,17 +50,19 @@ export interface BoardConfig {
   uArmDepth?: number;
 }
 
-export interface DesignerState {
+interface DesignerSnapshot {
   board: BoardConfig;
   tracks: PlacedTrack[];
   selectedTrackId: string | null;
   hoveredTrackId: string | null;
-  /** Currently selected catalog piece for placement */
   activePieceId: string | null;
-  /** AI generation loading state */
   aiGenerating: boolean;
-  /** AI generation error */
   aiError: string | null;
+}
+
+export interface DesignerState extends DesignerSnapshot {
+  historyPast: DesignerSnapshot[];
+  historyFuture: DesignerSnapshot[];
 }
 
 export type DesignerAction =
@@ -76,7 +78,9 @@ export type DesignerAction =
   | { type: "AI_START" }
   | { type: "AI_SUCCESS"; tracks: PlacedTrack[] }
   | { type: "AI_ERROR"; error: string }
-  | { type: "SNAP_CONNECTION"; fromInstanceId: string; fromConnId: string; toInstanceId: string; toConnId: string };
+  | { type: "SNAP_CONNECTION"; fromInstanceId: string; fromConnId: string; toInstanceId: string; toConnId: string }
+  | { type: "UNDO" }
+  | { type: "REDO" };
 
 // ============================================================
 // Initial state
@@ -91,6 +95,8 @@ export function createInitialState(): DesignerState {
     activePieceId: null,
     aiGenerating: false,
     aiError: null,
+    historyPast: [],
+    historyFuture: [],
   };
 }
 
@@ -98,37 +104,99 @@ export function createInitialState(): DesignerState {
 // Reducer
 // ============================================================
 
+const HISTORY_LIMIT = 50;
+
+function toSnapshot(state: DesignerState): DesignerSnapshot {
+  return {
+    board: state.board,
+    tracks: state.tracks,
+    selectedTrackId: state.selectedTrackId,
+    hoveredTrackId: state.hoveredTrackId,
+    activePieceId: state.activePieceId,
+    aiGenerating: state.aiGenerating,
+    aiError: state.aiError,
+  };
+}
+
+function applySnapshot(state: DesignerState, snapshot: DesignerSnapshot): DesignerState {
+  return {
+    ...state,
+    ...snapshot,
+  };
+}
+
+function pushHistory(state: DesignerState): DesignerState {
+  const snap = toSnapshot(state);
+  const nextPast = [...state.historyPast, snap];
+  if (nextPast.length > HISTORY_LIMIT) {
+    nextPast.splice(0, nextPast.length - HISTORY_LIMIT);
+  }
+
+  return {
+    ...state,
+    historyPast: nextPast,
+    historyFuture: [],
+  };
+}
+
 export function designerReducer(state: DesignerState, action: DesignerAction): DesignerState {
   switch (action.type) {
-    case "SET_BOARD":
-      return { ...state, board: action.board };
-
-    case "ADD_TRACK":
-      return { ...state, tracks: [...state.tracks, action.track] };
-
-    case "REMOVE_TRACK":
+    case "UNDO": {
+      const prev = state.historyPast[state.historyPast.length - 1];
+      if (!prev) return state;
+      const current = toSnapshot(state);
       return {
-        ...state,
-        tracks: state.tracks
+        ...applySnapshot(state, prev),
+        historyPast: state.historyPast.slice(0, -1),
+        historyFuture: [current, ...state.historyFuture].slice(0, HISTORY_LIMIT),
+      };
+    }
+
+    case "REDO": {
+      const next = state.historyFuture[0];
+      if (!next) return state;
+      const current = toSnapshot(state);
+      const nextPast = [...state.historyPast, current].slice(-HISTORY_LIMIT);
+      return {
+        ...applySnapshot(state, next),
+        historyPast: nextPast,
+        historyFuture: state.historyFuture.slice(1),
+      };
+    }
+
+    case "SET_BOARD": {
+      const next = pushHistory(state);
+      return { ...next, board: action.board };
+    }
+
+    case "ADD_TRACK": {
+      const next = pushHistory(state);
+      return { ...next, tracks: [...next.tracks, action.track] };
+    }
+
+    case "REMOVE_TRACK": {
+      const next = pushHistory(state);
+      return {
+        ...next,
+        tracks: next.tracks
           .filter((t) => t.instanceId !== action.instanceId)
           .map((t) => ({
             ...t,
             snappedConnections: Object.fromEntries(
-              Object.entries(t.snappedConnections).filter(
-                ([, v]) => !v.startsWith(action.instanceId + ":")
-              )
+              Object.entries(t.snappedConnections).filter(([, v]) => !v.startsWith(action.instanceId + ":")),
             ),
           })),
-        selectedTrackId: state.selectedTrackId === action.instanceId ? null : state.selectedTrackId,
+        selectedTrackId: next.selectedTrackId === action.instanceId ? null : next.selectedTrackId,
       };
+    }
 
-    case "UPDATE_TRACK":
+    case "UPDATE_TRACK": {
+      const next = pushHistory(state);
       return {
-        ...state,
-        tracks: state.tracks.map((t) =>
-          t.instanceId === action.instanceId ? { ...t, ...action.updates } : t
-        ),
+        ...next,
+        tracks: next.tracks.map((t) => (t.instanceId === action.instanceId ? { ...t, ...action.updates } : t)),
       };
+    }
 
     case "SELECT_TRACK":
       return { ...state, selectedTrackId: action.instanceId };
@@ -139,27 +207,34 @@ export function designerReducer(state: DesignerState, action: DesignerAction): D
     case "SET_ACTIVE_PIECE":
       return { ...state, activePieceId: action.pieceId };
 
-    case "SET_TRACKS":
-      return { ...state, tracks: action.tracks };
+    case "SET_TRACKS": {
+      const next = pushHistory(state);
+      return { ...next, tracks: action.tracks };
+    }
 
-    case "CLEAR_TRACKS":
-      return { ...state, tracks: [], selectedTrackId: null };
+    case "CLEAR_TRACKS": {
+      const next = pushHistory(state);
+      return { ...next, tracks: [], selectedTrackId: null };
+    }
 
     case "AI_START":
       return { ...state, aiGenerating: true, aiError: null };
 
-    case "AI_SUCCESS":
-      return { ...state, aiGenerating: false, tracks: action.tracks, aiError: null };
+    case "AI_SUCCESS": {
+      const next = pushHistory(state);
+      return { ...next, aiGenerating: false, tracks: action.tracks, aiError: null };
+    }
 
     case "AI_ERROR":
       return { ...state, aiGenerating: false, aiError: action.error };
 
     case "SNAP_CONNECTION": {
+      const next = pushHistory(state);
       const fromKey = `${action.toInstanceId}:${action.toConnId}`;
       const toKey = `${action.fromInstanceId}:${action.fromConnId}`;
       return {
-        ...state,
-        tracks: state.tracks.map((t) => {
+        ...next,
+        tracks: next.tracks.map((t) => {
           if (t.instanceId === action.fromInstanceId) {
             return {
               ...t,
