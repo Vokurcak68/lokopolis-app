@@ -81,10 +81,13 @@ function loadPersisted(): PersistedPlanner | null {
 }
 
 export function useTrackPlanner() {
-  const persisted = loadPersisted();
-  const [state, dispatch] = useReducer(designerReducer, persisted?.state ?? undefined, createInitialState);
+  const persistedRef = useRef(loadPersisted());
+  const [state, dispatch] = useReducer(
+    designerReducer,
+    persistedRef.current?.state ?? createInitialState(),
+  );
   const [transform, setTransform] = useState<ViewTransform>(
-    persisted?.transform ?? {
+    persistedRef.current?.transform ?? {
       zoom: 0.45,
       offsetX: 180,
       offsetY: 120,
