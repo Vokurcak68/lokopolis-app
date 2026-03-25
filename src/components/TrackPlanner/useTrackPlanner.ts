@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   canSnap,
   computeSnapPlacement,
@@ -26,8 +26,17 @@ import { getBoardPathMm, isPointInsidePolygon, closestPointOnAnyTrack, type View
 
 const STORAGE_KEY = "lokopolis-track-planner-v1";
 
+/** Only persist the essential data — no undo history (saves space) */
 interface PersistedPlanner {
   state: DesignerState;
+  transform: ViewTransform;
+}
+
+/** Stripped-down version for storage (no history stacks) */
+interface PersistedData {
+  board: DesignerState["board"];
+  tracks: DesignerState["tracks"];
+  terrainZones: DesignerState["terrainZones"];
   transform: ViewTransform;
 }
 
@@ -36,9 +45,36 @@ function loadPersisted(): PersistedPlanner | null {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as PersistedPlanner;
-    if (!parsed?.state?.board) return null;
-    return parsed;
+    const parsed = JSON.parse(raw);
+    // Support both old format (full state) and new format (stripped)
+    if (parsed?.board && parsed?.tracks) {
+      // New stripped format
+      const data = parsed as PersistedData;
+      return {
+        state: {
+          board: data.board,
+          tracks: data.tracks ?? [],
+          terrainZones: data.terrainZones ?? [],
+          selectedTrackId: null,
+          hoveredTrackId: null,
+          activePieceId: null,
+          aiGenerating: false,
+          aiError: null,
+          historyPast: [],
+          historyFuture: [],
+        },
+        transform: data.transform,
+      };
+    }
+    if (parsed?.state?.board) {
+      // Old format — strip history to save memory
+      const s = parsed as PersistedPlanner;
+      return {
+        state: { ...s.state, historyPast: [], historyFuture: [] },
+        transform: s.transform,
+      };
+    }
+    return null;
   } catch {
     return null;
   }
@@ -130,9 +166,38 @@ export function useTrackPlanner() {
 
   const saveToLocalStorage = useCallback(() => {
     if (typeof window === "undefined") return;
-    const payload: PersistedPlanner = { state, transform };
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-  }, [state, transform]);
+    try {
+      const payload: PersistedData = {
+        board: state.board,
+        tracks: state.tracks,
+        terrainZones: state.terrainZones,
+        transform,
+      };
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    } catch (e) {
+      console.error("Nepodařilo se uložit:", e);
+      alert("Nepodařilo se uložit — příliš velký projekt. Zkuste exportovat jako PNG.");
+    }
+  }, [state.board, state.tracks, state.terrainZones, transform]);
+
+  // Auto-save debounced (2s after last change)
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(() => {
+      try {
+        const payload: PersistedData = {
+          board: state.board,
+          tracks: state.tracks,
+          terrainZones: state.terrainZones,
+          transform,
+        };
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      } catch { /* ignore auto-save errors */ }
+    }, 2000);
+    return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
+  }, [state.board, state.tracks, state.terrainZones, transform]);
 
   const clearAll = useCallback(() => dispatch({ type: "CLEAR_TRACKS" }), []);
   const undo = useCallback(() => dispatch({ type: "UNDO" }), []);
