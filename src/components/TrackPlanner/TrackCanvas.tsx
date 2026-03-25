@@ -57,7 +57,7 @@ export function TrackCanvas({
   const [size, setSize] = useState({ width: 1200, height: 700 });
 
   const interactionRef = useRef<{
-    mode: "none" | "pan" | "drag";
+    mode: "none" | "pan" | "drag" | "touch-pending";
     pointerId: number | null;
     startX: number;
     startY: number;
@@ -70,6 +70,8 @@ export function TrackCanvas({
     pinchDistance: number | null;
     pinchCenter: { x: number; y: number } | null;
     touchPoints: Map<number, { x: number; y: number }>;
+    touchStartTime: number;
+    touchMoved: boolean;
   }>({
     mode: "none",
     pointerId: null,
@@ -84,6 +86,8 @@ export function TrackCanvas({
     pinchDistance: null,
     pinchCenter: null,
     touchPoints: new Map(),
+    touchStartTime: 0,
+    touchMoved: false,
   });
 
   useEffect(() => {
@@ -198,14 +202,16 @@ export function TrackCanvas({
     const world = screenToWorld(x, y, transform);
     const rightOrMiddle = e.button === 1 || e.button === 2;
 
-    // Single finger touch without active piece = PAN
+    // Single finger touch without active piece = wait to decide (tap vs pan)
     if (e.pointerType === "touch" && inter.touchPoints.size === 1 && !activePiece) {
-      inter.mode = "pan";
+      inter.mode = "touch-pending";
       inter.pointerId = e.pointerId;
       inter.startX = x;
       inter.startY = y;
       inter.startOffsetX = transform.offsetX;
       inter.startOffsetY = transform.offsetY;
+      inter.touchStartTime = Date.now();
+      inter.touchMoved = false;
       canvas.setPointerCapture(e.pointerId);
       return;
     }
@@ -265,6 +271,18 @@ export function TrackCanvas({
       return;
     }
 
+    // Promote touch-pending to pan after 8px movement
+    if (inter.mode === "touch-pending" && inter.pointerId === e.pointerId) {
+      const dx = x - inter.startX;
+      const dy = y - inter.startY;
+      if (Math.hypot(dx, dy) > 8) {
+        inter.mode = "pan";
+        inter.touchMoved = true;
+      }
+      // Don't move yet — wait for promotion
+      if (inter.mode === "touch-pending") return;
+    }
+
     if (inter.mode === "pan" && inter.pointerId === e.pointerId) {
       const dx = x - inter.startX;
       const dy = y - inter.startY;
@@ -293,7 +311,20 @@ export function TrackCanvas({
 
   const onPointerUp: React.PointerEventHandler<HTMLCanvasElement> = (e) => {
     const inter = interactionRef.current;
+    const canvas = canvasRef.current;
     inter.touchPoints.delete(e.pointerId);
+
+    // Touch-pending that didn't move = TAP → select/deselect track
+    if (inter.mode === "touch-pending" && !inter.touchMoved) {
+      const rect = canvas?.getBoundingClientRect();
+      if (rect) {
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const world = screenToWorld(x, y, transform);
+        const hit = hitTrack(world);
+        onSetSelectedTrack(hit?.instanceId ?? null);
+      }
+    }
 
     if (inter.mode === "drag" && inter.dragTrackId) {
       const current = state.tracks.find((t) => t.instanceId === inter.dragTrackId);
