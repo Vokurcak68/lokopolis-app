@@ -78,17 +78,17 @@ export function TrackCatalogPanel({ grouped, activePieceId, scale, openMobile, o
       )}
 
       <aside
-        className={`z-30 w-72 max-w-[80vw] shrink-0 border-r transition md:relative md:w-60 md:max-w-none md:translate-x-0 ${
-          openMobile
-            ? "fixed inset-y-0 left-0 translate-x-0 overflow-y-auto overscroll-contain"
-            : "fixed inset-y-0 left-0 -translate-x-full overflow-hidden"
-        } md:block md:overflow-visible`}
+        className={`z-30 shrink-0 border-r transition-transform
+          ${openMobile
+            ? "fixed inset-y-0 left-0 w-72 max-w-[80vw] translate-x-0 overflow-y-auto overscroll-contain"
+            : "fixed inset-y-0 left-0 w-72 max-w-[80vw] -translate-x-full overflow-hidden"
+          }
+          md:relative md:block md:w-64 md:max-w-none md:translate-x-0 md:overflow-y-auto md:overscroll-contain`}
         style={{
           borderColor: "var(--border)",
           background: "var(--bg-card)",
           touchAction: "pan-y",
           WebkitOverflowScrolling: "touch",
-          pointerEvents: openMobile ? "auto" : undefined,
         }}
       >
         <div className="sticky top-0 z-10 border-b px-3 py-3 md:static md:border-b-0 md:p-3" style={{ borderColor: "var(--border)", background: "var(--bg-card)" }}>
