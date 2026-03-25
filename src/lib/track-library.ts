@@ -168,36 +168,305 @@ function crossing(
 // ============================================================
 
 export const TILLIG_TT: TrackPieceDefinition[] = [
-  // Straight tracks
+  // ─── Přímé koleje ───
   straight("tt-g1", "G1 přímá 166mm", "TT", 166, "Tillig", "83101"),
   straight("tt-g2", "G2 přímá 83mm", "TT", 83, "Tillig", "83102"),
-  straight("tt-g3", "G3 přímá 41.5mm", "TT", 41.5, "Tillig", "83103"),
+  straight("tt-g3", "G3 přímá 41,5mm", "TT", 41.5, "Tillig", "83103"),
   straight("tt-g4", "G4 přímá 332mm", "TT", 332, "Tillig", "83104"),
   straight("tt-g5", "G5 přímá 228mm", "TT", 228, "Tillig", "83142"),
-  straight("tt-g6", "G6 přímá 55mm", "TT", 55, "Tillig", "83106"),
+  straight("tt-g6", "G6 přímá 21,3mm", "TT", 21.3, "Tillig", "83120"),
 
-  // Curves R1 (310mm)
-  curve("tt-r1-15", "R1 oblouk 15°", "TT", 310, 15, "Tillig", "83110"),
-  curve("tt-r1-30", "R1 oblouk 30°", "TT", 310, 30, "Tillig", "83111"),
+  // ─── Oblouky R0 (267mm) ───
+  curve("tt-r01-30", "R01 oblouk R267mm/30°", "TT", 267, 30, "Tillig", "83116"),
+  curve("tt-r04-7.5", "R04 oblouk R267mm/7,5°", "TT", 267, 7.5, "Tillig", "83115"),
 
-  // Curves R2 (353mm)
-  curve("tt-r2-15", "R2 oblouk 15°", "TT", 353, 15, "Tillig", "83112"),
-  curve("tt-r2-30", "R2 oblouk 30°", "TT", 353, 30, "Tillig", "83113"),
+  // ─── Oblouky R1 (310mm) ───
+  curve("tt-r11-30", "R11 oblouk R310mm/30°", "TT", 310, 30, "Tillig", "83109"),
+  curve("tt-r12-15", "R12 oblouk R310mm/15°", "TT", 310, 15, "Tillig", "83110"),
+  curve("tt-r14-7.5", "R14 oblouk R310mm/7,5°", "TT", 310, 7.5, "Tillig", "83113"),
 
-  // Curves R3 (396mm)
-  curve("tt-r3-15", "R3 oblouk 15°", "TT", 396, 15, "Tillig", "83114"),
-  curve("tt-r3-30", "R3 oblouk 30°", "TT", 396, 30, "Tillig", "83115"),
+  // ─── Oblouky R2 (353mm) ───
+  curve("tt-r21-30", "R21 oblouk R353mm/30°", "TT", 353, 30, "Tillig", "83106"),
+  curve("tt-r22-15", "R22 oblouk R353mm/15°", "TT", 353, 15, "Tillig", "83107"),
+  curve("tt-r24-7.5", "R24 oblouk R353mm/7,5°", "TT", 353, 7.5, "Tillig", "83114"),
 
-  // Curves R4 (439mm) — for double track outer curve
-  curve("tt-r4-15", "R4 oblouk 15°", "TT", 439, 15, "Tillig", "83116"),
-  curve("tt-r4-30", "R4 oblouk 30°", "TT", 439, 30, "Tillig", "83117"),
+  // ─── Oblouky R3 (396mm) ───
+  curve("tt-r31-30", "R31 oblouk R396mm/30°", "TT", 396, 30, "Tillig", "83111"),
+  curve("tt-r32-15", "R32 oblouk R396mm/15°", "TT", 396, 15, "Tillig", "83112"),
 
-  // Turnouts
-  turnout("tt-ewl", "Výhybka levá EWL", "TT", 166, 15, "left", 310, "Tillig", "83320"),
-  turnout("tt-ewr", "Výhybka pravá EWR", "TT", 166, 15, "right", 310, "Tillig", "83321"),
+  // ─── Výhybky EW1 (129,5mm / 15°) ───
+  turnout("tt-ew1-r", "EW1 výhybka pravá 129,5mm/15°", "TT", 129.5, 15, "right", 310, "Tillig", "83328"),
+  turnout("tt-ew1-l", "EW1 výhybka levá 129,5mm/15°", "TT", 129.5, 15, "left", 310, "Tillig", "83329"),
 
-  // Crossing
-  crossing("tt-dk", "Křížení DK 15°", "TT", 166, 15, "Tillig", "83160"),
+  // ─── Výhybky EW2 (166mm / 15°) ───
+  turnout("tt-ew2-r", "EW2 výhybka pravá 166mm/15°", "TT", 166, 15, "right", 310, "Tillig", "83331"),
+  turnout("tt-ew2-l", "EW2 výhybka levá 166mm/15°", "TT", 166, 15, "left", 310, "Tillig", "83332"),
+
+  // ─── Výhybky EW3 (207mm / 12°) ───
+  turnout("tt-ew3-r", "EW3 výhybka pravá 207mm/12°", "TT", 207, 12, "right", 631, "Tillig", "83341"),
+  turnout("tt-ew3-l", "EW3 výhybka levá 207mm/12°", "TT", 207, 12, "left", 631, "Tillig", "83342"),
+
+  // ─── IBW — Vnitřní oblouková výhybka (R631/15° + R310/30°) ───
+  // Oba směry vedou obloukem: hlavní R631mm/15°, odbočka R310mm/30°
+  {
+    id: "tt-ibw-r",
+    catalogNumber: "83363",
+    name: "IBW výhybka oblouková pravá",
+    type: "turnout",
+    scale: "TT",
+    radius: 631,
+    angle: 15,
+    direction: "right",
+    connections: [
+      { position: { x: 0, y: 0, z: 0 }, angle: Math.PI, id: "a" },
+      // Hlavní směr: oblouk R631mm/15° vpravo
+      {
+        position: {
+          x: 631 * Math.sin((15 * Math.PI) / 180),
+          y: 0,
+          z: -(631 - 631 * Math.cos((15 * Math.PI) / 180)),
+        },
+        angle: -(15 * Math.PI) / 180,
+        id: "b",
+      },
+      // Odbočka: oblouk R310mm/30° vpravo (strmější)
+      {
+        position: {
+          x: 310 * Math.sin((30 * Math.PI) / 180),
+          y: 0,
+          z: -(310 - 310 * Math.cos((30 * Math.PI) / 180)),
+        },
+        angle: -(30 * Math.PI) / 180,
+        id: "c",
+      },
+    ],
+    category: "Výhybky",
+    manufacturer: "Tillig",
+  },
+  {
+    id: "tt-ibw-l",
+    catalogNumber: "83364",
+    name: "IBW výhybka oblouková levá",
+    type: "turnout",
+    scale: "TT",
+    radius: 631,
+    angle: 15,
+    direction: "left",
+    connections: [
+      { position: { x: 0, y: 0, z: 0 }, angle: Math.PI, id: "a" },
+      // Hlavní směr: oblouk R631mm/15° vlevo
+      {
+        position: {
+          x: 631 * Math.sin((15 * Math.PI) / 180),
+          y: 0,
+          z: 631 - 631 * Math.cos((15 * Math.PI) / 180),
+        },
+        angle: (15 * Math.PI) / 180,
+        id: "b",
+      },
+      // Odbočka: oblouk R310mm/30° vlevo (strmější)
+      {
+        position: {
+          x: 310 * Math.sin((30 * Math.PI) / 180),
+          y: 0,
+          z: 310 - 310 * Math.cos((30 * Math.PI) / 180),
+        },
+        angle: (30 * Math.PI) / 180,
+        id: "c",
+      },
+    ],
+    category: "Výhybky",
+    manufacturer: "Tillig",
+  },
+
+  // ─── ABW1 — Vnější oblouková výhybka (R1273mm, 7,5°/7,5°) ───
+  // Symetrická: oba směry R1273mm, jeden 7.5° vlevo, druhý 7.5° vpravo
+  {
+    id: "tt-abw1",
+    catalogNumber: "83380",
+    name: "ABW1 vnější oblouková 7,5°/7,5°",
+    type: "turnout",
+    scale: "TT",
+    radius: 1273,
+    angle: 7.5,
+    connections: [
+      { position: { x: 0, y: 0, z: 0 }, angle: Math.PI, id: "a" },
+      // Směr 1: R1273mm/7.5° vlevo
+      {
+        position: {
+          x: 1273 * Math.sin((7.5 * Math.PI) / 180),
+          y: 0,
+          z: 1273 - 1273 * Math.cos((7.5 * Math.PI) / 180),
+        },
+        angle: (7.5 * Math.PI) / 180,
+        id: "b",
+      },
+      // Směr 2: R1273mm/7.5° vpravo
+      {
+        position: {
+          x: 1273 * Math.sin((7.5 * Math.PI) / 180),
+          y: 0,
+          z: -(1273 - 1273 * Math.cos((7.5 * Math.PI) / 180)),
+        },
+        angle: -(7.5 * Math.PI) / 180,
+        id: "c",
+      },
+    ],
+    category: "Výhybky",
+    manufacturer: "Tillig",
+  },
+
+  // ─── ABW2 — Vnější oblouková výhybka (R1986mm, 6°/6°) ───
+  {
+    id: "tt-abw2",
+    catalogNumber: "83382",
+    name: "ABW2 vnější oblouková 6°/6°",
+    type: "turnout",
+    scale: "TT",
+    radius: 1986,
+    angle: 6,
+    connections: [
+      { position: { x: 0, y: 0, z: 0 }, angle: Math.PI, id: "a" },
+      // Směr 1: R1986mm/6° vlevo
+      {
+        position: {
+          x: 1986 * Math.sin((6 * Math.PI) / 180),
+          y: 0,
+          z: 1986 - 1986 * Math.cos((6 * Math.PI) / 180),
+        },
+        angle: (6 * Math.PI) / 180,
+        id: "b",
+      },
+      // Směr 2: R1986mm/6° vpravo
+      {
+        position: {
+          x: 1986 * Math.sin((6 * Math.PI) / 180),
+          y: 0,
+          z: -(1986 - 1986 * Math.cos((6 * Math.PI) / 180)),
+        },
+        angle: -(6 * Math.PI) / 180,
+        id: "c",
+      },
+    ],
+    category: "Výhybky",
+    manufacturer: "Tillig",
+  },
+
+  // ─── DW — Trojitá výhybka (Y) 166mm / 15°+15° ───
+  {
+    id: "tt-dw",
+    catalogNumber: "83230",
+    name: "DW trojitá výhybka 166mm/15°",
+    type: "turnout",
+    scale: "TT",
+    length: 166,
+    angle: 15,
+    connections: [
+      { position: { x: 0, y: 0, z: 0 }, angle: Math.PI, id: "a" },
+      // Rovně
+      { position: { x: 166, y: 0, z: 0 }, angle: 0, id: "b" },
+      // Odbočka vlevo 15°
+      {
+        position: {
+          x: 310 * Math.sin((15 * Math.PI) / 180),
+          y: 0,
+          z: 310 - 310 * Math.cos((15 * Math.PI) / 180),
+        },
+        angle: (15 * Math.PI) / 180,
+        id: "c",
+      },
+      // Odbočka vpravo 15°
+      {
+        position: {
+          x: 310 * Math.sin((15 * Math.PI) / 180),
+          y: 0,
+          z: -(310 - 310 * Math.cos((15 * Math.PI) / 180)),
+        },
+        angle: -(15 * Math.PI) / 180,
+        id: "d",
+      },
+    ],
+    category: "Výhybky",
+    manufacturer: "Tillig",
+  },
+
+  // ─── DKW — Křížová výhybka 160mm / 15° ───
+  // 4 připojovací body, 2 přestavníky
+  {
+    id: "tt-dkw",
+    catalogNumber: "83300",
+    name: "DKW křížová výhybka 160mm/15°",
+    type: "crossing",
+    scale: "TT",
+    length: 160,
+    angle: 15,
+    connections: [
+      { position: { x: 0, y: 0, z: 0 }, angle: Math.PI, id: "a" },
+      { position: { x: 160, y: 0, z: 0 }, angle: 0, id: "b" },
+      {
+        position: {
+          x: 80 - 80 * Math.cos((15 * Math.PI) / 180),
+          y: 0,
+          z: 80 * Math.sin((15 * Math.PI) / 180),
+        },
+        angle: Math.PI + (15 * Math.PI) / 180,
+        id: "c",
+      },
+      {
+        position: {
+          x: 80 + 80 * Math.cos((15 * Math.PI) / 180),
+          y: 0,
+          z: 80 * Math.sin((15 * Math.PI) / 180),
+        },
+        angle: (15 * Math.PI) / 180,
+        id: "d",
+      },
+    ],
+    category: "Křížení",
+    manufacturer: "Tillig",
+  },
+
+  // ─── DKW Baeseler — Křížová výhybka 208,6mm / 15° / R792mm ───
+  {
+    id: "tt-dkw-baeseler",
+    catalogNumber: "83391",
+    name: "DKW Baeseler křížová 208,6mm/15°",
+    type: "crossing",
+    scale: "TT",
+    length: 208.6,
+    angle: 15,
+    radius: 792,
+    connections: [
+      { position: { x: 0, y: 0, z: 0 }, angle: Math.PI, id: "a" },
+      { position: { x: 208.6, y: 0, z: 0 }, angle: 0, id: "b" },
+      {
+        position: {
+          x: 104.3 - 104.3 * Math.cos((15 * Math.PI) / 180),
+          y: 0,
+          z: 104.3 * Math.sin((15 * Math.PI) / 180),
+        },
+        angle: Math.PI + (15 * Math.PI) / 180,
+        id: "c",
+      },
+      {
+        position: {
+          x: 104.3 + 104.3 * Math.cos((15 * Math.PI) / 180),
+          y: 0,
+          z: 104.3 * Math.sin((15 * Math.PI) / 180),
+        },
+        angle: (15 * Math.PI) / 180,
+        id: "d",
+      },
+    ],
+    category: "Křížení",
+    manufacturer: "Tillig",
+  },
+
+  // ─── Křížení K1 — 166mm / 15° ───
+  crossing("tt-k1", "K1 křížení 166mm/15°", "TT", 166, 15, "Tillig", "83161"),
+
+  // ─── Křížení K2 — 86mm / 30° ───
+  crossing("tt-k2", "K2 křížení 86mm/30°", "TT", 86, 30, "Tillig", "83170"),
 ];
 
 // ============================================================
