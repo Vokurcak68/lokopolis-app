@@ -48,6 +48,8 @@ export interface BoardConfig {
   lArmDepth?: number;
   /** U-shape: arm depth in cm (same unit as width/depth) */
   uArmDepth?: number;
+  /** U-shape: side arm width in cm (same unit as width/depth) */
+  uArmWidth?: number;
 }
 
 interface DesignerSnapshot {

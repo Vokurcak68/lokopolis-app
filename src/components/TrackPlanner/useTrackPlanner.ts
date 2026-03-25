@@ -19,7 +19,7 @@ import {
   type TrackPieceDefinition,
   type TrackScale,
 } from "@/lib/track-library";
-import type { ViewTransform } from "@/lib/track-canvas-renderer";
+import { getBoardPathMm, isPointInsidePolygon, type ViewTransform } from "@/lib/track-canvas-renderer";
 
 const STORAGE_KEY = "lokopolis-track-planner-v1";
 
@@ -81,13 +81,31 @@ export function useTrackPlanner() {
   );
 
   const setBoardSize = useCallback(
-    (next: { width?: number; depth?: number }) => {
+    (next: {
+      width?: number;
+      depth?: number;
+      shape?: "rectangle" | "l-shape" | "u-shape";
+      lCorner?: "top-left" | "top-right" | "bottom-left" | "bottom-right";
+      lArmWidth?: number;
+      lArmDepth?: number;
+      uArmDepth?: number;
+      uArmWidth?: number;
+    }) => {
+      const width = next.width ?? state.board.width;
+      const depth = next.depth ?? state.board.depth;
+      const shape = next.shape ?? state.board.shape;
       dispatch({
         type: "SET_BOARD",
         board: {
           ...state.board,
-          width: next.width ?? state.board.width,
-          depth: next.depth ?? state.board.depth,
+          width,
+          depth,
+          shape,
+          lCorner: next.lCorner ?? state.board.lCorner ?? "bottom-right",
+          lArmWidth: next.lArmWidth ?? state.board.lArmWidth ?? width / 2,
+          lArmDepth: next.lArmDepth ?? state.board.lArmDepth ?? depth / 2,
+          uArmDepth: next.uArmDepth ?? state.board.uArmDepth ?? depth / 2,
+          uArmWidth: next.uArmWidth ?? state.board.uArmWidth ?? width / 4,
         },
       });
     },
@@ -141,6 +159,12 @@ export function useTrackPlanner() {
           }
         }
         if (snapMatch) break;
+      }
+
+      if (!snapMatch) {
+        const boardPath = getBoardPathMm(state.board);
+        const insideBoard = isPointInsidePolygon({ x: worldX, z: worldZ }, boardPath);
+        if (!insideBoard) return null;
       }
 
       const instanceId = generateInstanceId();

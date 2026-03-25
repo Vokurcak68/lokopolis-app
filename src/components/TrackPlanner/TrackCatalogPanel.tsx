@@ -62,21 +62,31 @@ export function TrackCatalogPanel({ grouped, activePieceId, openMobile, onCloseM
       )}
 
       <aside
-        className={`z-30 w-60 shrink-0 border-r p-3 transition md:relative md:translate-x-0 ${
-          openMobile ? "fixed inset-y-0 left-0 translate-x-0" : "fixed inset-y-0 left-0 -translate-x-full"
-        } md:block`}
-        style={{ borderColor: "var(--border)", background: "var(--bg-card)" }}
+        className={`z-30 w-72 max-w-[80vw] shrink-0 border-r transition md:relative md:w-60 md:max-w-none md:translate-x-0 ${
+          openMobile
+            ? "fixed inset-y-0 left-0 translate-x-0 overflow-y-auto overscroll-contain"
+            : "fixed inset-y-0 left-0 -translate-x-full overflow-hidden"
+        } md:block md:overflow-visible`}
+        style={{
+          borderColor: "var(--border)",
+          background: "var(--bg-card)",
+          touchAction: "pan-y",
+          WebkitOverflowScrolling: "touch",
+          pointerEvents: openMobile ? "auto" : undefined,
+        }}
       >
-        <div className="mb-3 flex items-center justify-between">
-          <div className="text-sm font-bold uppercase tracking-wide" style={{ color: "var(--accent)" }}>
-            Katalog
+        <div className="sticky top-0 z-10 border-b px-3 py-3 md:static md:border-b-0 md:p-3" style={{ borderColor: "var(--border)", background: "var(--bg-card)" }}>
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-bold uppercase tracking-wide" style={{ color: "var(--accent)" }}>
+              Katalog
+            </div>
+            <button className="md:hidden text-sm" onClick={onCloseMobile} style={{ color: "var(--text-body)" }}>
+              ✕
+            </button>
           </div>
-          <button className="md:hidden text-sm" onClick={onCloseMobile} style={{ color: "var(--text-body)" }}>
-            ✕
-          </button>
         </div>
 
-        <div className="space-y-4 overflow-y-auto pb-6">
+        <div className="space-y-4 px-3 pb-6 md:px-3">
           {Object.entries(grouped).map(([groupName, pieces]) => (
             <section key={groupName}>
               <div className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-dim)" }}>

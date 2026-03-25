@@ -72,11 +72,23 @@ export default function TrackPlanner() {
         scale={planner.state.board.scale}
         boardWidth={planner.state.board.width}
         boardDepth={planner.state.board.depth}
+        boardShape={planner.state.board.shape}
+        lCorner={planner.state.board.lCorner ?? "bottom-right"}
+        lArmWidth={Math.round(planner.state.board.lArmWidth ?? planner.state.board.width / 2)}
+        lArmDepth={Math.round(planner.state.board.lArmDepth ?? planner.state.board.depth / 2)}
+        uArmDepth={Math.round(planner.state.board.uArmDepth ?? planner.state.board.depth / 2)}
+        uArmWidth={Math.round(planner.state.board.uArmWidth ?? planner.state.board.width / 4)}
         canUndo={planner.canUndo}
         canRedo={planner.canRedo}
         onScaleChange={planner.setScale}
         onBoardWidthChange={(width) => planner.setBoardSize({ width })}
         onBoardDepthChange={(depth) => planner.setBoardSize({ depth })}
+        onBoardShapeChange={(shape) => planner.setBoardSize({ shape })}
+        onLCornerChange={(lCorner) => planner.setBoardSize({ lCorner })}
+        onLArmWidthChange={(lArmWidth) => planner.setBoardSize({ lArmWidth })}
+        onLArmDepthChange={(lArmDepth) => planner.setBoardSize({ lArmDepth })}
+        onUArmDepthChange={(uArmDepth) => planner.setBoardSize({ uArmDepth })}
+        onUArmWidthChange={(uArmWidth) => planner.setBoardSize({ uArmWidth })}
         onUndo={planner.undo}
         onRedo={planner.redo}
         onClear={planner.clearAll}

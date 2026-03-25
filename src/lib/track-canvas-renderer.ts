@@ -242,18 +242,124 @@ function drawGrid(
   }
 }
 
+export function getBoardPathMm(board: BoardConfig): LocalPoint[] {
+  const widthMm = Math.max(1, board.width * 10);
+  const depthMm = Math.max(1, board.depth * 10);
+
+  if (board.shape === "l-shape") {
+    const corner = board.lCorner ?? "bottom-right";
+    const armW = Math.min(widthMm - 1, Math.max(1, (board.lArmWidth ?? board.width / 2) * 10));
+    const armD = Math.min(depthMm - 1, Math.max(1, (board.lArmDepth ?? board.depth / 2) * 10));
+
+    switch (corner) {
+      case "top-left":
+        return [
+          { x: armW, z: 0 },
+          { x: widthMm, z: 0 },
+          { x: widthMm, z: depthMm },
+          { x: 0, z: depthMm },
+          { x: 0, z: armD },
+          { x: armW, z: armD },
+        ];
+      case "top-right":
+        return [
+          { x: 0, z: 0 },
+          { x: widthMm - armW, z: 0 },
+          { x: widthMm - armW, z: armD },
+          { x: widthMm, z: armD },
+          { x: widthMm, z: depthMm },
+          { x: 0, z: depthMm },
+        ];
+      case "bottom-left":
+        return [
+          { x: 0, z: 0 },
+          { x: widthMm, z: 0 },
+          { x: widthMm, z: depthMm },
+          { x: armW, z: depthMm },
+          { x: armW, z: depthMm - armD },
+          { x: 0, z: depthMm - armD },
+        ];
+      default:
+        return [
+          { x: 0, z: 0 },
+          { x: widthMm, z: 0 },
+          { x: widthMm, z: depthMm - armD },
+          { x: widthMm - armW, z: depthMm - armD },
+          { x: widthMm - armW, z: depthMm },
+          { x: 0, z: depthMm },
+        ];
+    }
+  }
+
+  if (board.shape === "u-shape") {
+    const armDepthMm = Math.min(depthMm - 1, Math.max(1, (board.uArmDepth ?? board.depth / 2) * 10));
+    const sideArmWidthMm = Math.min(
+      Math.floor(widthMm / 2) - 1,
+      Math.max(1, (board.uArmWidth ?? board.width / 4) * 10),
+    );
+
+    return [
+      { x: 0, z: 0 },
+      { x: sideArmWidthMm, z: 0 },
+      { x: sideArmWidthMm, z: armDepthMm },
+      { x: widthMm - sideArmWidthMm, z: armDepthMm },
+      { x: widthMm - sideArmWidthMm, z: 0 },
+      { x: widthMm, z: 0 },
+      { x: widthMm, z: depthMm },
+      { x: 0, z: depthMm },
+    ];
+  }
+
+  return [
+    { x: 0, z: 0 },
+    { x: widthMm, z: 0 },
+    { x: widthMm, z: depthMm },
+    { x: 0, z: depthMm },
+  ];
+}
+
+export function isPointInsidePolygon(point: LocalPoint, polygon: LocalPoint[]): boolean {
+  const onSegment = (a: LocalPoint, b: LocalPoint) => {
+    const cross = (point.z - a.z) * (b.x - a.x) - (point.x - a.x) * (b.z - a.z);
+    if (Math.abs(cross) > 1e-6) return false;
+    const dot = (point.x - a.x) * (b.x - a.x) + (point.z - a.z) * (b.z - a.z);
+    if (dot < 0) return false;
+    const len2 = (b.x - a.x) ** 2 + (b.z - a.z) ** 2;
+    return dot <= len2;
+  };
+
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const a = polygon[j];
+    const b = polygon[i];
+
+    if (onSegment(a, b)) return true;
+
+    const intersects = b.z > point.z !== a.z > point.z
+      && point.x < ((a.x - b.x) * (point.z - b.z)) / ((a.z - b.z) || Number.EPSILON) + b.x;
+
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
 function drawBoard(ctx: CanvasRenderingContext2D, board: BoardConfig, transform: ViewTransform) {
-  const x = transform.offsetX;
-  const y = transform.offsetY;
-  const w = board.width * 10 * transform.zoom;
-  const h = board.depth * 10 * transform.zoom;
+  const path = getBoardPathMm(board);
 
   ctx.fillStyle = COLOR.boardFill;
   ctx.strokeStyle = COLOR.boardBorder;
   ctx.lineWidth = 1.5;
 
+  if (!path.length) return;
+  const first = worldToScreen(path[0], transform);
+
   ctx.beginPath();
-  ctx.rect(x, y, w, h);
+  ctx.moveTo(first.x, first.y);
+  for (let i = 1; i < path.length; i++) {
+    const p = worldToScreen(path[i], transform);
+    ctx.lineTo(p.x, p.y);
+  }
+  ctx.closePath();
   ctx.fill();
   ctx.stroke();
 }
