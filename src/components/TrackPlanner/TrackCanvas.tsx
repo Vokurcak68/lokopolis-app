@@ -235,10 +235,6 @@ export function TrackCanvas({
 
     if (activePiece) {
       onPlaceTrack(activePiece, world.x, world.z, 0);
-      // Deactivate piece after placing unless Shift is held (for repeated placement)
-      if (!e.shiftKey) {
-        onDeactivatePiece();
-      }
       return;
     }
 

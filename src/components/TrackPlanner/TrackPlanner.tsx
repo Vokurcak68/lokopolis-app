@@ -125,6 +125,25 @@ export default function TrackPlanner() {
         />
 
         <div className="relative min-w-0 flex-1">
+          {planner.activePiece && (
+            <div
+              className="absolute left-0 right-0 top-0 z-20 flex items-center justify-between border-b px-3 py-2"
+              style={{ background: "var(--accent)", borderColor: "var(--border)" }}
+            >
+              <span className="text-sm font-medium text-white">
+                🛤️ Vkládání: {planner.activePiece.name}
+                {planner.activePiece.catalogNumber && (
+                  <span className="ml-1 opacity-75">({planner.activePiece.catalogNumber})</span>
+                )}
+              </span>
+              <button
+                onClick={() => planner.setActivePiece(null)}
+                className="flex items-center gap-1 rounded-md bg-white/20 px-3 py-1 text-sm font-medium text-white transition hover:bg-white/30"
+              >
+                ✕ Ukončit vkládání
+              </button>
+            </div>
+          )}
           <TrackCanvas
             state={planner.state}
             catalog={planner.catalogMap}
