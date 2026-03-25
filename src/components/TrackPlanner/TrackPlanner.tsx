@@ -233,6 +233,7 @@ export default function TrackPlanner() {
             onToggleSelectTrack={planner.toggleSelectTrack}
             onSelectTracks={planner.selectTracks}
             onMoveSelectedTracks={planner.moveSelectedTracks}
+            onSnapGroupDrag={planner.snapGroupDrag}
             onHitTestTerrainZone={planner.hitTestTerrainZone}
             onSetSelectedZone={planner.setSelectedZoneId}
             onSetHoveredTrack={planner.setHoveredTrack}

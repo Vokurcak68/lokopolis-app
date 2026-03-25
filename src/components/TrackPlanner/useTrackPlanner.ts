@@ -464,6 +464,44 @@ export function useTrackPlanner() {
     [catalogMap, freeConnections],
   );
 
+  /** Snap a group of tracks: find the best snap for any track in the group against external free connections, return {dx,dz} offset */
+  const snapGroupDrag = useCallback(
+    (trackIds: string[]): { dx: number; dz: number } | null => {
+      const groupSet = new Set(trackIds);
+      const freeOthers = freeConnections.filter((f) => !groupSet.has(f.instanceId));
+      if (freeOthers.length === 0) return null;
+
+      let bestDist = 8; // max snap distance in mm
+      let bestOffset: { dx: number; dz: number } | null = null;
+
+      for (const id of trackIds) {
+        const track = state.tracks.find((t) => t.instanceId === id);
+        if (!track) continue;
+        const piece = catalogMap[track.pieceId];
+        if (!piece) continue;
+
+        for (const conn of piece.connections) {
+          const connWorld = connectionToWorld(conn, track.position, track.rotation, track.flipZ);
+          for (const target of freeOthers) {
+            const dist = Math.hypot(connWorld.position.x - target.worldPos.x, connWorld.position.z - target.worldPos.z);
+            if (dist >= bestDist) continue;
+
+            const placement = computeSnapPlacement(target.worldPos, target.worldAngle, piece, conn.id, track.flipZ);
+            if (!placement) continue;
+
+            const dx = placement.position.x - track.position.x;
+            const dz = placement.position.z - track.position.z;
+            bestDist = dist;
+            bestOffset = { dx, dz };
+          }
+        }
+      }
+
+      return bestOffset;
+    },
+    [catalogMap, freeConnections, state.tracks],
+  );
+
   const exportShoppingList = useCallback(() => {
     const counts = new Map<string, { piece: TrackPieceDefinition; count: number }>();
     for (const t of state.tracks) {
@@ -638,6 +676,7 @@ export function useTrackPlanner() {
     toggleSelectTrack,
     selectTracks,
     moveSelectedTracks,
+    snapGroupDrag,
     setHoveredTrack,
     saveToLocalStorage: saveProject,
     saveProjectAs,

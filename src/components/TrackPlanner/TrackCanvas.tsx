@@ -24,6 +24,7 @@ interface TrackCanvasProps {
   onToggleSelectTrack: (instanceId: string) => void;
   onSelectTracks: (instanceIds: string[]) => void;
   onMoveSelectedTracks: (dx: number, dz: number) => void;
+  onSnapGroupDrag: (trackIds: string[]) => { dx: number; dz: number } | null;
   onHitTestTerrainZone: (worldX: number, worldZ: number) => string | null;
   onSetSelectedZone: (zoneId: string | null) => void;
   onSetHoveredTrack: (instanceId: string | null) => void;
@@ -62,6 +63,7 @@ export function TrackCanvas({
   onToggleSelectTrack,
   onSelectTracks,
   onMoveSelectedTracks,
+  onSnapGroupDrag,
   onHitTestTerrainZone,
   onSetSelectedZone,
   onSetHoveredTrack,
@@ -507,9 +509,12 @@ export function TrackCanvas({
       }
     }
 
-    if (inter.mode === "group-drag") {
-      // Snap the first selected track, apply delta to all
-      // (simplified — just leave them where they are for now)
+    if (inter.mode === "group-drag" && state.selectedTrackIds.length > 0) {
+      // Try to snap the group to the nearest free connection
+      const snapOffset = onSnapGroupDrag(state.selectedTrackIds);
+      if (snapOffset) {
+        onMoveSelectedTracks(snapOffset.dx, snapOffset.dz);
+      }
     }
 
     inter.mode = "none";
