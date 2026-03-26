@@ -27,7 +27,7 @@ const RAIL_HEIGHT_MM = 1.5; // rail profile height
 const SLEEPER_THICKNESS_MM = 1.2; // sleeper height (Y)
 const SLEEPER_WIDTH_MM = 2; // sleeper extent along track direction
 const SLEEPER_LENGTH_FACTOR = 1.8; // sleeper length = gauge * factor (perpendicular to track)
-const BALLAST_WIDTH_FACTOR = 2.6; // ballast ribbon width = gauge * factor (MUST be wider than sleepers)
+const BALLAST_WIDTH_FACTOR = 2.1; // ballast ribbon width = gauge * factor (slightly wider than sleepers 1.8)
 const BALLAST_HEIGHT_MM = 1.5; // ballast ribbon thickness
 
 // ── Elevation graph solver ──
