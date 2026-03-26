@@ -50,6 +50,10 @@ interface TrackTopBarProps {
   elevationMode: boolean;
   onStartElevation: () => void;
   onCancelElevation: () => void;
+  // Portal system (new)
+  portalMode: { kind: "tunnel" | "bridge"; width: "single" | "double" } | null;
+  onStartPortal: (kind: "tunnel" | "bridge", width: "single" | "double") => void;
+  onCancelPortal: () => void;
 }
 
 export function TrackTopBar(props: TrackTopBarProps) {
@@ -97,7 +101,12 @@ export function TrackTopBar(props: TrackTopBarProps) {
     elevationMode,
     onStartElevation,
     onCancelElevation,
+    portalMode,
+    onStartPortal,
+    onCancelPortal,
   } = props;
+
+  const [portalDropdown, setPortalDropdown] = useState(false);
 
   const btnBase =
     "h-9 rounded-md border px-3 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-45";
@@ -304,6 +313,59 @@ export function TrackTopBar(props: TrackTopBarProps) {
           >
             🌉 Most
           </button>
+          {/* New portal buttons */}
+          <div className="relative" style={{ display: "inline-block" }}>
+            <button
+              onClick={() => {
+                if (portalMode) { onCancelPortal(); } else { setPortalDropdown((v) => !v); }
+              }}
+              className={btnBase}
+              style={{
+                borderColor: portalMode ? "#10b981" : "var(--border)",
+                color: portalMode ? "#fff" : "var(--text-body)",
+                background: portalMode ? "#10b981" : "transparent",
+              }}
+              title="Vložit portál (tunel/most)"
+            >
+              🚪 Portál ▾
+            </button>
+            {portalDropdown && !portalMode && (
+              <div
+                className="absolute left-0 top-full z-30 mt-1 rounded-lg border shadow-lg"
+                style={{ background: "var(--bg-card)", borderColor: "var(--border)", minWidth: 180 }}
+              >
+                <button
+                  onClick={() => { onStartPortal("tunnel", "single"); setPortalDropdown(false); }}
+                  className="block w-full px-3 py-2 text-left text-sm hover:bg-white/10"
+                  style={{ color: "var(--text-body)" }}
+                >
+                  🏔️ Tunel — jednokolejný
+                </button>
+                <button
+                  onClick={() => { onStartPortal("tunnel", "double"); setPortalDropdown(false); }}
+                  className="block w-full px-3 py-2 text-left text-sm hover:bg-white/10"
+                  style={{ color: "var(--text-body)" }}
+                >
+                  🏔️🏔️ Tunel — dvojkolejný
+                </button>
+                <hr style={{ borderColor: "var(--border)" }} />
+                <button
+                  onClick={() => { onStartPortal("bridge", "single"); setPortalDropdown(false); }}
+                  className="block w-full px-3 py-2 text-left text-sm hover:bg-white/10"
+                  style={{ color: "var(--text-body)" }}
+                >
+                  🌉 Most — jednokolejný
+                </button>
+                <button
+                  onClick={() => { onStartPortal("bridge", "double"); setPortalDropdown(false); }}
+                  className="block w-full px-3 py-2 text-left text-sm hover:bg-white/10"
+                  style={{ color: "var(--text-body)" }}
+                >
+                  🌉🌉 Most — dvojkolejný
+                </button>
+              </div>
+            )}
+          </div>
           <button onClick={onUndo} disabled={!canUndo} className={btnBase} style={{ borderColor: "var(--border)", color: "var(--text-body)" }}>
             Undo
           </button>

@@ -38,6 +38,13 @@ interface TrackCanvasProps {
   onUpdateTrack: (instanceId: string, updates: Partial<PlacedTrack>) => void;
   onSnapDraggedTrack: (track: PlacedTrack) => PlacedTrack;
   onElevationClick?: (trackId: string, t: number, worldX: number, worldZ: number, screenX: number, screenY: number) => void;
+  // Portal system (new)
+  portalMode?: boolean;
+  pairingMode?: boolean;
+  onPlacePortalPoint?: (worldX: number, worldZ: number) => boolean;
+  onHitTestPortal?: (worldX: number, worldZ: number) => string | null;
+  onSetSelectedPortal?: (portalId: string | null) => void;
+  onPairWithPortal?: (targetPortalId: string) => boolean;
 }
 
 function screenToWorld(x: number, y: number, t: ViewTransform): LocalPoint {
@@ -81,6 +88,12 @@ export function TrackCanvas({
   onSnapDraggedTrack,
   onDeactivatePiece,
   onElevationClick,
+  portalMode,
+  pairingMode,
+  onPlacePortalPoint,
+  onHitTestPortal,
+  onSetSelectedPortal,
+  onPairWithPortal,
 }: TrackCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState({ width: 1200, height: 700 });
@@ -174,6 +187,7 @@ export function TrackCanvas({
         board: state.board,
         tracks: state.tracks,
         terrainZones: state.terrainZones ?? [],
+        portals: state.portals ?? [],
         elevationPoints: state.elevationPoints ?? [],
         catalog,
         selectedTrackId: state.selectedTrackId,
@@ -292,6 +306,23 @@ export function TrackCanvas({
       inter.startOffsetX = transform.offsetX;
       inter.startOffsetY = transform.offsetY;
       canvas.setPointerCapture(e.pointerId);
+      return;
+    }
+
+    // Portal placement mode (new system)
+    if (portalMode && onPlacePortalPoint) {
+      const handled = onPlacePortalPoint(world.x, world.z);
+      if (handled) return;
+      return;
+    }
+
+    // Portal pairing mode
+    if (pairingMode && onHitTestPortal && onPairWithPortal) {
+      const hitPortalId = onHitTestPortal(world.x, world.z);
+      if (hitPortalId) {
+        onPairWithPortal(hitPortalId);
+        return;
+      }
       return;
     }
 
@@ -477,7 +508,12 @@ export function TrackCanvas({
         const y = e.clientY - rect.top;
         const world = screenToWorld(x, y, transform);
 
-        if (terrainMode) {
+        if (portalMode && onPlacePortalPoint) {
+          onPlacePortalPoint(world.x, world.z);
+        } else if (pairingMode && onHitTestPortal && onPairWithPortal) {
+          const hitPortalId = onHitTestPortal(world.x, world.z);
+          if (hitPortalId) onPairWithPortal(hitPortalId);
+        } else if (terrainMode) {
           onPlaceTerrainPoint(world.x, world.z);
         } else if (elevationMode) {
           const cp = closestPointOnAnyTrack(world, state.tracks, catalog);

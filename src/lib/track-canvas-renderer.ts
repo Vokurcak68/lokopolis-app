@@ -1,4 +1,4 @@
-import type { BoardConfig, ElevationPoint, PlacedTrack, TerrainZone, TrackPoint } from "./track-designer-store";
+import type { BoardConfig, ElevationPoint, PlacedTrack, Portal, TerrainZone, TrackPoint } from "./track-designer-store";
 import type { TrackPieceDefinition, TrackScale, ExplicitSegment } from "./track-library";
 
 export interface ViewTransform {
@@ -14,6 +14,7 @@ export interface RenderTrackCanvasParams {
   board: BoardConfig;
   tracks: PlacedTrack[];
   terrainZones: TerrainZone[];
+  portals?: Portal[];
   elevationPoints?: ElevationPoint[];
   catalog: Record<string, TrackPieceDefinition>;
   selectedTrackId: string | null;
@@ -882,6 +883,12 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
   if (!skipBackground && terrainZones.length > 0) {
     drawTerrainZones(ctx, terrainZones, tracks, catalog, transform);
   }
+
+  // Draw portals (new system)
+  const portals = params.portals ?? [];
+  if (!skipBackground && portals.length > 0) {
+    drawPortals(ctx, portals, tracks, catalog, transform);
+  }
 }
 
 export function distancePointToTrackMm(
@@ -1720,5 +1727,194 @@ export function drawTerrainZones(
     }
 
     ctx.restore();
+  }
+}
+
+// ── Portal rendering (new system) ──
+
+/** Get world position and tangent at a TrackPoint */
+function resolveTrackPoint(
+  tp: TrackPoint,
+  tracks: PlacedTrack[],
+  catalog: Record<string, TrackPieceDefinition>,
+): { worldPos: { x: number; z: number }; tangent: LocalPoint } | null {
+  const track = tracks.find((t) => t.instanceId === tp.trackId);
+  if (!track) return null;
+  const piece = catalog[track.pieceId];
+  if (!piece) return null;
+
+  const segments = getPieceSegmentsLocal(piece);
+  if (segments.length === 0) return null;
+
+  // Find the right segment and local t
+  let totalLen = 0;
+  const segLengths = segments.map((s) => segmentLength(s));
+  for (const l of segLengths) totalLen += l;
+
+  const targetDist = tp.t * totalLen;
+  let accum = 0;
+  for (let i = 0; i < segments.length; i++) {
+    const sl = segLengths[i];
+    if (accum + sl >= targetDist || i === segments.length - 1) {
+      const localT = sl > 0 ? (targetDist - accum) / sl : 0;
+      const data = pointAndTangentAt(segments[i], localT);
+      const worldPos = localToWorld(data.point, track);
+      const worldDir = localDirToWorld(data.tangent, track.rotation, track.flipZ);
+      return { worldPos, tangent: worldDir };
+    }
+    accum += sl;
+  }
+  return null;
+}
+
+/**
+ * Draw new-style portals (single and double width).
+ * Paired portals are connected with a dashed line.
+ */
+export function drawPortals(
+  ctx: CanvasRenderingContext2D,
+  portals: Portal[],
+  tracks: PlacedTrack[],
+  catalog: Record<string, TrackPieceDefinition>,
+  transform: ViewTransform,
+) {
+  const gaugeMm = 12; // TT scale
+
+  for (const portal of portals) {
+    const data1 = resolveTrackPoint(portal.track1, tracks, catalog);
+    if (!data1) continue;
+
+    const screen1 = worldToScreen({ x: data1.worldPos.x, z: data1.worldPos.z }, transform);
+    const portalRadius = gaugeMm * 1.5 * transform.zoom;
+
+    if (portal.width === "single") {
+      // Single portal — same as existing drawPortal
+      drawPortal(ctx, screen1, data1.tangent, portalRadius, portal.kind, transform);
+    } else {
+      // Double portal — wider, spanning two tracks
+      const data2 = portal.track2 ? resolveTrackPoint(portal.track2, tracks, catalog) : null;
+
+      if (data2) {
+        const screen2 = worldToScreen({ x: data2.worldPos.x, z: data2.worldPos.z }, transform);
+        // Draw wide portal centered between the two tracks
+        const cx = (screen1.x + screen2.x) / 2;
+        const cy = (screen1.y + screen2.y) / 2;
+        // Direction perpendicular to the line between the two tracks
+        const dx = screen2.x - screen1.x;
+        const dy = screen2.y - screen1.y;
+        const dist = Math.hypot(dx, dy);
+        // Use average tangent for portal orientation
+        const avgTanX = (data1.tangent.x + data2.tangent.x) / 2;
+        const avgTanZ = (data1.tangent.z + data2.tangent.z) / 2;
+        const tanLen = Math.hypot(avgTanX, avgTanZ) || 1;
+
+        // Double portal width = distance between tracks + 2 * single portal radius
+        const doubleRadius = dist / 2 + portalRadius;
+
+        ctx.save();
+        // Orient portal perpendicular to average tangent
+        const nx = -avgTanZ / tanLen;
+        const ny = avgTanX / tanLen;
+        const angle = Math.atan2(ny, nx);
+        ctx.translate(cx, cy);
+        ctx.rotate(angle);
+
+        if (portal.kind === "tunnel") {
+          // Wide tunnel mouth
+          ctx.beginPath();
+          ctx.ellipse(0, 0, doubleRadius + 3, portalRadius + 3, 0, Math.PI, 0, false);
+          ctx.closePath();
+          ctx.fillStyle = "rgba(160, 140, 100, 0.95)";
+          ctx.fill();
+          ctx.strokeStyle = "rgba(200, 180, 120, 0.9)";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          // Inner dark mouth
+          ctx.beginPath();
+          ctx.ellipse(0, 0, doubleRadius * 0.8, portalRadius * 0.7, 0, Math.PI, 0, false);
+          ctx.closePath();
+          ctx.fillStyle = "rgba(25, 20, 15, 0.95)";
+          ctx.fill();
+
+          // Stone arch lines
+          ctx.strokeStyle = "rgba(130, 115, 80, 0.7)";
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, doubleRadius * 0.9, portalRadius * 0.85, 0, Math.PI, 0, false);
+          ctx.stroke();
+
+          // Keystone
+          ctx.fillStyle = "rgba(180, 160, 110, 0.9)";
+          ctx.fillRect(-4, -portalRadius - 2, 8, 7);
+
+          // Center divider (pillar between tracks)
+          ctx.fillStyle = "rgba(120, 105, 75, 0.7)";
+          ctx.fillRect(-2, -portalRadius * 0.6, 4, portalRadius * 0.6);
+        } else {
+          // Wide bridge portal
+          ctx.beginPath();
+          ctx.rect(-doubleRadius, -portalRadius, doubleRadius * 2, portalRadius * 2);
+          ctx.fillStyle = "rgba(70, 100, 150, 0.85)";
+          ctx.fill();
+          ctx.strokeStyle = "rgba(100, 140, 200, 0.9)";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          // Cross braces
+          ctx.beginPath();
+          ctx.moveTo(-doubleRadius * 0.8, -portalRadius * 0.6);
+          ctx.lineTo(doubleRadius * 0.8, portalRadius * 0.6);
+          ctx.moveTo(doubleRadius * 0.8, -portalRadius * 0.6);
+          ctx.lineTo(-doubleRadius * 0.8, portalRadius * 0.6);
+          ctx.strokeStyle = "rgba(80, 120, 180, 0.6)";
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+
+          // Horizontal beam
+          ctx.beginPath();
+          ctx.moveTo(-doubleRadius * 0.9, -portalRadius * 0.15);
+          ctx.lineTo(doubleRadius * 0.9, -portalRadius * 0.15);
+          ctx.strokeStyle = "rgba(100, 140, 200, 0.7)";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+
+        ctx.restore();
+      } else {
+        // Fallback: only one track resolved — draw single portal
+        drawPortal(ctx, screen1, data1.tangent, portalRadius, portal.kind, transform);
+      }
+    }
+
+    // Draw paired connection line
+    if (portal.pairedPortalId) {
+      const partner = portals.find((p) => p.id === portal.pairedPortalId);
+      if (partner) {
+        const partnerData = resolveTrackPoint(partner.track1, tracks, catalog);
+        if (partnerData) {
+          const partnerScreen = worldToScreen({ x: partnerData.worldPos.x, z: partnerData.worldPos.z }, transform);
+          ctx.save();
+          ctx.setLineDash([4, 4]);
+          ctx.strokeStyle = portal.kind === "tunnel" ? "rgba(160, 140, 100, 0.5)" : "rgba(100, 140, 200, 0.5)";
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(screen1.x, screen1.y);
+          ctx.lineTo(partnerScreen.x, partnerScreen.y);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+    }
+
+    // Label
+    const label = portal.kind === "tunnel" ? "🏔️" : "🌉";
+    const widthLabel = portal.width === "double" ? "2×" : "";
+    const pairLabel = portal.pairedPortalId ? "🔗" : "⊘";
+    const fontSize = Math.max(10, 12 * transform.zoom);
+    ctx.font = `${fontSize}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
+    ctx.fillText(`${label}${widthLabel} ${pairLabel}`, screen1.x, screen1.y - portalRadius - 8);
   }
 }

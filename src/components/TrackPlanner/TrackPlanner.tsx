@@ -181,6 +181,9 @@ export default function TrackPlanner() {
         elevationMode={planner.elevationMode}
         onStartElevation={planner.startElevationMode}
         onCancelElevation={() => { planner.cancelElevationMode(); setElevationPopup(null); }}
+        portalMode={planner.portalMode}
+        onStartPortal={planner.startPortalMode}
+        onCancelPortal={planner.cancelPortalMode}
       />
 
       <div className="relative flex min-h-0 flex-1">
@@ -211,6 +214,46 @@ export default function TrackPlanner() {
                 className="flex items-center gap-1 rounded-md bg-white/20 px-3 py-1 text-sm font-medium text-white transition hover:bg-white/30"
               >
                 ✕ Ukončit vkládání
+              </button>
+            </div>
+          )}
+          {planner.portalMode && (
+            <div
+              className="absolute left-0 right-0 top-0 z-20 flex items-center justify-between border-b px-3 py-2"
+              style={{
+                background: planner.portalMode.kind === "tunnel" ? "#6366f1" : "#f59e0b",
+                borderColor: "var(--border)",
+              }}
+            >
+              <span className="text-sm font-medium text-white">
+                {planner.portalMode.kind === "tunnel" ? "🏔️" : "🌉"}{" "}
+                {planner.portalMode.width === "double"
+                  ? planner.portalFirstTrack
+                    ? "Klikni na druhou kolej (dvojkolejný portál)"
+                    : "Klikni na první kolej (dvojkolejný portál)"
+                  : "Klikni na kolej — umístit portál"}
+              </span>
+              <button
+                onClick={planner.cancelPortalMode}
+                className="flex items-center gap-1 rounded-md bg-white/20 px-3 py-1 text-sm font-medium text-white transition hover:bg-white/30"
+              >
+                ✕ Zrušit
+              </button>
+            </div>
+          )}
+          {planner.pairingPortalId && (
+            <div
+              className="absolute left-0 right-0 top-0 z-20 flex items-center justify-between border-b px-3 py-2"
+              style={{ background: "#10b981", borderColor: "var(--border)" }}
+            >
+              <span className="text-sm font-medium text-white">
+                🔗 Klikni na druhý portál pro spárování
+              </span>
+              <button
+                onClick={() => planner.cancelPortalMode()}
+                className="flex items-center gap-1 rounded-md bg-white/20 px-3 py-1 text-sm font-medium text-white transition hover:bg-white/30"
+              >
+                ✕ Zrušit
               </button>
             </div>
           )}
@@ -290,6 +333,12 @@ export default function TrackPlanner() {
               onElevationClick={(trackId, t, worldX, worldZ, screenX, screenY) => {
                 setElevationPopup({ trackId, t, worldX, worldZ, screenX, screenY });
               }}
+              portalMode={!!planner.portalMode}
+              pairingMode={!!planner.pairingPortalId}
+              onPlacePortalPoint={planner.placePortalPoint}
+              onHitTestPortal={planner.hitTestPortal}
+              onSetSelectedPortal={planner.setSelectedPortalId}
+              onPairWithPortal={planner.pairWithPortal}
             />
           )}
 

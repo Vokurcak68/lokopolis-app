@@ -54,8 +54,22 @@ export interface TrackPoint {
 }
 
 export type TerrainZoneKind = "tunnel" | "bridge";
+export type PortalWidth = "single" | "double";
 
-/** A terrain zone (tunnel or bridge) defined by two portal points on the track */
+/** A portal (entry/exit point for a tunnel or bridge) placed on one or two tracks */
+export interface Portal {
+  id: string;
+  kind: TerrainZoneKind;
+  width: PortalWidth;
+  /** Primary track point (always present) */
+  track1: TrackPoint;
+  /** Secondary track point (only for double portals) */
+  track2?: TrackPoint;
+  /** Paired portal id (null = unpaired) */
+  pairedPortalId: string | null;
+}
+
+/** Legacy terrain zone — kept for migration, new code uses Portal[] */
 export interface TerrainZone {
   id: string;
   kind: TerrainZoneKind;
@@ -92,6 +106,7 @@ interface DesignerSnapshot {
   board: BoardConfig;
   tracks: PlacedTrack[];
   terrainZones: TerrainZone[];
+  portals: Portal[];
   elevationPoints: ElevationPoint[];
   selectedTrackId: string | null;
   /** Multi-select: array of selected track IDs */
@@ -127,6 +142,10 @@ export type DesignerAction =
   | { type: "UNSNAP_TRACKS"; instanceIds: string[] }
   | { type: "ADD_TERRAIN_ZONE"; zone: TerrainZone }
   | { type: "REMOVE_TERRAIN_ZONE"; zoneId: string }
+  | { type: "ADD_PORTAL"; portal: Portal }
+  | { type: "REMOVE_PORTAL"; portalId: string }
+  | { type: "PAIR_PORTALS"; portalId1: string; portalId2: string }
+  | { type: "UNPAIR_PORTAL"; portalId: string }
   | { type: "ADD_ELEVATION_POINT"; point: ElevationPoint }
   | { type: "REMOVE_ELEVATION_POINT"; pointId: string }
   | { type: "UPDATE_ELEVATION_POINT"; pointId: string; updates: Partial<Omit<ElevationPoint, "id">> }
@@ -143,6 +162,7 @@ export function createInitialState(): DesignerState {
     board: { width: 200, depth: 100, scale: "TT", shape: "rectangle" },
     tracks: [],
     terrainZones: [],
+    portals: [],
     elevationPoints: [],
     selectedTrackId: null,
     selectedTrackIds: [],
@@ -166,6 +186,7 @@ function toSnapshot(state: DesignerState): DesignerSnapshot {
     board: state.board,
     tracks: state.tracks,
     terrainZones: state.terrainZones,
+    portals: state.portals,
     elevationPoints: state.elevationPoints,
     selectedTrackId: state.selectedTrackId,
     selectedTrackIds: state.selectedTrackIds,
@@ -358,7 +379,7 @@ export function designerReducer(state: DesignerState, action: DesignerAction): D
 
     case "CLEAR_TRACKS": {
       const next = pushHistory(state);
-      return { ...next, tracks: [], terrainZones: [], elevationPoints: [], selectedTrackId: null };
+      return { ...next, tracks: [], terrainZones: [], portals: [], elevationPoints: [], selectedTrackId: null };
     }
 
     case "AI_START":
@@ -380,6 +401,50 @@ export function designerReducer(state: DesignerState, action: DesignerAction): D
     case "REMOVE_TERRAIN_ZONE": {
       const next = pushHistory(state);
       return { ...next, terrainZones: next.terrainZones.filter((z) => z.id !== action.zoneId) };
+    }
+
+    case "ADD_PORTAL": {
+      const next = pushHistory(state);
+      return { ...next, portals: [...next.portals, action.portal] };
+    }
+
+    case "REMOVE_PORTAL": {
+      const next = pushHistory(state);
+      // Also unpair partner if paired
+      const removing = next.portals.find((p) => p.id === action.portalId);
+      let portals = next.portals.filter((p) => p.id !== action.portalId);
+      if (removing?.pairedPortalId) {
+        portals = portals.map((p) =>
+          p.id === removing.pairedPortalId ? { ...p, pairedPortalId: null } : p,
+        );
+      }
+      return { ...next, portals };
+    }
+
+    case "PAIR_PORTALS": {
+      const next = pushHistory(state);
+      return {
+        ...next,
+        portals: next.portals.map((p) => {
+          if (p.id === action.portalId1) return { ...p, pairedPortalId: action.portalId2 };
+          if (p.id === action.portalId2) return { ...p, pairedPortalId: action.portalId1 };
+          return p;
+        }),
+      };
+    }
+
+    case "UNPAIR_PORTAL": {
+      const next = pushHistory(state);
+      const portal = next.portals.find((p) => p.id === action.portalId);
+      if (!portal?.pairedPortalId) return next;
+      const partnerId = portal.pairedPortalId;
+      return {
+        ...next,
+        portals: next.portals.map((p) => {
+          if (p.id === action.portalId || p.id === partnerId) return { ...p, pairedPortalId: null };
+          return p;
+        }),
+      };
     }
 
     case "ADD_ELEVATION_POINT": {

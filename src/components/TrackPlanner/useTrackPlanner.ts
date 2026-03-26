@@ -16,6 +16,8 @@ import {
   type PlacedTrack,
   type TerrainZoneKind,
   type TrackPoint,
+  type Portal,
+  type PortalWidth,
 } from "@/lib/track-designer-store";
 import {
   getCatalogByScale,
@@ -35,6 +37,7 @@ interface PersistedData {
   board: DesignerState["board"];
   tracks: DesignerState["tracks"];
   terrainZones: DesignerState["terrainZones"];
+  portals?: DesignerState["portals"];
   elevationPoints?: DesignerState["elevationPoints"];
   transform: ViewTransform;
 }
@@ -83,6 +86,7 @@ function dataToState(data: PersistedData): DesignerState {
     board: data.board,
     tracks: data.tracks ?? [],
     terrainZones: data.terrainZones ?? [],
+    portals: data.portals ?? [],
     elevationPoints: data.elevationPoints ?? [],
     selectedTrackId: null,
     selectedTrackIds: [],
@@ -128,6 +132,7 @@ function loadPersisted(): { state: DesignerState; transform: ViewTransform; proj
         board: s.board,
         tracks: s.tracks ?? [],
         terrainZones: s.terrainZones ?? [],
+        portals: s.portals ?? [],
         elevationPoints: s.elevationPoints ?? [],
         transform: parsed.transform,
       };
@@ -251,6 +256,7 @@ export function useTrackPlanner() {
         board: state.board,
         tracks: state.tracks,
         terrainZones: state.terrainZones,
+        portals: state.portals,
         elevationPoints: state.elevationPoints,
         transform,
       };
@@ -282,7 +288,7 @@ export function useTrackPlanner() {
       console.error("Nepodařilo se uložit:", e);
       return false;
     }
-  }, [state.board, state.tracks, state.terrainZones, state.elevationPoints, transform, currentProjectId]);
+  }, [state.board, state.tracks, state.terrainZones, state.portals, state.elevationPoints, transform, currentProjectId]);
 
   /** Save As — prompt for name */
   const saveProjectAs = useCallback((name: string): boolean => {
@@ -292,6 +298,7 @@ export function useTrackPlanner() {
         board: state.board,
         tracks: state.tracks,
         terrainZones: state.terrainZones,
+        portals: state.portals,
         elevationPoints: state.elevationPoints,
         transform,
       };
@@ -307,7 +314,7 @@ export function useTrackPlanner() {
       console.error("Nepodařilo se uložit:", e);
       return false;
     }
-  }, [state.board, state.tracks, state.terrainZones, state.elevationPoints, transform]);
+  }, [state.board, state.tracks, state.terrainZones, state.portals, state.elevationPoints, transform]);
 
   /** Load a saved project */
   const loadProject = useCallback((projectId: string) => {
@@ -353,7 +360,7 @@ export function useTrackPlanner() {
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     autoSaveTimer.current = setTimeout(() => {
       try {
-        const data: PersistedData = { board: state.board, tracks: state.tracks, terrainZones: state.terrainZones, elevationPoints: state.elevationPoints, transform };
+        const data: PersistedData = { board: state.board, tracks: state.tracks, terrainZones: state.terrainZones, portals: state.portals, elevationPoints: state.elevationPoints, transform };
         const projects = getAllProjects();
         const idx = projects.findIndex((p) => p.id === currentProjectId);
         if (idx >= 0) {
@@ -364,7 +371,7 @@ export function useTrackPlanner() {
       } catch { /* ignore auto-save errors */ }
     }, 2000);
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
-  }, [state.board, state.tracks, state.terrainZones, state.elevationPoints, transform, currentProjectId]);
+  }, [state.board, state.tracks, state.terrainZones, state.portals, state.elevationPoints, transform, currentProjectId]);
 
   const clearAll = useCallback(() => dispatch({ type: "CLEAR_TRACKS" }), []);
   const undo = useCallback(() => dispatch({ type: "UNDO" }), []);
@@ -668,6 +675,128 @@ export function useTrackPlanner() {
     }
   }, [selectedZoneId, removeTerrainZone]);
 
+  // ── Portals (new system) ──
+  const [portalMode, setPortalMode] = useState<{ kind: TerrainZoneKind; width: PortalWidth } | null>(null);
+  const [portalFirstTrack, setPortalFirstTrack] = useState<TrackPoint | null>(null);
+  const [selectedPortalId, setSelectedPortalId] = useState<string | null>(null);
+  const [pairingPortalId, setPairingPortalId] = useState<string | null>(null);
+
+  let portalIdCounter = useRef(0);
+  const generatePortalId = useCallback(() => `portal-${Date.now()}-${portalIdCounter.current++}`, []);
+
+  /** Start portal placement mode */
+  const startPortalMode = useCallback((kind: TerrainZoneKind, width: PortalWidth) => {
+    setPortalMode({ kind, width });
+    setPortalFirstTrack(null);
+    setPairingPortalId(null);
+    dispatch({ type: "SET_ACTIVE_PIECE", pieceId: null });
+    dispatch({ type: "SELECT_TRACK", instanceId: null });
+  }, []);
+
+  const cancelPortalMode = useCallback(() => {
+    setPortalMode(null);
+    setPortalFirstTrack(null);
+    setPairingPortalId(null);
+  }, []);
+
+  /** Place a portal point — for single: 1 click, for double: 2 clicks (2 tracks) */
+  const placePortalPoint = useCallback(
+    (worldX: number, worldZ: number) => {
+      if (!portalMode) return false;
+
+      const hit = closestPointOnAnyTrack({ x: worldX, z: worldZ }, state.tracks, catalogMap);
+      if (!hit || hit.distance > 15) return false;
+
+      const point: TrackPoint = { trackId: hit.trackId, t: hit.t, worldX: hit.worldPos.x, worldZ: hit.worldPos.z };
+
+      if (portalMode.width === "single") {
+        // Single portal — one click creates the portal
+        const portal: Portal = {
+          id: generatePortalId(),
+          kind: portalMode.kind,
+          width: "single",
+          track1: point,
+          pairedPortalId: null,
+        };
+        dispatch({ type: "ADD_PORTAL", portal });
+        setPortalMode(null);
+        setPortalFirstTrack(null);
+        return true;
+      }
+
+      // Double portal — need 2 track clicks
+      if (!portalFirstTrack) {
+        setPortalFirstTrack(point);
+        return true;
+      }
+
+      // Don't allow same track for both points of a double portal
+      if (portalFirstTrack.trackId === point.trackId) return false;
+
+      const portal: Portal = {
+        id: generatePortalId(),
+        kind: portalMode.kind,
+        width: "double",
+        track1: portalFirstTrack,
+        track2: point,
+        pairedPortalId: null,
+      };
+      dispatch({ type: "ADD_PORTAL", portal });
+      setPortalMode(null);
+      setPortalFirstTrack(null);
+      return true;
+    },
+    [portalMode, portalFirstTrack, state.tracks, catalogMap, generatePortalId],
+  );
+
+  /** Start pairing mode — click on another portal to pair */
+  const startPairing = useCallback((portalId: string) => {
+    setPairingPortalId(portalId);
+    setPortalMode(null);
+    setPortalFirstTrack(null);
+  }, []);
+
+  /** Complete pairing — click on second portal */
+  const pairWithPortal = useCallback(
+    (targetPortalId: string) => {
+      if (!pairingPortalId || pairingPortalId === targetPortalId) return false;
+      const source = state.portals.find((p) => p.id === pairingPortalId);
+      const target = state.portals.find((p) => p.id === targetPortalId);
+      if (!source || !target) return false;
+      // Must be same kind (tunnel↔tunnel, bridge↔bridge)
+      if (source.kind !== target.kind) return false;
+      // Unpair existing pairs first
+      if (source.pairedPortalId) dispatch({ type: "UNPAIR_PORTAL", portalId: source.id });
+      if (target.pairedPortalId) dispatch({ type: "UNPAIR_PORTAL", portalId: target.id });
+      dispatch({ type: "PAIR_PORTALS", portalId1: pairingPortalId, portalId2: targetPortalId });
+      setPairingPortalId(null);
+      return true;
+    },
+    [pairingPortalId, state.portals],
+  );
+
+  const removePortal = useCallback((portalId: string) => {
+    dispatch({ type: "REMOVE_PORTAL", portalId });
+    if (selectedPortalId === portalId) setSelectedPortalId(null);
+    if (pairingPortalId === portalId) setPairingPortalId(null);
+  }, [selectedPortalId, pairingPortalId]);
+
+  /** Hit-test portals */
+  const hitTestPortal = useCallback(
+    (worldX: number, worldZ: number): string | null => {
+      for (const portal of state.portals) {
+        const p1 = portal.track1;
+        if (p1.worldX !== undefined && Math.hypot(worldX - p1.worldX, worldZ - p1.worldZ!) < 20) return portal.id;
+        if (portal.track2) {
+          const p2 = portal.track2;
+          if (p2.worldX !== undefined && Math.hypot(worldX - p2.worldX, worldZ - p2.worldZ!) < 20) return portal.id;
+        }
+      }
+      return null;
+    },
+    [state.portals],
+  );
+
   // ── Elevation points ──
   const [elevationMode, setElevationMode] = useState(false);
 
@@ -783,5 +912,18 @@ export function useTrackPlanner() {
     updateElevationPoint,
     startElevationMode,
     cancelElevationMode,
+    // Portals (new)
+    portalMode,
+    portalFirstTrack,
+    selectedPortalId,
+    setSelectedPortalId,
+    pairingPortalId,
+    startPortalMode,
+    cancelPortalMode,
+    placePortalPoint,
+    startPairing,
+    pairWithPortal,
+    removePortal,
+    hitTestPortal,
   };
 }
