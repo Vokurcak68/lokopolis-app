@@ -832,9 +832,9 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
     drawBoard(ctx, board, transform);
   }
 
-  // Z-order: tunnels (bottom) → tunnel overlays → normal → bridge overlays → bridges (top).
-  // This ensures tracks crossing a tunnel are drawn ABOVE the green tunnel overlay,
-  // and tracks under a bridge are drawn BELOW the bridge overlay.
+  // Z-order: tunnels (bottom) → normal → bridges (top).
+  // Overlays (tunnel green, bridge steel) are drawn AFTER all tracks,
+  // EXCEPT tracks with elevation that cross a tunnel — those are redrawn on top.
   const tunnels: PlacedTrack[] = [];
   const normal: PlacedTrack[] = [];
   const bridges: PlacedTrack[] = [];
@@ -867,37 +867,24 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
     }
   };
 
-  // Split terrain zones and portals into tunnel vs bridge layers
-  const tunnelZones = terrainZones.filter((z) => z.kind === "tunnel");
-  const bridgeZones = terrainZones.filter((z) => z.kind === "bridge");
+  // Draw all tracks in z-order
+  for (const layer of [sortSelected(tunnels), sortSelected(normal), sortSelected(bridges)]) {
+    drawLayer(layer);
+  }
+
+  // Overlays on top of all tracks (tunnel green covers tracks inside tunnel)
   const portals = params.portals ?? [];
-  const tunnelPortals = portals.filter((p) => p.kind === "tunnel");
-  const bridgePortals = portals.filter((p) => p.kind === "bridge");
-
-  // Layer 1: Tunnel tracks (bottom)
-  drawLayer(sortSelected(tunnels));
-
-  // Layer 2: Tunnel overlays (green hills, tunnel portals) — above tunnel tracks, below normal tracks
-  if (!skipBackground && tunnelZones.length > 0) {
-    drawTerrainZones(ctx, tunnelZones, tracks, catalog, transform);
+  if (!skipBackground && terrainZones.length > 0) {
+    drawTerrainZones(ctx, terrainZones, tracks, catalog, transform);
   }
-  if (!skipBackground && tunnelPortals.length > 0) {
-    drawPortals(ctx, tunnelPortals, tracks, catalog, transform);
+  if (!skipBackground && portals.length > 0) {
+    drawPortals(ctx, portals, tracks, catalog, transform);
   }
 
-  // Layer 3: Normal tracks — drawn above tunnel overlays (crossing tracks visible on top)
-  drawLayer(sortSelected(normal));
-
-  // Layer 4: Bridge overlays (steel paths, bridge portals) — above normal tracks, below bridge tracks
-  if (!skipBackground && bridgeZones.length > 0) {
-    drawTerrainZones(ctx, bridgeZones, tracks, catalog, transform);
+  // Re-draw bridge tracks on top of overlays (bridges cross over tunnels)
+  if (bridges.length > 0) {
+    drawLayer(sortSelected(bridges));
   }
-  if (!skipBackground && bridgePortals.length > 0) {
-    drawPortals(ctx, bridgePortals, tracks, catalog, transform);
-  }
-
-  // Layer 5: Bridge tracks (top) — drawn above bridge overlays
-  drawLayer(sortSelected(bridges));
 
   const dots: WorldConnectionDot[] = [];
   for (const track of tracks) {
@@ -1876,6 +1863,16 @@ export function drawPortals(
   const drawBetween = (a: TrackPoint, b: TrackPoint, kind: "tunnel" | "bridge") => {
     const zone: TerrainZone = { id: "tmp", kind, start: a, end: b };
     const pathPoints = sampleTrackPath(zone, tracks, catalog, 40);
+
+    // Snap first and last path point to the actual cached world positions of the portals
+    // (avoids mismatch when t maps to a slightly different point, e.g. on turnout primary vs all segments)
+    if (pathPoints.length > 0 && a.worldX !== undefined && a.worldZ !== undefined) {
+      pathPoints[0] = { x: a.worldX, z: a.worldZ };
+    }
+    if (pathPoints.length > 0 && b.worldX !== undefined && b.worldZ !== undefined) {
+      pathPoints[pathPoints.length - 1] = { x: b.worldX, z: b.worldZ };
+    }
+
     const screenPath = pathPoints.map((p) => worldToScreen(p, transform));
     if (kind === "tunnel") drawTunnelPathStyle(screenPath);
     else drawBridgePathStyle(screenPath);
@@ -1970,13 +1967,13 @@ export function drawPortals(
       drawBetween(a2, b2, portal.kind);
     }
 
-    // start portal — flipped 180° (portal mouth faces incoming direction)
+    // start portal — flipped 180° (same as end, both face inward toward the tunnel)
     if (portal.width === "double" && portal.track2) drawDoublePortal(portal, portal.track1, portal.track2, true);
     else drawSinglePortal(portal, portal.track1, true);
 
-    // end portal — faces outgoing direction (no flip)
-    if (partner.width === "double" && partner.track2) drawDoublePortal(partner, partner.track1, partner.track2, false);
-    else drawSinglePortal(partner, partner.track1, false);
+    // end portal — flipped 180° (was already correct before, restoring)
+    if (partner.width === "double" && partner.track2) drawDoublePortal(partner, partner.track1, partner.track2, true);
+    else drawSinglePortal(partner, partner.track1, true);
   }
 
   // 2) unpaired portals: draw standalone
