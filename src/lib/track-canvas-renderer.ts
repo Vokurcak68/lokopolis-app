@@ -867,12 +867,50 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
     }
   };
 
-  // Draw all tracks in z-order
-  for (const layer of [sortSelected(tunnels), sortSelected(normal), sortSelected(bridges)]) {
+  // Build set of track ids that have non-zero elevation (elevated tracks cross over tunnels)
+  const elevatedTrackIds = new Set<string>();
+  if (elevationPoints.length > 0) {
+    for (const ep of elevationPoints) {
+      if (ep.elevation !== 0) elevatedTrackIds.add(ep.trackId);
+    }
+    // Also mark connected tracks that inherit elevation via snap connections
+    // (simple: any track connected to a track with non-zero elevation marker is potentially elevated)
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const t of tracks) {
+        if (elevatedTrackIds.has(t.instanceId)) continue;
+        for (const snap of Object.values(t.snappedConnections)) {
+          const neighborId = snap.split(":")[0];
+          if (elevatedTrackIds.has(neighborId)) {
+            elevatedTrackIds.add(t.instanceId);
+            changed = true;
+            break;
+          }
+        }
+      }
+    }
+    // Remove tracks that have an explicit 0 elevation marker and no non-zero markers
+    // (track with only elev=0 markers is at ground level)
+    for (const t of tracks) {
+      if (!elevatedTrackIds.has(t.instanceId)) continue;
+      const ownMarkers = elevationPoints.filter((ep) => ep.trackId === t.instanceId);
+      if (ownMarkers.length > 0 && ownMarkers.every((ep) => ep.elevation === 0)) {
+        elevatedTrackIds.delete(t.instanceId);
+      }
+    }
+  }
+
+  // Split normal tracks into ground-level and elevated
+  const normalGround = normal.filter((t) => !elevatedTrackIds.has(t.instanceId));
+  const normalElevated = normal.filter((t) => elevatedTrackIds.has(t.instanceId));
+
+  // Draw ground-level tracks
+  for (const layer of [sortSelected(tunnels), sortSelected(normalGround)]) {
     drawLayer(layer);
   }
 
-  // Overlays on top of all tracks (tunnel green covers tracks inside tunnel)
+  // Overlays on top of ground-level tracks (tunnel green covers tracks inside tunnel)
   const portals = params.portals ?? [];
   if (!skipBackground && terrainZones.length > 0) {
     drawTerrainZones(ctx, terrainZones, tracks, catalog, transform);
@@ -881,7 +919,10 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
     drawPortals(ctx, portals, tracks, catalog, transform);
   }
 
-  // Re-draw bridge tracks on top of overlays (bridges cross over tunnels)
+  // Elevated tracks + bridge tracks on top of overlays (crossing over tunnels)
+  if (normalElevated.length > 0) {
+    drawLayer(sortSelected(normalElevated));
+  }
   if (bridges.length > 0) {
     drawLayer(sortSelected(bridges));
   }
@@ -1898,6 +1939,14 @@ export function drawPortals(
     const dx = s2.x - s1.x;
     const dy = s2.y - s1.y;
     const dist = Math.hypot(dx, dy);
+
+    // If the two tracks are too far apart, draw two single portals instead of one giant double
+    const maxDoubleSpan = portalRadius * 5;
+    if (dist > maxDoubleSpan) {
+      drawSinglePortal(portal, p1, flip);
+      drawSinglePortal(portal, p2, flip);
+      return;
+    }
 
     let avgTan = {
       x: (d1.tangent.x + d2.tangent.x) / 2,
