@@ -136,11 +136,15 @@ export function getPieceSegmentsLocal(piece: TrackPieceDefinition): PathSegment[
     const sign = piece.direction === "right" ? 1 : -1;
     const straightLen = piece.length ?? 0;
 
+    // Diverging branch: straight lead + arc so endpoint is near main-line end
+    const arcChordX = radius * Math.sin(angle);
+    const divergeLeadX = Math.max(0, straightLen - arcChordX);
+
     return [
       { kind: "line", from: { x: 0, z: 0 }, to: { x: straightLen, z: 0 } },
       {
         kind: "arc",
-        center: { x: 0, z: sign * radius },
+        center: { x: divergeLeadX, z: sign * radius },
         radius,
         startAngle: sign > 0 ? -Math.PI / 2 : Math.PI / 2,
         endAngle: (sign > 0 ? -Math.PI / 2 : Math.PI / 2) + sign * angle,

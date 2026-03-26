@@ -117,8 +117,15 @@ function turnout(
   // Screen/world handedness in planner is inverted vs catalog naming,
   // so left turnout must diverge to negative Z and right to positive Z.
   const sign = direction === "left" ? -1 : 1;
-  const divergeX = radius * Math.sin(angleRad);
+
+  // Realistic turnout geometry: diverging branch has a straight lead first,
+  // then transitions into the curved section.
+  // This keeps diverging endpoint close to the main-line length (EW1 behavior).
+  const arcChordX = radius * Math.sin(angleRad);
+  const divergeLeadX = Math.max(0, length - arcChordX);
+  const divergeX = divergeLeadX + arcChordX;
   const divergeZ = sign * (radius - radius * Math.cos(angleRad));
+
   return {
     id,
     catalogNumber,
