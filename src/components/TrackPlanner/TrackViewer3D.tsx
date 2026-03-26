@@ -424,7 +424,7 @@ function TrackPiece3D({
     const pts = geometry.centerPoints;
     if (pts.length < 2) return null;
 
-    const topHalfW = halfGauge * BALLAST_WIDTH_FACTOR / 2;
+    const topHalfW = gaugeMm * BALLAST_WIDTH_FACTOR / 2;
     const botHalfW = topHalfW * 1.3; // wider at base
     const bh = BALLAST_HEIGHT_MM;
     const vertices: number[] = [];
@@ -461,7 +461,7 @@ function TrackPiece3D({
     geom.setIndex(indices);
     geom.computeVertexNormals();
     return geom;
-  }, [geometry.centerPoints, halfGauge]);
+  }, [geometry.centerPoints, gaugeMm]);
 
   // Sleepers: merged BufferGeometry — each sleeper is a box oriented perpendicular to track
   const sleeperLength = gaugeMm * SLEEPER_LENGTH_FACTOR;
