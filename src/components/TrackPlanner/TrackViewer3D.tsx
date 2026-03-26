@@ -463,10 +463,11 @@ function TrackPiece3D({
     return geom;
   }, [geometry.centerPoints, halfGauge]);
 
-  // Sleepers: boxes at regular intervals along the path
-  const sleeperInstances = useMemo(() => {
+  // Sleepers: merged BufferGeometry — each sleeper is a box oriented perpendicular to track
+  const sleeperLength = gaugeMm * SLEEPER_LENGTH_FACTOR;
+  const sleeperGeom = useMemo(() => {
     const pts = geometry.centerPoints;
-    if (pts.length < 2) return [];
+    if (pts.length < 2) return null;
 
     // Build cumulative distance array
     const cumDist: number[] = [0];
@@ -477,15 +478,20 @@ function TrackPiece3D({
       ));
     }
     const totalLen = cumDist[cumDist.length - 1];
-    if (totalLen < 1) return [];
+    if (totalLen < 1) return null;
 
     const sleeperCount = Math.max(2, Math.floor(totalLen / SLEEPER_SPACING_MM));
-    const result: Array<{ position: [number, number, number]; rotation: number }> = [];
+    const halfLen = sleeperLength / 2; // half sleeper length (perpendicular to track)
+    const halfW = SLEEPER_WIDTH_MM / 2; // half sleeper width (along track)
+    const hh = SLEEPER_THICKNESS_MM; // sleeper height
+
+    const vertices: number[] = [];
+    const indices: number[] = [];
 
     for (let s = 0; s <= sleeperCount; s++) {
       const targetDist = (s / sleeperCount) * totalLen;
 
-      // Find segment containing targetDist
+      // Find segment
       let segIdx = 1;
       while (segIdx < cumDist.length - 1 && cumDist[segIdx] < targetDist) segIdx++;
 
@@ -497,21 +503,53 @@ function TrackPiece3D({
       const p0 = pts[segIdx - 1];
       const p1 = pts[segIdx];
 
-      const x = p0.x + t * (p1.x - p0.x);
-      const y = p0.y + t * (p1.y - p0.y);
-      const z = p0.z + t * (p1.z - p0.z);
-      const angle = Math.atan2(p1.tangentZ, p1.tangentX);
+      const cx = p0.x + t * (p1.x - p0.x);
+      const cy = p0.y + t * (p1.y - p0.y) + BALLAST_HEIGHT_MM;
+      const cz = p0.z + t * (p1.z - p0.z);
 
-      result.push({
-        position: [x, y + BALLAST_HEIGHT_MM + SLEEPER_THICKNESS_MM / 2, z],
-        rotation: angle,
-      });
+      // Tangent direction (along track)
+      const tx = p1.tangentX;
+      const tz = p1.tangentZ;
+      // Perpendicular direction (across track — this is the sleeper's long axis)
+      const px = -tz;
+      const pz = tx;
+
+      // 8 corners of the sleeper box
+      // Along track: ±halfW * tangent
+      // Across track: ±halfLen * perp
+      // Height: cy to cy+hh
+      const base = s * 8;
+      for (let dy = 0; dy <= 1; dy++) {
+        const y = cy + dy * hh;
+        // 4 corners at this height
+        vertices.push(cx + tx * halfW + px * halfLen, y, cz + tz * halfW + pz * halfLen); // +along +perp
+        vertices.push(cx + tx * halfW - px * halfLen, y, cz + tz * halfW - pz * halfLen); // +along -perp
+        vertices.push(cx - tx * halfW - px * halfLen, y, cz - tz * halfW - pz * halfLen); // -along -perp
+        vertices.push(cx - tx * halfW + px * halfLen, y, cz - tz * halfW + pz * halfLen); // -along +perp
+      }
+
+      // Bottom: 0,1,2,3  Top: 4,5,6,7
+      const b = base;
+      // Top face
+      indices.push(b+4, b+5, b+6, b+4, b+6, b+7);
+      // Bottom face
+      indices.push(b+2, b+1, b+0, b+3, b+2, b+0);
+      // Front (+along)
+      indices.push(b+0, b+1, b+5, b+0, b+5, b+4);
+      // Back (-along)
+      indices.push(b+2, b+3, b+7, b+2, b+7, b+6);
+      // Left (+perp)
+      indices.push(b+3, b+0, b+4, b+3, b+4, b+7);
+      // Right (-perp)
+      indices.push(b+1, b+2, b+6, b+1, b+6, b+5);
     }
 
-    return result;
-  }, [geometry.centerPoints]);
-
-  const sleeperLength = gaugeMm * SLEEPER_LENGTH_FACTOR;
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+    geom.setIndex(indices);
+    geom.computeVertexNormals();
+    return geom;
+  }, [geometry.centerPoints, sleeperLength, gaugeMm]);
 
   return (
     <group>
@@ -523,12 +561,11 @@ function TrackPiece3D({
       )}
 
       {/* Sleepers */}
-      {sleeperInstances.map((sl, i) => (
-        <mesh key={i} position={sl.position} rotation={[0, -sl.rotation + Math.PI / 2, 0]}>
-          <boxGeometry args={[SLEEPER_WIDTH_MM, SLEEPER_THICKNESS_MM, sleeperLength]} />
+      {sleeperGeom && (
+        <mesh geometry={sleeperGeom}>
           <meshStandardMaterial color="#6f4e37" />
         </mesh>
-      ))}
+      )}
 
       {/* Rails */}
       {railLeftGeom && (
