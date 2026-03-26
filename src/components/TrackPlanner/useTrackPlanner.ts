@@ -33,6 +33,13 @@ import { getBoardPathMm, isPointInsidePolygon, closestPointOnAnyTrack, type View
 const STORAGE_KEY = "lokopolis-track-planner-v1";
 const PROJECTS_KEY = "lokopolis-track-projects";
 const CURRENT_PROJECT_KEY = "lokopolis-track-current-project";
+const CLOUD_CURRENT_PROJECT_KEY = "lokopolis-track-cloud-current-project";
+
+const DEFAULT_TRANSFORM: ViewTransform = {
+  zoom: 0.45,
+  offsetX: 180,
+  offsetY: 120,
+};
 
 /** Stripped-down version for storage (no history stacks) */
 interface PersistedData {
@@ -87,6 +94,20 @@ function setCurrentProjectId(id: string | null) {
     window.localStorage.setItem(CURRENT_PROJECT_KEY, id);
   } else {
     window.localStorage.removeItem(CURRENT_PROJECT_KEY);
+  }
+}
+
+function getCloudCurrentProjectId(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(CLOUD_CURRENT_PROJECT_KEY);
+}
+
+function setCloudCurrentProjectId(id: string | null) {
+  if (typeof window === "undefined") return;
+  if (id) {
+    window.localStorage.setItem(CLOUD_CURRENT_PROJECT_KEY, id);
+  } else {
+    window.localStorage.removeItem(CLOUD_CURRENT_PROJECT_KEY);
   }
 }
 
@@ -169,16 +190,13 @@ export function useTrackPlanner() {
     persistedRef.current?.state ?? createInitialState(),
   );
   const [transform, setTransform] = useState<ViewTransform>(
-    persistedRef.current?.transform ?? {
-      zoom: 0.45,
-      offsetX: 180,
-      offsetY: 120,
-    },
+    persistedRef.current?.transform ?? DEFAULT_TRANSFORM,
   );
   const [currentProjectId, setCurrentProjectIdState] = useState<string | null>(persistedRef.current?.projectId ?? null);
   const [currentProjectName, setCurrentProjectName] = useState<string | null>(persistedRef.current?.projectName ?? null);
   const [cloudProjects, setCloudProjects] = useState<SavedProject[]>([]);
   const [catalogOpenMobile, setCatalogOpenMobile] = useState(false);
+  const hasHydratedCloudProjectRef = useRef(false);
 
   // Placement rotation for free-placement (no snap) — persists between placements
   const [placementRotation, setPlacementRotation] = useState(0);
@@ -300,10 +318,35 @@ export function useTrackPlanner() {
       setCloudProjects([]);
       setCurrentProjectIdState(null);
       setCurrentProjectName(null);
+      setCloudCurrentProjectId(null);
+      hasHydratedCloudProjectRef.current = false;
+      dispatch({ type: "CLEAR_TRACKS" });
+      setTransform(DEFAULT_TRANSFORM);
       return;
     }
     void fetchCloudProjects();
   }, [authLoading, user, fetchCloudProjects]);
+
+  // Hydrate last cloud project after refresh (logged-in users only)
+  useEffect(() => {
+    if (authLoading || !user || hasHydratedCloudProjectRef.current) return;
+    if (cloudProjects.length === 0) {
+      hasHydratedCloudProjectRef.current = true;
+      return;
+    }
+
+    const preferredId = getCloudCurrentProjectId();
+    const preferred = preferredId ? cloudProjects.find((p) => p.id === preferredId) : null;
+    const projectToLoad = preferred ?? cloudProjects[0];
+
+    dispatch({ type: "LOAD_STATE", state: dataToState(projectToLoad.data) });
+    setTransform(projectToLoad.data.transform ?? DEFAULT_TRANSFORM);
+    setCurrentProjectIdState(projectToLoad.id);
+    setCurrentProjectName(projectToLoad.name);
+    setCloudCurrentProjectId(projectToLoad.id);
+
+    hasHydratedCloudProjectRef.current = true;
+  }, [authLoading, user, cloudProjects]);
 
   /** Save current project (or create new if none) */
   const saveProject = useCallback(async (nameOverride?: string): Promise<boolean> => {
@@ -320,6 +363,7 @@ export function useTrackPlanner() {
 
         if (error) throw error;
         if (nameOverride?.trim()) setCurrentProjectName(nameOverride.trim());
+        setCloudCurrentProjectId(currentProjectId);
         await fetchCloudProjects();
         return true;
       }
@@ -335,6 +379,7 @@ export function useTrackPlanner() {
 
       setCurrentProjectIdState(inserted.id);
       setCurrentProjectName(inserted.name);
+      setCloudCurrentProjectId(inserted.id);
       await fetchCloudProjects();
       return true;
     } catch (e) {
@@ -361,6 +406,7 @@ export function useTrackPlanner() {
 
       setCurrentProjectIdState(inserted.id);
       setCurrentProjectName(inserted.name);
+      setCloudCurrentProjectId(inserted.id);
       await fetchCloudProjects();
       return true;
     } catch (e) {
@@ -384,9 +430,10 @@ export function useTrackPlanner() {
 
     const projectData = (data as { id: string; name: string; data: PersistedData }).data;
     dispatch({ type: "LOAD_STATE", state: dataToState(projectData) });
-    setTransform(projectData.transform);
+    setTransform(projectData.transform ?? DEFAULT_TRANSFORM);
     setCurrentProjectIdState(projectId);
     setCurrentProjectName((data as { name: string }).name);
+    setCloudCurrentProjectId(projectId);
     return true;
   }, [user]);
 
@@ -408,6 +455,7 @@ export function useTrackPlanner() {
     if (currentProjectId === projectId) {
       setCurrentProjectIdState(null);
       setCurrentProjectName(null);
+      setCloudCurrentProjectId(null);
     }
     await fetchCloudProjects();
   }, [user, currentProjectId, fetchCloudProjects]);
