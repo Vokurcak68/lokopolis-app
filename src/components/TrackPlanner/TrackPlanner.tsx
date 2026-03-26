@@ -354,32 +354,6 @@ export default function TrackPlanner() {
             />
           )}
 
-          {viewMode === "2d" && (
-            <div
-              className="absolute right-4 top-4 z-20 flex items-center gap-2 rounded-lg border px-2 py-2 shadow-lg"
-              style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}
-            >
-              <button
-                onClick={() => {
-                  if (planner.elevationMode) {
-                    planner.cancelElevationMode();
-                    setElevationPopup(null);
-                  } else {
-                    planner.startElevationMode();
-                  }
-                }}
-                className="h-8 rounded-md border px-3 text-sm font-medium transition"
-                style={{
-                  borderColor: planner.elevationMode ? "#8b5cf6" : "var(--border)",
-                  color: planner.elevationMode ? "#fff" : "var(--text-body)",
-                  background: planner.elevationMode ? "#8b5cf6" : "transparent",
-                }}
-                title="Nástroj výšek"
-              >
-                📐 Výšky
-              </button>
-            </div>
-          )}
 
           {/* Elevation point popup */}
           {elevationPopup && (
