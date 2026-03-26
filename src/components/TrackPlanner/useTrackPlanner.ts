@@ -688,6 +688,8 @@ export function useTrackPlanner() {
   const startPortalMode = useCallback((kind: TerrainZoneKind, width: PortalWidth) => {
     setPortalMode({ kind, width });
     setPortalFirstTrack(null);
+    setPortalSecondTrack(null);
+    endFirstTrackRef.current = null;
     setPairingPortalId(null);
     dispatch({ type: "SET_ACTIVE_PIECE", pieceId: null });
     dispatch({ type: "SELECT_TRACK", instanceId: null });
