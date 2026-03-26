@@ -197,6 +197,7 @@ export function useTrackPlanner() {
   const [cloudProjects, setCloudProjects] = useState<SavedProject[]>([]);
   const [catalogOpenMobile, setCatalogOpenMobile] = useState(false);
   const hasHydratedCloudProjectRef = useRef(false);
+  const cloudFetchedRef = useRef(false);
 
   // Placement rotation for free-placement (no snap) — persists between placements
   const [placementRotation, setPlacementRotation] = useState(0);
@@ -310,6 +311,7 @@ export function useTrackPlanner() {
       data: p.data,
     }));
     setCloudProjects(mapped);
+    cloudFetchedRef.current = true;
   }, [user]);
 
   useEffect(() => {
@@ -320,6 +322,7 @@ export function useTrackPlanner() {
       setCurrentProjectName(null);
       setCloudCurrentProjectId(null);
       hasHydratedCloudProjectRef.current = false;
+      cloudFetchedRef.current = false;
       dispatch({ type: "CLEAR_TRACKS" });
       setTransform(DEFAULT_TRANSFORM);
       return;
@@ -330,7 +333,12 @@ export function useTrackPlanner() {
   // Hydrate last cloud project after refresh (logged-in users only)
   useEffect(() => {
     if (authLoading || !user || hasHydratedCloudProjectRef.current) return;
+    // Don't mark as hydrated until we've actually received the cloud fetch result.
+    // cloudProjects starts as [] and stays [] until fetchCloudProjects resolves.
+    if (cloudProjects.length === 0 && !cloudFetchedRef.current) return;
+
     if (cloudProjects.length === 0) {
+      // User is logged in but truly has no cloud projects — nothing to hydrate
       hasHydratedCloudProjectRef.current = true;
       return;
     }
