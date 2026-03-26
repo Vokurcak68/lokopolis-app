@@ -78,7 +78,7 @@ function buildElevationMap(
 
   const trackMap = new Map(tracks.map((t) => [t.instanceId, t]));
 
-  // Build adjacency graph from snappedConnections
+  // Build adjacency: for each track, which tracks connect at start/end
   type Neighbor = { trackId: string; atMyEnd: "start" | "end"; atTheirEnd: "start" | "end" };
   const adjacency = new Map<string, Neighbor[]>();
 
@@ -88,102 +88,166 @@ function buildElevationMap(
     if (!piece) continue;
     for (const [myConnId, snapVal] of Object.entries(track.snappedConnections)) {
       const [otherTrackId, otherConnId] = snapVal.split(":");
-      const myEnd = myConnId === "a" ? "start" : "end";
-      const theirEnd = otherConnId === "a" ? "start" : "end";
+      const myEnd: "start" | "end" = myConnId === "a" ? "start" : "end";
+      const theirEnd: "start" | "end" = otherConnId === "a" ? "start" : "end";
       neighbors.push({ trackId: otherTrackId, atMyEnd: myEnd, atTheirEnd: theirEnd });
     }
     adjacency.set(track.instanceId, neighbors);
   }
 
-  // Group elevation points by track
-  const epByTrack = new Map<string, ElevationPoint[]>();
+  // Find connected components via BFS from tracks that have elevation points
+  const visited = new Set<string>();
+
   for (const ep of elevationPoints) {
-    if (!epByTrack.has(ep.trackId)) epByTrack.set(ep.trackId, []);
-    epByTrack.get(ep.trackId)!.push(ep);
-  }
+    if (visited.has(ep.trackId)) continue;
 
-  // For each track with elevation points, compute directly from its own points
-  // Then propagate to connected tracks via BFS along the graph
-  const processed = new Set<string>();
-
-  // Step 1: Handle tracks that have their own elevation points
-  for (const [trackId, eps] of epByTrack) {
-    const track = trackMap.get(trackId);
-    if (!track) continue;
-    const len = getTrackLengthMm(track, catalog);
-    if (len < 0.001) continue;
-
-    const sorted = [...eps].sort((a, b) => a.t - b.t);
-    // startElev = interpolate at t=0, endElev = interpolate at t=1
-    const anchors = sorted.map((e) => ({ dist: e.t * len, elevation: e.elevation }));
-    const startElev = interpolateElevation(0, anchors);
-    const endElev = interpolateElevation(len, anchors);
-    result.set(trackId, { startElev, endElev });
-    processed.add(trackId);
-  }
-
-  // Step 2: BFS propagate from tracks with known elevations to their neighbors
-  const queue = [...processed];
-  while (queue.length > 0) {
-    const tid = queue.shift()!;
-    const myElev = result.get(tid)!;
-    const neighbors = adjacency.get(tid) ?? [];
-
-    for (const n of neighbors) {
-      if (processed.has(n.trackId)) continue;
-      const nTrack = trackMap.get(n.trackId);
-      if (!nTrack) continue;
-
-      // Determine elevation at the connection point
-      // My "start" = t=0 = startElev, my "end" = t=1 = endElev
-      const myConnElev = n.atMyEnd === "start" ? myElev.startElev : myElev.endElev;
-
-      // Their connection: if atTheirEnd === "start", the connection is at t=0 of neighbor
-      const nLen = getTrackLengthMm(nTrack, catalog);
-      if (n.atTheirEnd === "start") {
-        // Neighbor t=0 = myConnElev, t=1 = unknown (default: same elevation = flat)
-        result.set(n.trackId, { startElev: myConnElev, endElev: myConnElev });
-      } else {
-        // Neighbor t=1 = myConnElev, t=0 = unknown (default: same elevation = flat)
-        result.set(n.trackId, { startElev: myConnElev, endElev: myConnElev });
+    // BFS to find connected component
+    const component: string[] = [];
+    const queue = [ep.trackId];
+    const seen = new Set<string>();
+    seen.add(ep.trackId);
+    while (queue.length > 0) {
+      const tid = queue.shift()!;
+      component.push(tid);
+      visited.add(tid);
+      for (const n of adjacency.get(tid) ?? []) {
+        if (!seen.has(n.trackId)) {
+          seen.add(n.trackId);
+          queue.push(n.trackId);
+        }
       }
-      processed.add(n.trackId);
-      queue.push(n.trackId);
-    }
-  }
-
-  // Step 3: For propagated tracks that have elevation on BOTH ends (connected to two known tracks),
-  // update with correct values from both connections
-  for (const track of tracks) {
-    if (epByTrack.has(track.instanceId)) continue; // has own points, skip
-    const neighbors = adjacency.get(track.instanceId) ?? [];
-    const knownEnds: { end: "start" | "end"; elev: number }[] = [];
-
-    for (const n of neighbors) {
-      const nElev = result.get(n.trackId);
-      if (!nElev) continue;
-      const connElev = n.atMyEnd === "start"
-        ? (n.atTheirEnd === "start" ? nElev.startElev : nElev.endElev)
-        : (n.atTheirEnd === "start" ? nElev.startElev : nElev.endElev);
-
-      // Wait — we need the neighbor's elevation at the CONNECTION point (not at my end)
-      const neighborElev = n.atTheirEnd === "start" ? nElev.startElev : nElev.endElev;
-      knownEnds.push({ end: n.atMyEnd, elev: neighborElev });
     }
 
-    if (knownEnds.length >= 2) {
-      let startElev = 0, endElev = 0;
-      for (const ke of knownEnds) {
-        if (ke.end === "start") startElev = ke.elev;
-        else endElev = ke.elev;
+    const inComponent = new Set(component);
+    const componentNeighbors = (tid: string) =>
+      (adjacency.get(tid) ?? []).filter((n) => inComponent.has(n.trackId));
+
+    // Build ALL possible linear paths through the component using DFS
+    // For each path, collect anchors and interpolate elevation
+    // A path is a sequence of tracks from one dead end to another (or back to a visited node)
+    // For branching (turnouts), we explore all branches
+
+    // Strategy: DFS from every endpoint (track with ≤1 connection in component)
+    // For each DFS path, build chain with cumulative distance and interpolate
+    const endpoints: string[] = [];
+    for (const tid of component) {
+      if (componentNeighbors(tid).length <= 1) endpoints.push(tid);
+    }
+    // If no endpoints (closed loop), start from first track with elevation
+    if (endpoints.length === 0) endpoints.push(ep.trackId);
+
+    // Walk all paths from the first endpoint using DFS, accumulating distance
+    const chainVisited = new Set<string>();
+
+    type ChainEntry = { trackId: string; cumDist: number; length: number; reversed: boolean };
+
+    const walkChain = (startTid: string, entryEnd: "start" | "end" | null) => {
+      const chain: ChainEntry[] = [];
+      let current: string | null = startTid;
+      let cumDist = 0;
+      let prevEntryEnd = entryEnd;
+
+      while (current && !chainVisited.has(current)) {
+        chainVisited.add(current);
+        const track = trackMap.get(current);
+        if (!track) break;
+        const len = getTrackLengthMm(track, catalog);
+
+        // Determine if this track is reversed in the chain
+        let enteredFrom: "start" | "end" = "start";
+        if (prevEntryEnd !== null) {
+          for (const n of adjacency.get(current) ?? []) {
+            if (chainVisited.has(n.trackId) && n.trackId !== current) {
+              enteredFrom = n.atMyEnd;
+              break;
+            }
+          }
+        }
+        const reversed = enteredFrom === "end";
+
+        chain.push({ trackId: current, cumDist, length: len, reversed });
+        cumDist += len;
+
+        // Find all unvisited neighbors and recurse into branches
+        const unvisitedNeighbors: Neighbor[] = componentNeighbors(current).filter(
+          (n) => !chainVisited.has(n.trackId),
+        );
+
+        if (unvisitedNeighbors.length === 0) break;
+
+        // Continue main chain with first neighbor
+        const mainNext = unvisitedNeighbors[0];
+        prevEntryEnd = mainNext.atTheirEnd;
+
+        // Recurse into additional branches (if turnout/crossing creates multiple paths)
+        for (let i = 1; i < unvisitedNeighbors.length; i++) {
+          const branch = unvisitedNeighbors[i];
+          walkChain(branch.trackId, branch.atTheirEnd);
+        }
+
+        current = mainNext.trackId;
       }
-      result.set(track.instanceId, { startElev, endElev });
-    } else if (knownEnds.length === 1) {
-      const ke = knownEnds[0];
-      if (ke.end === "start") {
-        result.set(track.instanceId, { startElev: ke.elev, endElev: ke.elev });
-      } else {
-        result.set(track.instanceId, { startElev: ke.elev, endElev: ke.elev });
+
+      if (chain.length === 0) return;
+
+      // Collect elevation anchors for this chain
+      type Anchor = { globalDist: number; elevation: number };
+      const anchors: Anchor[] = [];
+      for (const ep2 of elevationPoints) {
+        const ci = chain.findIndex((c) => c.trackId === ep2.trackId);
+        if (ci === -1) continue;
+        const c = chain[ci];
+        const effectiveT = c.reversed ? 1 - ep2.t : ep2.t;
+        anchors.push({
+          globalDist: c.cumDist + effectiveT * c.length,
+          elevation: ep2.elevation,
+        });
+      }
+
+      // Also pull in known elevations from already-resolved neighbors at chain start
+      if (chain.length > 0 && anchors.length === 0) {
+        // This branch has no elevation points of its own.
+        // Inherit from the connection point
+        const firstTrack = chain[0];
+        const firstReversed = firstTrack.reversed;
+        const connEnd = firstReversed ? "end" : "start";
+        // Find the neighbor that's already resolved
+        for (const n of adjacency.get(firstTrack.trackId) ?? []) {
+          const resolved = result.get(n.trackId);
+          if (resolved) {
+            const connElev = n.atTheirEnd === "start" ? resolved.startElev : resolved.endElev;
+            anchors.push({ globalDist: 0, elevation: connElev });
+            break;
+          }
+        }
+      }
+
+      anchors.sort((a, b) => a.globalDist - b.globalDist);
+      if (anchors.length === 0) return;
+
+      // Interpolate elevation for each track in this chain
+      for (const c of chain) {
+        if (result.has(c.trackId)) continue; // Already resolved, don't overwrite
+        const startDist = c.cumDist;
+        const endDist = c.cumDist + c.length;
+        const startElev = interpolateElevation(startDist, anchors);
+        const endElev = interpolateElevation(endDist, anchors);
+
+        if (c.reversed) {
+          result.set(c.trackId, { startElev: endElev, endElev: startElev });
+        } else {
+          result.set(c.trackId, { startElev, endElev });
+        }
+      }
+    };
+
+    // Start walking from the first endpoint
+    walkChain(endpoints[0], null);
+
+    // Walk any remaining unvisited branches
+    for (const tid of component) {
+      if (!chainVisited.has(tid)) {
+        walkChain(tid, null);
       }
     }
   }
@@ -191,18 +255,18 @@ function buildElevationMap(
   return result;
 }
 
-/** Interpolate elevation at a given distance using sorted anchors */
-function interpolateElevation(dist: number, anchors: { dist: number; elevation: number }[]): number {
+/** Interpolate elevation at a given cumulative distance using sorted anchors */
+function interpolateElevation(dist: number, anchors: { globalDist: number; elevation: number }[]): number {
   if (anchors.length === 0) return 0;
   if (anchors.length === 1) return anchors[0].elevation;
-  if (dist <= anchors[0].dist) return anchors[0].elevation;
-  if (dist >= anchors[anchors.length - 1].dist) return anchors[anchors.length - 1].elevation;
+  if (dist <= anchors[0].globalDist) return anchors[0].elevation;
+  if (dist >= anchors[anchors.length - 1].globalDist) return anchors[anchors.length - 1].elevation;
 
   for (let i = 0; i < anchors.length - 1; i++) {
-    if (dist >= anchors[i].dist && dist <= anchors[i + 1].dist) {
-      const range = anchors[i + 1].dist - anchors[i].dist;
+    if (dist >= anchors[i].globalDist && dist <= anchors[i + 1].globalDist) {
+      const range = anchors[i + 1].globalDist - anchors[i].globalDist;
       if (range < 0.001) return anchors[i].elevation;
-      const frac = (dist - anchors[i].dist) / range;
+      const frac = (dist - anchors[i].globalDist) / range;
       return anchors[i].elevation + frac * (anchors[i + 1].elevation - anchors[i].elevation);
     }
   }
