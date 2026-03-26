@@ -62,6 +62,12 @@ export default function TrackPlanner() {
         return;
       }
 
+      if ((e.key === "Delete" || e.key === "Backspace") && planner.selectedPortalId) {
+        e.preventDefault();
+        planner.removePortal(planner.selectedPortalId);
+        return;
+      }
+
       if ((e.key === "Delete" || e.key === "Backspace") && planner.selectedZoneId) {
         e.preventDefault();
         planner.deleteSelectedZone();
@@ -427,7 +433,30 @@ export default function TrackPlanner() {
             </div>
           )}
 
-          {planner.selectedZoneId && (() => {
+          {planner.selectedPortalId && (() => {
+            const portal = planner.state.portals.find((p) => p.id === planner.selectedPortalId);
+            if (!portal) return null;
+            return (
+              <div
+                className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-lg border px-3 py-2 shadow-lg"
+                style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}
+              >
+                <span className="text-sm font-medium" style={{ color: "var(--text-body)" }}>
+                  {portal.kind === "tunnel" ? "🏔️ Tunel" : "🌉 Most"} — {portal.width === "single" ? "jednokolejný" : "dvojkolejný"} portál
+                </span>
+                <button
+                  onClick={() => planner.removePortal(portal.id)}
+                  className="h-8 rounded-md border px-3 text-sm font-medium transition"
+                  style={{ borderColor: "var(--border)", color: "#ef4444" }}
+                  title="Smazat portál (Delete)"
+                >
+                  🗑 Smazat
+                </button>
+              </div>
+            );
+          })()}
+
+          {planner.selectedZoneId && !planner.selectedPortalId && (() => {
             const zone = planner.state.terrainZones.find((z) => z.id === planner.selectedZoneId);
             if (!zone) return null;
             return (
@@ -450,7 +479,7 @@ export default function TrackPlanner() {
             );
           })()}
 
-          {planner.state.selectedTrackId && !planner.selectedZoneId && (() => {
+          {planner.state.selectedTrackId && !planner.selectedZoneId && !planner.selectedPortalId && (() => {
             const selTrack = planner.state.tracks.find((t) => t.instanceId === planner.state.selectedTrackId);
             const selPiece = selTrack ? planner.catalogMap[selTrack.pieceId] : null;
             const canFlip = selPiece && selPiece.type !== "straight";

@@ -347,10 +347,20 @@ export function TrackCanvas({
       return;
     }
 
-    // Check if clicking on a terrain zone portal
+    // Check if clicking on a new portal (single/double system)
+    const portalHit = onHitTestPortal?.(world.x, world.z) ?? null;
+    if (portalHit && !activePiece) {
+      onSetSelectedPortal?.(portalHit);
+      onSetSelectedZone(null);
+      onSetSelectedTrack(null);
+      return;
+    }
+
+    // Check if clicking on a terrain zone portal (legacy system)
     const zoneHit = onHitTestTerrainZone(world.x, world.z);
     if (zoneHit && !activePiece) {
       onSetSelectedZone(zoneHit);
+      onSetSelectedPortal?.(null);
       onSetSelectedTrack(null);
       return;
     }
@@ -361,6 +371,7 @@ export function TrackCanvas({
 
     if (hit && !activePiece) {
       onSetSelectedZone(null);
+      onSetSelectedPortal?.(null);
 
       if (multiKey) {
         // Ctrl/Shift+click → toggle this track in multi-selection
@@ -411,11 +422,13 @@ export function TrackCanvas({
       canvas.setPointerCapture(e.pointerId);
       onSetSelectedTrack(null);
       onSetSelectedZone(null);
+      onSetSelectedPortal?.(null);
       return;
     }
 
     onSetSelectedTrack(null);
     onSetSelectedZone(null);
+    onSetSelectedPortal?.(null);
   };
 
   const onPointerMove: React.PointerEventHandler<HTMLCanvasElement> = (e) => {
@@ -539,14 +552,23 @@ export function TrackCanvas({
             onElevationClick(cp.trackId, cp.t, cp.worldPos.x, cp.worldPos.z, x, y);
           }
         } else {
-          const zoneHit = onHitTestTerrainZone(world.x, world.z);
-          if (zoneHit) {
-            onSetSelectedZone(zoneHit);
+          const portalHit = onHitTestPortal?.(world.x, world.z) ?? null;
+          if (portalHit) {
+            onSetSelectedPortal?.(portalHit);
+            onSetSelectedZone(null);
             onSetSelectedTrack(null);
           } else {
-            const hit = hitTrack(world);
-            onSetSelectedTrack(hit?.instanceId ?? null);
-            onSetSelectedZone(null);
+            const zoneHit = onHitTestTerrainZone(world.x, world.z);
+            if (zoneHit) {
+              onSetSelectedZone(zoneHit);
+              onSetSelectedPortal?.(null);
+              onSetSelectedTrack(null);
+            } else {
+              const hit = hitTrack(world);
+              onSetSelectedTrack(hit?.instanceId ?? null);
+              onSetSelectedZone(null);
+              onSetSelectedPortal?.(null);
+            }
           }
         }
       }
