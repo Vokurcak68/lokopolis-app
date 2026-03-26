@@ -114,7 +114,9 @@ function turnout(
   radius: number, manufacturer: string, catalogNumber?: string,
 ): TrackPieceDefinition {
   const angleRad = (angleDeg * Math.PI) / 180;
-  const sign = direction === "left" ? 1 : -1;
+  // Screen/world handedness in planner is inverted vs catalog naming,
+  // so left turnout must diverge to negative Z and right to positive Z.
+  const sign = direction === "left" ? -1 : 1;
   const divergeX = radius * Math.sin(angleRad);
   const divergeZ = sign * (radius - radius * Math.cos(angleRad));
   return {

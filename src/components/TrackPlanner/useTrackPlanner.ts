@@ -590,7 +590,15 @@ export function useTrackPlanner() {
     if (!piece) return;
     // Only flip non-straight pieces (curves, turnouts, crossings)
     if (piece.type === "straight") return;
-    dispatch({ type: "UPDATE_TRACK", instanceId: track.instanceId, updates: { flipZ: !track.flipZ } });
+
+    // For turnouts we also rotate 180° so mirrored piece can be used in opposite running direction.
+    // This keeps placement/snapping usable when turnout is "reversed" on non-parallel geometry.
+    const updates: Partial<PlacedTrack> = { flipZ: !track.flipZ };
+    if (piece.type === "turnout") {
+      updates.rotation = track.rotation + Math.PI;
+    }
+
+    dispatch({ type: "UPDATE_TRACK", instanceId: track.instanceId, updates });
   }, [state.selectedTrackId, state.tracks, catalogMap]);
 
   const toggleSelectedTunnel = useCallback(() => {
