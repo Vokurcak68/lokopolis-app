@@ -132,7 +132,8 @@ export function getPieceSegmentsLocal(piece: TrackPieceDefinition): PathSegment[
   if (piece.type === "turnout") {
     const angle = ((piece.angle ?? 0) * Math.PI) / 180;
     const radius = piece.radius ?? 0;
-    const sign = piece.direction === "right" ? -1 : 1;
+    // Must match turnout geometry in track-library.ts (left=-Z, right=+Z)
+    const sign = piece.direction === "right" ? 1 : -1;
     const straightLen = piece.length ?? 0;
 
     return [

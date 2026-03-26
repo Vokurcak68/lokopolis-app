@@ -111,8 +111,10 @@ export function TrackCanvas({
     dragTrackId: string | null;
     dragStartWorld: LocalPoint | null;
     dragTrackStartPos: { x: number; z: number } | null;
+    dragUnsnapped: boolean;
     /** Group drag: starting positions of all selected tracks */
     groupDragStarts: Map<string, { x: number; z: number }>;
+    groupDragUnsnapped: boolean;
     isSpacePressed: boolean;
     pinchDistance: number | null;
     pinchCenter: { x: number; y: number } | null;
@@ -130,7 +132,9 @@ export function TrackCanvas({
     dragTrackId: null,
     dragStartWorld: null,
     dragTrackStartPos: null,
+    dragUnsnapped: false,
     groupDragStarts: new Map(),
+    groupDragUnsnapped: false,
     isSpacePressed: false,
     pinchDistance: null,
     pinchCenter: null,
@@ -366,9 +370,9 @@ export function TrackCanvas({
 
       // If clicking on an already-selected track in a group → start group drag
       if (state.selectedTrackIds.length > 1 && state.selectedTrackIds.includes(hit.instanceId)) {
-        // Unsnap all tracks in the group (disconnect from external tracks)
-        onUnsnapTracks(state.selectedTrackIds);
+        // Delay unsnap until user actually drags (prevents red/green flicker on simple click/select)
         inter.mode = "group-drag";
+        inter.groupDragUnsnapped = false;
         inter.pointerId = e.pointerId;
         inter.dragStartWorld = world;
         inter.groupDragStarts = new Map();
@@ -380,10 +384,10 @@ export function TrackCanvas({
         return;
       }
 
-      // Single select + start drag — unsnap this track
-      onUnsnapTracks([hit.instanceId]);
+      // Single select + potential drag — delay unsnap until real movement (>2mm)
       onSetSelectedTrack(hit.instanceId);
       inter.mode = "drag";
+      inter.dragUnsnapped = false;
       inter.pointerId = e.pointerId;
       inter.dragTrackId = hit.instanceId;
       inter.dragStartWorld = world;
@@ -466,6 +470,13 @@ export function TrackCanvas({
       const world = screenToWorld(x, y, transform);
       const dx = world.x - inter.dragStartWorld.x;
       const dz = world.z - inter.dragStartWorld.z;
+
+      // Unsnap only after real drag movement (~2mm), not on mere click/select
+      if (!inter.groupDragUnsnapped && Math.hypot(dx, dz) > 2) {
+        onUnsnapTracks(state.selectedTrackIds);
+        inter.groupDragUnsnapped = true;
+      }
+
       for (const [id, startPos] of inter.groupDragStarts) {
         onUpdateTrack(id, {
           position: { x: startPos.x + dx, y: 0, z: startPos.z + dz },
@@ -478,6 +489,13 @@ export function TrackCanvas({
       const world = screenToWorld(x, y, transform);
       const dx = world.x - inter.dragStartWorld.x;
       const dz = world.z - inter.dragStartWorld.z;
+
+      // Unsnap only after real drag movement (~2mm), not on simple selection click
+      if (!inter.dragUnsnapped && Math.hypot(dx, dz) > 2) {
+        onUnsnapTracks([inter.dragTrackId]);
+        inter.dragUnsnapped = true;
+      }
+
       onUpdateTrack(inter.dragTrackId, {
         position: {
           x: inter.dragTrackStartPos.x + dx,
@@ -594,7 +612,9 @@ export function TrackCanvas({
     inter.dragTrackId = null;
     inter.dragStartWorld = null;
     inter.dragTrackStartPos = null;
+    inter.dragUnsnapped = false;
     inter.groupDragStarts = new Map();
+    inter.groupDragUnsnapped = false;
     inter.pinchDistance = null;
     inter.pinchCenter = null;
   };
