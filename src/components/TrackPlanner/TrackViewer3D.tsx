@@ -28,63 +28,232 @@ const SLEEPER_LENGTH_FACTOR = 2.2; // factor of gauge
 const BALLAST_WIDTH_FACTOR = 2.8; // factor of gauge
 const BALLAST_HEIGHT_MM = 1.5;
 
-// ── Helpers ──
+// ── Elevation graph solver ──
+// Walks the connected track graph, finds elevation points, and computes
+// the elevation at any (trackId, t) by interpolating along cumulative distance.
 
-/** Get elevation at a given track+t, interpolating from elevation points */
-function getElevationAt(
-  trackId: string,
-  t: number,
-  elevationPoints: ElevationPoint[],
+interface TrackLengthInfo {
+  trackId: string;
+  length: number; // mm
+}
+
+/**
+ * Compute the length of a placed track's primary path in mm.
+ */
+function getTrackLengthMm(track: PlacedTrack, catalog: Record<string, TrackPieceDefinition>): number {
+  const piece = catalog[track.pieceId];
+  if (!piece) return 0;
+  const segs = getPieceSegmentsLocal(piece);
+  let total = 0;
+  for (const seg of segs) {
+    if (seg.kind === "line") {
+      total += Math.hypot(seg.to.x - seg.from.x, seg.to.z - seg.from.z);
+    } else {
+      total += seg.radius * Math.abs(seg.endAngle - seg.startAngle);
+    }
+  }
+  // For multi-segment pieces (turnouts), use first segment as primary
+  if (segs.length > 1 && (piece.type === "turnout" || piece.type === "crossing")) {
+    const s = segs[0];
+    if (s.kind === "line") return Math.hypot(s.to.x - s.from.x, s.to.z - s.from.z);
+    return s.radius * Math.abs(s.endAngle - s.startAngle);
+  }
+  return total || 1;
+}
+
+/**
+ * Build a map: trackId → elevation (mm) for each track's start (t=0) and end (t=1).
+ * Walks the graph of connected tracks starting from elevation points,
+ * propagating elevation along cumulative distance.
+ */
+function buildElevationMap(
   tracks: PlacedTrack[],
-): number {
-  // Get all elevation points for this track, sorted by t
-  const pts = elevationPoints
-    .filter((ep) => ep.trackId === trackId)
-    .sort((a, b) => a.t - b.t);
+  elevationPoints: ElevationPoint[],
+  catalog: Record<string, TrackPieceDefinition>,
+): Map<string, { startElev: number; endElev: number }> {
+  const result = new Map<string, { startElev: number; endElev: number }>();
+  if (elevationPoints.length === 0) return result;
 
-  if (pts.length === 0) {
-    // Check connected tracks for elevation hints
-    const track = tracks.find((tr) => tr.instanceId === trackId);
-    if (!track) return 0;
-    
-    // Check if any connected track has elevation points
-    for (const [, snapTarget] of Object.entries(track.snappedConnections)) {
-      const [targetId] = snapTarget.split(":");
-      const connPts = elevationPoints.filter((ep) => ep.trackId === targetId);
-      if (connPts.length > 0) {
-        // Use the nearest endpoint elevation from connected track
-        // Simple approach: return average of connected track's boundary elevations
-        const boundaryPts = connPts.filter((p) => p.t <= 0.05 || p.t >= 0.95);
-        if (boundaryPts.length > 0) {
-          return boundaryPts[0].elevation;
+  const trackMap = new Map(tracks.map((t) => [t.instanceId, t]));
+
+  // Build adjacency: for each track, which tracks connect at t=0 (connection "a") and t=1 (connection "b")
+  // snappedConnections: { connId: "otherInstanceId:otherConnId" }
+  type Neighbor = { trackId: string; atMyEnd: "start" | "end"; atTheirEnd: "start" | "end" };
+  const adjacency = new Map<string, Neighbor[]>();
+
+  for (const track of tracks) {
+    const neighbors: Neighbor[] = [];
+    const piece = catalog[track.pieceId];
+    if (!piece) continue;
+    const connIds = piece.connections.map((c) => c.id);
+    // "a" = t=0 end, "b" = t=1 end (for primary path)
+    for (const [myConnId, snapVal] of Object.entries(track.snappedConnections)) {
+      const [otherTrackId, otherConnId] = snapVal.split(":");
+      const myEnd = myConnId === "a" ? "start" : "end";
+      const otherPiece = catalog[trackMap.get(otherTrackId)?.pieceId ?? ""];
+      const theirEnd = otherConnId === "a" ? "start" : "end";
+      neighbors.push({ trackId: otherTrackId, atMyEnd: myEnd, atTheirEnd: theirEnd });
+    }
+    adjacency.set(track.instanceId, neighbors);
+  }
+
+  // Collect all elevation anchors: (trackId, t, elevation, distanceAlongTrack)
+  type Anchor = { trackId: string; t: number; elevation: number; globalDist: number };
+
+  // For each connected component that has elevation points, walk the graph
+  // and assign elevations by interpolating between anchors along cumulative distance
+  const visited = new Set<string>();
+
+  // Walk from each elevation point's track, BFS to discover the connected component
+  for (const ep of elevationPoints) {
+    if (visited.has(ep.trackId)) continue;
+
+    // BFS to find connected component
+    const component: string[] = [];
+    const queue = [ep.trackId];
+    const seen = new Set<string>();
+    seen.add(ep.trackId);
+    while (queue.length > 0) {
+      const tid = queue.shift()!;
+      component.push(tid);
+      visited.add(tid);
+      for (const n of adjacency.get(tid) ?? []) {
+        if (!seen.has(n.trackId)) {
+          seen.add(n.trackId);
+          queue.push(n.trackId);
         }
       }
     }
-    return 0;
-  }
 
-  if (pts.length === 1) return pts[0].elevation;
+    // Build a linear chain through this component (simplified: BFS order with cumulative distance)
+    // Find chain endpoints (tracks with only one connection in component)
+    const inComponent = new Set(component);
+    const componentNeighbors = (tid: string) =>
+      (adjacency.get(tid) ?? []).filter((n) => inComponent.has(n.trackId));
 
-  // Interpolate between points
-  if (t <= pts[0].t) return pts[0].elevation;
-  if (t >= pts[pts.length - 1].t) return pts[pts.length - 1].elevation;
+    // Find a chain start: prefer track with 0 or 1 in-component neighbors
+    let chainStart = component[0];
+    for (const tid of component) {
+      const cn = componentNeighbors(tid);
+      if (cn.length <= 1) { chainStart = tid; break; }
+    }
 
-  for (let i = 0; i < pts.length - 1; i++) {
-    if (t >= pts[i].t && t <= pts[i + 1].t) {
-      const frac = (t - pts[i].t) / (pts[i + 1].t - pts[i].t);
-      return pts[i].elevation + frac * (pts[i + 1].elevation - pts[i].elevation);
+    // Walk chain from chainStart
+    const chain: { trackId: string; cumDist: number; length: number; reversed: boolean }[] = [];
+    const chainVisited = new Set<string>();
+    let current = chainStart;
+    let cumDist = 0;
+    let prevEnd: "start" | "end" | null = null;
+
+    while (current && !chainVisited.has(current)) {
+      chainVisited.add(current);
+      const track = trackMap.get(current);
+      if (!track) break;
+      const len = getTrackLengthMm(track, catalog);
+
+      // Determine if this track is reversed in the chain
+      // If we entered from the "end" side, the track runs backwards
+      const neighbors = componentNeighbors(current);
+      let enteredFrom: "start" | "end" = "start";
+      if (prevEnd !== null) {
+        // Find which neighbor connection leads back to previous track
+        for (const n of adjacency.get(current) ?? []) {
+          if (chainVisited.has(n.trackId) && n.trackId !== current) {
+            enteredFrom = n.atMyEnd;
+            break;
+          }
+        }
+      }
+      const reversed = enteredFrom === "end";
+
+      chain.push({ trackId: current, cumDist, length: len, reversed });
+      cumDist += len;
+
+      // Find next unvisited neighbor
+      let next: string | null = null;
+      let nextEnd: "start" | "end" | null = null;
+      for (const n of neighbors) {
+        if (!chainVisited.has(n.trackId)) {
+          next = n.trackId;
+          nextEnd = n.atTheirEnd;
+          break;
+        }
+      }
+      prevEnd = nextEnd;
+      current = next!;
+    }
+
+    // Now place elevation anchors on the chain
+    const anchors: Anchor[] = [];
+    for (const ep2 of elevationPoints) {
+      const ci = chain.findIndex((c) => c.trackId === ep2.trackId);
+      if (ci === -1) continue;
+      const c = chain[ci];
+      const effectiveT = c.reversed ? 1 - ep2.t : ep2.t;
+      anchors.push({
+        trackId: ep2.trackId,
+        t: ep2.t,
+        elevation: ep2.elevation,
+        globalDist: c.cumDist + effectiveT * c.length,
+      });
+    }
+    anchors.sort((a, b) => a.globalDist - b.globalDist);
+
+    if (anchors.length === 0) continue;
+
+    // For each track in chain, compute start and end elevation by interpolating
+    for (const c of chain) {
+      const startDist = c.cumDist;
+      const endDist = c.cumDist + c.length;
+
+      const startElev = interpolateElevation(startDist, anchors);
+      const endElev = interpolateElevation(endDist, anchors);
+
+      if (c.reversed) {
+        result.set(c.trackId, { startElev: endElev, endElev: startElev });
+      } else {
+        result.set(c.trackId, { startElev, endElev });
+      }
     }
   }
 
-  return 0;
+  return result;
 }
 
-/** Sample a segment in world space with elevation, returning 3D points */
+/** Interpolate elevation at a given cumulative distance using sorted anchors */
+function interpolateElevation(dist: number, anchors: { globalDist: number; elevation: number }[]): number {
+  if (anchors.length === 0) return 0;
+  if (anchors.length === 1) return anchors[0].elevation;
+  if (dist <= anchors[0].globalDist) return anchors[0].elevation;
+  if (dist >= anchors[anchors.length - 1].globalDist) return anchors[anchors.length - 1].elevation;
+
+  for (let i = 0; i < anchors.length - 1; i++) {
+    if (dist >= anchors[i].globalDist && dist <= anchors[i + 1].globalDist) {
+      const range = anchors[i + 1].globalDist - anchors[i].globalDist;
+      if (range < 0.001) return anchors[i].elevation;
+      const frac = (dist - anchors[i].globalDist) / range;
+      return anchors[i].elevation + frac * (anchors[i + 1].elevation - anchors[i].elevation);
+    }
+  }
+  return anchors[anchors.length - 1].elevation;
+}
+
+/** Get elevation at (trackId, t) from the precomputed elevation map */
+function getElevationFromMap(
+  trackId: string,
+  t: number,
+  elevMap: Map<string, { startElev: number; endElev: number }>,
+): number {
+  const entry = elevMap.get(trackId);
+  if (!entry) return 0;
+  return entry.startElev + t * (entry.endElev - entry.startElev);
+}
+
+/** Sample a segment in world space with elevation from the graph-based map */
 function sampleSegmentWorld3D(
   seg: PathSegment,
   track: PlacedTrack,
-  elevationPoints: ElevationPoint[],
-  tracks: PlacedTrack[],
+  elevMap: Map<string, { startElev: number; endElev: number }>,
   stepMm: number,
 ): Array<{ x: number; y: number; z: number; tangentX: number; tangentZ: number }> {
   const len = seg.kind === "line"
@@ -105,7 +274,7 @@ function sampleSegmentWorld3D(
     const tanZ = worldTan.z - world.z;
     const tanLen = Math.hypot(tanX, tanZ) || 1;
 
-    const elev = getElevationAt(track.instanceId, t, elevationPoints, tracks);
+    const elev = getElevationFromMap(track.instanceId, t, elevMap);
 
     out.push({
       x: world.x,
@@ -122,23 +291,31 @@ function sampleSegmentWorld3D(
 // ── Board mesh ──
 
 function BoardMesh({ board }: { board: BoardConfig }) {
-  const shape = useMemo(() => {
+  const geometry = useMemo(() => {
     const boardPath = getBoardPathMm(board);
-    const s = new THREE.Shape();
-    if (boardPath.length === 0) return s;
+    if (boardPath.length < 3) return null;
 
-    // Board path is in mm (x, z) — map to Three.js (x, z) plane
-    s.moveTo(boardPath[0].x, boardPath[0].z);
-    for (let i = 1; i < boardPath.length; i++) {
-      s.lineTo(boardPath[i].x, boardPath[i].z);
+    // Build flat polygon in XZ plane at Y=0 directly (no rotation tricks)
+    const vertices: number[] = [];
+    const indices: number[] = [];
+
+    // Fan triangulation from first vertex
+    for (let i = 1; i < boardPath.length - 1; i++) {
+      vertices.push(boardPath[0].x, 0, boardPath[0].z);
+      vertices.push(boardPath[i].x, 0, boardPath[i].z);
+      vertices.push(boardPath[i + 1].x, 0, boardPath[i + 1].z);
     }
-    s.closePath();
-    return s;
+
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+    geom.computeVertexNormals();
+    return geom;
   }, [board]);
 
+  if (!geometry) return null;
+
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.5, 0]} receiveShadow>
-      <extrudeGeometry args={[shape, { depth: 1, bevelEnabled: false }]} />
+    <mesh geometry={geometry} position={[0, -1, 0]} receiveShadow>
       <meshStandardMaterial color="#8b9a7b" side={THREE.DoubleSide} />
     </mesh>
   );
@@ -149,13 +326,11 @@ function BoardMesh({ board }: { board: BoardConfig }) {
 function TrackPiece3D({
   track,
   piece,
-  elevationPoints,
-  tracks,
+  elevMap,
 }: {
   track: PlacedTrack;
   piece: TrackPieceDefinition;
-  elevationPoints: ElevationPoint[];
-  tracks: PlacedTrack[];
+  elevMap: Map<string, { startElev: number; endElev: number }>;
 }) {
   const gaugeMm = getGaugeMm(piece.scale);
   const halfGauge = gaugeMm / 2;
@@ -167,7 +342,7 @@ function TrackPiece3D({
     const centerPoints: Array<{ x: number; y: number; z: number; tangentX: number; tangentZ: number }> = [];
 
     for (const seg of segments) {
-      const pts = sampleSegmentWorld3D(seg, track, elevationPoints, tracks, 5);
+      const pts = sampleSegmentWorld3D(seg, track, elevMap, 5);
       centerPoints.push(...pts);
     }
 
@@ -190,7 +365,7 @@ function TrackPiece3D({
     }
 
     return { railLeftPoints, railRightPoints, centerPoints };
-  }, [track, piece, elevationPoints, tracks, halfGauge]);
+  }, [track, piece, elevMap, halfGauge]);
 
   // Create rail tube geometry
   const railLeftGeom = useMemo(() => {
@@ -517,25 +692,23 @@ function ElevationMarkers({ elevationPoints, tracks, catalog }: {
 function TrackCenterLine({
   track,
   piece,
-  elevationPoints,
-  tracks,
+  elevMap,
 }: {
   track: PlacedTrack;
   piece: TrackPieceDefinition;
-  elevationPoints: ElevationPoint[];
-  tracks: PlacedTrack[];
+  elevMap: Map<string, { startElev: number; endElev: number }>;
 }) {
   const points = useMemo(() => {
     const segments = getPieceSegmentsLocal(piece);
     const pts: [number, number, number][] = [];
     for (const seg of segments) {
-      const sampled = sampleSegmentWorld3D(seg, track, elevationPoints, tracks, 5);
+      const sampled = sampleSegmentWorld3D(seg, track, elevMap, 5);
       for (const pt of sampled) {
         pts.push([pt.x, pt.y + 5, pt.z]);
       }
     }
     return pts;
-  }, [track, piece, elevationPoints, tracks]);
+  }, [track, piece, elevMap]);
 
   if (points.length < 2) return null;
 
@@ -566,7 +739,13 @@ function CameraSetup({ board }: { board: BoardConfig }) {
 
 // ── Main scene ──
 
-function Scene({ tracks, catalog, board, elevationPoints, terrainZones }: TrackViewer3DProps) {
+function Scene({ tracks, catalog, board, elevationPoints }: TrackViewer3DProps) {
+  // Build elevation map once for the whole scene (graph-based propagation)
+  const elevMap = useMemo(
+    () => buildElevationMap(tracks, elevationPoints, catalog),
+    [tracks, elevationPoints, catalog],
+  );
+
   return (
     <>
       {/* Lighting */}
@@ -592,11 +771,10 @@ function Scene({ tracks, catalog, board, elevationPoints, terrainZones }: TrackV
             <TrackPiece3D
               track={track}
               piece={piece}
-              elevationPoints={elevationPoints}
-              tracks={tracks}
+              elevMap={elevMap}
             />
-            {/* Debug center line per segment */}
-            <TrackCenterLine track={track} piece={piece} elevationPoints={elevationPoints} tracks={tracks} />
+            {/* Debug center line */}
+            <TrackCenterLine track={track} piece={piece} elevMap={elevMap} />
           </group>
         );
       })}
