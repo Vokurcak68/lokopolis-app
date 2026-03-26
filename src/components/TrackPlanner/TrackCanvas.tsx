@@ -305,12 +305,9 @@ export function TrackCanvas({
 
     // Elevation mode — click nearest track point
     if (elevationMode) {
-      const hit = hitTrack(world);
-      if (hit && onElevationClick) {
-        const cp = closestPointOnAnyTrack(world, state.tracks, catalog);
-        if (cp && cp.trackId === hit.instanceId && cp.distance <= 25) {
-          onElevationClick(cp.trackId, cp.t, cp.worldPos.x, cp.worldPos.z, x, y);
-        }
+      const cp = closestPointOnAnyTrack(world, state.tracks, catalog);
+      if (cp && cp.distance <= 25 && onElevationClick) {
+        onElevationClick(cp.trackId, cp.t, cp.worldPos.x, cp.worldPos.z, x, y);
       }
       return;
     }

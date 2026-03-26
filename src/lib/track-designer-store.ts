@@ -183,6 +183,52 @@ function applySnapshot(state: DesignerState, snapshot: DesignerSnapshot): Design
   };
 }
 
+function withPropagatedElevation(state: DesignerState): DesignerState {
+  if (state.tracks.length === 0) return state;
+
+  const byId = new Map(state.tracks.map((t) => [t.instanceId, t]));
+  const neighbors = new Map<string, Set<string>>();
+  for (const t of state.tracks) {
+    if (!neighbors.has(t.instanceId)) neighbors.set(t.instanceId, new Set());
+    for (const target of Object.values(t.snappedConnections)) {
+      const [otherId] = target.split(":");
+      if (!otherId || !byId.has(otherId)) continue;
+      neighbors.get(t.instanceId)!.add(otherId);
+      if (!neighbors.has(otherId)) neighbors.set(otherId, new Set());
+      neighbors.get(otherId)!.add(t.instanceId);
+    }
+  }
+
+  const solved = new Map<string, number>();
+  for (const t of state.tracks) {
+    const pts = state.elevationPoints.filter((p) => p.trackId === t.instanceId);
+    if (pts.length > 0) {
+      const avg = pts.reduce((sum, p) => sum + p.elevation, 0) / pts.length;
+      solved.set(t.instanceId, avg);
+    } else if (Math.abs(t.elevation) > 0.0001) {
+      solved.set(t.instanceId, t.elevation);
+    }
+  }
+
+  const queue = [...solved.keys()];
+  while (queue.length > 0) {
+    const id = queue.shift();
+    if (!id) continue;
+    const base = solved.get(id) ?? 0;
+    for (const n of neighbors.get(id) ?? []) {
+      if (!solved.has(n)) {
+        solved.set(n, base);
+        queue.push(n);
+      }
+    }
+  }
+
+  return {
+    ...state,
+    tracks: state.tracks.map((t) => ({ ...t, elevation: solved.get(t.instanceId) ?? 0 })),
+  };
+}
+
 function pushHistory(state: DesignerState): DesignerState {
   const snap = toSnapshot(state);
   const nextPast = [...state.historyPast, snap];
@@ -232,12 +278,12 @@ export function designerReducer(state: DesignerState, action: DesignerAction): D
 
     case "ADD_TRACK": {
       const next = pushHistory(state);
-      return { ...next, tracks: [...next.tracks, action.track] };
+      return withPropagatedElevation({ ...next, tracks: [...next.tracks, action.track] });
     }
 
     case "REMOVE_TRACK": {
       const next = pushHistory(state);
-      return {
+      return withPropagatedElevation({
         ...next,
         tracks: next.tracks
           .filter((t) => t.instanceId !== action.instanceId)
@@ -249,15 +295,15 @@ export function designerReducer(state: DesignerState, action: DesignerAction): D
           })),
         elevationPoints: next.elevationPoints.filter((p) => p.trackId !== action.instanceId),
         selectedTrackId: next.selectedTrackId === action.instanceId ? null : next.selectedTrackId,
-      };
+      });
     }
 
     case "UPDATE_TRACK": {
       const next = pushHistory(state);
-      return {
+      return withPropagatedElevation({
         ...next,
         tracks: next.tracks.map((t) => (t.instanceId === action.instanceId ? { ...t, ...action.updates } : t)),
-      };
+      });
     }
 
     case "SELECT_TRACK":
@@ -338,29 +384,29 @@ export function designerReducer(state: DesignerState, action: DesignerAction): D
 
     case "ADD_ELEVATION_POINT": {
       const next = pushHistory(state);
-      return { ...next, elevationPoints: [...next.elevationPoints, action.point] };
+      return withPropagatedElevation({ ...next, elevationPoints: [...next.elevationPoints, action.point] });
     }
 
     case "REMOVE_ELEVATION_POINT": {
       const next = pushHistory(state);
-      return { ...next, elevationPoints: next.elevationPoints.filter((p) => p.id !== action.pointId) };
+      return withPropagatedElevation({ ...next, elevationPoints: next.elevationPoints.filter((p) => p.id !== action.pointId) });
     }
 
     case "UPDATE_ELEVATION_POINT": {
       const next = pushHistory(state);
-      return {
+      return withPropagatedElevation({
         ...next,
         elevationPoints: next.elevationPoints.map((p) =>
           p.id === action.pointId ? { ...p, ...action.updates } : p,
         ),
-      };
+      });
     }
 
     case "UNSNAP_TRACKS": {
       // Remove all snap connections involving the given tracks (both sides)
       const unsnapSet = new Set(action.instanceIds);
       const next = pushHistory(state);
-      return {
+      return withPropagatedElevation({
         ...next,
         tracks: next.tracks.map((t) => {
           if (unsnapSet.has(t.instanceId)) {
@@ -379,14 +425,14 @@ export function designerReducer(state: DesignerState, action: DesignerAction): D
           }
           return t;
         }),
-      };
+      });
     }
 
     case "SNAP_CONNECTION": {
       const next = pushHistory(state);
       const fromKey = `${action.toInstanceId}:${action.toConnId}`;
       const toKey = `${action.fromInstanceId}:${action.fromConnId}`;
-      return {
+      return withPropagatedElevation({
         ...next,
         tracks: next.tracks.map((t) => {
           if (t.instanceId === action.fromInstanceId) {
@@ -403,7 +449,7 @@ export function designerReducer(state: DesignerState, action: DesignerAction): D
           }
           return t;
         }),
-      };
+      });
     }
 
     default:

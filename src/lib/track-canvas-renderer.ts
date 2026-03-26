@@ -705,8 +705,119 @@ function drawConnectionDots(
   }
 }
 
+function drawElevationMarkers(
+  ctx: CanvasRenderingContext2D,
+  elevationPoints: ElevationPoint[],
+  tracks: PlacedTrack[],
+  catalog: Record<string, TrackPieceDefinition>,
+  transform: ViewTransform,
+) {
+  const getPrimarySegments = (piece: TrackPieceDefinition): PathSegment[] => {
+    const all = getPieceSegmentsLocal(piece);
+    if (piece.type === "straight" || piece.type === "curve") return all;
+    if (piece.type === "turnout" || piece.type === "crossing") return all.length > 0 ? [all[0]] : all;
+    return all.length > 0 ? [all[0]] : all;
+  };
+
+  const pointForElevation = (ep: ElevationPoint): LocalPoint | null => {
+    const track = tracks.find((t) => t.instanceId === ep.trackId);
+    if (!track) return null;
+    const piece = catalog[track.pieceId];
+    if (!piece) return null;
+
+    const segs = getPrimarySegments(piece);
+    if (segs.length === 0) return null;
+
+    const segLens = segs.map((s) => segmentLength(s));
+    const totalLen = segLens.reduce((a, b) => a + b, 0);
+    if (totalLen < 0.001) return null;
+
+    let target = Math.max(0, Math.min(1, ep.t)) * totalLen;
+    for (let i = 0; i < segs.length; i++) {
+      const len = segLens[i];
+      if (target <= len || i === segs.length - 1) {
+        const segT = len > 0 ? Math.max(0, Math.min(1, target / len)) : 0;
+        const local = pointAndTangentAt(segs[i], segT).point;
+        return localToWorld(local, track);
+      }
+      target -= len;
+    }
+
+    return null;
+  };
+
+  const byTrack = new Map<string, ElevationPoint[]>();
+  for (const ep of elevationPoints) {
+    if (!byTrack.has(ep.trackId)) byTrack.set(ep.trackId, []);
+    byTrack.get(ep.trackId)!.push(ep);
+  }
+
+  // Slope labels/lines between neighboring points on same track
+  for (const [, points] of byTrack) {
+    const sorted = [...points].sort((a, b) => a.t - b.t);
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const a = sorted[i];
+      const b = sorted[i + 1];
+      const wa = pointForElevation(a);
+      const wb = pointForElevation(b);
+      if (!wa || !wb) continue;
+
+      const pa = worldToScreen(wa, transform);
+      const pb = worldToScreen(wb, transform);
+      const run = Math.max(1, Math.hypot(wb.x - wa.x, wb.z - wa.z));
+      const rise = b.elevation - a.elevation;
+      const slopePct = (rise / run) * 100;
+
+      ctx.save();
+      ctx.strokeStyle = "rgba(96,165,250,0.65)";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.moveTo(pa.x, pa.y);
+      ctx.lineTo(pb.x, pb.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      const mx = (pa.x + pb.x) / 2;
+      const my = (pa.y + pb.y) / 2;
+      const label = `${slopePct >= 0 ? "+" : ""}${slopePct.toFixed(1)}%`;
+      ctx.font = "11px system-ui, sans-serif";
+      const tw = ctx.measureText(label).width;
+      ctx.fillStyle = "rgba(17,24,39,0.78)";
+      ctx.fillRect(mx - tw / 2 - 4, my - 9, tw + 8, 16);
+      ctx.fillStyle = "#e5e7eb";
+      ctx.fillText(label, mx - tw / 2, my + 3);
+      ctx.restore();
+    }
+  }
+
+  // Point markers
+  for (const ep of elevationPoints) {
+    const wp = pointForElevation(ep);
+    if (!wp) continue;
+    const p = worldToScreen(wp, transform);
+    const color = ep.elevation === 0 ? "#22c55e" : ep.elevation > 0 ? "#3b82f6" : "#ef4444";
+
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,0.6)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.font = "10px system-ui, sans-serif";
+    const txt = `${Math.round(ep.elevation)} mm`;
+    const tw = ctx.measureText(txt).width;
+    ctx.fillStyle = "rgba(17,24,39,0.82)";
+    ctx.fillRect(p.x - tw / 2 - 3, p.y - 18, tw + 6, 12);
+    ctx.fillStyle = "#f3f4f6";
+    ctx.fillText(txt, p.x - tw / 2, p.y - 8);
+  }
+}
+
 export function renderTrackCanvas(params: RenderTrackCanvasParams) {
-  const { ctx, width, height, board, tracks, terrainZones, catalog, selectedTrackId, selectedTrackIds, hoveredTrackId, transform, skipBackground } = params;
+  const { ctx, width, height, board, tracks, terrainZones, elevationPoints = [], catalog, selectedTrackId, selectedTrackIds, hoveredTrackId, transform, skipBackground } = params;
   const multiSelected = new Set(selectedTrackIds ?? []);
 
   if (!skipBackground) {
@@ -762,6 +873,10 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
   }
 
   drawConnectionDots(ctx, dots, transform);
+
+  if (!skipBackground && elevationPoints.length > 0) {
+    drawElevationMarkers(ctx, elevationPoints, tracks, catalog, transform);
+  }
 
   // Draw terrain zones (tunnels/bridges) on top of tracks
   if (!skipBackground && terrainZones.length > 0) {

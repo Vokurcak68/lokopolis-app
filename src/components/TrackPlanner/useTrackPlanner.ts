@@ -124,7 +124,13 @@ function loadPersisted(): { state: DesignerState; transform: ViewTransform; proj
       data = parsed as PersistedData;
     } else if (parsed?.state?.board) {
       const s = parsed.state;
-      data = { board: s.board, tracks: s.tracks ?? [], terrainZones: s.terrainZones ?? [], transform: parsed.transform };
+      data = {
+        board: s.board,
+        tracks: s.tracks ?? [],
+        terrainZones: s.terrainZones ?? [],
+        elevationPoints: s.elevationPoints ?? [],
+        transform: parsed.transform,
+      };
     }
     if (!data) return null;
 

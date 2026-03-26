@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useRef } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, Grid } from "@react-three/drei";
+import { useMemo } from "react";
+import { Canvas } from "@react-three/fiber";
+import { OrbitControls, Line } from "@react-three/drei";
 import * as THREE from "three";
 import type { PlacedTrack, BoardConfig, ElevationPoint, TerrainZone } from "@/lib/track-designer-store";
 import type { TrackPieceDefinition } from "@/lib/track-library";
@@ -512,6 +512,42 @@ function ElevationMarkers({ elevationPoints, tracks, catalog }: {
   );
 }
 
+// ── Debug center line for each track ──
+
+function TrackCenterLine({
+  track,
+  piece,
+  elevationPoints,
+  tracks,
+}: {
+  track: PlacedTrack;
+  piece: TrackPieceDefinition;
+  elevationPoints: ElevationPoint[];
+  tracks: PlacedTrack[];
+}) {
+  const points = useMemo(() => {
+    const segments = getPieceSegmentsLocal(piece);
+    const pts: [number, number, number][] = [];
+    for (const seg of segments) {
+      const sampled = sampleSegmentWorld3D(seg, track, elevationPoints, tracks, 5);
+      for (const pt of sampled) {
+        pts.push([pt.x, pt.y + 5, pt.z]);
+      }
+    }
+    return pts;
+  }, [track, piece, elevationPoints, tracks]);
+
+  if (points.length < 2) return null;
+
+  return (
+    <Line
+      points={points}
+      color="#ff4444"
+      lineWidth={3}
+    />
+  );
+}
+
 // ── Camera auto-fit ──
 
 function CameraSetup({ board }: { board: BoardConfig }) {
@@ -552,13 +588,16 @@ function Scene({ tracks, catalog, board, elevationPoints, terrainZones }: TrackV
         const piece = catalog[track.pieceId];
         if (!piece) return null;
         return (
-          <TrackPiece3D
-            key={track.instanceId}
-            track={track}
-            piece={piece}
-            elevationPoints={elevationPoints}
-            tracks={tracks}
-          />
+          <group key={track.instanceId}>
+            <TrackPiece3D
+              track={track}
+              piece={piece}
+              elevationPoints={elevationPoints}
+              tracks={tracks}
+            />
+            {/* Debug center line per segment */}
+            <TrackCenterLine track={track} piece={piece} elevationPoints={elevationPoints} tracks={tracks} />
+          </group>
         );
       })}
 
