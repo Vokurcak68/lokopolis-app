@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useState } from "react";
 import { TrackCanvas } from "./TrackCanvas";
 import { TrackCatalogPanel } from "./TrackCatalogPanel";
+import { TrackHelpModal } from "./TrackHelpModal";
 import { TrackStatsBar } from "./TrackStatsBar";
 import { TrackTopBar } from "./TrackTopBar";
 import { useTrackPlanner } from "./useTrackPlanner";
@@ -15,6 +16,7 @@ export default function TrackPlanner() {
   const { user } = useAuth();
   const planner = useTrackPlanner();
   const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");
+  const [showHelp, setShowHelp] = useState(false);
   const [elevationPopup, setElevationPopup] = useState<{
     trackId: string; t: number; worldX: number; worldZ: number; screenX: number; screenY: number;
     existingPointId?: string; existingElevation?: number;
@@ -549,6 +551,18 @@ export default function TrackPlanner() {
         freeConnections={planner.stats.freeConnections}
         turnouts={planner.stats.turnouts}
       />
+
+      {/* Help button — fixed bottom-right corner */}
+      <button
+        onClick={() => setShowHelp(true)}
+        className="fixed right-4 bottom-4 z-40 flex h-10 w-10 items-center justify-center rounded-full text-lg shadow-lg transition-transform hover:scale-110"
+        style={{ background: "var(--accent)", color: "#111" }}
+        title="Nápověda"
+      >
+        ?
+      </button>
+
+      {showHelp && <TrackHelpModal onClose={() => setShowHelp(false)} />}
     </div>
   );
 }
