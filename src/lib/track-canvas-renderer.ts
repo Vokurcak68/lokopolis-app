@@ -1974,11 +1974,11 @@ export function drawPortals(
       drawBetween(a2, b2, portal.kind);
     }
 
-    // start portal — flipped 180° (same as end, both face inward toward the tunnel)
-    if (portal.width === "double" && portal.track2) drawDoublePortal(portal, portal.track1, portal.track2, true);
-    else drawSinglePortal(portal, portal.track1, true);
+    // start portal — no flip (same as classic terrain tunnel start)
+    if (portal.width === "double" && portal.track2) drawDoublePortal(portal, portal.track1, portal.track2, false);
+    else drawSinglePortal(portal, portal.track1, false);
 
-    // end portal — flipped 180° (was already correct before, restoring)
+    // end portal — flipped 180° (same as classic terrain tunnel end)
     if (partner.width === "double" && partner.track2) drawDoublePortal(partner, partner.track1, partner.track2, true);
     else drawSinglePortal(partner, partner.track1, true);
   }
