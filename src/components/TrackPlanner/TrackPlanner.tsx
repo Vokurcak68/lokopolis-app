@@ -7,10 +7,12 @@ import { TrackCatalogPanel } from "./TrackCatalogPanel";
 import { TrackStatsBar } from "./TrackStatsBar";
 import { TrackTopBar } from "./TrackTopBar";
 import { useTrackPlanner } from "./useTrackPlanner";
+import { useAuth } from "@/components/Auth/AuthProvider";
 
 const TrackViewer3D = dynamic(() => import("./TrackViewer3D"), { ssr: false });
 
 export default function TrackPlanner() {
+  const { user } = useAuth();
   const planner = useTrackPlanner();
   const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");
   const [elevationPopup, setElevationPopup] = useState<{
@@ -99,19 +101,25 @@ export default function TrackPlanner() {
 
   const [saveToast, setSaveToast] = useState<"ok" | "fail" | null>(null);
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
+    if (!user) {
+      alert("Pro ukládání projektů se přihlas do Lokopolis.");
+      return;
+    }
+
+    let ok = false;
     if (!planner.currentProjectId) {
       // First save — ask for name
       const name = prompt("Název projektu:", "Nový plán");
       if (!name?.trim()) return;
-      const ok = planner.saveToLocalStorage(name.trim());
-      setSaveToast(ok ? "ok" : "fail");
+      ok = await planner.saveToLocalStorage(name.trim());
     } else {
-      const ok = planner.saveToLocalStorage();
-      setSaveToast(ok ? "ok" : "fail");
+      ok = await planner.saveToLocalStorage();
     }
+
+    setSaveToast(ok ? "ok" : "fail");
     setTimeout(() => setSaveToast(null), 2000);
-  }, [planner.saveToLocalStorage, planner.currentProjectId]);
+  }, [planner.saveToLocalStorage, planner.currentProjectId, user]);
 
   const handleExportPng = () => {
     const canvas = planner.canvasRef.current;
@@ -170,15 +178,29 @@ export default function TrackPlanner() {
         onExportList={handleExportList}
         onSave={handleSave}
         onSaveAs={(name) => {
-          const ok = planner.saveProjectAs(name);
-          setSaveToast(ok ? "ok" : "fail");
-          setTimeout(() => setSaveToast(null), 2000);
+          if (!user) {
+            alert("Pro ukládání projektů se přihlas do Lokopolis.");
+            return;
+          }
+          void (async () => {
+            const ok = await planner.saveProjectAs(name);
+            setSaveToast(ok ? "ok" : "fail");
+            setTimeout(() => setSaveToast(null), 2000);
+          })();
         }}
-        onLoadProject={planner.loadProject}
-        onDeleteProject={planner.deleteProject}
+        onLoadProject={(id) => {
+          void planner.loadProject(id);
+        }}
+        onDeleteProject={(id) => {
+          void planner.deleteProject(id);
+        }}
         onNewProject={planner.newProject}
         listProjects={planner.listProjects}
         currentProjectName={planner.currentProjectName}
+        canSaveProjects={Boolean(user)}
+        onRequireLoginForSave={() => {
+          alert("Pro ukládání projektů se přihlas do Lokopolis.");
+        }}
         saveToast={saveToast}
         onToggleCatalogMobile={() => planner.setCatalogOpenMobile((v) => !v)}
         terrainMode={planner.terrainMode}

@@ -38,6 +38,8 @@ interface TrackTopBarProps {
   onNewProject: () => void;
   listProjects: () => SavedProject[];
   currentProjectName: string | null;
+  canSaveProjects?: boolean;
+  onRequireLoginForSave?: () => void;
   saveToast?: "ok" | "fail" | null;
   onExportList: () => void;
   onToggleCatalogMobile: () => void;
@@ -89,6 +91,8 @@ export function TrackTopBar(props: TrackTopBarProps) {
     onNewProject,
     listProjects,
     currentProjectName,
+    canSaveProjects = true,
+    onRequireLoginForSave,
     saveToast,
     onExportList,
     onToggleCatalogMobile,
@@ -389,6 +393,8 @@ export function TrackTopBar(props: TrackTopBarProps) {
             onNewProject={onNewProject}
             listProjects={listProjects}
             currentProjectName={currentProjectName}
+            canSaveProjects={canSaveProjects}
+            onRequireLoginForSave={onRequireLoginForSave}
             saveToast={saveToast}
             btnBase={btnBase}
           />
@@ -407,6 +413,8 @@ function ProjectMenu({
   onNewProject,
   listProjects,
   currentProjectName,
+  canSaveProjects,
+  onRequireLoginForSave,
   saveToast,
   btnBase,
 }: {
@@ -417,6 +425,8 @@ function ProjectMenu({
   onNewProject: () => void;
   listProjects: () => SavedProject[];
   currentProjectName: string | null;
+  canSaveProjects: boolean;
+  onRequireLoginForSave?: () => void;
   saveToast?: "ok" | "fail" | null;
   btnBase: string;
 }) {
@@ -451,20 +461,49 @@ function ProjectMenu({
     <div className="relative">
       <div className="flex">
         <button
-          onClick={onSave}
+          onClick={() => {
+            if (!canSaveProjects) {
+              onRequireLoginForSave?.();
+              return;
+            }
+            onSave();
+          }}
           className={`${btnBase} rounded-r-none border-0 transition-all`}
           style={{
-            background: saveToast === "ok" ? "#22c55e" : saveToast === "fail" ? "#ef4444" : "var(--accent)",
-            color: "#111",
+            background: canSaveProjects
+              ? saveToast === "ok"
+                ? "#22c55e"
+                : saveToast === "fail"
+                  ? "#ef4444"
+                  : "var(--accent)"
+              : "#374151",
+            color: canSaveProjects ? "#111" : "#f9fafb",
           }}
+          title={canSaveProjects ? "Uložit projekt" : "Ukládání je dostupné jen po přihlášení"}
         >
-          {saveToast === "ok" ? "✓ Uloženo" : saveToast === "fail" ? "✗ Chyba" : "💾 Uložit"}
+          {canSaveProjects
+            ? saveToast === "ok"
+              ? "✓ Uloženo"
+              : saveToast === "fail"
+                ? "✗ Chyba"
+                : "💾 Uložit"
+            : "🔒 Přihlásit"}
         </button>
         <button
-          onClick={() => setOpen((v) => !v)}
+          onClick={() => {
+            if (!canSaveProjects) {
+              onRequireLoginForSave?.();
+              return;
+            }
+            setOpen((v) => !v);
+          }}
           className={`${btnBase} rounded-l-none border-0 border-l px-1.5`}
-          style={{ background: "var(--accent)", color: "#111", borderColor: "rgba(0,0,0,0.2)" }}
-          title="Projekty"
+          style={{
+            background: canSaveProjects ? "var(--accent)" : "#4b5563",
+            color: canSaveProjects ? "#111" : "#f9fafb",
+            borderColor: "rgba(0,0,0,0.2)",
+          }}
+          title={canSaveProjects ? "Projekty" : "Projekty jsou dostupné jen po přihlášení"}
         >
           ▾
         </button>

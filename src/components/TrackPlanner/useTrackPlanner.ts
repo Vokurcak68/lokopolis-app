@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useAuth } from "@/components/Auth/AuthProvider";
+import { supabase } from "@/lib/supabase";
 import {
   canSnap,
   computeSnapPlacement,
@@ -47,6 +49,13 @@ export interface SavedProject {
   name: string;
   updatedAt: number;
   data: PersistedData;
+}
+
+interface CloudProjectRow {
+  id: string;
+  name: string;
+  data: PersistedData;
+  updated_at: string;
 }
 
 function generateProjectId(): string {
@@ -100,8 +109,8 @@ function dataToState(data: PersistedData): DesignerState {
 }
 
 /** Load current project, or migrate old single-save format */
-function loadPersisted(): { state: DesignerState; transform: ViewTransform; projectId: string | null; projectName: string | null } | null {
-  if (typeof window === "undefined") return null;
+function loadPersisted(allowLocalProjects: boolean): { state: DesignerState; transform: ViewTransform; projectId: string | null; projectName: string | null } | null {
+  if (typeof window === "undefined" || !allowLocalProjects) return null;
   try {
     // Try loading current project
     const currentId = getCurrentProjectId();
@@ -153,7 +162,8 @@ function loadPersisted(): { state: DesignerState; transform: ViewTransform; proj
 }
 
 export function useTrackPlanner() {
-  const persistedRef = useRef(loadPersisted());
+  const { user, loading: authLoading } = useAuth();
+  const persistedRef = useRef(loadPersisted(Boolean(user)));
   const [state, dispatch] = useReducer(
     designerReducer,
     persistedRef.current?.state ?? createInitialState(),
@@ -167,6 +177,7 @@ export function useTrackPlanner() {
   );
   const [currentProjectId, setCurrentProjectIdState] = useState<string | null>(persistedRef.current?.projectId ?? null);
   const [currentProjectName, setCurrentProjectName] = useState<string | null>(persistedRef.current?.projectName ?? null);
+  const [cloudProjects, setCloudProjects] = useState<SavedProject[]>([]);
   const [catalogOpenMobile, setCatalogOpenMobile] = useState(false);
 
   // Placement rotation for free-placement (no snap) — persists between placements
@@ -248,130 +259,197 @@ export function useTrackPlanner() {
   }, []);
   const setHoveredTrack = useCallback((instanceId: string | null) => dispatch({ type: "HOVER_TRACK", instanceId }), []);
 
+  const serializeCurrentData = useCallback((): PersistedData => ({
+    board: state.board,
+    tracks: state.tracks,
+    terrainZones: state.terrainZones,
+    portals: state.portals,
+    elevationPoints: state.elevationPoints,
+    transform,
+  }), [state.board, state.tracks, state.terrainZones, state.portals, state.elevationPoints, transform]);
+
+  const fetchCloudProjects = useCallback(async () => {
+    if (!user) {
+      setCloudProjects([]);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("track_planner_projects")
+      .select("id,name,data,updated_at")
+      .eq("user_id", user.id)
+      .order("updated_at", { ascending: false });
+
+    if (error) {
+      console.error("Nepodařilo se načíst projekty:", error.message);
+      return;
+    }
+
+    const mapped: SavedProject[] = ((data as CloudProjectRow[] | null) ?? []).map((p) => ({
+      id: p.id,
+      name: p.name,
+      updatedAt: new Date(p.updated_at).getTime(),
+      data: p.data,
+    }));
+    setCloudProjects(mapped);
+  }, [user]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      setCloudProjects([]);
+      setCurrentProjectIdState(null);
+      setCurrentProjectName(null);
+      return;
+    }
+    void fetchCloudProjects();
+  }, [authLoading, user, fetchCloudProjects]);
+
   /** Save current project (or create new if none) */
-  const saveProject = useCallback((nameOverride?: string): boolean => {
-    if (typeof window === "undefined") return false;
+  const saveProject = useCallback(async (nameOverride?: string): Promise<boolean> => {
+    if (!user) return false;
     try {
-      const data: PersistedData = {
-        board: state.board,
-        tracks: state.tracks,
-        terrainZones: state.terrainZones,
-        portals: state.portals,
-        elevationPoints: state.elevationPoints,
-        transform,
-      };
-      const projects = getAllProjects();
+      const data = serializeCurrentData();
 
       if (currentProjectId) {
-        // Update existing
-        const idx = projects.findIndex((p) => p.id === currentProjectId);
-        if (idx >= 0) {
-          projects[idx].data = data;
-          projects[idx].updatedAt = Date.now();
-          if (nameOverride) projects[idx].name = nameOverride;
-          saveAllProjects(projects);
-          if (nameOverride) setCurrentProjectName(nameOverride);
-          return true;
-        }
+        const { error } = await supabase
+          .from("track_planner_projects")
+          .update({ name: nameOverride?.trim() || currentProjectName || "Nový plán", data })
+          .eq("id", currentProjectId)
+          .eq("user_id", user.id);
+
+        if (error) throw error;
+        if (nameOverride?.trim()) setCurrentProjectName(nameOverride.trim());
+        await fetchCloudProjects();
+        return true;
       }
 
-      // Create new
-      const name = nameOverride || "Nový plán";
-      const id = generateProjectId();
-      projects.push({ id, name, updatedAt: Date.now(), data });
-      saveAllProjects(projects);
-      setCurrentProjectId(id);
-      setCurrentProjectIdState(id);
-      setCurrentProjectName(name);
-      return true;
-    } catch (e) {
-      console.error("Nepodařilo se uložit:", e);
-      return false;
-    }
-  }, [state.board, state.tracks, state.terrainZones, state.portals, state.elevationPoints, transform, currentProjectId]);
+      const insertName = nameOverride?.trim() || "Nový plán";
+      const { data: inserted, error } = await supabase
+        .from("track_planner_projects")
+        .insert({ user_id: user.id, name: insertName, data })
+        .select("id,name")
+        .single();
 
-  /** Save As — prompt for name */
-  const saveProjectAs = useCallback((name: string): boolean => {
-    if (typeof window === "undefined") return false;
-    try {
-      const data: PersistedData = {
-        board: state.board,
-        tracks: state.tracks,
-        terrainZones: state.terrainZones,
-        portals: state.portals,
-        elevationPoints: state.elevationPoints,
-        transform,
-      };
-      const id = generateProjectId();
-      const projects = getAllProjects();
-      projects.push({ id, name, updatedAt: Date.now(), data });
-      saveAllProjects(projects);
-      setCurrentProjectId(id);
-      setCurrentProjectIdState(id);
-      setCurrentProjectName(name);
+      if (error || !inserted) throw error || new Error("insert_failed");
+
+      setCurrentProjectIdState(inserted.id);
+      setCurrentProjectName(inserted.name);
+      await fetchCloudProjects();
       return true;
     } catch (e) {
       console.error("Nepodařilo se uložit:", e);
       return false;
     }
-  }, [state.board, state.tracks, state.terrainZones, state.portals, state.elevationPoints, transform]);
+  }, [user, currentProjectId, currentProjectName, serializeCurrentData, fetchCloudProjects]);
+
+  /** Save As */
+  const saveProjectAs = useCallback(async (name: string): Promise<boolean> => {
+    if (!user) return false;
+    try {
+      const data = serializeCurrentData();
+      const trimmed = name.trim();
+      if (!trimmed) return false;
+
+      const { data: inserted, error } = await supabase
+        .from("track_planner_projects")
+        .insert({ user_id: user.id, name: trimmed, data })
+        .select("id,name")
+        .single();
+
+      if (error || !inserted) throw error || new Error("insert_failed");
+
+      setCurrentProjectIdState(inserted.id);
+      setCurrentProjectName(inserted.name);
+      await fetchCloudProjects();
+      return true;
+    } catch (e) {
+      console.error("Nepodařilo se uložit:", e);
+      return false;
+    }
+  }, [user, serializeCurrentData, fetchCloudProjects]);
 
   /** Load a saved project */
-  const loadProject = useCallback((projectId: string) => {
-    const projects = getAllProjects();
-    const project = projects.find((p) => p.id === projectId);
-    if (!project) return false;
-    dispatch({ type: "LOAD_STATE", state: dataToState(project.data) });
-    setTransform(project.data.transform);
-    setCurrentProjectId(projectId);
+  const loadProject = useCallback(async (projectId: string) => {
+    if (!user) return false;
+
+    const { data, error } = await supabase
+      .from("track_planner_projects")
+      .select("id,name,data")
+      .eq("id", projectId)
+      .eq("user_id", user.id)
+      .single();
+
+    if (error || !data) return false;
+
+    const projectData = (data as { id: string; name: string; data: PersistedData }).data;
+    dispatch({ type: "LOAD_STATE", state: dataToState(projectData) });
+    setTransform(projectData.transform);
     setCurrentProjectIdState(projectId);
-    setCurrentProjectName(project.name);
+    setCurrentProjectName((data as { name: string }).name);
     return true;
-  }, []);
+  }, [user]);
 
   /** Delete a saved project */
-  const deleteProject = useCallback((projectId: string) => {
-    const projects = getAllProjects().filter((p) => p.id !== projectId);
-    saveAllProjects(projects);
+  const deleteProject = useCallback(async (projectId: string) => {
+    if (!user) return;
+
+    const { error } = await supabase
+      .from("track_planner_projects")
+      .delete()
+      .eq("id", projectId)
+      .eq("user_id", user.id);
+
+    if (error) {
+      console.error("Nepodařilo se smazat projekt:", error.message);
+      return;
+    }
+
     if (currentProjectId === projectId) {
       setCurrentProjectIdState(null);
       setCurrentProjectName(null);
-      setCurrentProjectId(null);
     }
-  }, [currentProjectId]);
+    await fetchCloudProjects();
+  }, [user, currentProjectId, fetchCloudProjects]);
 
   /** New empty project */
   const newProject = useCallback(() => {
     dispatch({ type: "CLEAR_TRACKS" });
     setCurrentProjectIdState(null);
     setCurrentProjectName(null);
-    setCurrentProjectId(null);
   }, []);
 
   /** List all saved projects */
   const listProjects = useCallback((): SavedProject[] => {
-    return getAllProjects().sort((a, b) => b.updatedAt - a.updatedAt);
-  }, []);
+    return cloudProjects;
+  }, [cloudProjects]);
 
-  // Auto-save debounced (2s after last change) — only if project exists
+  // Auto-save debounced (2s after last change) — only for logged-in users with active project
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (typeof window === "undefined" || !currentProjectId) return;
+    if (!user || !currentProjectId) return;
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+
     autoSaveTimer.current = setTimeout(() => {
-      try {
-        const data: PersistedData = { board: state.board, tracks: state.tracks, terrainZones: state.terrainZones, portals: state.portals, elevationPoints: state.elevationPoints, transform };
-        const projects = getAllProjects();
-        const idx = projects.findIndex((p) => p.id === currentProjectId);
-        if (idx >= 0) {
-          projects[idx].data = data;
-          projects[idx].updatedAt = Date.now();
-          saveAllProjects(projects);
+      void (async () => {
+        try {
+          const data = serializeCurrentData();
+          const { error } = await supabase
+            .from("track_planner_projects")
+            .update({ data })
+            .eq("id", currentProjectId)
+            .eq("user_id", user.id);
+          if (!error) await fetchCloudProjects();
+        } catch {
+          // ignore auto-save errors
         }
-      } catch { /* ignore auto-save errors */ }
+      })();
     }, 2000);
-    return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
-  }, [state.board, state.tracks, state.terrainZones, state.portals, state.elevationPoints, transform, currentProjectId]);
+
+    return () => {
+      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    };
+  }, [user, currentProjectId, serializeCurrentData, fetchCloudProjects]);
 
   const clearAll = useCallback(() => dispatch({ type: "CLEAR_TRACKS" }), []);
   const undo = useCallback(() => dispatch({ type: "UNDO" }), []);
