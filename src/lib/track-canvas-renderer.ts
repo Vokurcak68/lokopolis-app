@@ -867,18 +867,23 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
     }
   };
 
-  // Build set of track ids that have non-zero elevation (elevated tracks cross over tunnels)
+  // Build set of NORMAL (non-tunnel, non-bridge) track ids that have non-zero elevation.
+  // Only these tracks are drawn above tunnel/bridge overlays (they cross OVER the tunnel).
+  // Tunnel/bridge tracks themselves NEVER go into the elevated layer.
   const elevatedTrackIds = new Set<string>();
   if (elevationPoints.length > 0) {
+    // Only seed from non-tunnel, non-bridge tracks with non-zero elevation markers
     for (const ep of elevationPoints) {
-      if (ep.elevation !== 0) elevatedTrackIds.add(ep.trackId);
+      const t = tracks.find((tr) => tr.instanceId === ep.trackId);
+      if (t && !t.isTunnel && !t.isBridge && ep.elevation !== 0) {
+        elevatedTrackIds.add(ep.trackId);
+      }
     }
-    // Also mark connected tracks that inherit elevation via snap connections
-    // (simple: any track connected to a track with non-zero elevation marker is potentially elevated)
+    // Propagate to connected NORMAL tracks only (skip tunnel/bridge tracks)
     let changed = true;
     while (changed) {
       changed = false;
-      for (const t of tracks) {
+      for (const t of normal) {
         if (elevatedTrackIds.has(t.instanceId)) continue;
         for (const snap of Object.values(t.snappedConnections)) {
           const neighborId = snap.split(":")[0];
@@ -891,8 +896,7 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
       }
     }
     // Remove tracks that have an explicit 0 elevation marker and no non-zero markers
-    // (track with only elev=0 markers is at ground level)
-    for (const t of tracks) {
+    for (const t of normal) {
       if (!elevatedTrackIds.has(t.instanceId)) continue;
       const ownMarkers = elevationPoints.filter((ep) => ep.trackId === t.instanceId);
       if (ownMarkers.length > 0 && ownMarkers.every((ep) => ep.elevation === 0)) {
