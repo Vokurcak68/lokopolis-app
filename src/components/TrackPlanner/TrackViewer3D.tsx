@@ -19,16 +19,16 @@ interface TrackViewer3DProps {
 }
 
 // ── Constants ──
-// Sizes are exaggerated for visibility in 3D (mm units in a large scene)
+// All dimensions in mm. Exaggerated for TT-scale 3D visibility.
 
-const SLEEPER_SPACING_MM = 12; // distance between sleepers
-const RAIL_WIDTH_MM = 1.5; // visual rail profile width (exaggerated from real 0.8mm)
-const RAIL_HEIGHT_MM = 2; // rail profile height
-const SLEEPER_THICKNESS_MM = 2.5; // sleeper height/thickness
-const SLEEPER_WIDTH_MM = 4; // sleeper width along track direction
-const SLEEPER_LENGTH_FACTOR = 2.2; // factor of gauge for sleeper length
-const BALLAST_WIDTH_FACTOR = 3.0; // factor of gauge for ballast width
-const BALLAST_HEIGHT_MM = 2;
+const SLEEPER_SPACING_MM = 10; // distance between sleepers along track
+const RAIL_WIDTH_MM = 1.2; // rail profile width (cross-section)
+const RAIL_HEIGHT_MM = 1.5; // rail profile height
+const SLEEPER_THICKNESS_MM = 1.5; // sleeper height (Y)
+const SLEEPER_WIDTH_MM = 3; // sleeper extent along track direction (X in local)
+const SLEEPER_LENGTH_FACTOR = 2.4; // sleeper length = gauge * factor (perpendicular to track)
+const BALLAST_WIDTH_FACTOR = 3.0; // ballast ribbon width = gauge * factor
+const BALLAST_HEIGHT_MM = 1.5; // ballast ribbon thickness
 
 // ── Elevation graph solver ──
 // Walks the connected track graph, finds elevation points, and computes
@@ -346,8 +346,6 @@ function TrackPiece3D({
 
   const geometry = useMemo(() => {
     const segments = getPieceSegmentsLocal(piece);
-    const railLeftPoints: THREE.Vector3[] = [];
-    const railRightPoints: THREE.Vector3[] = [];
     const centerPoints: Array<{ x: number; y: number; z: number; tangentX: number; tangentZ: number }> = [];
 
     for (const seg of segments) {
@@ -355,47 +353,53 @@ function TrackPiece3D({
       centerPoints.push(...pts);
     }
 
-    // Build rail paths offset by half gauge perpendicular to tangent
-    for (const pt of centerPoints) {
-      // Perpendicular in xz plane (left = -tanZ, tanX)
-      const perpX = -pt.tangentZ;
-      const perpZ = pt.tangentX;
+    return { centerPoints };
+  }, [track, piece, elevMap]);
 
-      railLeftPoints.push(new THREE.Vector3(
-        pt.x + perpX * halfGauge,
-        pt.y + BALLAST_HEIGHT_MM + SLEEPER_THICKNESS_MM + RAIL_HEIGHT_MM / 2,
-        pt.z + perpZ * halfGauge,
-      ));
-      railRightPoints.push(new THREE.Vector3(
-        pt.x - perpX * halfGauge,
-        pt.y + BALLAST_HEIGHT_MM + SLEEPER_THICKNESS_MM + RAIL_HEIGHT_MM / 2,
-        pt.z - perpZ * halfGauge,
-      ));
-    }
-
-    return { railLeftPoints, railRightPoints, centerPoints };
-  }, [track, piece, elevMap, halfGauge]);
-
-  // Create rail geometry — extruded ribbon (more visible than thin tubes)
-  const buildRailRibbon = (points: THREE.Vector3[]) => {
-    if (points.length < 2) return null;
+  // Create rail geometry — extruded rectangle profile along path
+  // Each cross-section has 4 corners; quads between successive sections form the rail solid.
+  const buildRailSolid = (
+    centerPts: Array<{ x: number; y: number; z: number; tangentX: number; tangentZ: number }>,
+    offsetX: number, // perpendicular offset from center (±halfGauge)
+  ) => {
+    if (centerPts.length < 2) return null;
     const hw = RAIL_WIDTH_MM / 2;
     const hh = RAIL_HEIGHT_MM / 2;
     const vertices: number[] = [];
     const indices: number[] = [];
+    const railY = BALLAST_HEIGHT_MM + SLEEPER_THICKNESS_MM;
 
-    for (let i = 0; i < points.length; i++) {
-      const p = points[i];
-      // For each point, create 4 vertices (top-left, top-right, bottom-left, bottom-right of rail cross-section)
-      // Rail runs along the path; cross-section is in Y (up) direction
-      vertices.push(p.x, p.y + hh, p.z); // top
-      vertices.push(p.x, p.y - hh, p.z); // bottom
+    for (let i = 0; i < centerPts.length; i++) {
+      const pt = centerPts[i];
+      const perpX = -pt.tangentZ; // perpendicular in XZ plane
+      const perpZ = pt.tangentX;
+
+      // Rail center position (offset perpendicular to track)
+      const cx = pt.x + perpX * offsetX;
+      const cz = pt.z + perpZ * offsetX;
+      const cy = pt.y + railY;
+
+      // 4 corners of rail cross-section:
+      // The rail profile is a rectangle in the plane perpendicular to the track tangent.
+      // "width" is along perp direction, "height" is along Y.
+      // 0: top-outer, 1: top-inner, 2: bottom-inner, 3: bottom-outer
+      vertices.push(cx + perpX * hw, cy + hh, cz + perpZ * hw); // 0
+      vertices.push(cx - perpX * hw, cy + hh, cz - perpZ * hw); // 1
+      vertices.push(cx - perpX * hw, cy - hh, cz - perpZ * hw); // 2
+      vertices.push(cx + perpX * hw, cy - hh, cz + perpZ * hw); // 3
 
       if (i > 0) {
-        const idx = i * 2;
-        // Two triangles forming a quad between this point and previous
-        indices.push(idx - 2, idx - 1, idx);
-        indices.push(idx - 1, idx + 1, idx);
+        const c = i * 4; // current quad start
+        const p = (i - 1) * 4; // previous quad start
+        // 4 faces (quads = 2 tris each) connecting previous and current cross-sections
+        // Top face
+        indices.push(p + 0, p + 1, c + 1, p + 0, c + 1, c + 0);
+        // Bottom face
+        indices.push(p + 2, p + 3, c + 3, p + 2, c + 3, c + 2);
+        // Outer face
+        indices.push(p + 3, p + 0, c + 0, p + 3, c + 0, c + 3);
+        // Inner face
+        indices.push(p + 1, p + 2, c + 2, p + 1, c + 2, c + 1);
       }
     }
 
@@ -406,15 +410,23 @@ function TrackPiece3D({
     return geom;
   };
 
-  const railLeftGeom = useMemo(() => buildRailRibbon(geometry.railLeftPoints), [geometry.railLeftPoints]);
-  const railRightGeom = useMemo(() => buildRailRibbon(geometry.railRightPoints), [geometry.railRightPoints]);
+  const railLeftGeom = useMemo(
+    () => buildRailSolid(geometry.centerPoints, halfGauge),
+    [geometry.centerPoints, halfGauge],
+  );
+  const railRightGeom = useMemo(
+    () => buildRailSolid(geometry.centerPoints, -halfGauge),
+    [geometry.centerPoints, halfGauge],
+  );
 
-  // Ballast: a flat ribbon along the center
+  // Ballast: 3D trapezoidal ribbon along the center (top flat, sides sloped)
   const ballastGeom = useMemo(() => {
     const pts = geometry.centerPoints;
     if (pts.length < 2) return null;
 
-    const ballastHalfWidth = halfGauge * BALLAST_WIDTH_FACTOR / 2;
+    const topHalfW = halfGauge * BALLAST_WIDTH_FACTOR / 2;
+    const botHalfW = topHalfW * 1.3; // wider at base
+    const bh = BALLAST_HEIGHT_MM;
     const vertices: number[] = [];
     const indices: number[] = [];
 
@@ -422,24 +434,25 @@ function TrackPiece3D({
       const pt = pts[i];
       const perpX = -pt.tangentZ;
       const perpZ = pt.tangentX;
+      const baseY = pt.y;
 
-      // Left vertex
-      vertices.push(
-        pt.x + perpX * ballastHalfWidth,
-        pt.y,
-        pt.z + perpZ * ballastHalfWidth,
-      );
-      // Right vertex
-      vertices.push(
-        pt.x - perpX * ballastHalfWidth,
-        pt.y,
-        pt.z - perpZ * ballastHalfWidth,
-      );
+      // 4 vertices per cross-section: topLeft, topRight, bottomLeft, bottomRight
+      vertices.push(pt.x + perpX * topHalfW, baseY + bh, pt.z + perpZ * topHalfW); // 0 topL
+      vertices.push(pt.x - perpX * topHalfW, baseY + bh, pt.z - perpZ * topHalfW); // 1 topR
+      vertices.push(pt.x - perpX * botHalfW, baseY,      pt.z - perpZ * botHalfW); // 2 botR
+      vertices.push(pt.x + perpX * botHalfW, baseY,      pt.z + perpZ * botHalfW); // 3 botL
 
       if (i > 0) {
-        const idx = i * 2;
-        indices.push(idx - 2, idx - 1, idx);
-        indices.push(idx - 1, idx + 1, idx);
+        const c = i * 4;
+        const p = (i - 1) * 4;
+        // Top face
+        indices.push(p + 0, p + 1, c + 1, p + 0, c + 1, c + 0);
+        // Right slope
+        indices.push(p + 1, p + 2, c + 2, p + 1, c + 2, c + 1);
+        // Bottom face
+        indices.push(p + 2, p + 3, c + 3, p + 2, c + 3, c + 2);
+        // Left slope
+        indices.push(p + 3, p + 0, c + 0, p + 3, c + 0, c + 3);
       }
     }
 
@@ -450,45 +463,47 @@ function TrackPiece3D({
     return geom;
   }, [geometry.centerPoints, halfGauge]);
 
-  // Sleepers: small boxes at regular intervals along the path
+  // Sleepers: boxes at regular intervals along the path
   const sleeperInstances = useMemo(() => {
     const pts = geometry.centerPoints;
     if (pts.length < 2) return [];
 
-    const totalLen = pts.reduce((acc, pt, i) => {
-      if (i === 0) return 0;
-      const prev = pts[i - 1];
-      return acc + Math.hypot(pt.x - prev.x, pt.z - prev.z);
-    }, 0);
+    // Build cumulative distance array
+    const cumDist: number[] = [0];
+    for (let i = 1; i < pts.length; i++) {
+      cumDist.push(cumDist[i - 1] + Math.hypot(
+        pts[i].x - pts[i - 1].x,
+        pts[i].z - pts[i - 1].z,
+      ));
+    }
+    const totalLen = cumDist[cumDist.length - 1];
+    if (totalLen < 1) return [];
 
     const sleeperCount = Math.max(2, Math.floor(totalLen / SLEEPER_SPACING_MM));
     const result: Array<{ position: [number, number, number]; rotation: number }> = [];
 
-    let accumulated = 0;
-    let nextSleeperDist = 0;
-    let ptIdx = 1;
-
     for (let s = 0; s <= sleeperCount; s++) {
       const targetDist = (s / sleeperCount) * totalLen;
 
-      while (ptIdx < pts.length && accumulated + Math.hypot(
-        pts[ptIdx].x - pts[ptIdx - 1].x,
-        pts[ptIdx].z - pts[ptIdx - 1].z,
-      ) < targetDist) {
-        accumulated += Math.hypot(
-          pts[ptIdx].x - pts[ptIdx - 1].x,
-          pts[ptIdx].z - pts[ptIdx - 1].z,
-        );
-        ptIdx++;
-      }
+      // Find segment containing targetDist
+      let segIdx = 1;
+      while (segIdx < cumDist.length - 1 && cumDist[segIdx] < targetDist) segIdx++;
 
-      if (ptIdx >= pts.length) ptIdx = pts.length - 1;
+      const segStart = cumDist[segIdx - 1];
+      const segEnd = cumDist[segIdx];
+      const segLen = segEnd - segStart;
+      const t = segLen > 0 ? (targetDist - segStart) / segLen : 0;
 
-      const pt = pts[ptIdx];
-      const angle = Math.atan2(pt.tangentZ, pt.tangentX);
+      const p0 = pts[segIdx - 1];
+      const p1 = pts[segIdx];
+
+      const x = p0.x + t * (p1.x - p0.x);
+      const y = p0.y + t * (p1.y - p0.y);
+      const z = p0.z + t * (p1.z - p0.z);
+      const angle = Math.atan2(p1.tangentZ, p1.tangentX);
 
       result.push({
-        position: [pt.x, pt.y + BALLAST_HEIGHT_MM + SLEEPER_THICKNESS_MM / 2, pt.z],
+        position: [x, y + BALLAST_HEIGHT_MM + SLEEPER_THICKNESS_MM / 2, z],
         rotation: angle,
       });
     }
