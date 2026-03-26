@@ -696,10 +696,22 @@ export function useTrackPlanner() {
   const cancelPortalMode = useCallback(() => {
     setPortalMode(null);
     setPortalFirstTrack(null);
+    setPortalSecondTrack(null);
+    endFirstTrackRef.current = null;
     setPairingPortalId(null);
   }, []);
 
-  /** Place a portal point — for single: 1 click, for double: 2 clicks (2 tracks) */
+  // For double portal, we collect tracks for each end (start portal + end portal)
+  const [portalSecondTrack, setPortalSecondTrack] = useState<TrackPoint | null>(null);
+  // Step: 0 = first click, 1 = second click (for double: first track of start), 2 = third (double: second track of start or first of end), etc.
+  // Simplified: single = 2 clicks (start + end), double = 4 clicks (2 tracks start + 2 tracks end)
+  // But let's keep it simple like terrain: 2 clicks for single, and for double we ask 2 tracks per portal end
+
+  /** Place portal — works like terrain zones: click start, click end
+   *  Single: 1st click = start portal, 2nd click = end portal (auto-paired)
+   *  Double: 1st click = start track1, 2nd = start track2 (creates start portal),
+   *          3rd = end track1, 4th = end track2 (creates end portal, auto-paired)
+   */
   const placePortalPoint = useCallback(
     (worldX: number, worldZ: number) => {
       if (!portalMode) return false;
@@ -710,44 +722,90 @@ export function useTrackPlanner() {
       const point: TrackPoint = { trackId: hit.trackId, t: hit.t, worldX: hit.worldPos.x, worldZ: hit.worldPos.z };
 
       if (portalMode.width === "single") {
-        // Single portal — one click creates the portal
-        const portal: Portal = {
-          id: generatePortalId(),
+        if (!portalFirstTrack) {
+          // 1st click — start portal position
+          setPortalFirstTrack(point);
+          return true;
+        }
+        // 2nd click — end portal position → create pair
+        const startId = generatePortalId();
+        const endId = generatePortalId();
+        const startPortal: Portal = {
+          id: startId,
+          kind: portalMode.kind,
+          width: "single",
+          track1: portalFirstTrack,
+          pairedPortalId: endId,
+        };
+        const endPortal: Portal = {
+          id: endId,
           kind: portalMode.kind,
           width: "single",
           track1: point,
-          pairedPortalId: null,
+          pairedPortalId: startId,
         };
-        dispatch({ type: "ADD_PORTAL", portal });
+        dispatch({ type: "ADD_PORTAL", portal: startPortal });
+        dispatch({ type: "ADD_PORTAL", portal: endPortal });
         setPortalMode(null);
         setPortalFirstTrack(null);
         return true;
       }
 
-      // Double portal — need 2 track clicks
+      // Double portal — need 4 clicks total (2 for start, 2 for end)
       if (!portalFirstTrack) {
+        // 1st click — first track of start portal
         setPortalFirstTrack(point);
         return true;
       }
+      if (!portalSecondTrack) {
+        // 2nd click — second track of start portal
+        if (portalFirstTrack.trackId === point.trackId) return false; // must be different track
+        setPortalSecondTrack(point);
+        return true;
+      }
 
-      // Don't allow same track for both points of a double portal
-      if (portalFirstTrack.trackId === point.trackId) return false;
+      // We have start portal tracks, now collecting end portal
+      // Check if we're on 3rd click (first track of end) or 4th (second track of end)
+      // Use a ref to track the end's first track
+      if (!endFirstTrackRef.current) {
+        // 3rd click — first track of end portal
+        endFirstTrackRef.current = point;
+        return true;
+      }
 
-      const portal: Portal = {
-        id: generatePortalId(),
+      // 4th click — second track of end portal
+      if (endFirstTrackRef.current.trackId === point.trackId) return false;
+
+      const startId = generatePortalId();
+      const endId = generatePortalId();
+      const startPortal: Portal = {
+        id: startId,
         kind: portalMode.kind,
         width: "double",
         track1: portalFirstTrack,
-        track2: point,
-        pairedPortalId: null,
+        track2: portalSecondTrack,
+        pairedPortalId: endId,
       };
-      dispatch({ type: "ADD_PORTAL", portal });
+      const endPortal: Portal = {
+        id: endId,
+        kind: portalMode.kind,
+        width: "double",
+        track1: endFirstTrackRef.current,
+        track2: point,
+        pairedPortalId: startId,
+      };
+      dispatch({ type: "ADD_PORTAL", portal: startPortal });
+      dispatch({ type: "ADD_PORTAL", portal: endPortal });
       setPortalMode(null);
       setPortalFirstTrack(null);
+      setPortalSecondTrack(null);
+      endFirstTrackRef.current = null;
       return true;
     },
-    [portalMode, portalFirstTrack, state.tracks, catalogMap, generatePortalId],
+    [portalMode, portalFirstTrack, portalSecondTrack, state.tracks, catalogMap, generatePortalId],
   );
+
+  const endFirstTrackRef = useRef<TrackPoint | null>(null);
 
   /** Start pairing mode — click on another portal to pair */
   const startPairing = useCallback((portalId: string) => {
@@ -915,6 +973,8 @@ export function useTrackPlanner() {
     // Portals (new)
     portalMode,
     portalFirstTrack,
+    portalSecondTrack,
+    portalEndFirstTrack: endFirstTrackRef.current,
     selectedPortalId,
     setSelectedPortalId,
     pairingPortalId,

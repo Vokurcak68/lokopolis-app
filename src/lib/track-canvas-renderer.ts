@@ -1785,7 +1785,7 @@ export function drawPortals(
     if (!data1) continue;
 
     const screen1 = worldToScreen({ x: data1.worldPos.x, z: data1.worldPos.z }, transform);
-    const portalRadius = gaugeMm * 1.5 * transform.zoom;
+    const portalRadius = Math.max(14, 22 * transform.zoom);
 
     if (portal.width === "single") {
       // Single portal — same as existing drawPortal

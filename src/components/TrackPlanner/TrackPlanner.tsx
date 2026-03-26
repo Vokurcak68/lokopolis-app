@@ -227,11 +227,17 @@ export default function TrackPlanner() {
             >
               <span className="text-sm font-medium text-white">
                 {planner.portalMode.kind === "tunnel" ? "🏔️" : "🌉"}{" "}
-                {planner.portalMode.width === "double"
+                {planner.portalMode.width === "single"
                   ? planner.portalFirstTrack
-                    ? "Klikni na druhou kolej (dvojkolejný portál)"
-                    : "Klikni na první kolej (dvojkolejný portál)"
-                  : "Klikni na kolej — umístit portál"}
+                    ? "Klikni na trať — konec tunelu/mostu"
+                    : "Klikni na trať — začátek tunelu/mostu"
+                  : !planner.portalFirstTrack
+                    ? "Klikni na 1. kolej (začátek — dvojkolejný)"
+                    : !planner.portalSecondTrack
+                      ? "Klikni na 2. kolej (začátek — dvojkolejný)"
+                      : !planner.portalEndFirstTrack
+                        ? "Klikni na 1. kolej (konec — dvojkolejný)"
+                        : "Klikni na 2. kolej (konec — dvojkolejný)"}
               </span>
               <button
                 onClick={planner.cancelPortalMode}
