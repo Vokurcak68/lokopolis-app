@@ -19,14 +19,16 @@ interface TrackViewer3DProps {
 }
 
 // ── Constants ──
+// Sizes are exaggerated for visibility in 3D (mm units in a large scene)
 
-const SLEEPER_SPACING_MM = 15; // distance between sleepers
-const RAIL_WIDTH_MM = 0.8;
-const RAIL_HEIGHT_MM = 1.2;
-const SLEEPER_WIDTH_MM = 2;
-const SLEEPER_LENGTH_FACTOR = 2.2; // factor of gauge
-const BALLAST_WIDTH_FACTOR = 2.8; // factor of gauge
-const BALLAST_HEIGHT_MM = 1.5;
+const SLEEPER_SPACING_MM = 12; // distance between sleepers
+const RAIL_WIDTH_MM = 1.5; // visual rail profile width (exaggerated from real 0.8mm)
+const RAIL_HEIGHT_MM = 2; // rail profile height
+const SLEEPER_THICKNESS_MM = 2.5; // sleeper height/thickness
+const SLEEPER_WIDTH_MM = 4; // sleeper width along track direction
+const SLEEPER_LENGTH_FACTOR = 2.2; // factor of gauge for sleeper length
+const BALLAST_WIDTH_FACTOR = 3.0; // factor of gauge for ballast width
+const BALLAST_HEIGHT_MM = 2;
 
 // ── Elevation graph solver ──
 // Walks the connected track graph, finds elevation points, and computes
@@ -354,12 +356,12 @@ function TrackPiece3D({
 
       railLeftPoints.push(new THREE.Vector3(
         pt.x + perpX * halfGauge,
-        pt.y + BALLAST_HEIGHT_MM + SLEEPER_WIDTH_MM,
+        pt.y + BALLAST_HEIGHT_MM + SLEEPER_THICKNESS_MM + RAIL_HEIGHT_MM / 2,
         pt.z + perpZ * halfGauge,
       ));
       railRightPoints.push(new THREE.Vector3(
         pt.x - perpX * halfGauge,
-        pt.y + BALLAST_HEIGHT_MM + SLEEPER_WIDTH_MM,
+        pt.y + BALLAST_HEIGHT_MM + SLEEPER_THICKNESS_MM + RAIL_HEIGHT_MM / 2,
         pt.z - perpZ * halfGauge,
       ));
     }
@@ -367,18 +369,38 @@ function TrackPiece3D({
     return { railLeftPoints, railRightPoints, centerPoints };
   }, [track, piece, elevMap, halfGauge]);
 
-  // Create rail tube geometry
-  const railLeftGeom = useMemo(() => {
-    if (geometry.railLeftPoints.length < 2) return null;
-    const curve = new THREE.CatmullRomCurve3(geometry.railLeftPoints, false, "centripetal", 0.1);
-    return new THREE.TubeGeometry(curve, geometry.railLeftPoints.length * 2, RAIL_WIDTH_MM / 2, 4, false);
-  }, [geometry.railLeftPoints]);
+  // Create rail geometry — extruded ribbon (more visible than thin tubes)
+  const buildRailRibbon = (points: THREE.Vector3[]) => {
+    if (points.length < 2) return null;
+    const hw = RAIL_WIDTH_MM / 2;
+    const hh = RAIL_HEIGHT_MM / 2;
+    const vertices: number[] = [];
+    const indices: number[] = [];
 
-  const railRightGeom = useMemo(() => {
-    if (geometry.railRightPoints.length < 2) return null;
-    const curve = new THREE.CatmullRomCurve3(geometry.railRightPoints, false, "centripetal", 0.1);
-    return new THREE.TubeGeometry(curve, geometry.railRightPoints.length * 2, RAIL_WIDTH_MM / 2, 4, false);
-  }, [geometry.railRightPoints]);
+    for (let i = 0; i < points.length; i++) {
+      const p = points[i];
+      // For each point, create 4 vertices (top-left, top-right, bottom-left, bottom-right of rail cross-section)
+      // Rail runs along the path; cross-section is in Y (up) direction
+      vertices.push(p.x, p.y + hh, p.z); // top
+      vertices.push(p.x, p.y - hh, p.z); // bottom
+
+      if (i > 0) {
+        const idx = i * 2;
+        // Two triangles forming a quad between this point and previous
+        indices.push(idx - 2, idx - 1, idx);
+        indices.push(idx - 1, idx + 1, idx);
+      }
+    }
+
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+    geom.setIndex(indices);
+    geom.computeVertexNormals();
+    return geom;
+  };
+
+  const railLeftGeom = useMemo(() => buildRailRibbon(geometry.railLeftPoints), [geometry.railLeftPoints]);
+  const railRightGeom = useMemo(() => buildRailRibbon(geometry.railRightPoints), [geometry.railRightPoints]);
 
   // Ballast: a flat ribbon along the center
   const ballastGeom = useMemo(() => {
@@ -459,7 +481,7 @@ function TrackPiece3D({
       const angle = Math.atan2(pt.tangentZ, pt.tangentX);
 
       result.push({
-        position: [pt.x, pt.y + BALLAST_HEIGHT_MM + SLEEPER_WIDTH_MM / 2, pt.z],
+        position: [pt.x, pt.y + BALLAST_HEIGHT_MM + SLEEPER_THICKNESS_MM / 2, pt.z],
         rotation: angle,
       });
     }
@@ -481,7 +503,7 @@ function TrackPiece3D({
       {/* Sleepers */}
       {sleeperInstances.map((sl, i) => (
         <mesh key={i} position={sl.position} rotation={[0, -sl.rotation + Math.PI / 2, 0]}>
-          <boxGeometry args={[SLEEPER_WIDTH_MM, SLEEPER_WIDTH_MM * 0.6, sleeperLength]} />
+          <boxGeometry args={[SLEEPER_WIDTH_MM, SLEEPER_THICKNESS_MM, sleeperLength]} />
           <meshStandardMaterial color="#6f4e37" />
         </mesh>
       ))}
@@ -767,15 +789,12 @@ function Scene({ tracks, catalog, board, elevationPoints }: TrackViewer3DProps) 
         const piece = catalog[track.pieceId];
         if (!piece) return null;
         return (
-          <group key={track.instanceId}>
-            <TrackPiece3D
-              track={track}
-              piece={piece}
-              elevMap={elevMap}
-            />
-            {/* Debug center line */}
-            <TrackCenterLine track={track} piece={piece} elevMap={elevMap} />
-          </group>
+          <TrackPiece3D
+            key={track.instanceId}
+            track={track}
+            piece={piece}
+            elevMap={elevMap}
+          />
         );
       })}
 
