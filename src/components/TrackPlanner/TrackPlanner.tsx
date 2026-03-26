@@ -13,7 +13,10 @@ const TrackViewer3D = dynamic(() => import("./TrackViewer3D"), { ssr: false });
 export default function TrackPlanner() {
   const planner = useTrackPlanner();
   const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");
-  const [elevationPopup, setElevationPopup] = useState<{ trackId: string; t: number; worldX: number; worldZ: number; screenX: number; screenY: number } | null>(null);
+  const [elevationPopup, setElevationPopup] = useState<{
+    trackId: string; t: number; worldX: number; worldZ: number; screenX: number; screenY: number;
+    existingPointId?: string; existingElevation?: number;
+  } | null>(null);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -343,7 +346,16 @@ export default function TrackPlanner() {
               onUpdateTrack={planner.updateTrack}
               onSnapDraggedTrack={planner.snapDraggedTrack}
               onElevationClick={(trackId, t, worldX, worldZ, screenX, screenY) => {
-                setElevationPopup({ trackId, t, worldX, worldZ, screenX, screenY });
+                // Check if clicking near an existing elevation point
+                const existing = planner.state.elevationPoints.find((ep) => {
+                  if (ep.trackId !== trackId) return false;
+                  return Math.abs(ep.t - t) < 0.05; // within 5% of track length
+                });
+                if (existing) {
+                  setElevationPopup({ trackId, t: existing.t, worldX, worldZ, screenX, screenY, existingPointId: existing.id, existingElevation: existing.elevation });
+                } else {
+                  setElevationPopup({ trackId, t, worldX, worldZ, screenX, screenY });
+                }
               }}
               portalMode={!!planner.portalMode}
               pairingMode={!!planner.pairingPortalId}
@@ -366,14 +378,20 @@ export default function TrackPlanner() {
                 borderColor: "var(--border)",
               }}
             >
-              <label className="text-xs font-medium" style={{ color: "var(--text-body)" }}>Výška (mm):</label>
+              <label className="text-xs font-medium" style={{ color: "var(--text-body)" }}>
+                {elevationPopup.existingPointId ? "Upravit výšku (mm):" : "Výška (mm):"}
+              </label>
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
                   const formData = new FormData(e.currentTarget);
                   const val = parseFloat(formData.get("elevation") as string);
                   if (!isNaN(val)) {
-                    planner.addElevationPoint(elevationPopup.trackId, elevationPopup.t, val);
+                    if (elevationPopup.existingPointId) {
+                      planner.updateElevationPoint(elevationPopup.existingPointId, { elevation: val });
+                    } else {
+                      planner.addElevationPoint(elevationPopup.trackId, elevationPopup.t, val);
+                    }
                   }
                   setElevationPopup(null);
                 }}
@@ -383,7 +401,7 @@ export default function TrackPlanner() {
                     name="elevation"
                     type="number"
                     step="any"
-                    defaultValue="0"
+                    defaultValue={elevationPopup.existingElevation ?? 0}
                     autoFocus
                     className="w-20 rounded border px-2 py-1 text-sm"
                     style={{ background: "var(--bg-input)", borderColor: "var(--border)", color: "var(--text-body)" }}
@@ -394,6 +412,18 @@ export default function TrackPlanner() {
                   >
                     OK
                   </button>
+                  {elevationPopup.existingPointId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        planner.removeElevationPoint(elevationPopup.existingPointId!);
+                        setElevationPopup(null);
+                      }}
+                      className="rounded bg-red-600 px-2 py-1 text-sm text-white hover:bg-red-700"
+                    >
+                      🗑
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setElevationPopup(null)}
