@@ -21,13 +21,13 @@ interface TrackViewer3DProps {
 // ── Constants ──
 // All dimensions in mm. Exaggerated for TT-scale 3D visibility.
 
-const SLEEPER_SPACING_MM = 10; // distance between sleepers along track
+const SLEEPER_SPACING_MM = 5; // distance between sleepers along track (tight, realistic)
 const RAIL_WIDTH_MM = 1.2; // rail profile width (cross-section)
 const RAIL_HEIGHT_MM = 1.5; // rail profile height
 const SLEEPER_THICKNESS_MM = 1.2; // sleeper height (Y)
 const SLEEPER_WIDTH_MM = 2; // sleeper extent along track direction
 const SLEEPER_LENGTH_FACTOR = 1.8; // sleeper length = gauge * factor (perpendicular to track)
-const BALLAST_WIDTH_FACTOR = 2.2; // ballast ribbon width = gauge * factor (wider than sleepers)
+const BALLAST_WIDTH_FACTOR = 2.6; // ballast ribbon width = gauge * factor (MUST be wider than sleepers)
 const BALLAST_HEIGHT_MM = 1.5; // ballast ribbon thickness
 
 // ── Elevation graph solver ──
