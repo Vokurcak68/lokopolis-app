@@ -297,21 +297,28 @@ function BoardMesh({ board }: { board: BoardConfig }) {
     const boardPath = getBoardPathMm(board);
     if (boardPath.length < 3) return null;
 
-    // Build flat polygon in XZ plane at Y=0 directly (no rotation tricks)
-    const vertices: number[] = [];
-    const indices: number[] = [];
-
-    // Fan triangulation from first vertex
-    for (let i = 1; i < boardPath.length - 1; i++) {
-      vertices.push(boardPath[0].x, 0, boardPath[0].z);
-      vertices.push(boardPath[i].x, 0, boardPath[i].z);
-      vertices.push(boardPath[i + 1].x, 0, boardPath[i + 1].z);
+    // Use THREE.Shape for proper triangulation of concave polygons (L-shapes etc.)
+    // Shape works in XY plane, so we map our x→X, z→Y
+    const shape = new THREE.Shape();
+    shape.moveTo(boardPath[0].x, boardPath[0].z);
+    for (let i = 1; i < boardPath.length; i++) {
+      shape.lineTo(boardPath[i].x, boardPath[i].z);
     }
+    shape.closePath();
 
-    const geom = new THREE.BufferGeometry();
-    geom.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
-    geom.computeVertexNormals();
-    return geom;
+    const shapeGeom = new THREE.ShapeGeometry(shape);
+
+    // ShapeGeometry outputs vertices in XY plane — remap to XZ plane (Y=0)
+    const pos = shapeGeom.getAttribute("position");
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i);
+      const y = pos.getY(i); // this is our Z
+      pos.setXYZ(i, x, 0, y);
+    }
+    pos.needsUpdate = true;
+    shapeGeom.computeVertexNormals();
+
+    return shapeGeom;
   }, [board]);
 
   if (!geometry) return null;
