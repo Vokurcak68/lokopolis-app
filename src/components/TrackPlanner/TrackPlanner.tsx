@@ -1,14 +1,20 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useState } from "react";
 import { TrackCanvas } from "./TrackCanvas";
 import { TrackCatalogPanel } from "./TrackCatalogPanel";
 import { TrackStatsBar } from "./TrackStatsBar";
 import { TrackTopBar } from "./TrackTopBar";
 import { useTrackPlanner } from "./useTrackPlanner";
+import { closestPointOnAnyTrack } from "@/lib/track-canvas-renderer";
+
+const TrackViewer3D = dynamic(() => import("./TrackViewer3D"), { ssr: false });
 
 export default function TrackPlanner() {
   const planner = useTrackPlanner();
+  const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");
+  const [elevationPopup, setElevationPopup] = useState<{ trackId: string; t: number; worldX: number; worldZ: number; screenX: number; screenY: number } | null>(null);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -28,6 +34,13 @@ export default function TrackPlanner() {
       if (e.key === "Escape" && planner.terrainMode) {
         e.preventDefault();
         planner.cancelTerrainMode();
+        return;
+      }
+
+      if (e.key === "Escape" && planner.elevationMode) {
+        e.preventDefault();
+        planner.cancelElevationMode();
+        setElevationPopup(null);
         return;
       }
 
@@ -164,6 +177,11 @@ export default function TrackPlanner() {
         onStartTunnel={() => planner.startTerrainMode("tunnel")}
         onStartBridge={() => planner.startTerrainMode("bridge")}
         onCancelTerrain={planner.cancelTerrainMode}
+        viewMode={viewMode}
+        onToggleViewMode={() => setViewMode((v) => (v === "2d" ? "3d" : "2d"))}
+        elevationMode={planner.elevationMode}
+        onStartElevation={planner.startElevationMode}
+        onCancelElevation={() => { planner.cancelElevationMode(); setElevationPopup(null); }}
       />
 
       <div className="relative flex min-h-0 flex-1">
@@ -219,32 +237,114 @@ export default function TrackPlanner() {
               </button>
             </div>
           )}
-          <TrackCanvas
-            state={planner.state}
-            catalog={planner.catalogMap}
-            activePiece={planner.activePiece}
-            transform={planner.transform}
-            canvasRef={planner.canvasRef}
-            terrainMode={!!planner.terrainMode}
-            selectedZoneId={planner.selectedZoneId}
-            placementRotation={planner.placementRotation}
-            onTransformChange={(fn) => planner.setTransform((prev) => fn(prev))}
-            onSetSelectedTrack={planner.setSelectedTrack}
-            onToggleSelectTrack={planner.toggleSelectTrack}
-            onSelectTracks={planner.selectTracks}
-            onMoveSelectedTracks={planner.moveSelectedTracks}
-            onSnapGroupDrag={planner.snapGroupDrag}
-            onUnsnapTracks={planner.unsnapTracks}
-            onSnapConnection={planner.snapConnection}
-            onHitTestTerrainZone={planner.hitTestTerrainZone}
-            onSetSelectedZone={planner.setSelectedZoneId}
-            onSetHoveredTrack={planner.setHoveredTrack}
-            onPlaceTrack={planner.placeTrackAt}
-            onPlaceTerrainPoint={planner.placeTerrainPoint}
-            onDeactivatePiece={() => planner.setActivePiece(null)}
-            onUpdateTrack={planner.updateTrack}
-            onSnapDraggedTrack={planner.snapDraggedTrack}
-          />
+          {planner.elevationMode && !planner.terrainMode && (
+            <div
+              className="absolute left-0 right-0 top-0 z-20 flex items-center justify-between border-b px-3 py-2"
+              style={{ background: "#8b5cf6", borderColor: "var(--border)" }}
+            >
+              <span className="text-sm font-medium text-white">
+                📐 Klikni na trať pro přidání výškového bodu
+              </span>
+              <button
+                onClick={() => { planner.cancelElevationMode(); setElevationPopup(null); }}
+                className="flex items-center gap-1 rounded-md bg-white/20 px-3 py-1 text-sm font-medium text-white transition hover:bg-white/30"
+              >
+                ✕ Zrušit
+              </button>
+            </div>
+          )}
+          {viewMode === "3d" ? (
+            <TrackViewer3D
+              tracks={planner.state.tracks}
+              catalog={planner.catalogMap}
+              board={planner.state.board}
+              elevationPoints={planner.state.elevationPoints}
+              terrainZones={planner.state.terrainZones}
+            />
+          ) : (
+            <TrackCanvas
+              state={planner.state}
+              catalog={planner.catalogMap}
+              activePiece={planner.activePiece}
+              transform={planner.transform}
+              canvasRef={planner.canvasRef}
+              terrainMode={!!planner.terrainMode}
+              elevationMode={planner.elevationMode}
+              selectedZoneId={planner.selectedZoneId}
+              placementRotation={planner.placementRotation}
+              onTransformChange={(fn) => planner.setTransform((prev) => fn(prev))}
+              onSetSelectedTrack={planner.setSelectedTrack}
+              onToggleSelectTrack={planner.toggleSelectTrack}
+              onSelectTracks={planner.selectTracks}
+              onMoveSelectedTracks={planner.moveSelectedTracks}
+              onSnapGroupDrag={planner.snapGroupDrag}
+              onUnsnapTracks={planner.unsnapTracks}
+              onSnapConnection={planner.snapConnection}
+              onHitTestTerrainZone={planner.hitTestTerrainZone}
+              onSetSelectedZone={planner.setSelectedZoneId}
+              onSetHoveredTrack={planner.setHoveredTrack}
+              onPlaceTrack={planner.placeTrackAt}
+              onPlaceTerrainPoint={planner.placeTerrainPoint}
+              onDeactivatePiece={() => planner.setActivePiece(null)}
+              onUpdateTrack={planner.updateTrack}
+              onSnapDraggedTrack={planner.snapDraggedTrack}
+              onElevationClick={(trackId, t, worldX, worldZ, screenX, screenY) => {
+                setElevationPopup({ trackId, t, worldX, worldZ, screenX, screenY });
+              }}
+            />
+          )}
+
+          {/* Elevation point popup */}
+          {elevationPopup && (
+            <div
+              className="absolute z-30 flex flex-col gap-2 rounded-lg border p-3 shadow-lg"
+              style={{
+                left: elevationPopup.screenX + 10,
+                top: elevationPopup.screenY - 40,
+                background: "var(--bg-card)",
+                borderColor: "var(--border)",
+              }}
+            >
+              <label className="text-xs font-medium" style={{ color: "var(--text-body)" }}>Výška (mm):</label>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const formData = new FormData(e.currentTarget);
+                  const val = parseFloat(formData.get("elevation") as string);
+                  if (!isNaN(val)) {
+                    planner.addElevationPoint(elevationPopup.trackId, elevationPopup.t, val);
+                  }
+                  setElevationPopup(null);
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  <input
+                    name="elevation"
+                    type="number"
+                    step="any"
+                    defaultValue="0"
+                    autoFocus
+                    className="w-20 rounded border px-2 py-1 text-sm"
+                    style={{ background: "var(--bg-input)", borderColor: "var(--border)", color: "var(--text-body)" }}
+                  />
+                  <button
+                    type="submit"
+                    className="rounded bg-blue-600 px-2 py-1 text-sm text-white hover:bg-blue-700"
+                  >
+                    OK
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setElevationPopup(null)}
+                    className="rounded px-2 py-1 text-sm"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
 
           {planner.selectedZoneId && (() => {
             const zone = planner.state.terrainZones.find((z) => z.id === planner.selectedZoneId);

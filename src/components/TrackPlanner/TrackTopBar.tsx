@@ -45,6 +45,11 @@ interface TrackTopBarProps {
   onStartTunnel: () => void;
   onStartBridge: () => void;
   onCancelTerrain: () => void;
+  viewMode: "2d" | "3d";
+  onToggleViewMode: () => void;
+  elevationMode: boolean;
+  onStartElevation: () => void;
+  onCancelElevation: () => void;
 }
 
 export function TrackTopBar(props: TrackTopBarProps) {
@@ -87,6 +92,11 @@ export function TrackTopBar(props: TrackTopBarProps) {
     onStartTunnel,
     onStartBridge,
     onCancelTerrain,
+    viewMode,
+    onToggleViewMode,
+    elevationMode,
+    onStartElevation,
+    onCancelElevation,
   } = props;
 
   const btnBase =
@@ -246,6 +256,30 @@ export function TrackTopBar(props: TrackTopBarProps) {
         )}
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
+          <button
+            onClick={onToggleViewMode}
+            className={btnBase}
+            style={{
+              borderColor: viewMode === "3d" ? "#10b981" : "var(--border)",
+              color: viewMode === "3d" ? "#fff" : "var(--text-body)",
+              background: viewMode === "3d" ? "#10b981" : "transparent",
+            }}
+            title={viewMode === "2d" ? "Přepnout na 3D pohled" : "Přepnout na 2D pohled"}
+          >
+            {viewMode === "2d" ? "🏔️ 3D" : "🗺️ 2D"}
+          </button>
+          <button
+            onClick={elevationMode ? onCancelElevation : onStartElevation}
+            className={btnBase}
+            style={{
+              borderColor: elevationMode ? "#8b5cf6" : "var(--border)",
+              color: elevationMode ? "#fff" : "var(--text-body)",
+              background: elevationMode ? "#8b5cf6" : "transparent",
+            }}
+            title="Nastavit výšky"
+          >
+            📐 Výšky
+          </button>
           <button
             onClick={terrainMode === "tunnel" ? onCancelTerrain : onStartTunnel}
             className={btnBase}

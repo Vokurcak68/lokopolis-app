@@ -31,6 +31,17 @@ export interface PlacedTrack {
   flipZ?: boolean;
 }
 
+/** An elevation control point on a track */
+export interface ElevationPoint {
+  id: string;
+  /** Which placed track this point is on */
+  trackId: string;
+  /** 0..1 position along the track's primary path */
+  t: number;
+  /** Height in mm — can be negative (underground) */
+  elevation: number;
+}
+
 /** A point on the track layout, referenced by track instance + parameter t (0..1 along piece) */
 export interface TrackPoint {
   /** Track instance id */
@@ -81,6 +92,7 @@ interface DesignerSnapshot {
   board: BoardConfig;
   tracks: PlacedTrack[];
   terrainZones: TerrainZone[];
+  elevationPoints: ElevationPoint[];
   selectedTrackId: string | null;
   /** Multi-select: array of selected track IDs */
   selectedTrackIds: string[];
@@ -115,6 +127,9 @@ export type DesignerAction =
   | { type: "UNSNAP_TRACKS"; instanceIds: string[] }
   | { type: "ADD_TERRAIN_ZONE"; zone: TerrainZone }
   | { type: "REMOVE_TERRAIN_ZONE"; zoneId: string }
+  | { type: "ADD_ELEVATION_POINT"; point: ElevationPoint }
+  | { type: "REMOVE_ELEVATION_POINT"; pointId: string }
+  | { type: "UPDATE_ELEVATION_POINT"; pointId: string; updates: Partial<Omit<ElevationPoint, "id">> }
   | { type: "UNDO" }
   | { type: "REDO" }
   | { type: "LOAD_STATE"; state: DesignerState };
@@ -128,6 +143,7 @@ export function createInitialState(): DesignerState {
     board: { width: 200, depth: 100, scale: "TT", shape: "rectangle" },
     tracks: [],
     terrainZones: [],
+    elevationPoints: [],
     selectedTrackId: null,
     selectedTrackIds: [],
     hoveredTrackId: null,
@@ -150,6 +166,7 @@ function toSnapshot(state: DesignerState): DesignerSnapshot {
     board: state.board,
     tracks: state.tracks,
     terrainZones: state.terrainZones,
+    elevationPoints: state.elevationPoints,
     selectedTrackId: state.selectedTrackId,
     selectedTrackIds: state.selectedTrackIds,
     hoveredTrackId: state.hoveredTrackId,
@@ -230,6 +247,7 @@ export function designerReducer(state: DesignerState, action: DesignerAction): D
               Object.entries(t.snappedConnections).filter(([, v]) => !v.startsWith(action.instanceId + ":")),
             ),
           })),
+        elevationPoints: next.elevationPoints.filter((p) => p.trackId !== action.instanceId),
         selectedTrackId: next.selectedTrackId === action.instanceId ? null : next.selectedTrackId,
       };
     }
@@ -294,7 +312,7 @@ export function designerReducer(state: DesignerState, action: DesignerAction): D
 
     case "CLEAR_TRACKS": {
       const next = pushHistory(state);
-      return { ...next, tracks: [], terrainZones: [], selectedTrackId: null };
+      return { ...next, tracks: [], terrainZones: [], elevationPoints: [], selectedTrackId: null };
     }
 
     case "AI_START":
@@ -316,6 +334,26 @@ export function designerReducer(state: DesignerState, action: DesignerAction): D
     case "REMOVE_TERRAIN_ZONE": {
       const next = pushHistory(state);
       return { ...next, terrainZones: next.terrainZones.filter((z) => z.id !== action.zoneId) };
+    }
+
+    case "ADD_ELEVATION_POINT": {
+      const next = pushHistory(state);
+      return { ...next, elevationPoints: [...next.elevationPoints, action.point] };
+    }
+
+    case "REMOVE_ELEVATION_POINT": {
+      const next = pushHistory(state);
+      return { ...next, elevationPoints: next.elevationPoints.filter((p) => p.id !== action.pointId) };
+    }
+
+    case "UPDATE_ELEVATION_POINT": {
+      const next = pushHistory(state);
+      return {
+        ...next,
+        elevationPoints: next.elevationPoints.map((p) =>
+          p.id === action.pointId ? { ...p, ...action.updates } : p,
+        ),
+      };
     }
 
     case "UNSNAP_TRACKS": {
@@ -386,6 +424,11 @@ export function generateInstanceId(): string {
 export function generateZoneId(): string {
   _idCounter++;
   return `zone-${Date.now()}-${_idCounter}`;
+}
+
+export function generateElevationPointId(): string {
+  _idCounter++;
+  return `elev-${Date.now()}-${_idCounter}`;
 }
 
 /** Convert connection point from local to world space */

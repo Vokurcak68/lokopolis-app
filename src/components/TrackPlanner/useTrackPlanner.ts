@@ -10,7 +10,9 @@ import {
   findFreeConnections,
   generateInstanceId,
   generateZoneId,
+  generateElevationPointId,
   type DesignerState,
+  type ElevationPoint,
   type PlacedTrack,
   type TerrainZoneKind,
   type TrackPoint,
@@ -33,6 +35,7 @@ interface PersistedData {
   board: DesignerState["board"];
   tracks: DesignerState["tracks"];
   terrainZones: DesignerState["terrainZones"];
+  elevationPoints?: DesignerState["elevationPoints"];
   transform: ViewTransform;
 }
 
@@ -80,6 +83,7 @@ function dataToState(data: PersistedData): DesignerState {
     board: data.board,
     tracks: data.tracks ?? [],
     terrainZones: data.terrainZones ?? [],
+    elevationPoints: data.elevationPoints ?? [],
     selectedTrackId: null,
     selectedTrackIds: [],
     hoveredTrackId: null,
@@ -241,6 +245,7 @@ export function useTrackPlanner() {
         board: state.board,
         tracks: state.tracks,
         terrainZones: state.terrainZones,
+        elevationPoints: state.elevationPoints,
         transform,
       };
       const projects = getAllProjects();
@@ -271,7 +276,7 @@ export function useTrackPlanner() {
       console.error("Nepodařilo se uložit:", e);
       return false;
     }
-  }, [state.board, state.tracks, state.terrainZones, transform, currentProjectId]);
+  }, [state.board, state.tracks, state.terrainZones, state.elevationPoints, transform, currentProjectId]);
 
   /** Save As — prompt for name */
   const saveProjectAs = useCallback((name: string): boolean => {
@@ -281,6 +286,7 @@ export function useTrackPlanner() {
         board: state.board,
         tracks: state.tracks,
         terrainZones: state.terrainZones,
+        elevationPoints: state.elevationPoints,
         transform,
       };
       const id = generateProjectId();
@@ -295,7 +301,7 @@ export function useTrackPlanner() {
       console.error("Nepodařilo se uložit:", e);
       return false;
     }
-  }, [state.board, state.tracks, state.terrainZones, transform]);
+  }, [state.board, state.tracks, state.terrainZones, state.elevationPoints, transform]);
 
   /** Load a saved project */
   const loadProject = useCallback((projectId: string) => {
@@ -341,7 +347,7 @@ export function useTrackPlanner() {
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     autoSaveTimer.current = setTimeout(() => {
       try {
-        const data: PersistedData = { board: state.board, tracks: state.tracks, terrainZones: state.terrainZones, transform };
+        const data: PersistedData = { board: state.board, tracks: state.tracks, terrainZones: state.terrainZones, elevationPoints: state.elevationPoints, transform };
         const projects = getAllProjects();
         const idx = projects.findIndex((p) => p.id === currentProjectId);
         if (idx >= 0) {
@@ -352,7 +358,7 @@ export function useTrackPlanner() {
       } catch { /* ignore auto-save errors */ }
     }, 2000);
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
-  }, [state.board, state.tracks, state.terrainZones, transform, currentProjectId]);
+  }, [state.board, state.tracks, state.terrainZones, state.elevationPoints, transform, currentProjectId]);
 
   const clearAll = useCallback(() => dispatch({ type: "CLEAR_TRACKS" }), []);
   const undo = useCallback(() => dispatch({ type: "UNDO" }), []);
@@ -656,6 +662,43 @@ export function useTrackPlanner() {
     }
   }, [selectedZoneId, removeTerrainZone]);
 
+  // ── Elevation points ──
+  const [elevationMode, setElevationMode] = useState(false);
+
+  const addElevationPoint = useCallback(
+    (trackId: string, t: number, elevation: number) => {
+      const point: ElevationPoint = {
+        id: generateElevationPointId(),
+        trackId,
+        t,
+        elevation,
+      };
+      dispatch({ type: "ADD_ELEVATION_POINT", point });
+      return point.id;
+    },
+    [],
+  );
+
+  const removeElevationPoint = useCallback((pointId: string) => {
+    dispatch({ type: "REMOVE_ELEVATION_POINT", pointId });
+  }, []);
+
+  const updateElevationPoint = useCallback((pointId: string, updates: Partial<Omit<ElevationPoint, "id">>) => {
+    dispatch({ type: "UPDATE_ELEVATION_POINT", pointId, updates });
+  }, []);
+
+  const startElevationMode = useCallback(() => {
+    setElevationMode(true);
+    dispatch({ type: "SET_ACTIVE_PIECE", pieceId: null });
+    dispatch({ type: "SELECT_TRACK", instanceId: null });
+    setTerrainMode(null);
+    setTerrainFirstPoint(null);
+  }, []);
+
+  const cancelElevationMode = useCallback(() => {
+    setElevationMode(false);
+  }, []);
+
   const toggleSelectedBridge = useCallback(() => {
     if (!state.selectedTrackId) return;
     const track = state.tracks.find((t) => t.instanceId === state.selectedTrackId);
@@ -727,5 +770,12 @@ export function useTrackPlanner() {
     exportShoppingList,
     canUndo: state.historyPast.length > 0,
     canRedo: state.historyFuture.length > 0,
+    // Elevation
+    elevationMode,
+    addElevationPoint,
+    removeElevationPoint,
+    updateElevationPoint,
+    startElevationMode,
+    cancelElevationMode,
   };
 }

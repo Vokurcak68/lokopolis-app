@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { DesignerState, PlacedTrack } from "@/lib/track-designer-store";
 import type { TrackPieceDefinition } from "@/lib/track-library";
 import {
+  closestPointOnAnyTrack,
   distancePointToTrackMm,
   renderTrackCanvas,
   type LocalPoint,
@@ -17,6 +18,7 @@ interface TrackCanvasProps {
   transform: ViewTransform;
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
   terrainMode: boolean;
+  elevationMode?: boolean;
   selectedZoneId: string | null;
   placementRotation: number;
   onTransformChange: (fn: (prev: ViewTransform) => ViewTransform) => void;
@@ -35,6 +37,7 @@ interface TrackCanvasProps {
   onDeactivatePiece: () => void;
   onUpdateTrack: (instanceId: string, updates: Partial<PlacedTrack>) => void;
   onSnapDraggedTrack: (track: PlacedTrack) => PlacedTrack;
+  onElevationClick?: (trackId: string, t: number, worldX: number, worldZ: number, screenX: number, screenY: number) => void;
 }
 
 function screenToWorld(x: number, y: number, t: ViewTransform): LocalPoint {
@@ -58,6 +61,7 @@ export function TrackCanvas({
   transform,
   canvasRef,
   terrainMode,
+  elevationMode,
   selectedZoneId,
   placementRotation,
   onTransformChange,
@@ -76,6 +80,7 @@ export function TrackCanvas({
   onUpdateTrack,
   onSnapDraggedTrack,
   onDeactivatePiece,
+  onElevationClick,
 }: TrackCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState({ width: 1200, height: 700 });
@@ -169,6 +174,7 @@ export function TrackCanvas({
         board: state.board,
         tracks: state.tracks,
         terrainZones: state.terrainZones ?? [],
+        elevationPoints: state.elevationPoints ?? [],
         catalog,
         selectedTrackId: state.selectedTrackId,
         selectedTrackIds: state.selectedTrackIds,
@@ -206,7 +212,7 @@ export function TrackCanvas({
     });
 
     return () => cancelAnimationFrame(raf);
-  }, [activePiece, canvasRef, catalog, mouseWorld, placementRotation, size.height, size.width, state.board, state.hoveredTrackId, state.selectedTrackId, state.selectedTrackIds, state.tracks, state.terrainZones, transform]);
+  }, [activePiece, canvasRef, catalog, mouseWorld, placementRotation, size.height, size.width, state.board, state.elevationPoints, state.hoveredTrackId, state.selectedTrackId, state.selectedTrackIds, state.tracks, state.terrainZones, transform]);
 
   const hitTrack = (world: LocalPoint): PlacedTrack | null => {
     let best: PlacedTrack | null = null;
@@ -294,6 +300,18 @@ export function TrackCanvas({
       const handled = onPlaceTerrainPoint(world.x, world.z);
       if (handled) return;
       // If not near a track, ignore click
+      return;
+    }
+
+    // Elevation mode — click nearest track point
+    if (elevationMode) {
+      const hit = hitTrack(world);
+      if (hit && onElevationClick) {
+        const cp = closestPointOnAnyTrack(world, state.tracks, catalog);
+        if (cp && cp.trackId === hit.instanceId && cp.distance <= 25) {
+          onElevationClick(cp.trackId, cp.t, cp.worldPos.x, cp.worldPos.z, x, y);
+        }
+      }
       return;
     }
 
@@ -464,6 +482,11 @@ export function TrackCanvas({
 
         if (terrainMode) {
           onPlaceTerrainPoint(world.x, world.z);
+        } else if (elevationMode) {
+          const cp = closestPointOnAnyTrack(world, state.tracks, catalog);
+          if (cp && cp.distance <= 25 && onElevationClick) {
+            onElevationClick(cp.trackId, cp.t, cp.worldPos.x, cp.worldPos.z, x, y);
+          }
         } else {
           const zoneHit = onHitTestTerrainZone(world.x, world.z);
           if (zoneHit) {

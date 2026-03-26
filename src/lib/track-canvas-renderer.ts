@@ -1,4 +1,4 @@
-import type { BoardConfig, PlacedTrack, TerrainZone, TrackPoint } from "./track-designer-store";
+import type { BoardConfig, ElevationPoint, PlacedTrack, TerrainZone, TrackPoint } from "./track-designer-store";
 import type { TrackPieceDefinition, TrackScale, ExplicitSegment } from "./track-library";
 
 export interface ViewTransform {
@@ -14,6 +14,7 @@ export interface RenderTrackCanvasParams {
   board: BoardConfig;
   tracks: PlacedTrack[];
   terrainZones: TerrainZone[];
+  elevationPoints?: ElevationPoint[];
   catalog: Record<string, TrackPieceDefinition>;
   selectedTrackId: string | null;
   /** Multi-select track IDs */
