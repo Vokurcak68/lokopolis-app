@@ -1859,6 +1859,17 @@ export function drawPortals(
     ctx.stroke();
   };
 
+  /** Get average world position of a portal (center of its track points) */
+  const getPortalWorldCenter = (p: Portal, trks: PlacedTrack[], cat: Record<string, TrackPieceDefinition>): { x: number; z: number } | null => {
+    const d1 = trackPointToWorldWithTangent(p.track1, trks, cat);
+    if (!d1) return null;
+    if (p.track2) {
+      const d2 = trackPointToWorldWithTangent(p.track2, trks, cat);
+      if (d2) return { x: (d1.pos.x + d2.pos.x) / 2, z: (d1.pos.z + d2.pos.z) / 2 };
+    }
+    return d1.pos;
+  };
+
   const drawBetween = (a: TrackPoint, b: TrackPoint, kind: "tunnel" | "bridge") => {
     const zone: TerrainZone = { id: "tmp", kind, start: a, end: b };
     const pathPoints = sampleTrackPath(zone, tracks, catalog, 40);
@@ -1877,15 +1888,23 @@ export function drawPortals(
     else drawBridgePathStyle(screenPath);
   };
 
-  const drawSinglePortal = (portal: Portal, tp: TrackPoint, flip: boolean) => {
+  /** Draw single portal oriented so the arch (half-circle) faces toward `towardWorld` */
+  const drawSinglePortalToward = (portal: Portal, tp: TrackPoint, towardWorld: { x: number; z: number }) => {
     const data = trackPointToWorldWithTangent(tp, tracks, catalog);
     if (!data) return;
     const screen = worldToScreen(data.pos, transform);
-    const tan = flip ? { x: -data.tangent.x, z: -data.tangent.z } : data.tangent;
+
+    // Use track tangent but pick the direction that faces toward the partner
+    const dirToPartner = { x: towardWorld.x - data.pos.x, z: towardWorld.z - data.pos.z };
+    const dot = data.tangent.x * dirToPartner.x + data.tangent.z * dirToPartner.z;
+    // If tangent points toward partner → arch faces partner (correct).
+    // If tangent points away → flip it so arch faces partner.
+    const tan = dot >= 0 ? data.tangent : { x: -data.tangent.x, z: -data.tangent.z };
     drawPortal(ctx, screen, tan, portalRadius, portal.kind, transform);
   };
 
-  const drawDoublePortal = (portal: Portal, p1: TrackPoint, p2: TrackPoint, flip: boolean) => {
+  /** Draw double portal oriented so the arch faces toward `towardWorld` */
+  const drawDoublePortalToward = (portal: Portal, p1: TrackPoint, p2: TrackPoint, towardWorld: { x: number; z: number }) => {
     const d1 = trackPointToWorldWithTangent(p1, tracks, catalog);
     const d2 = trackPointToWorldWithTangent(p2, tracks, catalog);
     if (!d1 || !d2) return;
@@ -1901,8 +1920,8 @@ export function drawPortals(
     // If the two tracks are too far apart, draw two single portals instead of one giant double
     const maxDoubleSpan = portalRadius * 5;
     if (dist > maxDoubleSpan) {
-      drawSinglePortal(portal, p1, flip);
-      drawSinglePortal(portal, p2, flip);
+      drawSinglePortalToward(portal, p1, towardWorld);
+      drawSinglePortalToward(portal, p2, towardWorld);
       return;
     }
 
@@ -1912,7 +1931,11 @@ export function drawPortals(
     };
     const l = Math.hypot(avgTan.x, avgTan.z) || 1;
     avgTan = { x: avgTan.x / l, z: avgTan.z / l };
-    if (flip) avgTan = { x: -avgTan.x, z: -avgTan.z };
+    // Orient toward partner (arch faces partner, base faces away)
+    const midWorld = { x: (d1.pos.x + d2.pos.x) / 2, z: (d1.pos.z + d2.pos.z) / 2 };
+    const dirToPartner = { x: towardWorld.x - midWorld.x, z: towardWorld.z - midWorld.z };
+    const dot = avgTan.x * dirToPartner.x + avgTan.z * dirToPartner.z;
+    if (dot < 0) avgTan = { x: -avgTan.x, z: -avgTan.z };
 
     const nx = -avgTan.z;
     const ny = avgTan.x;
@@ -1974,18 +1997,28 @@ export function drawPortals(
       drawBetween(a2, b2, portal.kind);
     }
 
-    // Both portals flipped (face inward toward tunnel) — matches what user confirmed as correct
-    if (portal.width === "double" && portal.track2) drawDoublePortal(portal, portal.track1, portal.track2, true);
-    else drawSinglePortal(portal, portal.track1, true);
+    // Compute world centers to orient portals toward each other
+    const portalCenter = getPortalWorldCenter(portal, tracks, catalog);
+    const partnerCenter = getPortalWorldCenter(partner, tracks, catalog);
 
-    if (partner.width === "double" && partner.track2) drawDoublePortal(partner, partner.track1, partner.track2, true);
-    else drawSinglePortal(partner, partner.track1, true);
+    if (portalCenter && partnerCenter) {
+      // Portal arch faces toward partner, base faces outward
+      if (portal.width === "double" && portal.track2) drawDoublePortalToward(portal, portal.track1, portal.track2, partnerCenter);
+      else drawSinglePortalToward(portal, portal.track1, partnerCenter);
+
+      if (partner.width === "double" && partner.track2) drawDoublePortalToward(partner, partner.track1, partner.track2, portalCenter);
+      else drawSinglePortalToward(partner, partner.track1, portalCenter);
+    }
   }
 
-  // 2) unpaired portals: draw standalone
+  // 2) unpaired portals: draw standalone (no partner to face, use tangent as-is)
   for (const portal of portals) {
     if (portal.pairedPortalId) continue;
-    if (portal.width === "double" && portal.track2) drawDoublePortal(portal, portal.track1, portal.track2, false);
-    else drawSinglePortal(portal, portal.track1, false);
+    const data = trackPointToWorldWithTangent(portal.track1, tracks, catalog);
+    if (!data) continue;
+    // Face "forward" along tangent — pick arbitrary direction
+    const fakeTarget = { x: data.pos.x + data.tangent.x * 100, z: data.pos.z + data.tangent.z * 100 };
+    if (portal.width === "double" && portal.track2) drawDoublePortalToward(portal, portal.track1, portal.track2, fakeTarget);
+    else drawSinglePortalToward(portal, portal.track1, fakeTarget);
   }
 }
