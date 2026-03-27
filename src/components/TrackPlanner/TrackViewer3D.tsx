@@ -396,7 +396,7 @@ function TrackPiece3D({
       if (!conn) continue;
       const connWorld = localToWorld({ x: conn.position.x, z: conn.position.z }, track);
 
-      // Find which segment + which end (first or last point) is closest to this connection
+      // Find which segment + which end is closest, then blend smoothly
       for (const pts of allPts) {
         if (pts.length < 2) continue;
         const first = pts[0];
@@ -404,11 +404,28 @@ function TrackPiece3D({
         const distFirst = Math.hypot(first.x - connWorld.x, first.z - connWorld.z);
         const distLast = Math.hypot(last.x - connWorld.x, last.z - connWorld.z);
 
+        // Blend over ~30% of points from the matched end
+        const blendCount = Math.max(2, Math.floor(pts.length * 0.3));
+
         if (distFirst < 5) {
-          pts[0] = { ...first, x: snapPt.x, z: snapPt.z };
+          const dx = snapPt.x - first.x;
+          const dz = snapPt.z - first.z;
+          for (let b = 0; b < blendCount && b < pts.length; b++) {
+            // Smooth ease-out: full correction at b=0, zero at b=blendCount
+            const t = 1 - b / blendCount;
+            const ease = t * t; // quadratic ease-out
+            pts[b] = { ...pts[b], x: pts[b].x + dx * ease, z: pts[b].z + dz * ease };
+          }
         }
         if (distLast < 5) {
-          pts[pts.length - 1] = { ...last, x: snapPt.x, z: snapPt.z };
+          const dx = snapPt.x - last.x;
+          const dz = snapPt.z - last.z;
+          for (let b = 0; b < blendCount && b < pts.length; b++) {
+            const idx = pts.length - 1 - b;
+            const t = 1 - b / blendCount;
+            const ease = t * t;
+            pts[idx] = { ...pts[idx], x: pts[idx].x + dx * ease, z: pts[idx].z + dz * ease };
+          }
         }
       }
     }
