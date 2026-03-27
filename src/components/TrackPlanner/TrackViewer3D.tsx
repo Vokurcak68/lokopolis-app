@@ -650,9 +650,12 @@ function BridgeSupports({
   const bridgeGeom = useMemo(() => {
     if (centerPoints.length < 4) return null;
 
-    // Find bridge section (elevated points)
-    const bridgePts = centerPoints.filter((pt) => pt.y > 0.3);
+    // Use ALL points — bridge renders even at ground level (y=0).
+    // Pillar height is max(y, minClearance) so there's always visible structure.
+    const bridgePts = centerPoints;
     if (bridgePts.length < 2) return null;
+
+    const minClearance = gaugeMm * 1.5; // minimum bridge height when flat
 
     const halfWidth = gaugeMm * 1.2; // bridge deck half-width (wider than track)
     const girderHeight = gaugeMm * 0.8; // side girder height
@@ -801,9 +804,9 @@ function BridgeSupports({
       const py = pt0.y + t * (pt1.y - pt0.y);
       const pz = pt0.z + t * (pt1.z - pt0.z);
 
-      if (py < 0.5) continue; // skip if barely elevated
-
-      const deckBottom = py - deckThick - girderHeight;
+      // Bridge height: at least minClearance so flat bridges still show pillars
+      const effectiveY = Math.max(py, minClearance);
+      const deckBottom = effectiveY - deckThick - girderHeight;
       const hpw = pillarW / 2;
 
       // Pillar: from ground (0) to girder bottom
