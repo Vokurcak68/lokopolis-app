@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useEffect, useRef } from "react";
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls, Line } from "@react-three/drei";
+import { OrbitControls, Environment, ContactShadows } from "@react-three/drei";
+import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import * as THREE from "three";
 import type { PlacedTrack, BoardConfig, ElevationPoint, TerrainZone } from "@/lib/track-designer-store";
 import type { TrackPieceDefinition } from "@/lib/track-library";
@@ -19,29 +20,24 @@ interface TrackViewer3DProps {
 }
 
 // ── Constants ──
-// All dimensions in mm. Exaggerated for TT-scale 3D visibility.
+// All dimensions in mm
 
-const SLEEPER_SPACING_MM = 5; // distance between sleepers along track (tight, realistic)
-const RAIL_WIDTH_MM = 1.2; // rail profile width (cross-section)
-const RAIL_HEIGHT_MM = 1.5; // rail profile height
-const SLEEPER_THICKNESS_MM = 1.2; // sleeper height (Y)
-const SLEEPER_WIDTH_MM = 2; // sleeper extent along track direction
+const SLEEPER_SPACING_MM = 60; // distance between sleepers along track (realistic)
+const RAIL_WIDTH_MM = 1.5; // rail profile width (cross-section)
+const RAIL_HEIGHT_MM = 2.0; // rail profile height
+const SLEEPER_THICKNESS_MM = 1.5; // sleeper height (Y)
+const SLEEPER_WIDTH_MM = 3.5; // sleeper extent along track direction
 const SLEEPER_LENGTH_FACTOR = 1.8; // sleeper length = gauge * factor (perpendicular to track)
-const BALLAST_WIDTH_FACTOR = 1.97; // ballast=23.6mm (sleepers=21.6mm + 1mm overhang each side)
-const BALLAST_HEIGHT_MM = 1.5; // ballast ribbon thickness
+const BALLAST_WIDTH_FACTOR = 2.2; // ballast width factor
+const BALLAST_HEIGHT_MM = 2.0; // ballast ribbon thickness
 
 // ── Elevation graph solver ──
-// Walks the connected track graph, finds elevation points, and computes
-// the elevation at any (trackId, t) by interpolating along cumulative distance.
 
 interface TrackLengthInfo {
   trackId: string;
-  length: number; // mm
+  length: number;
 }
 
-/**
- * Compute the length of a placed track's primary path in mm.
- */
 function getTrackLengthMm(track: PlacedTrack, catalog: Record<string, TrackPieceDefinition>): number {
   const piece = catalog[track.pieceId];
   if (!piece) return 0;
@@ -54,7 +50,6 @@ function getTrackLengthMm(track: PlacedTrack, catalog: Record<string, TrackPiece
       total += seg.radius * Math.abs(seg.endAngle - seg.startAngle);
     }
   }
-  // For multi-segment pieces (turnouts), use first segment as primary
   if (segs.length > 1 && (piece.type === "turnout" || piece.type === "crossing")) {
     const s = segs[0];
     if (s.kind === "line") return Math.hypot(s.to.x - s.from.x, s.to.z - s.from.z);
@@ -63,11 +58,6 @@ function getTrackLengthMm(track: PlacedTrack, catalog: Record<string, TrackPiece
   return total || 1;
 }
 
-/**
- * Build a map: trackId → elevation (mm) for each track's start (t=0) and end (t=1).
- * Walks the graph of connected tracks starting from elevation points,
- * propagating elevation along cumulative distance.
- */
 function buildElevationMap(
   tracks: PlacedTrack[],
   elevationPoints: ElevationPoint[],
@@ -78,7 +68,6 @@ function buildElevationMap(
 
   const trackMap = new Map(tracks.map((t) => [t.instanceId, t]));
 
-  // Build adjacency: for each track, which tracks connect at start/end
   type Neighbor = { trackId: string; atMyEnd: "start" | "end"; atTheirEnd: "start" | "end" };
   const adjacency = new Map<string, Neighbor[]>();
 
@@ -95,13 +84,11 @@ function buildElevationMap(
     adjacency.set(track.instanceId, neighbors);
   }
 
-  // Find connected components via BFS from tracks that have elevation points
   const visited = new Set<string>();
 
   for (const ep of elevationPoints) {
     if (visited.has(ep.trackId)) continue;
 
-    // BFS to find connected component
     const component: string[] = [];
     const queue = [ep.trackId];
     const seen = new Set<string>();
@@ -122,21 +109,12 @@ function buildElevationMap(
     const componentNeighbors = (tid: string) =>
       (adjacency.get(tid) ?? []).filter((n) => inComponent.has(n.trackId));
 
-    // Build ALL possible linear paths through the component using DFS
-    // For each path, collect anchors and interpolate elevation
-    // A path is a sequence of tracks from one dead end to another (or back to a visited node)
-    // For branching (turnouts), we explore all branches
-
-    // Strategy: DFS from every endpoint (track with ≤1 connection in component)
-    // For each DFS path, build chain with cumulative distance and interpolate
     const endpoints: string[] = [];
     for (const tid of component) {
       if (componentNeighbors(tid).length <= 1) endpoints.push(tid);
     }
-    // If no endpoints (closed loop), start from first track with elevation
     if (endpoints.length === 0) endpoints.push(ep.trackId);
 
-    // Walk all paths from the first endpoint using DFS, accumulating distance
     const chainVisited = new Set<string>();
 
     type ChainEntry = { trackId: string; cumDist: number; length: number; reversed: boolean };
@@ -153,7 +131,6 @@ function buildElevationMap(
         if (!track) break;
         const len = getTrackLengthMm(track, catalog);
 
-        // Determine if this track is reversed in the chain
         let enteredFrom: "start" | "end" = "start";
         if (prevEntryEnd !== null) {
           for (const n of adjacency.get(current) ?? []) {
@@ -168,18 +145,15 @@ function buildElevationMap(
         chain.push({ trackId: current, cumDist, length: len, reversed });
         cumDist += len;
 
-        // Find all unvisited neighbors and recurse into branches
         const unvisitedNeighbors: Neighbor[] = componentNeighbors(current).filter(
           (n) => !chainVisited.has(n.trackId),
         );
 
         if (unvisitedNeighbors.length === 0) break;
 
-        // Continue main chain with first neighbor
         const mainNext = unvisitedNeighbors[0];
         prevEntryEnd = mainNext.atTheirEnd;
 
-        // Recurse into additional branches (if turnout/crossing creates multiple paths)
         for (let i = 1; i < unvisitedNeighbors.length; i++) {
           const branch = unvisitedNeighbors[i];
           walkChain(branch.trackId, branch.atTheirEnd);
@@ -190,7 +164,6 @@ function buildElevationMap(
 
       if (chain.length === 0) return;
 
-      // Collect elevation anchors for this chain
       type Anchor = { globalDist: number; elevation: number };
       const anchors: Anchor[] = [];
       for (const ep2 of elevationPoints) {
@@ -204,14 +177,10 @@ function buildElevationMap(
         });
       }
 
-      // Also pull in known elevations from already-resolved neighbors at chain start
       if (chain.length > 0 && anchors.length === 0) {
-        // This branch has no elevation points of its own.
-        // Inherit from the connection point
         const firstTrack = chain[0];
         const firstReversed = firstTrack.reversed;
         const connEnd = firstReversed ? "end" : "start";
-        // Find the neighbor that's already resolved
         for (const n of adjacency.get(firstTrack.trackId) ?? []) {
           const resolved = result.get(n.trackId);
           if (resolved) {
@@ -225,9 +194,8 @@ function buildElevationMap(
       anchors.sort((a, b) => a.globalDist - b.globalDist);
       if (anchors.length === 0) return;
 
-      // Interpolate elevation for each track in this chain
       for (const c of chain) {
-        if (result.has(c.trackId)) continue; // Already resolved, don't overwrite
+        if (result.has(c.trackId)) continue;
         const startDist = c.cumDist;
         const endDist = c.cumDist + c.length;
         const startElev = interpolateElevation(startDist, anchors);
@@ -241,10 +209,8 @@ function buildElevationMap(
       }
     };
 
-    // Start walking from the first endpoint
     walkChain(endpoints[0], null);
 
-    // Walk any remaining unvisited branches
     for (const tid of component) {
       if (!chainVisited.has(tid)) {
         walkChain(tid, null);
@@ -255,7 +221,6 @@ function buildElevationMap(
   return result;
 }
 
-/** Interpolate elevation at a given cumulative distance using sorted anchors */
 function interpolateElevation(dist: number, anchors: { globalDist: number; elevation: number }[]): number {
   if (anchors.length === 0) return 0;
   if (anchors.length === 1) return anchors[0].elevation;
@@ -273,7 +238,6 @@ function interpolateElevation(dist: number, anchors: { globalDist: number; eleva
   return anchors[anchors.length - 1].elevation;
 }
 
-/** Get elevation at (trackId, t) from the precomputed elevation map */
 function getElevationFromMap(
   trackId: string,
   t: number,
@@ -284,7 +248,6 @@ function getElevationFromMap(
   return entry.startElev + t * (entry.endElev - entry.startElev);
 }
 
-/** Sample a segment in world space with elevation from the graph-based map */
 function sampleSegmentWorld3D(
   seg: PathSegment,
   track: PlacedTrack,
@@ -330,8 +293,6 @@ function BoardMesh({ board }: { board: BoardConfig }) {
     const boardPath = getBoardPathMm(board);
     if (boardPath.length < 3) return null;
 
-    // Use THREE.Shape for proper triangulation of concave polygons (L-shapes etc.)
-    // Shape works in XY plane, so we map our x→X, z→Y
     const shape = new THREE.Shape();
     shape.moveTo(boardPath[0].x, boardPath[0].z);
     for (let i = 1; i < boardPath.length; i++) {
@@ -341,11 +302,10 @@ function BoardMesh({ board }: { board: BoardConfig }) {
 
     const shapeGeom = new THREE.ShapeGeometry(shape);
 
-    // ShapeGeometry outputs vertices in XY plane — remap to XZ plane (Y=0)
     const pos = shapeGeom.getAttribute("position");
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i);
-      const y = pos.getY(i); // this is our Z
+      const y = pos.getY(i);
       pos.setXYZ(i, x, 0, y);
     }
     pos.needsUpdate = true;
@@ -357,10 +317,43 @@ function BoardMesh({ board }: { board: BoardConfig }) {
   if (!geometry) return null;
 
   return (
-    <mesh geometry={geometry} position={[0, -1, 0]} receiveShadow>
-      <meshStandardMaterial color="#8b9a7b" side={THREE.DoubleSide} />
+    <mesh geometry={geometry} position={[0, 0, 0]} receiveShadow>
+      <meshStandardMaterial
+        color="#7a8a6b"
+        map={createGridTexture()}
+        roughness={0.8}
+        metalness={0.1}
+      />
     </mesh>
   );
+}
+
+function createGridTexture(): THREE.Texture {
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return new THREE.Texture(canvas);
+
+  ctx.fillStyle = "#6a7a5b";
+  ctx.fillRect(0, 0, 512, 512);
+
+  ctx.strokeStyle = "#8b9a7b";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let i = 0; i <= 512; i += 64) {
+    ctx.moveTo(i, 0);
+    ctx.lineTo(i, 512);
+    ctx.moveTo(0, i);
+    ctx.lineTo(512, i);
+  }
+  ctx.stroke();
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(1, 1);
+  return texture;
 }
 
 // ── Single track piece 3D ──
@@ -382,18 +375,16 @@ function TrackPiece3D({
     const centerPoints: Array<{ x: number; y: number; z: number; tangentX: number; tangentZ: number }> = [];
 
     for (const seg of segments) {
-      const pts = sampleSegmentWorld3D(seg, track, elevMap, 5);
+      const pts = sampleSegmentWorld3D(seg, track, elevMap, 10);
       centerPoints.push(...pts);
     }
 
     return { centerPoints };
   }, [track, piece, elevMap]);
 
-  // Create rail geometry — extruded rectangle profile along path
-  // Each cross-section has 4 corners; quads between successive sections form the rail solid.
   const buildRailSolid = (
     centerPts: Array<{ x: number; y: number; z: number; tangentX: number; tangentZ: number }>,
-    offsetX: number, // perpendicular offset from center (±halfGauge)
+    offsetX: number,
   ) => {
     if (centerPts.length < 2) return null;
     const hw = RAIL_WIDTH_MM / 2;
@@ -404,34 +395,24 @@ function TrackPiece3D({
 
     for (let i = 0; i < centerPts.length; i++) {
       const pt = centerPts[i];
-      const perpX = -pt.tangentZ; // perpendicular in XZ plane
+      const perpX = -pt.tangentZ;
       const perpZ = pt.tangentX;
 
-      // Rail center position (offset perpendicular to track)
       const cx = pt.x + perpX * offsetX;
       const cz = pt.z + perpZ * offsetX;
       const cy = pt.y + railY;
 
-      // 4 corners of rail cross-section:
-      // The rail profile is a rectangle in the plane perpendicular to the track tangent.
-      // "width" is along perp direction, "height" is along Y.
-      // 0: top-outer, 1: top-inner, 2: bottom-inner, 3: bottom-outer
-      vertices.push(cx + perpX * hw, cy + hh, cz + perpZ * hw); // 0
-      vertices.push(cx - perpX * hw, cy + hh, cz - perpZ * hw); // 1
-      vertices.push(cx - perpX * hw, cy - hh, cz - perpZ * hw); // 2
-      vertices.push(cx + perpX * hw, cy - hh, cz + perpZ * hw); // 3
+      vertices.push(cx + perpX * hw, cy + hh, cz + perpZ * hw);
+      vertices.push(cx - perpX * hw, cy + hh, cz - perpZ * hw);
+      vertices.push(cx - perpX * hw, cy - hh, cz - perpZ * hw);
+      vertices.push(cx + perpX * hw, cy - hh, cz + perpZ * hw);
 
       if (i > 0) {
-        const c = i * 4; // current quad start
-        const p = (i - 1) * 4; // previous quad start
-        // 4 faces (quads = 2 tris each) connecting previous and current cross-sections
-        // Top face
+        const c = i * 4;
+        const p = (i - 1) * 4;
         indices.push(p + 0, p + 1, c + 1, p + 0, c + 1, c + 0);
-        // Bottom face
         indices.push(p + 2, p + 3, c + 3, p + 2, c + 3, c + 2);
-        // Outer face
         indices.push(p + 3, p + 0, c + 0, p + 3, c + 0, c + 3);
-        // Inner face
         indices.push(p + 1, p + 2, c + 2, p + 1, c + 2, c + 1);
       }
     }
@@ -452,13 +433,12 @@ function TrackPiece3D({
     [geometry.centerPoints, halfGauge],
   );
 
-  // Ballast: 3D trapezoidal ribbon along the center (top flat, sides sloped)
   const ballastGeom = useMemo(() => {
     const pts = geometry.centerPoints;
     if (pts.length < 2) return null;
 
     const topHalfW = gaugeMm * BALLAST_WIDTH_FACTOR / 2;
-    const botHalfW = topHalfW * 1.3; // wider at base
+    const botHalfW = topHalfW * 1.3;
     const bh = BALLAST_HEIGHT_MM;
     const vertices: number[] = [];
     const indices: number[] = [];
@@ -469,22 +449,17 @@ function TrackPiece3D({
       const perpZ = pt.tangentX;
       const baseY = pt.y;
 
-      // 4 vertices per cross-section: topLeft, topRight, bottomLeft, bottomRight
-      vertices.push(pt.x + perpX * topHalfW, baseY + bh, pt.z + perpZ * topHalfW); // 0 topL
-      vertices.push(pt.x - perpX * topHalfW, baseY + bh, pt.z - perpZ * topHalfW); // 1 topR
-      vertices.push(pt.x - perpX * botHalfW, baseY,      pt.z - perpZ * botHalfW); // 2 botR
-      vertices.push(pt.x + perpX * botHalfW, baseY,      pt.z + perpZ * botHalfW); // 3 botL
+      vertices.push(pt.x + perpX * topHalfW, baseY + bh, pt.z + perpZ * topHalfW);
+      vertices.push(pt.x - perpX * topHalfW, baseY + bh, pt.z - perpZ * topHalfW);
+      vertices.push(pt.x - perpX * botHalfW, baseY, pt.z - perpZ * botHalfW);
+      vertices.push(pt.x + perpX * botHalfW, baseY, pt.z + perpZ * botHalfW);
 
       if (i > 0) {
         const c = i * 4;
         const p = (i - 1) * 4;
-        // Top face
         indices.push(p + 0, p + 1, c + 1, p + 0, c + 1, c + 0);
-        // Right slope
         indices.push(p + 1, p + 2, c + 2, p + 1, c + 2, c + 1);
-        // Bottom face
         indices.push(p + 2, p + 3, c + 3, p + 2, c + 3, c + 2);
-        // Left slope
         indices.push(p + 3, p + 0, c + 0, p + 3, c + 0, c + 3);
       }
     }
@@ -496,27 +471,25 @@ function TrackPiece3D({
     return geom;
   }, [geometry.centerPoints, gaugeMm]);
 
-  // Sleepers: merged BufferGeometry — each sleeper is a box oriented perpendicular to track
   const sleeperLength = gaugeMm * SLEEPER_LENGTH_FACTOR;
   const sleeperGeom = useMemo(() => {
     const pts = geometry.centerPoints;
     if (pts.length < 2) return null;
 
-    // Build cumulative distance array
     const cumDist: number[] = [0];
     for (let i = 1; i < pts.length; i++) {
-      cumDist.push(cumDist[i - 1] + Math.hypot(
-        pts[i].x - pts[i - 1].x,
-        pts[i].z - pts[i - 1].z,
-      ));
+      cumDist.push(
+        cumDist[i - 1] +
+          Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z),
+      );
     }
     const totalLen = cumDist[cumDist.length - 1];
     if (totalLen < 1) return null;
 
     const sleeperCount = Math.max(2, Math.floor(totalLen / SLEEPER_SPACING_MM));
-    const halfLen = sleeperLength / 2; // half sleeper length (perpendicular to track)
-    const halfW = SLEEPER_WIDTH_MM / 2; // half sleeper width (along track)
-    const hh = SLEEPER_THICKNESS_MM; // sleeper height
+    const halfLen = sleeperLength / 2;
+    const halfW = SLEEPER_WIDTH_MM / 2;
+    const hh = SLEEPER_THICKNESS_MM;
 
     const vertices: number[] = [];
     const indices: number[] = [];
@@ -524,7 +497,6 @@ function TrackPiece3D({
     for (let s = 0; s <= sleeperCount; s++) {
       const targetDist = (s / sleeperCount) * totalLen;
 
-      // Find segment
       let segIdx = 1;
       while (segIdx < cumDist.length - 1 && cumDist[segIdx] < targetDist) segIdx++;
 
@@ -540,41 +512,27 @@ function TrackPiece3D({
       const cy = p0.y + t * (p1.y - p0.y) + BALLAST_HEIGHT_MM;
       const cz = p0.z + t * (p1.z - p0.z);
 
-      // Tangent direction (along track)
       const tx = p1.tangentX;
       const tz = p1.tangentZ;
-      // Perpendicular direction (across track — this is the sleeper's long axis)
       const px = -tz;
       const pz = tx;
 
-      // 8 corners of the sleeper box
-      // Along track: ±halfW * tangent
-      // Across track: ±halfLen * perp
-      // Height: cy to cy+hh
       const base = s * 8;
       for (let dy = 0; dy <= 1; dy++) {
         const y = cy + dy * hh;
-        // 4 corners at this height
-        vertices.push(cx + tx * halfW + px * halfLen, y, cz + tz * halfW + pz * halfLen); // +along +perp
-        vertices.push(cx + tx * halfW - px * halfLen, y, cz + tz * halfW - pz * halfLen); // +along -perp
-        vertices.push(cx - tx * halfW - px * halfLen, y, cz - tz * halfW - pz * halfLen); // -along -perp
-        vertices.push(cx - tx * halfW + px * halfLen, y, cz - tz * halfW + pz * halfLen); // -along +perp
+        vertices.push(cx + tx * halfW + px * halfLen, y, cz + tz * halfW + pz * halfLen);
+        vertices.push(cx + tx * halfW - px * halfLen, y, cz + tz * halfW - pz * halfLen);
+        vertices.push(cx - tx * halfW - px * halfLen, y, cz - tz * halfW - pz * halfLen);
+        vertices.push(cx - tx * halfW + px * halfLen, y, cz - tz * halfW + pz * halfLen);
       }
 
-      // Bottom: 0,1,2,3  Top: 4,5,6,7
       const b = base;
-      // Top face
-      indices.push(b+4, b+5, b+6, b+4, b+6, b+7);
-      // Bottom face
-      indices.push(b+2, b+1, b+0, b+3, b+2, b+0);
-      // Front (+along)
-      indices.push(b+0, b+1, b+5, b+0, b+5, b+4);
-      // Back (-along)
-      indices.push(b+2, b+3, b+7, b+2, b+7, b+6);
-      // Left (+perp)
-      indices.push(b+3, b+0, b+4, b+3, b+4, b+7);
-      // Right (-perp)
-      indices.push(b+1, b+2, b+6, b+1, b+6, b+5);
+      indices.push(b + 4, b + 5, b + 6, b + 4, b + 6, b + 7);
+      indices.push(b + 2, b + 1, b + 0, b + 3, b + 2, b + 0);
+      indices.push(b + 0, b + 1, b + 5, b + 0, b + 5, b + 4);
+      indices.push(b + 2, b + 3, b + 7, b + 2, b + 7, b + 6);
+      indices.push(b + 3, b + 0, b + 4, b + 3, b + 4, b + 7);
+      indices.push(b + 1, b + 2, b + 6, b + 1, b + 6, b + 5);
     }
 
     const geom = new THREE.BufferGeometry();
@@ -586,46 +544,35 @@ function TrackPiece3D({
 
   return (
     <group>
-      {/* Ballast */}
       {ballastGeom && (
-        <mesh geometry={ballastGeom}>
-          <meshStandardMaterial color="#9e9584" />
+        <mesh geometry={ballastGeom} castShadow receiveShadow>
+          <meshStandardMaterial color="#8b8171" roughness={0.9} />
         </mesh>
       )}
 
-      {/* Sleepers */}
       {sleeperGeom && (
-        <mesh geometry={sleeperGeom}>
-          <meshStandardMaterial color="#6f4e37" />
+        <mesh geometry={sleeperGeom} castShadow receiveShadow>
+          <meshStandardMaterial color="#5a4a3a" roughness={0.8} />
         </mesh>
       )}
 
-      {/* Rails */}
       {railLeftGeom && (
-        <mesh geometry={railLeftGeom}>
-          <meshStandardMaterial color="#b0b0b0" metalness={0.7} roughness={0.3} />
+        <mesh geometry={railLeftGeom} castShadow receiveShadow>
+          <meshStandardMaterial color="#c0c0c0" metalness={0.8} roughness={0.2} />
         </mesh>
       )}
       {railRightGeom && (
-        <mesh geometry={railRightGeom}>
-          <meshStandardMaterial color="#b0b0b0" metalness={0.7} roughness={0.3} />
+        <mesh geometry={railRightGeom} castShadow receiveShadow>
+          <meshStandardMaterial color="#c0c0c0" metalness={0.8} roughness={0.2} />
         </mesh>
       )}
 
-      {/* Bridge supports */}
       {track.isBridge && (
-        <BridgeSupports
-          centerPoints={geometry.centerPoints}
-          gaugeMm={gaugeMm}
-        />
+        <BridgeSupports centerPoints={geometry.centerPoints} gaugeMm={gaugeMm} />
       )}
 
-      {/* Tunnel hill */}
       {track.isTunnel && (
-        <TunnelHill
-          centerPoints={geometry.centerPoints}
-          gaugeMm={gaugeMm}
-        />
+        <TunnelHill centerPoints={geometry.centerPoints} gaugeMm={gaugeMm} />
       )}
     </group>
   );
@@ -649,7 +596,6 @@ function BridgeSupports({
       return acc + Math.hypot(pt.x - prev.x, pt.z - prev.z);
     }, 0);
 
-    // Place pillars every ~40mm
     const spacing = 40;
     const count = Math.max(2, Math.floor(totalLen / spacing));
     const step = Math.floor(centerPoints.length / count);
@@ -668,9 +614,9 @@ function BridgeSupports({
   return (
     <group>
       {pillars.map((p, i) => (
-        <mesh key={i} position={[p.x, p.height / 2, p.z]}>
+        <mesh key={i} position={[p.x, p.height / 2, p.z]} castShadow receiveShadow>
           <boxGeometry args={[pillarWidth, p.height, pillarWidth]} />
-          <meshStandardMaterial color="#7a7a7a" />
+          <meshStandardMaterial color="#6a6a6a" roughness={0.6} />
         </mesh>
       ))}
     </group>
@@ -693,7 +639,7 @@ function TunnelHill({
     const hillHeight = gaugeMm * 4;
     const vertices: number[] = [];
     const indices: number[] = [];
-    const segments = 8; // around the hill cross-section
+    const segments = 8;
 
     for (let i = 0; i < centerPoints.length; i++) {
       const pt = centerPoints[i];
@@ -701,7 +647,7 @@ function TunnelHill({
       const perpZ = pt.tangentX;
 
       for (let j = 0; j <= segments; j++) {
-        const angle = (j / segments) * Math.PI; // 0 to PI (half circle)
+        const angle = (j / segments) * Math.PI;
         const dx = Math.cos(angle) * hillRadius;
         const dy = Math.sin(angle) * hillHeight;
 
@@ -735,13 +681,8 @@ function TunnelHill({
   if (!hillGeom) return null;
 
   return (
-    <mesh geometry={hillGeom}>
-      <meshStandardMaterial
-        color="#5a7a4a"
-        transparent
-        opacity={0.6}
-        side={THREE.DoubleSide}
-      />
+    <mesh geometry={hillGeom} receiveShadow>
+      <meshStandardMaterial color="#4a6a3a" transparent opacity={0.7} roughness={0.9} />
     </mesh>
   );
 }
@@ -763,7 +704,6 @@ function ElevationMarkers({ elevationPoints, tracks, catalog }: {
       const segments = getPieceSegmentsLocal(piece);
       if (segments.length === 0) return null;
 
-      // Use first segment for simplicity (works for most tracks)
       const seg = segments[0];
       const { point: local } = pointAndTangentAt(seg, ep.t);
       const world = localToWorld(local, track);
@@ -784,14 +724,12 @@ function ElevationMarkers({ elevationPoints, tracks, catalog }: {
         const color = m.elevation === 0 ? "#22c55e" : m.elevation > 0 ? "#3b82f6" : "#ef4444";
         return (
           <group key={m.id} position={[m.x, m.y, m.z]}>
-            {/* Vertical pole */}
             <mesh position={[0, m.elevation > 0 ? -m.elevation / 2 : -m.elevation / 2, 0]}>
               <cylinderGeometry args={[0.3, 0.3, Math.abs(m.elevation) || 2, 6]} />
-              <meshStandardMaterial color={color} opacity={0.5} transparent />
+              <meshStandardMaterial color={color} opacity={0.6} transparent />
             </mesh>
-            {/* Sphere marker */}
             <mesh>
-              <sphereGeometry args={[2, 8, 8]} />
+              <sphereGeometry args={[1.5, 8, 8]} />
               <meshStandardMaterial color={color} />
             </mesh>
           </group>
@@ -801,52 +739,29 @@ function ElevationMarkers({ elevationPoints, tracks, catalog }: {
   );
 }
 
-// ── Debug center line for each track ──
-
-function TrackCenterLine({
-  track,
-  piece,
-  elevMap,
-}: {
-  track: PlacedTrack;
-  piece: TrackPieceDefinition;
-  elevMap: Map<string, { startElev: number; endElev: number }>;
-}) {
-  const points = useMemo(() => {
-    const segments = getPieceSegmentsLocal(piece);
-    const pts: [number, number, number][] = [];
-    for (const seg of segments) {
-      const sampled = sampleSegmentWorld3D(seg, track, elevMap, 5);
-      for (const pt of sampled) {
-        pts.push([pt.x, pt.y + 5, pt.z]);
-      }
-    }
-    return pts;
-  }, [track, piece, elevMap]);
-
-  if (points.length < 2) return null;
-
-  return (
-    <Line
-      points={points}
-      color="#ff4444"
-      lineWidth={3}
-    />
-  );
-}
-
 // ── Camera auto-fit ──
 
-function CameraSetup({ board }: { board: BoardConfig }) {
-  const widthMm = board.width * 10;
-  const depthMm = board.depth * 10;
+function CameraSetup({ board, boardDiagonal }: { board: BoardConfig; boardDiagonal: number }) {
+  const controlsRef = useRef<OrbitControlsImpl | null>(null);
+
+  useEffect(() => {
+    if (controlsRef.current) {
+      const widthMm = board.width * 10;
+      const depthMm = board.depth * 10;
+      controlsRef.current.target.set(widthMm / 2, 0, depthMm / 2);
+      controlsRef.current.update();
+    }
+  }, [board]);
 
   return (
     <OrbitControls
-      target={[widthMm / 2, 0, depthMm / 2]}
+      ref={controlsRef}
+      enableDamping
+      dampingFactor={0.08}
+      rotateSpeed={0.5}
       maxPolarAngle={Math.PI / 2 - 0.05}
       minDistance={50}
-      maxDistance={widthMm * 3}
+      maxDistance={boardDiagonal * 2}
     />
   );
 }
@@ -854,7 +769,10 @@ function CameraSetup({ board }: { board: BoardConfig }) {
 // ── Main scene ──
 
 function Scene({ tracks, catalog, board, elevationPoints }: TrackViewer3DProps) {
-  // Build elevation map once for the whole scene (graph-based propagation)
+  const widthMm = board.width * 10;
+  const depthMm = board.depth * 10;
+  const boardDiagonal = Math.sqrt(widthMm * widthMm + depthMm * depthMm);
+
   const elevMap = useMemo(
     () => buildElevationMap(tracks, elevationPoints, catalog),
     [tracks, elevationPoints, catalog],
@@ -863,18 +781,29 @@ function Scene({ tracks, catalog, board, elevationPoints }: TrackViewer3DProps) 
   return (
     <>
       {/* Lighting */}
-      <ambientLight intensity={0.6} />
-      <directionalLight position={[board.width * 5, board.width * 10, board.depth * 5]} intensity={0.8} castShadow />
-      <directionalLight position={[-board.width * 5, board.width * 5, -board.depth * 5]} intensity={0.3} />
+      <ambientLight intensity={0.5} />
+      <hemisphereLight intensity={0.3} color="#a0a0a0" groundColor="#404040" />
+      <directionalLight
+        position={[board.width * 5, board.width * 8, board.depth * 5]}
+        intensity={0.8}
+        castShadow
+        shadow-mapSize-width={2048}
+        shadow-mapSize-height={2048}
+        shadow-bias={-0.0001}
+      />
+      <directionalLight
+        position={[-board.width * 3, board.width * 5, -board.depth * 3]}
+        intensity={0.3}
+      />
+
+      {/* Fog for depth cue */}
+      <fog attach="fog" args={["#1a1a2e", boardDiagonal * 0.5, boardDiagonal * 3]} />
+
+      {/* Environment map */}
+      <Environment preset="sunset" />
 
       {/* Board */}
       <BoardMesh board={board} />
-
-      {/* Grid helper on board */}
-      <gridHelper
-        args={[Math.max(board.width, board.depth) * 10 * 2, Math.max(board.width, board.depth), "#999999", "#cccccc"]}
-        position={[board.width * 5, -0.4, board.depth * 5]}
-      />
 
       {/* Tracks */}
       {tracks.map((track) => {
@@ -897,8 +826,16 @@ function Scene({ tracks, catalog, board, elevationPoints }: TrackViewer3DProps) 
         catalog={catalog}
       />
 
+      {/* Contact shadows for realism */}
+      <ContactShadows
+        opacity={0.4}
+        scale={10}
+        blur={2}
+        far={boardDiagonal}
+      />
+
       {/* Camera controls */}
-      <CameraSetup board={board} />
+      <CameraSetup board={board} boardDiagonal={boardDiagonal} />
     </>
   );
 }
@@ -909,17 +846,25 @@ export default function TrackViewer3D(props: TrackViewer3DProps) {
   const { board } = props;
   const widthMm = board.width * 10;
   const depthMm = board.depth * 10;
+  const boardDiagonal = Math.sqrt(widthMm * widthMm + depthMm * depthMm);
 
   return (
     <div className="h-full w-full" style={{ background: "#1a1a2e" }}>
       <Canvas
         camera={{
-          position: [widthMm / 2, Math.max(widthMm, depthMm) * 0.8, depthMm * 1.5],
+          position: [widthMm / 2, Math.max(widthMm, depthMm) * 0.7, depthMm * 1.2],
           fov: 50,
-          near: 1,
-          far: widthMm * 10,
+          near: 0.1,
+          far: boardDiagonal * 20,
         }}
         shadows
+        gl={{
+          antialias: true,
+          alpha: false,
+          powerPreference: "high-performance",
+          logarithmicDepthBuffer: true,
+        }}
+        dpr={[1, 2]}
       >
         <Scene {...props} />
       </Canvas>
