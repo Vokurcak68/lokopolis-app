@@ -341,6 +341,7 @@ export default function TrackPlanner() {
               board={planner.state.board}
               elevationPoints={planner.state.elevationPoints}
               terrainZones={planner.state.terrainZones}
+              portals={planner.state.portals}
             />
           ) : (
             <TrackCanvas
