@@ -372,10 +372,12 @@ function TrackPiece3D({
   track,
   piece,
   elevMap,
+  snapMap,
 }: {
   track: PlacedTrack;
   piece: TrackPieceDefinition;
   elevMap: Map<string, { startElev: number; endElev: number }>;
+  snapMap: SnapMap;
 }) {
   const gaugeMm = getGaugeMm(piece.scale);
   const halfGauge = gaugeMm / 2;
@@ -383,8 +385,36 @@ function TrackPiece3D({
   // Generate center points PER SEGMENT to avoid jumps in turnouts/crossings
   const segmentPoints = useMemo(() => {
     const segments = getPieceSegmentsLocal(piece);
-    return segments.map((seg) => sampleSegmentWorld3D(seg, track, elevMap, 10));
-  }, [track, piece, elevMap]);
+    const allPts = segments.map((seg) => sampleSegmentWorld3D(seg, track, elevMap, 10));
+
+    // Snap endpoints: for each connection, if snapped, move the closest endpoint to the snap midpoint
+    for (const [connId] of Object.entries(track.snappedConnections)) {
+      const snapPt = snapMap.get(`${track.instanceId}:${connId}`);
+      if (!snapPt) continue;
+
+      const conn = piece.connections.find((c) => c.id === connId);
+      if (!conn) continue;
+      const connWorld = localToWorld({ x: conn.position.x, z: conn.position.z }, track);
+
+      // Find which segment + which end (first or last point) is closest to this connection
+      for (const pts of allPts) {
+        if (pts.length < 2) continue;
+        const first = pts[0];
+        const last = pts[pts.length - 1];
+        const distFirst = Math.hypot(first.x - connWorld.x, first.z - connWorld.z);
+        const distLast = Math.hypot(last.x - connWorld.x, last.z - connWorld.z);
+
+        if (distFirst < 5) {
+          pts[0] = { ...first, x: snapPt.x, z: snapPt.z };
+        }
+        if (distLast < 5) {
+          pts[pts.length - 1] = { ...last, x: snapPt.x, z: snapPt.z };
+        }
+      }
+    }
+
+    return allPts;
+  }, [track, piece, elevMap, snapMap]);
 
   // For ballast + sleepers, use only the FIRST segment (primary path)
   // For rails, render each segment separately
@@ -992,6 +1022,43 @@ function CameraSetup({ board, boardDiagonal }: { board: BoardConfig; boardDiagon
 
 // ── Main scene ──
 
+// snapKey: "trackId:connId" → averaged world position
+type SnapMap = Map<string, { x: number; z: number }>;
+
+function buildSnapMap(tracks: PlacedTrack[], catalog: Record<string, TrackPieceDefinition>): SnapMap {
+  const map: SnapMap = new Map();
+  // For each snapped pair, compute the midpoint of the two connection world positions
+  for (const track of tracks) {
+    const piece = catalog[track.pieceId];
+    if (!piece) continue;
+    for (const [myConnId, snapVal] of Object.entries(track.snappedConnections)) {
+      const key1 = `${track.instanceId}:${myConnId}`;
+      if (map.has(key1)) continue;
+
+      const [otherTrackId, otherConnId] = snapVal.split(":");
+      const otherTrack = tracks.find((t) => t.instanceId === otherTrackId);
+      const otherPiece = otherTrack ? catalog[otherTrack.pieceId] : null;
+      if (!otherTrack || !otherPiece) continue;
+
+      // Find my connection point in local coords → world
+      const myConn = piece.connections.find((c) => c.id === myConnId);
+      const otherConn = otherPiece.connections.find((c) => c.id === otherConnId);
+      if (!myConn || !otherConn) continue;
+
+      const myWorld = localToWorld({ x: myConn.position.x, z: myConn.position.z }, track);
+      const otherWorld = localToWorld({ x: otherConn.position.x, z: otherConn.position.z }, otherTrack);
+
+      const midX = (myWorld.x + otherWorld.x) / 2;
+      const midZ = (myWorld.z + otherWorld.z) / 2;
+
+      const key2 = `${otherTrackId}:${otherConnId}`;
+      map.set(key1, { x: midX, z: midZ });
+      map.set(key2, { x: midX, z: midZ });
+    }
+  }
+  return map;
+}
+
 function Scene({ tracks, catalog, board, elevationPoints }: TrackViewer3DProps) {
   const widthMm = board.width * 10;
   const depthMm = board.depth * 10;
@@ -1000,6 +1067,11 @@ function Scene({ tracks, catalog, board, elevationPoints }: TrackViewer3DProps) 
   const elevMap = useMemo(
     () => buildElevationMap(tracks, elevationPoints, catalog),
     [tracks, elevationPoints, catalog],
+  );
+
+  const snapMap = useMemo(
+    () => buildSnapMap(tracks, catalog),
+    [tracks, catalog],
   );
 
   return (
@@ -1039,6 +1111,7 @@ function Scene({ tracks, catalog, board, elevationPoints }: TrackViewer3DProps) 
             track={track}
             piece={piece}
             elevMap={elevMap}
+            snapMap={snapMap}
           />
         );
       })}
