@@ -432,9 +432,7 @@ function TrackPiece3D({
   }, [segmentPoints, halfGauge]);
 
   const isMultiSegment = segmentPoints.length > 1; // turnout / crossing
-  // For turnouts: sleepers only on primary path but wider to cover diverging branch
   const sleeperLengthBase = gaugeMm * SLEEPER_LENGTH_FACTOR;
-  const sleeperLength = isMultiSegment ? sleeperLengthBase * 1.6 : sleeperLengthBase;
 
   // Ballast per segment (each branch gets its own ballast)
   const ballastGeoms = useMemo(() => {
@@ -469,41 +467,122 @@ function TrackPiece3D({
     });
   }, [segmentPoints, gaugeMm]);
 
-  // Sleepers only on PRIMARY segment (turnouts share sleepers across branches like real ones)
+  // ── Sleeper geometry ──
+  // For turnouts/crossings: fan-shaped sleepers spanning from outer edge of one rail
+  // to outer edge of the diverging rail (like real turnout sleepers)
+  // For simple tracks: standard perpendicular sleepers
   const sleeperGeom = useMemo(() => {
-    const pts = primaryPoints;
-    if (pts.length < 2) return null;
-    const cumDist: number[] = [0];
-    for (let i = 1; i < pts.length; i++) {
-      cumDist.push(cumDist[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z));
+    const mainPts = primaryPoints;
+    if (mainPts.length < 2) return null;
+
+    // Build cumDist for main path
+    const mainCumDist: number[] = [0];
+    for (let i = 1; i < mainPts.length; i++) {
+      mainCumDist.push(mainCumDist[i - 1] + Math.hypot(mainPts[i].x - mainPts[i - 1].x, mainPts[i].z - mainPts[i - 1].z));
     }
-    const totalLen = cumDist[cumDist.length - 1];
-    if (totalLen < 1) return null;
-    const count = Math.max(2, Math.floor(totalLen / SLEEPER_SPACING_MM));
-    const halfLen = sleeperLength / 2;
+    const mainTotalLen = mainCumDist[mainCumDist.length - 1];
+    if (mainTotalLen < 1) return null;
+
+    // Build cumDist for diverging path (if exists)
+    const divPts = isMultiSegment ? segmentPoints[1] : null;
+    let divCumDist: number[] | null = null;
+    let divTotalLen = 0;
+    if (divPts && divPts.length >= 2) {
+      divCumDist = [0];
+      for (let i = 1; i < divPts.length; i++) {
+        divCumDist.push(divCumDist[i - 1] + Math.hypot(divPts[i].x - divPts[i - 1].x, divPts[i].z - divPts[i - 1].z));
+      }
+      divTotalLen = divCumDist[divCumDist.length - 1];
+    }
+
+    // Helper: interpolate point at distance along a path
+    function pointAtDist(pts: typeof mainPts, cumD: number[], dist: number) {
+      let si = 1;
+      while (si < cumD.length - 1 && cumD[si] < dist) si++;
+      const segLen = cumD[si] - cumD[si - 1];
+      const t = segLen > 0 ? (dist - cumD[si - 1]) / segLen : 0;
+      const p0 = pts[si - 1], p1 = pts[si];
+      return {
+        x: p0.x + t * (p1.x - p0.x),
+        y: p0.y + t * (p1.y - p0.y),
+        z: p0.z + t * (p1.z - p0.z),
+        tx: p1.tangentX,
+        tz: p1.tangentZ,
+      };
+    }
+
+    const count = Math.max(2, Math.floor(mainTotalLen / SLEEPER_SPACING_MM));
     const halfW = SLEEPER_WIDTH_MM / 2;
     const hh = SLEEPER_THICKNESS_MM;
     const sVerts: number[] = [];
     const sIdx: number[] = [];
+
     for (let s = 0; s <= count; s++) {
-      const target = (s / count) * totalLen;
-      let si = 1;
-      while (si < cumDist.length - 1 && cumDist[si] < target) si++;
-      const segLen = cumDist[si] - cumDist[si - 1];
-      const t = segLen > 0 ? (target - cumDist[si - 1]) / segLen : 0;
-      const p0 = pts[si - 1], p1 = pts[si];
-      const cx = p0.x + t * (p1.x - p0.x);
-      const cy = p0.y + t * (p1.y - p0.y) + BALLAST_HEIGHT_MM;
-      const cz = p0.z + t * (p1.z - p0.z);
-      const tx = p1.tangentX, tz = p1.tangentZ;
-      const px = -tz, pz = tx;
+      const dist = (s / count) * mainTotalLen;
+      const frac = dist / mainTotalLen; // 0..1 along turnout
+      const mp = pointAtDist(mainPts, mainCumDist, dist);
+      const cy = mp.y + BALLAST_HEIGHT_MM;
+
+      // Main track perpendicular
+      const mPerpX = -mp.tz;
+      const mPerpZ = mp.tx;
+
+      let leftX: number, leftZ: number, rightX: number, rightZ: number;
+
+      if (divPts && divCumDist && divTotalLen > 0) {
+        // Find corresponding point on diverging branch
+        const divDist = frac * divTotalLen;
+        const dp = pointAtDist(divPts, divCumDist, divDist);
+        const dPerpX = -dp.tz;
+        const dPerpZ = dp.tx;
+
+        // Determine which side the diverging branch is on
+        // (check if diverging center is to the left or right of main track)
+        const toDiv = { x: dp.x - mp.x, z: dp.z - mp.z };
+        const cross = mPerpX * toDiv.z - mPerpZ * toDiv.x;
+        // cross > 0 → div is to the right of main perp direction
+
+        // Outer edge of main rail (side away from diverging)
+        // Outer edge of diverging rail (side away from main)
+        if (cross >= 0) {
+          // Diverging is to the "right" — main left edge stays, div right edge extends
+          leftX = mp.x + mPerpX * (halfGauge + RAIL_WIDTH_MM);
+          leftZ = mp.z + mPerpZ * (halfGauge + RAIL_WIDTH_MM);
+          rightX = dp.x - dPerpX * (halfGauge + RAIL_WIDTH_MM);
+          rightZ = dp.z - dPerpZ * (halfGauge + RAIL_WIDTH_MM);
+        } else {
+          // Diverging is to the "left"
+          leftX = dp.x + dPerpX * (halfGauge + RAIL_WIDTH_MM);
+          leftZ = dp.z + dPerpZ * (halfGauge + RAIL_WIDTH_MM);
+          rightX = mp.x - mPerpX * (halfGauge + RAIL_WIDTH_MM);
+          rightZ = mp.z - mPerpZ * (halfGauge + RAIL_WIDTH_MM);
+        }
+      } else {
+        // Simple track: standard symmetric sleeper
+        const halfLen = sleeperLengthBase / 2;
+        leftX = mp.x + mPerpX * halfLen;
+        leftZ = mp.z + mPerpZ * halfLen;
+        rightX = mp.x - mPerpX * halfLen;
+        rightZ = mp.z - mPerpZ * halfLen;
+      }
+
+      // Sleeper direction (left → right)
+      const sdx = rightX - leftX;
+      const sdz = rightZ - leftZ;
+      const sdLen = Math.hypot(sdx, sdz);
+      const snx = sdLen > 0 ? sdx / sdLen : mPerpX;
+      const snz = sdLen > 0 ? sdz / sdLen : mPerpZ;
+      // Along-track direction for sleeper thickness
+      const stx = -snz;
+      const stz = snx;
+
       const base = s * 8;
       for (let dy = 0; dy <= 1; dy++) {
         const y = cy + dy * hh;
-        sVerts.push(cx + tx * halfW + px * halfLen, y, cz + tz * halfW + pz * halfLen);
-        sVerts.push(cx + tx * halfW - px * halfLen, y, cz + tz * halfW - pz * halfLen);
-        sVerts.push(cx - tx * halfW - px * halfLen, y, cz - tz * halfW - pz * halfLen);
-        sVerts.push(cx - tx * halfW + px * halfLen, y, cz - tz * halfW + pz * halfLen);
+        sVerts.push(leftX + stx * halfW, y, leftZ + stz * halfW);
+        sVerts.push(leftX - stx * halfW, y, leftZ - stz * halfW);
+        sVerts.push(rightX - stx * halfW, y, rightZ - stz * halfW);
+        sVerts.push(rightX + stx * halfW, y, rightZ + stz * halfW);
       }
       const b = base;
       sIdx.push(b + 4, b + 5, b + 6, b + 4, b + 6, b + 7);
@@ -513,12 +592,13 @@ function TrackPiece3D({
       sIdx.push(b + 3, b, b + 4, b + 3, b + 4, b + 7);
       sIdx.push(b + 1, b + 2, b + 6, b + 1, b + 6, b + 5);
     }
+
     const geom = new THREE.BufferGeometry();
     geom.setAttribute("position", new THREE.Float32BufferAttribute(sVerts, 3));
     geom.setIndex(sIdx);
     geom.computeVertexNormals();
     return geom;
-  }, [primaryPoints, sleeperLength]);
+  }, [primaryPoints, segmentPoints, isMultiSegment, halfGauge, sleeperLengthBase]);
 
   return (
     <group>
@@ -529,7 +609,7 @@ function TrackPiece3D({
         </mesh>
       ))}
 
-      {/* Sleepers only on primary path */}
+      {/* Fan-shaped sleepers for turnouts, standard for simple tracks */}
       {sleeperGeom && (
         <mesh geometry={sleeperGeom} castShadow receiveShadow>
           <meshStandardMaterial color="#5a4a3a" roughness={0.8} />
