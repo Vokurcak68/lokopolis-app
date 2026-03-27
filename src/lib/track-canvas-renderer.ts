@@ -855,16 +855,33 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
     }
   };
 
-  // Elevated = only tracks that directly have an elevation marker with height > 0.
-  // No propagation through snap connections — only the track with the marker itself.
-  // These are drawn ABOVE tunnel/bridge overlays (they visually cross over the tunnel).
+  // Elevated = tracks connected (via snaps) to a track with elevation marker > 0.
+  // Elevation propagates through snap connections — entire connected group is elevated.
   const elevatedTrackIds = new Set<string>();
   for (const ep of elevationPoints) {
     if (ep.elevation > 0) elevatedTrackIds.add(ep.trackId);
   }
-  // If a track has both >0 and =0 markers, it stays elevated (it has a ramp on it)
+  // Tracks explicitly at ground level (elevation marker = 0) — don't propagate into these
+  const groundLevelTrackIds = new Set<string>();
+  for (const ep of elevationPoints) {
+    if (ep.elevation === 0) groundLevelTrackIds.add(ep.trackId);
+  }
+  // BFS: propagate through snapped connections, stop at ground-level tracks
+  const queue = [...elevatedTrackIds];
+  while (queue.length > 0) {
+    const tid = queue.shift()!;
+    const t = tracks.find((tr) => tr.instanceId === tid);
+    if (!t) continue;
+    for (const snapVal of Object.values(t.snappedConnections)) {
+      const neighborId = snapVal.split(":")[0];
+      if (elevatedTrackIds.has(neighborId)) continue;
+      if (groundLevelTrackIds.has(neighborId)) continue;
+      elevatedTrackIds.add(neighborId);
+      queue.push(neighborId);
+    }
+  }
 
-  // Split ALL tracks (not just normal) into ground-level and elevated
+  // Split ALL tracks into ground-level and elevated
   const groundTracks = tracks.filter((t) => !elevatedTrackIds.has(t.instanceId));
   const elevatedTracks = tracks.filter((t) => elevatedTrackIds.has(t.instanceId));
 
