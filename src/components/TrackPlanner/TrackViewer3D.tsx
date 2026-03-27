@@ -647,38 +647,190 @@ function BridgeSupports({
   centerPoints: Array<{ x: number; y: number; z: number; tangentX: number; tangentZ: number }>;
   gaugeMm: number;
 }) {
-  const pillars = useMemo(() => {
-    if (centerPoints.length < 2) return [];
-    const result: Array<{ x: number; y: number; z: number; height: number }> = [];
-    const totalLen = centerPoints.reduce((acc, pt, i) => {
-      if (i === 0) return 0;
-      const prev = centerPoints[i - 1];
-      return acc + Math.hypot(pt.x - prev.x, pt.z - prev.z);
-    }, 0);
+  const bridgeGeom = useMemo(() => {
+    if (centerPoints.length < 4) return null;
 
-    const spacing = 40;
-    const count = Math.max(2, Math.floor(totalLen / spacing));
-    const step = Math.floor(centerPoints.length / count);
+    // Find bridge section (elevated points)
+    const bridgePts = centerPoints.filter((pt) => pt.y > 0.3);
+    if (bridgePts.length < 2) return null;
 
-    for (let i = 0; i < centerPoints.length; i += Math.max(1, step)) {
-      const pt = centerPoints[i];
-      if (pt.y > 0.5) {
-        result.push({ x: pt.x, y: 0, z: pt.z, height: pt.y });
-      }
+    const halfWidth = gaugeMm * 1.2; // bridge deck half-width (wider than track)
+    const girderHeight = gaugeMm * 0.8; // side girder height
+    const girderThick = gaugeMm * 0.08; // girder wall thickness
+    const deckThick = gaugeMm * 0.1; // deck plate thickness
+    const pillarW = gaugeMm * 0.5; // pillar cross-section
+    const railingH = gaugeMm * 0.5; // railing height above girder
+    const railingThick = gaugeMm * 0.04;
+
+    const vertices: number[] = [];
+    const indices: number[] = [];
+    let vi = 0;
+
+    function addQuad(
+      ax: number, ay: number, az: number,
+      bx: number, by: number, bz: number,
+      cx: number, cy: number, cz: number,
+      dx: number, dy: number, dz: number,
+    ) {
+      const base = vi;
+      vertices.push(ax, ay, az, bx, by, bz, cx, cy, cz, dx, dy, dz);
+      indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+      vi += 4;
     }
-    return result;
-  }, [centerPoints]);
 
-  const pillarWidth = gaugeMm * 0.6;
+    // Generate bridge deck + girders along center points
+    for (let i = 0; i < bridgePts.length - 1; i++) {
+      const p0 = bridgePts[i];
+      const p1 = bridgePts[i + 1];
+
+      // Perpendiculars
+      const perp0x = -p0.tangentZ, perp0z = p0.tangentX;
+      const perp1x = -p1.tangentZ, perp1z = p1.tangentX;
+
+      const deckY0 = p0.y - deckThick;
+      const deckY1 = p1.y - deckThick;
+
+      // ── Deck bottom face ──
+      addQuad(
+        p0.x + perp0x * halfWidth, deckY0, p0.z + perp0z * halfWidth,
+        p0.x - perp0x * halfWidth, deckY0, p0.z - perp0z * halfWidth,
+        p1.x - perp1x * halfWidth, deckY1, p1.z - perp1z * halfWidth,
+        p1.x + perp1x * halfWidth, deckY1, p1.z + perp1z * halfWidth,
+      );
+
+      // ── Left girder (outer face) ──
+      const gBase0 = deckY0 - girderHeight;
+      const gBase1 = deckY1 - girderHeight;
+      addQuad(
+        p0.x + perp0x * halfWidth, deckY0, p0.z + perp0z * halfWidth,
+        p1.x + perp1x * halfWidth, deckY1, p1.z + perp1z * halfWidth,
+        p1.x + perp1x * halfWidth, gBase1, p1.z + perp1z * halfWidth,
+        p0.x + perp0x * halfWidth, gBase0, p0.z + perp0z * halfWidth,
+      );
+      // Left girder (inner face)
+      const innerOff = halfWidth - girderThick;
+      addQuad(
+        p0.x + perp0x * innerOff, deckY0, p0.z + perp0z * innerOff,
+        p0.x + perp0x * innerOff, gBase0, p0.z + perp0z * innerOff,
+        p1.x + perp1x * innerOff, gBase1, p1.z + perp1z * innerOff,
+        p1.x + perp1x * innerOff, deckY1, p1.z + perp1z * innerOff,
+      );
+      // Left girder bottom
+      addQuad(
+        p0.x + perp0x * halfWidth, gBase0, p0.z + perp0z * halfWidth,
+        p1.x + perp1x * halfWidth, gBase1, p1.z + perp1z * halfWidth,
+        p1.x + perp1x * innerOff, gBase1, p1.z + perp1z * innerOff,
+        p0.x + perp0x * innerOff, gBase0, p0.z + perp0z * innerOff,
+      );
+
+      // ── Right girder (outer face) ──
+      addQuad(
+        p0.x - perp0x * halfWidth, deckY0, p0.z - perp0z * halfWidth,
+        p0.x - perp0x * halfWidth, gBase0, p0.z - perp0z * halfWidth,
+        p1.x - perp1x * halfWidth, gBase1, p1.z - perp1z * halfWidth,
+        p1.x - perp1x * halfWidth, deckY1, p1.z - perp1z * halfWidth,
+      );
+      // Right girder (inner face)
+      addQuad(
+        p0.x - perp0x * innerOff, deckY0, p0.z - perp0z * innerOff,
+        p1.x - perp1x * innerOff, deckY1, p1.z - perp1z * innerOff,
+        p1.x - perp1x * innerOff, gBase1, p1.z - perp1z * innerOff,
+        p0.x - perp0x * innerOff, gBase0, p0.z - perp0z * innerOff,
+      );
+      // Right girder bottom
+      addQuad(
+        p0.x - perp0x * halfWidth, gBase0, p0.z - perp0z * halfWidth,
+        p0.x - perp0x * innerOff, gBase0, p0.z - perp0z * innerOff,
+        p1.x - perp1x * innerOff, gBase1, p1.z - perp1z * innerOff,
+        p1.x - perp1x * halfWidth, gBase1, p1.z - perp1z * halfWidth,
+      );
+
+      // ── Left railing ──
+      const railTop0 = p0.y + railingH;
+      const railTop1 = p1.y + railingH;
+      addQuad(
+        p0.x + perp0x * halfWidth, railTop0, p0.z + perp0z * halfWidth,
+        p1.x + perp1x * halfWidth, railTop1, p1.z + perp1z * halfWidth,
+        p1.x + perp1x * halfWidth, deckY1 + deckThick, p1.z + perp1z * halfWidth,
+        p0.x + perp0x * halfWidth, deckY0 + deckThick, p0.z + perp0z * halfWidth,
+      );
+      // Left railing inner
+      const railInner = halfWidth - railingThick;
+      addQuad(
+        p0.x + perp0x * railInner, railTop0, p0.z + perp0z * railInner,
+        p0.x + perp0x * railInner, deckY0 + deckThick, p0.z + perp0z * railInner,
+        p1.x + perp1x * railInner, deckY1 + deckThick, p1.z + perp1z * railInner,
+        p1.x + perp1x * railInner, railTop1, p1.z + perp1z * railInner,
+      );
+
+      // ── Right railing ──
+      addQuad(
+        p0.x - perp0x * halfWidth, railTop0, p0.z - perp0z * halfWidth,
+        p0.x - perp0x * halfWidth, deckY0 + deckThick, p0.z - perp0z * halfWidth,
+        p1.x - perp1x * halfWidth, deckY1 + deckThick, p1.z - perp1z * halfWidth,
+        p1.x - perp1x * halfWidth, railTop1, p1.z + perp1z * halfWidth,
+      );
+      addQuad(
+        p0.x - perp0x * railInner, railTop0, p0.z - perp0z * railInner,
+        p1.x - perp1x * railInner, railTop1, p1.z - perp1z * railInner,
+        p1.x - perp1x * railInner, deckY1 + deckThick, p1.z - perp1z * railInner,
+        p0.x - perp0x * railInner, deckY0 + deckThick, p0.z - perp0z * railInner,
+      );
+    }
+
+    // ── Pillars at regular intervals ──
+    const cumDist: number[] = [0];
+    for (let i = 1; i < bridgePts.length; i++) {
+      cumDist.push(cumDist[i - 1] + Math.hypot(
+        bridgePts[i].x - bridgePts[i - 1].x,
+        bridgePts[i].z - bridgePts[i - 1].z,
+      ));
+    }
+    const totalLen = cumDist[cumDist.length - 1];
+    const pillarSpacing = 40; // mm between pillars
+    const pillarCount = Math.max(2, Math.floor(totalLen / pillarSpacing));
+
+    for (let p = 0; p <= pillarCount; p++) {
+      const targetDist = (p / pillarCount) * totalLen;
+      let si = 1;
+      while (si < cumDist.length - 1 && cumDist[si] < targetDist) si++;
+      const sLen = cumDist[si] - cumDist[si - 1];
+      const t = sLen > 0 ? (targetDist - cumDist[si - 1]) / sLen : 0;
+      const pt0 = bridgePts[si - 1], pt1 = bridgePts[si];
+      const px = pt0.x + t * (pt1.x - pt0.x);
+      const py = pt0.y + t * (pt1.y - pt0.y);
+      const pz = pt0.z + t * (pt1.z - pt0.z);
+
+      if (py < 0.5) continue; // skip if barely elevated
+
+      const deckBottom = py - deckThick - girderHeight;
+      const hpw = pillarW / 2;
+
+      // Pillar: from ground (0) to girder bottom
+      // Front face
+      addQuad(px - hpw, deckBottom, pz - hpw, px + hpw, deckBottom, pz - hpw, px + hpw, 0, pz - hpw, px - hpw, 0, pz - hpw);
+      // Back face
+      addQuad(px + hpw, deckBottom, pz + hpw, px - hpw, deckBottom, pz + hpw, px - hpw, 0, pz + hpw, px + hpw, 0, pz + hpw);
+      // Left face
+      addQuad(px - hpw, deckBottom, pz + hpw, px - hpw, deckBottom, pz - hpw, px - hpw, 0, pz - hpw, px - hpw, 0, pz + hpw);
+      // Right face
+      addQuad(px + hpw, deckBottom, pz - hpw, px + hpw, deckBottom, pz + hpw, px + hpw, 0, pz + hpw, px + hpw, 0, pz - hpw);
+    }
+
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+    geom.setIndex(indices);
+    geom.computeVertexNormals();
+    return geom;
+  }, [centerPoints, gaugeMm]);
 
   return (
     <group>
-      {pillars.map((p, i) => (
-        <mesh key={i} position={[p.x, p.height / 2, p.z]} castShadow receiveShadow>
-          <boxGeometry args={[pillarWidth, p.height, pillarWidth]} />
-          <meshStandardMaterial color="#6a6a6a" roughness={0.6} />
+      {bridgeGeom && (
+        <mesh geometry={bridgeGeom} castShadow receiveShadow>
+          <meshStandardMaterial color="#5a5a5a" roughness={0.5} metalness={0.3} />
         </mesh>
-      ))}
+      )}
     </group>
   );
 }
