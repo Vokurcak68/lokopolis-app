@@ -431,128 +431,108 @@ function TrackPiece3D({
     }));
   }, [segmentPoints, halfGauge]);
 
-  const ballastGeom = useMemo(() => {
-    const pts = primaryPoints;
-    if (pts.length < 2) return null;
-
-    const topHalfW = gaugeMm * BALLAST_WIDTH_FACTOR / 2;
-    const botHalfW = topHalfW * 1.3;
-    const bh = BALLAST_HEIGHT_MM;
-    const vertices: number[] = [];
-    const indices: number[] = [];
-
-    for (let i = 0; i < pts.length; i++) {
-      const pt = pts[i];
-      const perpX = -pt.tangentZ;
-      const perpZ = pt.tangentX;
-      const baseY = pt.y;
-
-      vertices.push(pt.x + perpX * topHalfW, baseY + bh, pt.z + perpZ * topHalfW);
-      vertices.push(pt.x - perpX * topHalfW, baseY + bh, pt.z - perpZ * topHalfW);
-      vertices.push(pt.x - perpX * botHalfW, baseY, pt.z - perpZ * botHalfW);
-      vertices.push(pt.x + perpX * botHalfW, baseY, pt.z + perpZ * botHalfW);
-
-      if (i > 0) {
-        const c = i * 4;
-        const p = (i - 1) * 4;
-        indices.push(p + 0, p + 1, c + 1, p + 0, c + 1, c + 0);
-        indices.push(p + 1, p + 2, c + 2, p + 1, c + 2, c + 1);
-        indices.push(p + 2, p + 3, c + 3, p + 2, c + 3, c + 2);
-        indices.push(p + 3, p + 0, c + 0, p + 3, c + 0, c + 3);
-      }
-    }
-
-    const geom = new THREE.BufferGeometry();
-    geom.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
-    geom.setIndex(indices);
-    geom.computeVertexNormals();
-    return geom;
-  }, [primaryPoints, gaugeMm]);
-
   const sleeperLength = gaugeMm * SLEEPER_LENGTH_FACTOR;
-  const sleeperGeom = useMemo(() => {
-    const pts = primaryPoints;
-    if (pts.length < 2) return null;
 
-    const cumDist: number[] = [0];
-    for (let i = 1; i < pts.length; i++) {
-      cumDist.push(
-        cumDist[i - 1] +
-          Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z),
-      );
-    }
-    const totalLen = cumDist[cumDist.length - 1];
-    if (totalLen < 1) return null;
+  // Build ballast + sleeper geometry per segment (so turnout branches get full treatment)
+  const perSegGeoms = useMemo(() => {
+    return segmentPoints.map((pts) => {
+      if (pts.length < 2) return { ballast: null, sleepers: null };
 
-    const sleeperCount = Math.max(2, Math.floor(totalLen / SLEEPER_SPACING_MM));
-    const halfLen = sleeperLength / 2;
-    const halfW = SLEEPER_WIDTH_MM / 2;
-    const hh = SLEEPER_THICKNESS_MM;
+      // -- Ballast --
+      const topHalfW = gaugeMm * BALLAST_WIDTH_FACTOR / 2;
+      const botHalfW = topHalfW * 1.3;
+      const bh = BALLAST_HEIGHT_MM;
+      const bVerts: number[] = [];
+      const bIdx: number[] = [];
+      for (let i = 0; i < pts.length; i++) {
+        const pt = pts[i];
+        const px = -pt.tangentZ;
+        const pz = pt.tangentX;
+        bVerts.push(pt.x + px * topHalfW, pt.y + bh, pt.z + pz * topHalfW);
+        bVerts.push(pt.x - px * topHalfW, pt.y + bh, pt.z - pz * topHalfW);
+        bVerts.push(pt.x - px * botHalfW, pt.y, pt.z - pz * botHalfW);
+        bVerts.push(pt.x + px * botHalfW, pt.y, pt.z + pz * botHalfW);
+        if (i > 0) {
+          const c = i * 4, p = (i - 1) * 4;
+          bIdx.push(p, p + 1, c + 1, p, c + 1, c);
+          bIdx.push(p + 1, p + 2, c + 2, p + 1, c + 2, c + 1);
+          bIdx.push(p + 2, p + 3, c + 3, p + 2, c + 3, c + 2);
+          bIdx.push(p + 3, p, c, p + 3, c, c + 3);
+        }
+      }
+      const ballast = new THREE.BufferGeometry();
+      ballast.setAttribute("position", new THREE.Float32BufferAttribute(bVerts, 3));
+      ballast.setIndex(bIdx);
+      ballast.computeVertexNormals();
 
-    const vertices: number[] = [];
-    const indices: number[] = [];
-
-    for (let s = 0; s <= sleeperCount; s++) {
-      const targetDist = (s / sleeperCount) * totalLen;
-
-      let segIdx = 1;
-      while (segIdx < cumDist.length - 1 && cumDist[segIdx] < targetDist) segIdx++;
-
-      const segStart = cumDist[segIdx - 1];
-      const segEnd = cumDist[segIdx];
-      const segLen = segEnd - segStart;
-      const t = segLen > 0 ? (targetDist - segStart) / segLen : 0;
-
-      const p0 = pts[segIdx - 1];
-      const p1 = pts[segIdx];
-
-      const cx = p0.x + t * (p1.x - p0.x);
-      const cy = p0.y + t * (p1.y - p0.y) + BALLAST_HEIGHT_MM;
-      const cz = p0.z + t * (p1.z - p0.z);
-
-      const tx = p1.tangentX;
-      const tz = p1.tangentZ;
-      const px = -tz;
-      const pz = tx;
-
-      const base = s * 8;
-      for (let dy = 0; dy <= 1; dy++) {
-        const y = cy + dy * hh;
-        vertices.push(cx + tx * halfW + px * halfLen, y, cz + tz * halfW + pz * halfLen);
-        vertices.push(cx + tx * halfW - px * halfLen, y, cz + tz * halfW - pz * halfLen);
-        vertices.push(cx - tx * halfW - px * halfLen, y, cz - tz * halfW - pz * halfLen);
-        vertices.push(cx - tx * halfW + px * halfLen, y, cz - tz * halfW + pz * halfLen);
+      // -- Sleepers --
+      const cumDist: number[] = [0];
+      for (let i = 1; i < pts.length; i++) {
+        cumDist.push(cumDist[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z));
+      }
+      const totalLen = cumDist[cumDist.length - 1];
+      let sleepers: THREE.BufferGeometry | null = null;
+      if (totalLen >= 1) {
+        const count = Math.max(2, Math.floor(totalLen / SLEEPER_SPACING_MM));
+        const halfLen = sleeperLength / 2;
+        const halfW = SLEEPER_WIDTH_MM / 2;
+        const hh = SLEEPER_THICKNESS_MM;
+        const sVerts: number[] = [];
+        const sIdx: number[] = [];
+        for (let s = 0; s <= count; s++) {
+          const target = (s / count) * totalLen;
+          let si = 1;
+          while (si < cumDist.length - 1 && cumDist[si] < target) si++;
+          const segLen = cumDist[si] - cumDist[si - 1];
+          const t = segLen > 0 ? (target - cumDist[si - 1]) / segLen : 0;
+          const p0 = pts[si - 1], p1 = pts[si];
+          const cx = p0.x + t * (p1.x - p0.x);
+          const cy = p0.y + t * (p1.y - p0.y) + BALLAST_HEIGHT_MM;
+          const cz = p0.z + t * (p1.z - p0.z);
+          const tx = p1.tangentX, tz = p1.tangentZ;
+          const px = -tz, pz = tx;
+          const base = s * 8;
+          for (let dy = 0; dy <= 1; dy++) {
+            const y = cy + dy * hh;
+            sVerts.push(cx + tx * halfW + px * halfLen, y, cz + tz * halfW + pz * halfLen);
+            sVerts.push(cx + tx * halfW - px * halfLen, y, cz + tz * halfW - pz * halfLen);
+            sVerts.push(cx - tx * halfW - px * halfLen, y, cz - tz * halfW - pz * halfLen);
+            sVerts.push(cx - tx * halfW + px * halfLen, y, cz - tz * halfW + pz * halfLen);
+          }
+          const b = base;
+          sIdx.push(b + 4, b + 5, b + 6, b + 4, b + 6, b + 7);
+          sIdx.push(b + 2, b + 1, b, b + 3, b + 2, b);
+          sIdx.push(b, b + 1, b + 5, b, b + 5, b + 4);
+          sIdx.push(b + 2, b + 3, b + 7, b + 2, b + 7, b + 6);
+          sIdx.push(b + 3, b, b + 4, b + 3, b + 4, b + 7);
+          sIdx.push(b + 1, b + 2, b + 6, b + 1, b + 6, b + 5);
+        }
+        sleepers = new THREE.BufferGeometry();
+        sleepers.setAttribute("position", new THREE.Float32BufferAttribute(sVerts, 3));
+        sleepers.setIndex(sIdx);
+        sleepers.computeVertexNormals();
       }
 
-      const b = base;
-      indices.push(b + 4, b + 5, b + 6, b + 4, b + 6, b + 7);
-      indices.push(b + 2, b + 1, b + 0, b + 3, b + 2, b + 0);
-      indices.push(b + 0, b + 1, b + 5, b + 0, b + 5, b + 4);
-      indices.push(b + 2, b + 3, b + 7, b + 2, b + 7, b + 6);
-      indices.push(b + 3, b + 0, b + 4, b + 3, b + 4, b + 7);
-      indices.push(b + 1, b + 2, b + 6, b + 1, b + 6, b + 5);
-    }
-
-    const geom = new THREE.BufferGeometry();
-    geom.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
-    geom.setIndex(indices);
-    geom.computeVertexNormals();
-    return geom;
-  }, [primaryPoints, sleeperLength, gaugeMm]);
+      return { ballast, sleepers };
+    });
+  }, [segmentPoints, gaugeMm, sleeperLength]);
 
   return (
     <group>
-      {ballastGeom && (
-        <mesh geometry={ballastGeom} castShadow receiveShadow>
-          <meshStandardMaterial color="#8b8171" roughness={0.9} />
-        </mesh>
-      )}
-
-      {sleeperGeom && (
-        <mesh geometry={sleeperGeom} castShadow receiveShadow>
-          <meshStandardMaterial color="#5a4a3a" roughness={0.8} />
-        </mesh>
-      )}
+      {perSegGeoms.map((sg, idx) => (
+        <group key={`seg-${idx}`}>
+          {sg.ballast && (
+            <mesh geometry={sg.ballast} castShadow receiveShadow>
+              <meshStandardMaterial color="#8b8171" roughness={0.9} />
+            </mesh>
+          )}
+          {sg.sleepers && (
+            <mesh geometry={sg.sleepers} castShadow receiveShadow>
+              <meshStandardMaterial color="#5a4a3a" roughness={0.8} />
+            </mesh>
+          )}
+        </group>
+      ))}
 
       {railGeoms.map((rg, idx) => (
         <group key={`rails-${idx}`}>
