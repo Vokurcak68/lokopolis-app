@@ -855,16 +855,45 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
     }
   };
 
-  // Elevated = only tracks that directly have an elevation marker with height > 0.
-  // No propagation through snap connections — only the track with the marker itself.
-  // These are drawn ABOVE tunnel/bridge overlays (they visually cross over the tunnel).
-  const elevatedTrackIds = new Set<string>();
+  // Elevated = tracks that cross OVER a tunnel/bridge.
+  // A track is elevated if:
+  //   1. It has an elevation marker > 0 directly on it, OR
+  //   2. It is connected (snapped) to an elevated track AND is not flagged as isTunnel
+  // This propagates elevation through snap connections so all tracks on the upper layer
+  // are drawn above the tunnel overlay, even without their own elevation markers.
+  const directElevated = new Set<string>();
   for (const ep of elevationPoints) {
-    if (ep.elevation > 0) elevatedTrackIds.add(ep.trackId);
+    if (ep.elevation > 0) directElevated.add(ep.trackId);
   }
-  // If a track has both >0 and =0 markers, it stays elevated (it has a ramp on it)
 
-  // Split ALL tracks (not just normal) into ground-level and elevated
+  // Build snap adjacency for propagation
+  const snapAdj = new Map<string, string[]>();
+  for (const t of tracks) {
+    const neighbors: string[] = [];
+    for (const snapVal of Object.values(t.snappedConnections)) {
+      const otherId = snapVal.split(":")[0];
+      neighbors.push(otherId);
+    }
+    snapAdj.set(t.instanceId, neighbors);
+  }
+
+  // BFS: propagate elevation through connected non-tunnel tracks
+  const elevatedTrackIds = new Set<string>(directElevated);
+  const queue = [...directElevated];
+  while (queue.length > 0) {
+    const tid = queue.shift()!;
+    for (const neighbor of snapAdj.get(tid) ?? []) {
+      if (elevatedTrackIds.has(neighbor)) continue;
+      const nTrack = tracks.find((t) => t.instanceId === neighbor);
+      if (!nTrack) continue;
+      // Don't propagate into tunnel tracks — those stay underground
+      if (nTrack.isTunnel) continue;
+      elevatedTrackIds.add(neighbor);
+      queue.push(neighbor);
+    }
+  }
+
+  // Split ALL tracks into ground-level and elevated
   const groundTracks = tracks.filter((t) => !elevatedTrackIds.has(t.instanceId));
   const elevatedTracks = tracks.filter((t) => elevatedTrackIds.has(t.instanceId));
 
