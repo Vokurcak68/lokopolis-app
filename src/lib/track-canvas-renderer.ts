@@ -855,14 +855,15 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
     }
   };
 
-  // Layer logic: isTunnel tracks under overlay, everything else above
+  // Layer logic: isTunnel tracks go UNDER the green overlay,
+  // everything else goes ABOVE it (including tracks crossing over the tunnel).
   const tunnelTracks = tracks.filter((t) => t.isTunnel);
   const aboveTracks = tracks.filter((t) => !t.isTunnel);
 
-  // 1) Tunnel tracks (under the green overlay)
+  // 1) Draw tunnel tracks (under the green overlay)
   drawLayer(sortSelected(tunnelTracks));
 
-  // 2) Tunnel/bridge overlays
+  // 2) Draw tunnel/bridge overlays on top of tunnel tracks
   const portals = params.portals ?? [];
   if (!skipBackground && terrainZones.length > 0) {
     drawTerrainZones(ctx, terrainZones, tracks, catalog, transform);
@@ -871,8 +872,10 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
     drawPortals(ctx, portals, tracks, catalog, transform);
   }
 
-  // 3) Non-tunnel tracks above overlay
-  drawLayer(sortSelected(aboveTracks));
+  // 3) Draw all non-tunnel tracks above overlay (these cross over the tunnel)
+  if (aboveTracks.length > 0) {
+    drawLayer(sortSelected(aboveTracks));
+  }
 
   const dots: WorldConnectionDot[] = [];
   for (const track of tracks) {

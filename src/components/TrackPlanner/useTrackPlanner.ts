@@ -112,43 +112,11 @@ function setCloudCurrentProjectId(id: string | null) {
 }
 
 function dataToState(data: PersistedData): DesignerState {
-  const tracks = data.tracks ?? [];
-  const portals = data.portals ?? [];
-
-  // Retroactively set isTunnel/isBridge flags on tracks between portals
-  // (for saves created before portal→flag auto-assignment was added)
-  if (portals.length > 0) {
-    const byId = new Map(portals.map((p) => [p.id, p]));
-    const processed = new Set<string>();
-    for (const portal of portals) {
-      if (!portal.pairedPortalId || processed.has(portal.id)) continue;
-      const paired = byId.get(portal.pairedPortalId);
-      if (!paired) continue;
-      processed.add(portal.id);
-      processed.add(paired.id);
-
-      const flag = portal.kind === "bridge"
-        ? { isBridge: true, isTunnel: false }
-        : { isTunnel: true, isBridge: false };
-
-      const startTrackId = portal.track1.trackId;
-      const endTrackId = paired.track1.trackId;
-      const between = findTracksBetween(startTrackId, endTrackId, tracks);
-      for (const tid of between) {
-        const t = tracks.find((tr) => tr.instanceId === tid);
-        if (t) {
-          if (flag.isTunnel) t.isTunnel = true;
-          if (flag.isBridge) t.isBridge = true;
-        }
-      }
-    }
-  }
-
   return {
     board: data.board,
-    tracks,
+    tracks: data.tracks ?? [],
     terrainZones: data.terrainZones ?? [],
-    portals,
+    portals: data.portals ?? [],
     elevationPoints: data.elevationPoints ?? [],
     selectedTrackId: null,
     selectedTrackIds: [],
