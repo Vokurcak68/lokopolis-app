@@ -289,6 +289,9 @@ function sampleSegmentWorld3D(
 // ── Board mesh ──
 
 function BoardMesh({ board }: { board: BoardConfig }) {
+  const widthMm = board.width * 10;
+  const depthMm = board.depth * 10;
+
   const geometry = useMemo(() => {
     const boardPath = getBoardPathMm(board);
     if (boardPath.length < 3) return null;
@@ -300,18 +303,16 @@ function BoardMesh({ board }: { board: BoardConfig }) {
     }
     shape.closePath();
 
-    const shapeGeom = new THREE.ShapeGeometry(shape);
+    // Extrude a thin slab so both sides have proper normals
+    const geom = new THREE.ExtrudeGeometry(shape, {
+      depth: 3, // 3mm thick board
+      bevelEnabled: false,
+    });
 
-    const pos = shapeGeom.getAttribute("position");
-    for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i);
-      const y = pos.getY(i);
-      pos.setXYZ(i, x, 0, y);
-    }
-    pos.needsUpdate = true;
-    shapeGeom.computeVertexNormals();
+    // ExtrudeGeometry extrudes along Z — rotate so board lies in XZ plane (flat)
+    geom.rotateX(-Math.PI / 2);
 
-    return shapeGeom;
+    return geom;
   }, [board]);
 
   const gridTexture = useMemo(() => {
@@ -340,22 +341,21 @@ function BoardMesh({ board }: { board: BoardConfig }) {
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
     // Repeat so grid tiles are ~50mm each
-    const widthMm = board.width * 10;
-    const depthMm = board.depth * 10;
     const tileMm = 50;
     texture.repeat.set(widthMm / tileMm, depthMm / tileMm);
     return texture;
-  }, []);
+  }, [widthMm, depthMm]);
 
   if (!geometry) return null;
 
   return (
-    <mesh geometry={geometry} position={[0, -0.5, 0]} receiveShadow>
+    <mesh geometry={geometry} position={[0, -3, 0]} receiveShadow>
       <meshStandardMaterial
         color="#ffffff"
         map={gridTexture}
         roughness={0.85}
         metalness={0}
+        side={THREE.DoubleSide}
       />
     </mesh>
   );
