@@ -1019,7 +1019,7 @@ function Scene({ tracks, catalog, board, elevationPoints }: TrackViewer3DProps) 
       />
 
       {/* Fog for depth cue */}
-      <fog attach="fog" args={["#d4d0c8", boardDiagonal * 0.8, boardDiagonal * 4]} />
+      {/* Fog removed — was washing out the board color */}
 
       {/* Board */}
       <BoardMesh board={board} />
