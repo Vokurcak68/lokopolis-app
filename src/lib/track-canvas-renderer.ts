@@ -855,15 +855,23 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
     }
   };
 
-  // Layer logic: isTunnel tracks go UNDER the green overlay,
-  // everything else goes ABOVE it (including tracks crossing over the tunnel).
-  const tunnelTracks = tracks.filter((t) => t.isTunnel);
-  const aboveTracks = tracks.filter((t) => !t.isTunnel);
+  // Elevated = only tracks that directly have an elevation marker with height > 0.
+  // No propagation through snap connections — only the track with the marker itself.
+  // These are drawn ABOVE tunnel/bridge overlays (they visually cross over the tunnel).
+  const elevatedTrackIds = new Set<string>();
+  for (const ep of elevationPoints) {
+    if (ep.elevation > 0) elevatedTrackIds.add(ep.trackId);
+  }
+  // If a track has both >0 and =0 markers, it stays elevated (it has a ramp on it)
 
-  // 1) Draw tunnel tracks (under the green overlay)
-  drawLayer(sortSelected(tunnelTracks));
+  // Split ALL tracks (not just normal) into ground-level and elevated
+  const groundTracks = tracks.filter((t) => !elevatedTrackIds.has(t.instanceId));
+  const elevatedTracks = tracks.filter((t) => elevatedTrackIds.has(t.instanceId));
 
-  // 2) Draw tunnel/bridge overlays on top of tunnel tracks
+  // Draw ground-level tracks (everything without elevation markers > 0)
+  drawLayer(sortSelected(groundTracks));
+
+  // Overlays on top of ground-level tracks (tunnel green covers tracks inside tunnel)
   const portals = params.portals ?? [];
   if (!skipBackground && terrainZones.length > 0) {
     drawTerrainZones(ctx, terrainZones, tracks, catalog, transform);
@@ -872,9 +880,9 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
     drawPortals(ctx, portals, tracks, catalog, transform);
   }
 
-  // 3) Draw all non-tunnel tracks above overlay (these cross over the tunnel)
-  if (aboveTracks.length > 0) {
-    drawLayer(sortSelected(aboveTracks));
+  // Elevated tracks on top of overlays (crossing over tunnels/bridges)
+  if (elevatedTracks.length > 0) {
+    drawLayer(sortSelected(elevatedTracks));
   }
 
   const dots: WorldConnectionDot[] = [];
