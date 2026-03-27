@@ -351,13 +351,16 @@ function BoardMesh({ board }: { board: BoardConfig }) {
   if (!geometry) return null;
 
   return (
-    <mesh geometry={geometry} position={[0, -3, 0]} receiveShadow>
+    <mesh geometry={geometry} position={[0, -5, 0]} receiveShadow>
       <meshStandardMaterial
         color="#ffffff"
         map={gridTexture}
         roughness={0.85}
         metalness={0}
         side={THREE.DoubleSide}
+        polygonOffset
+        polygonOffsetFactor={1}
+        polygonOffsetUnits={1}
       />
     </mesh>
   );
