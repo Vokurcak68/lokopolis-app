@@ -876,6 +876,8 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
       const neighborId = snapVal.split(":")[0];
       if (elevatedTrackIds.has(neighborId)) continue;
       if (groundLevelTrackIds.has(neighborId)) continue;
+      const nTrack = tracks.find((tr) => tr.instanceId === neighborId);
+      if (nTrack?.isTunnel) continue; // don't propagate into tunnel tracks
       elevatedTrackIds.add(neighborId);
       queue.push(neighborId);
     }
@@ -888,18 +890,20 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
   // Draw ground-level tracks (everything without elevation markers > 0)
   drawLayer(sortSelected(groundTracks));
 
-  // Overlays on top of ground-level tracks (tunnel green covers tracks inside tunnel)
+  // Green/blue overlays on top of ground-level tracks
   const portals = params.portals ?? [];
   if (!skipBackground && terrainZones.length > 0) {
     drawTerrainZones(ctx, terrainZones, tracks, catalog, transform);
   }
-  if (!skipBackground && portals.length > 0) {
-    drawPortals(ctx, portals, tracks, catalog, transform);
-  }
 
-  // Elevated tracks on top of overlays (crossing over tunnels/bridges)
+  // Elevated tracks on top of terrain overlays (crossing over tunnels/bridges)
   if (elevatedTracks.length > 0) {
     drawLayer(sortSelected(elevatedTracks));
+  }
+
+  // Portals (paths + icons) drawn LAST so they're always visible and clickable
+  if (!skipBackground && portals.length > 0) {
+    drawPortals(ctx, portals, tracks, catalog, transform);
   }
 
   const dots: WorldConnectionDot[] = [];
