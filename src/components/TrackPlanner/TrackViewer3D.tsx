@@ -22,14 +22,14 @@ interface TrackViewer3DProps {
 // ── Constants ──
 // All dimensions in mm
 
-const SLEEPER_SPACING_MM = 60; // distance between sleepers along track (realistic)
-const RAIL_WIDTH_MM = 1.5; // rail profile width (cross-section)
-const RAIL_HEIGHT_MM = 2.0; // rail profile height
-const SLEEPER_THICKNESS_MM = 1.5; // sleeper height (Y)
-const SLEEPER_WIDTH_MM = 3.5; // sleeper extent along track direction
+const SLEEPER_SPACING_MM = 5; // distance between sleepers along track
+const RAIL_WIDTH_MM = 1.2; // rail profile width (cross-section)
+const RAIL_HEIGHT_MM = 1.5; // rail profile height
+const SLEEPER_THICKNESS_MM = 1.2; // sleeper height (Y)
+const SLEEPER_WIDTH_MM = 2; // sleeper extent along track direction
 const SLEEPER_LENGTH_FACTOR = 1.8; // sleeper length = gauge * factor (perpendicular to track)
-const BALLAST_WIDTH_FACTOR = 2.2; // ballast width factor
-const BALLAST_HEIGHT_MM = 2.0; // ballast ribbon thickness
+const BALLAST_WIDTH_FACTOR = 1.97; // ballast width factor
+const BALLAST_HEIGHT_MM = 1.5; // ballast ribbon thickness
 
 // ── Elevation graph solver ──
 
@@ -371,17 +371,15 @@ function TrackPiece3D({
   const gaugeMm = getGaugeMm(piece.scale);
   const halfGauge = gaugeMm / 2;
 
-  const geometry = useMemo(() => {
+  // Generate center points PER SEGMENT to avoid jumps in turnouts/crossings
+  const segmentPoints = useMemo(() => {
     const segments = getPieceSegmentsLocal(piece);
-    const centerPoints: Array<{ x: number; y: number; z: number; tangentX: number; tangentZ: number }> = [];
-
-    for (const seg of segments) {
-      const pts = sampleSegmentWorld3D(seg, track, elevMap, 10);
-      centerPoints.push(...pts);
-    }
-
-    return { centerPoints };
+    return segments.map((seg) => sampleSegmentWorld3D(seg, track, elevMap, 10));
   }, [track, piece, elevMap]);
+
+  // For ballast + sleepers, use only the FIRST segment (primary path)
+  // For rails, render each segment separately
+  const primaryPoints = segmentPoints[0] ?? [];
 
   const buildRailSolid = (
     centerPts: Array<{ x: number; y: number; z: number; tangentX: number; tangentZ: number }>,
@@ -425,17 +423,16 @@ function TrackPiece3D({
     return geom;
   };
 
-  const railLeftGeom = useMemo(
-    () => buildRailSolid(geometry.centerPoints, halfGauge),
-    [geometry.centerPoints, halfGauge],
-  );
-  const railRightGeom = useMemo(
-    () => buildRailSolid(geometry.centerPoints, -halfGauge),
-    [geometry.centerPoints, halfGauge],
-  );
+  // Build rail geometry per segment (so turnout branches render correctly)
+  const railGeoms = useMemo(() => {
+    return segmentPoints.map((pts) => ({
+      left: buildRailSolid(pts, halfGauge),
+      right: buildRailSolid(pts, -halfGauge),
+    }));
+  }, [segmentPoints, halfGauge]);
 
   const ballastGeom = useMemo(() => {
-    const pts = geometry.centerPoints;
+    const pts = primaryPoints;
     if (pts.length < 2) return null;
 
     const topHalfW = gaugeMm * BALLAST_WIDTH_FACTOR / 2;
@@ -470,11 +467,11 @@ function TrackPiece3D({
     geom.setIndex(indices);
     geom.computeVertexNormals();
     return geom;
-  }, [geometry.centerPoints, gaugeMm]);
+  }, [primaryPoints, gaugeMm]);
 
   const sleeperLength = gaugeMm * SLEEPER_LENGTH_FACTOR;
   const sleeperGeom = useMemo(() => {
-    const pts = geometry.centerPoints;
+    const pts = primaryPoints;
     if (pts.length < 2) return null;
 
     const cumDist: number[] = [0];
@@ -541,7 +538,7 @@ function TrackPiece3D({
     geom.setIndex(indices);
     geom.computeVertexNormals();
     return geom;
-  }, [geometry.centerPoints, sleeperLength, gaugeMm]);
+  }, [primaryPoints, sleeperLength, gaugeMm]);
 
   return (
     <group>
@@ -557,23 +554,27 @@ function TrackPiece3D({
         </mesh>
       )}
 
-      {railLeftGeom && (
-        <mesh geometry={railLeftGeom} castShadow receiveShadow>
-          <meshStandardMaterial color="#c0c0c0" metalness={0.8} roughness={0.2} />
-        </mesh>
-      )}
-      {railRightGeom && (
-        <mesh geometry={railRightGeom} castShadow receiveShadow>
-          <meshStandardMaterial color="#c0c0c0" metalness={0.8} roughness={0.2} />
-        </mesh>
-      )}
+      {railGeoms.map((rg, idx) => (
+        <group key={`rails-${idx}`}>
+          {rg.left && (
+            <mesh geometry={rg.left} castShadow receiveShadow>
+              <meshStandardMaterial color="#c0c0c0" metalness={0.8} roughness={0.2} />
+            </mesh>
+          )}
+          {rg.right && (
+            <mesh geometry={rg.right} castShadow receiveShadow>
+              <meshStandardMaterial color="#c0c0c0" metalness={0.8} roughness={0.2} />
+            </mesh>
+          )}
+        </group>
+      ))}
 
       {track.isBridge && (
-        <BridgeSupports centerPoints={geometry.centerPoints} gaugeMm={gaugeMm} />
+        <BridgeSupports centerPoints={primaryPoints} gaugeMm={gaugeMm} />
       )}
 
       {track.isTunnel && (
-        <TunnelHill centerPoints={geometry.centerPoints} gaugeMm={gaugeMm} />
+        <TunnelHill centerPoints={primaryPoints} gaugeMm={gaugeMm} />
       )}
     </group>
   );
