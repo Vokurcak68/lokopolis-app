@@ -468,9 +468,9 @@ function TrackPiece3D({
   }, [segmentPoints, gaugeMm]);
 
   // ── Sleeper geometry ──
-  // For turnouts/crossings: fan-shaped sleepers spanning from outer edge of one rail
-  // to outer edge of the diverging rail (like real turnout sleepers)
-  // For simple tracks: standard perpendicular sleepers
+  // For turnouts/crossings: sleepers perpendicular to main track, but dynamically
+  // extended on the side where the diverging branch goes (like real turnout sleepers).
+  // For simple tracks: standard perpendicular sleepers.
   const sleeperGeom = useMemo(() => {
     const mainPts = primaryPoints;
     if (mainPts.length < 2) return null;
@@ -506,83 +506,79 @@ function TrackPiece3D({
         x: p0.x + t * (p1.x - p0.x),
         y: p0.y + t * (p1.y - p0.y),
         z: p0.z + t * (p1.z - p0.z),
-        tx: p1.tangentX,
-        tz: p1.tangentZ,
       };
     }
 
     const count = Math.max(2, Math.floor(mainTotalLen / SLEEPER_SPACING_MM));
     const halfW = SLEEPER_WIDTH_MM / 2;
     const hh = SLEEPER_THICKNESS_MM;
+    const baseHalfLen = sleeperLengthBase / 2;
+    const railEdge = halfGauge + RAIL_WIDTH_MM; // outer edge of rail from center
+    const overhang = RAIL_WIDTH_MM * 2; // small overhang beyond outer rail
+
     const sVerts: number[] = [];
     const sIdx: number[] = [];
 
     for (let s = 0; s <= count; s++) {
       const dist = (s / count) * mainTotalLen;
-      const frac = dist / mainTotalLen; // 0..1 along turnout
-      const mp = pointAtDist(mainPts, mainCumDist, dist);
-      const cy = mp.y + BALLAST_HEIGHT_MM;
+      const frac = dist / mainTotalLen;
 
-      // Main track perpendicular
-      const mPerpX = -mp.tz;
-      const mPerpZ = mp.tx;
+      // Main track point
+      const mp = mainPts[0]; // fallback
+      let si = 1;
+      while (si < mainCumDist.length - 1 && mainCumDist[si] < dist) si++;
+      const segLen = mainCumDist[si] - mainCumDist[si - 1];
+      const t = segLen > 0 ? (dist - mainCumDist[si - 1]) / segLen : 0;
+      const p0 = mainPts[si - 1], p1 = mainPts[si];
+      const cx = p0.x + t * (p1.x - p0.x);
+      const cy = p0.y + t * (p1.y - p0.y) + BALLAST_HEIGHT_MM;
+      const cz = p0.z + t * (p1.z - p0.z);
+      const tx = p1.tangentX, tz = p1.tangentZ;
+      // Perpendicular to main track (always)
+      const perpX = -tz;
+      const perpZ = tx;
 
-      let leftX: number, leftZ: number, rightX: number, rightZ: number;
+      // Default: symmetric sleeper
+      let extLeft = baseHalfLen;
+      let extRight = baseHalfLen;
 
       if (divPts && divCumDist && divTotalLen > 0) {
-        // Find corresponding point on diverging branch
-        const divDist = frac * divTotalLen;
-        const dp = pointAtDist(divPts, divCumDist, divDist);
-        const dPerpX = -dp.tz;
-        const dPerpZ = dp.tx;
+        // Find diverging point at same fraction
+        const dp = pointAtDist(divPts, divCumDist, frac * divTotalLen);
 
-        // Determine which side the diverging branch is on
-        // (check if diverging center is to the left or right of main track)
-        const toDiv = { x: dp.x - mp.x, z: dp.z - mp.z };
-        const cross = mPerpX * toDiv.z - mPerpZ * toDiv.x;
-        // cross > 0 → div is to the right of main perp direction
+        // Project diverging center onto the main track's perpendicular axis
+        // to find how far the diverging track is from main center
+        const toDivX = dp.x - cx;
+        const toDivZ = dp.z - cz;
+        const projDist = toDivX * perpX + toDivZ * perpZ;
+        // projDist > 0 → diverging is in the "left" (positive perp) direction
+        // projDist < 0 → diverging is in the "right" (negative perp) direction
 
-        // Outer edge of main rail (side away from diverging)
-        // Outer edge of diverging rail (side away from main)
-        if (cross >= 0) {
-          // Diverging is to the "right" — main left edge stays, div right edge extends
-          leftX = mp.x + mPerpX * (halfGauge + RAIL_WIDTH_MM);
-          leftZ = mp.z + mPerpZ * (halfGauge + RAIL_WIDTH_MM);
-          rightX = dp.x - dPerpX * (halfGauge + RAIL_WIDTH_MM);
-          rightZ = dp.z - dPerpZ * (halfGauge + RAIL_WIDTH_MM);
+        // The sleeper needs to reach the far edge of the diverging track
+        const divFarEdge = Math.abs(projDist) + railEdge + overhang;
+
+        if (projDist > 0) {
+          // Diverging is to the left
+          extLeft = Math.max(baseHalfLen, divFarEdge);
         } else {
-          // Diverging is to the "left"
-          leftX = dp.x + dPerpX * (halfGauge + RAIL_WIDTH_MM);
-          leftZ = dp.z + dPerpZ * (halfGauge + RAIL_WIDTH_MM);
-          rightX = mp.x - mPerpX * (halfGauge + RAIL_WIDTH_MM);
-          rightZ = mp.z - mPerpZ * (halfGauge + RAIL_WIDTH_MM);
+          // Diverging is to the right
+          extRight = Math.max(baseHalfLen, divFarEdge);
         }
-      } else {
-        // Simple track: standard symmetric sleeper
-        const halfLen = sleeperLengthBase / 2;
-        leftX = mp.x + mPerpX * halfLen;
-        leftZ = mp.z + mPerpZ * halfLen;
-        rightX = mp.x - mPerpX * halfLen;
-        rightZ = mp.z - mPerpZ * halfLen;
       }
 
-      // Sleeper direction (left → right)
-      const sdx = rightX - leftX;
-      const sdz = rightZ - leftZ;
-      const sdLen = Math.hypot(sdx, sdz);
-      const snx = sdLen > 0 ? sdx / sdLen : mPerpX;
-      const snz = sdLen > 0 ? sdz / sdLen : mPerpZ;
-      // Along-track direction for sleeper thickness
-      const stx = -snz;
-      const stz = snx;
+      // Sleeper endpoints (perpendicular to main track, asymmetric extension)
+      const leftX = cx + perpX * extLeft;
+      const leftZ = cz + perpZ * extLeft;
+      const rightX = cx - perpX * extRight;
+      const rightZ = cz - perpZ * extRight;
 
       const base = s * 8;
       for (let dy = 0; dy <= 1; dy++) {
         const y = cy + dy * hh;
-        sVerts.push(leftX + stx * halfW, y, leftZ + stz * halfW);
-        sVerts.push(leftX - stx * halfW, y, leftZ - stz * halfW);
-        sVerts.push(rightX - stx * halfW, y, rightZ - stz * halfW);
-        sVerts.push(rightX + stx * halfW, y, rightZ + stz * halfW);
+        sVerts.push(leftX + tx * halfW, y, leftZ + tz * halfW);
+        sVerts.push(leftX - tx * halfW, y, leftZ - tz * halfW);
+        sVerts.push(rightX - tx * halfW, y, rightZ - tz * halfW);
+        sVerts.push(rightX + tx * halfW, y, rightZ + tz * halfW);
       }
       const b = base;
       sIdx.push(b + 4, b + 5, b + 6, b + 4, b + 6, b + 7);
