@@ -2,7 +2,7 @@
 
 import { useMemo, useEffect, useRef } from "react";
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls, Environment, ContactShadows } from "@react-three/drei";
+import { OrbitControls } from "@react-three/drei";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import * as THREE from "three";
 import type { PlacedTrack, BoardConfig, ElevationPoint, TerrainZone } from "@/lib/track-designer-store";
@@ -314,46 +314,47 @@ function BoardMesh({ board }: { board: BoardConfig }) {
     return shapeGeom;
   }, [board]);
 
+  const gridTexture = useMemo(() => {
+    if (typeof document === "undefined") return null;
+    const canvas = document.createElement("canvas");
+    canvas.width = 512;
+    canvas.height = 512;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+
+    ctx.fillStyle = "#6a7a5b";
+    ctx.fillRect(0, 0, 512, 512);
+
+    ctx.strokeStyle = "#8b9a7b";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i <= 512; i += 64) {
+      ctx.moveTo(i, 0);
+      ctx.lineTo(i, 512);
+      ctx.moveTo(0, i);
+      ctx.lineTo(512, i);
+    }
+    ctx.stroke();
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(1, 1);
+    return texture;
+  }, []);
+
   if (!geometry) return null;
 
   return (
     <mesh geometry={geometry} position={[0, 0, 0]} receiveShadow>
       <meshStandardMaterial
         color="#7a8a6b"
-        map={createGridTexture()}
+        map={gridTexture}
         roughness={0.8}
         metalness={0.1}
       />
     </mesh>
   );
-}
-
-function createGridTexture(): THREE.Texture {
-  const canvas = document.createElement("canvas");
-  canvas.width = 512;
-  canvas.height = 512;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return new THREE.Texture(canvas);
-
-  ctx.fillStyle = "#6a7a5b";
-  ctx.fillRect(0, 0, 512, 512);
-
-  ctx.strokeStyle = "#8b9a7b";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  for (let i = 0; i <= 512; i += 64) {
-    ctx.moveTo(i, 0);
-    ctx.lineTo(i, 512);
-    ctx.moveTo(0, i);
-    ctx.lineTo(512, i);
-  }
-  ctx.stroke();
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(1, 1);
-  return texture;
 }
 
 // ── Single track piece 3D ──
@@ -799,9 +800,6 @@ function Scene({ tracks, catalog, board, elevationPoints }: TrackViewer3DProps) 
       {/* Fog for depth cue */}
       <fog attach="fog" args={["#1a1a2e", boardDiagonal * 0.5, boardDiagonal * 3]} />
 
-      {/* Environment map */}
-      <Environment preset="sunset" />
-
       {/* Board */}
       <BoardMesh board={board} />
 
@@ -824,14 +822,6 @@ function Scene({ tracks, catalog, board, elevationPoints }: TrackViewer3DProps) 
         elevationPoints={elevationPoints}
         tracks={tracks}
         catalog={catalog}
-      />
-
-      {/* Contact shadows for realism */}
-      <ContactShadows
-        opacity={0.4}
-        scale={10}
-        blur={2}
-        far={boardDiagonal}
       />
 
       {/* Camera controls */}
