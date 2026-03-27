@@ -855,53 +855,15 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
     }
   };
 
-  // Elevated = tracks that cross OVER a tunnel/bridge.
-  // A track is elevated if:
-  //   1. It has an elevation marker > 0 directly on it, OR
-  //   2. It is NOT isTunnel and is connected (snapped) to a track with isTunnel
-  //      (i.e. it neighbors or crosses a tunnel area from outside)
-  // This ensures tracks above a tunnel are drawn on top of the green overlay.
+  // Layer logic: isTunnel tracks go UNDER the green overlay,
+  // everything else goes ABOVE it (including tracks crossing over the tunnel).
+  const tunnelTracks = tracks.filter((t) => t.isTunnel);
+  const aboveTracks = tracks.filter((t) => !t.isTunnel);
 
-  // Build snap adjacency
-  const snapAdj = new Map<string, string[]>();
-  for (const t of tracks) {
-    const neighbors: string[] = [];
-    for (const snapVal of Object.values(t.snappedConnections)) {
-      const otherId = snapVal.split(":")[0];
-      neighbors.push(otherId);
-    }
-    snapAdj.set(t.instanceId, neighbors);
-  }
+  // 1) Draw tunnel tracks (under the green overlay)
+  drawLayer(sortSelected(tunnelTracks));
 
-  // Seed: tracks with elevation > 0
-  const directElevated = new Set<string>();
-  for (const ep of elevationPoints) {
-    if (ep.elevation > 0) directElevated.add(ep.trackId);
-  }
-
-  // BFS: propagate elevation through connected non-tunnel tracks
-  const elevatedTrackIds = new Set<string>(directElevated);
-  const queue = [...directElevated];
-  while (queue.length > 0) {
-    const tid = queue.shift()!;
-    for (const neighbor of snapAdj.get(tid) ?? []) {
-      if (elevatedTrackIds.has(neighbor)) continue;
-      const nTrack = tracks.find((t) => t.instanceId === neighbor);
-      if (!nTrack) continue;
-      if (nTrack.isTunnel) continue;
-      elevatedTrackIds.add(neighbor);
-      queue.push(neighbor);
-    }
-  }
-
-  // Split ALL tracks into ground-level and elevated
-  const groundTracks = tracks.filter((t) => !elevatedTrackIds.has(t.instanceId));
-  const elevatedTracks = tracks.filter((t) => elevatedTrackIds.has(t.instanceId));
-
-  // Draw ground-level tracks (everything without elevation markers > 0)
-  drawLayer(sortSelected(groundTracks));
-
-  // Overlays on top of ground-level tracks (tunnel green covers tracks inside tunnel)
+  // 2) Draw tunnel/bridge overlays on top of tunnel tracks
   const portals = params.portals ?? [];
   if (!skipBackground && terrainZones.length > 0) {
     drawTerrainZones(ctx, terrainZones, tracks, catalog, transform);
@@ -910,9 +872,9 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
     drawPortals(ctx, portals, tracks, catalog, transform);
   }
 
-  // Elevated tracks on top of overlays (crossing over tunnels/bridges)
-  if (elevatedTracks.length > 0) {
-    drawLayer(sortSelected(elevatedTracks));
+  // 3) Draw all non-tunnel tracks above overlay (these cross over the tunnel)
+  if (aboveTracks.length > 0) {
+    drawLayer(sortSelected(aboveTracks));
   }
 
   const dots: WorldConnectionDot[] = [];
