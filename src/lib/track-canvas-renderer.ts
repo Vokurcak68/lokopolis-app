@@ -855,55 +855,34 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
     }
   };
 
-  // Elevated = tracks connected (via snaps) to a track with elevation marker > 0.
-  // Elevation propagates through snap connections — entire connected group is elevated.
+  // Elevated = only tracks that directly have an elevation marker with height > 0.
+  // No propagation through snap connections — only the track with the marker itself.
+  // These are drawn ABOVE tunnel/bridge overlays (they visually cross over the tunnel).
   const elevatedTrackIds = new Set<string>();
   for (const ep of elevationPoints) {
     if (ep.elevation > 0) elevatedTrackIds.add(ep.trackId);
   }
-  // Tracks explicitly at ground level (elevation marker = 0) — don't propagate into these
-  const groundLevelTrackIds = new Set<string>();
-  for (const ep of elevationPoints) {
-    if (ep.elevation === 0) groundLevelTrackIds.add(ep.trackId);
-  }
-  // BFS: propagate through snapped connections, stop at ground-level tracks
-  const queue = [...elevatedTrackIds];
-  while (queue.length > 0) {
-    const tid = queue.shift()!;
-    const t = tracks.find((tr) => tr.instanceId === tid);
-    if (!t) continue;
-    for (const snapVal of Object.values(t.snappedConnections)) {
-      const neighborId = snapVal.split(":")[0];
-      if (elevatedTrackIds.has(neighborId)) continue;
-      if (groundLevelTrackIds.has(neighborId)) continue;
-      const nTrack = tracks.find((tr) => tr.instanceId === neighborId);
-      if (nTrack?.isTunnel) continue; // don't propagate into tunnel tracks
-      elevatedTrackIds.add(neighborId);
-      queue.push(neighborId);
-    }
-  }
+  // If a track has both >0 and =0 markers, it stays elevated (it has a ramp on it)
 
-  // Split ALL tracks into ground-level and elevated
+  // Split ALL tracks (not just normal) into ground-level and elevated
   const groundTracks = tracks.filter((t) => !elevatedTrackIds.has(t.instanceId));
   const elevatedTracks = tracks.filter((t) => elevatedTrackIds.has(t.instanceId));
 
   // Draw ground-level tracks (everything without elevation markers > 0)
   drawLayer(sortSelected(groundTracks));
 
-  // Green/blue overlays on top of ground-level tracks
+  // Overlays on top of ground-level tracks (tunnel green covers tracks inside tunnel)
   const portals = params.portals ?? [];
   if (!skipBackground && terrainZones.length > 0) {
     drawTerrainZones(ctx, terrainZones, tracks, catalog, transform);
   }
-
-  // Elevated tracks on top of terrain overlays (crossing over tunnels/bridges)
-  if (elevatedTracks.length > 0) {
-    drawLayer(sortSelected(elevatedTracks));
+  if (!skipBackground && portals.length > 0) {
+    drawPortals(ctx, portals, tracks, catalog, transform);
   }
 
-  // Portals (paths + icons) drawn LAST so they're always visible and clickable
-  if (!skipBackground && portals.length > 0) {
-    drawPortals(ctx, portals, tracks, catalog, transform, elevationPoints);
+  // Elevated tracks on top of overlays (crossing over tunnels/bridges)
+  if (elevatedTracks.length > 0) {
+    drawLayer(sortSelected(elevatedTracks));
   }
 
   const dots: WorldConnectionDot[] = [];
@@ -1326,7 +1305,6 @@ function findTrackPathSegments(
   start: TrackPoint,
   end: TrackPoint,
   tracks: PlacedTrack[],
-  elevationPoints?: ElevationPoint[],
 ): { trackId: string; tFrom: number; tTo: number }[] {
   // Same track — trivial
   if (start.trackId === end.trackId) {
@@ -1349,7 +1327,6 @@ function findTrackPathSegments(
   }
 
   // BFS from start track to end track
-  // Prefer tracks flagged as isTunnel/isBridge (they form the tunnel/bridge path)
   const visited = new Set<string>([start.trackId]);
   const parent = new Map<string, { fromTrackId: string; viaConnId: string; entryConnId: string }>();
   const queue = [start.trackId];
@@ -1432,9 +1409,8 @@ function sampleTrackPath(
   tracks: PlacedTrack[],
   catalog: Record<string, TrackPieceDefinition>,
   numSamples: number,
-  elevationPoints?: ElevationPoint[],
 ): LocalPoint[] {
-  const segments = findTrackPathSegments(zone.start, zone.end, tracks, elevationPoints);
+  const segments = findTrackPathSegments(zone.start, zone.end, tracks);
   const points: LocalPoint[] = [];
 
   // Distribute samples proportionally to segment t-ranges
@@ -1814,7 +1790,6 @@ export function drawPortals(
   tracks: PlacedTrack[],
   catalog: Record<string, TrackPieceDefinition>,
   transform: ViewTransform,
-  elevationPoints?: ElevationPoint[],
 ) {
   const portalRadius = Math.max(16, 24 * transform.zoom); // trošku větší než terrain default
   const pathWidth = Math.max(10, 22 * transform.zoom);
@@ -1897,7 +1872,7 @@ export function drawPortals(
 
   const drawBetween = (a: TrackPoint, b: TrackPoint, kind: "tunnel" | "bridge") => {
     const zone: TerrainZone = { id: "tmp", kind, start: a, end: b };
-    const pathPoints = sampleTrackPath(zone, tracks, catalog, 40, elevationPoints);
+    const pathPoints = sampleTrackPath(zone, tracks, catalog, 40);
 
     // Snap first and last path point to the actual cached world positions of the portals
     // (avoids mismatch when t maps to a slightly different point, e.g. on turnout primary vs all segments)
@@ -1911,23 +1886,6 @@ export function drawPortals(
     const screenPath = pathPoints.map((p) => worldToScreen(p, transform));
     if (kind === "tunnel") drawTunnelPathStyle(screenPath);
     else drawBridgePathStyle(screenPath);
-
-    // DEBUG: draw red dot at path start, blue dot at path end
-    if (screenPath.length > 0) {
-      ctx.fillStyle = "red";
-      ctx.beginPath();
-      ctx.arc(screenPath[0].x, screenPath[0].y, 6, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "blue";
-      ctx.beginPath();
-      ctx.arc(screenPath[screenPath.length - 1].x, screenPath[screenPath.length - 1].y, 6, 0, Math.PI * 2);
-      ctx.fill();
-      // DEBUG text with t values
-      ctx.fillStyle = "white";
-      ctx.font = "12px monospace";
-      ctx.fillText(`a.t=${a.t.toFixed(2)}`, screenPath[0].x + 8, screenPath[0].y - 4);
-      ctx.fillText(`b.t=${b.t.toFixed(2)}`, screenPath[screenPath.length - 1].x + 8, screenPath[screenPath.length - 1].y - 4);
-    }
   };
 
   /** Draw single portal oriented so the arch (half-circle) faces toward `towardWorld` */

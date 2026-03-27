@@ -183,16 +183,9 @@ function loadPersisted(allowLocalProjects: boolean): { state: DesignerState; tra
 }
 
 /** BFS to find connected tracks between two track IDs (via snappedConnections) */
-function findTracksBetween(startId: string, endId: string, tracks: PlacedTrack[], elevationPoints?: ElevationPoint[]): string[] {
+function findTracksBetween(startId: string, endId: string, tracks: PlacedTrack[]): string[] {
   if (startId === endId) return [startId];
   const trackMap = new Map(tracks.map((t) => [t.instanceId, t]));
-  // Tracks with elevation > 0 are above ground — avoid them when finding tunnel path
-  const elevatedIds = new Set<string>();
-  if (elevationPoints) {
-    for (const ep of elevationPoints) {
-      if (ep.elevation > 0) elevatedIds.add(ep.trackId);
-    }
-  }
   const visited = new Set<string>();
   const parent = new Map<string, string>();
   const queue = [startId];
@@ -206,12 +199,10 @@ function findTracksBetween(startId: string, endId: string, tracks: PlacedTrack[]
     for (const conn of Object.values(track.snappedConnections)) {
       const neighborId = conn.split(":")[0];
       if (visited.has(neighborId)) continue;
-      // Skip elevated tracks (they go over the tunnel, not through it)
-      // But allow the endId even if elevated (portal might be on elevated track)
-      if (neighborId !== endId && elevatedIds.has(neighborId)) continue;
       visited.add(neighborId);
       parent.set(neighborId, current);
       if (neighborId === endId) {
+        // Reconstruct path
         const path: string[] = [];
         let node: string | undefined = endId;
         while (node && node !== startId) {
@@ -942,7 +933,7 @@ export function useTrackPlanner() {
           : { isTunnel: true, isBridge: false };
         const flaggedIds = new Set([portalFirstTrack.trackId, point.trackId]);
         // Also flag connected tracks between the two portal tracks
-        const between = findTracksBetween(portalFirstTrack.trackId, point.trackId, state.tracks, state.elevationPoints);
+        const between = findTracksBetween(portalFirstTrack.trackId, point.trackId, state.tracks);
         for (const tid of between) flaggedIds.add(tid);
         for (const tid of flaggedIds) {
           dispatch({ type: "UPDATE_TRACK", instanceId: tid, updates: flag });
