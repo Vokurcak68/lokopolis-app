@@ -1348,15 +1348,8 @@ function findTrackPathSegments(
     adj.set(t.instanceId, edges);
   }
 
-  // Skip elevated tracks when finding tunnel path (they go OVER the tunnel)
-  const elevatedIds = new Set<string>();
-  if (elevationPoints) {
-    for (const ep of elevationPoints) {
-      if (ep.elevation > 0) elevatedIds.add(ep.trackId);
-    }
-  }
-
   // BFS from start track to end track
+  // Prefer tracks flagged as isTunnel/isBridge (they form the tunnel/bridge path)
   const visited = new Set<string>([start.trackId]);
   const parent = new Map<string, { fromTrackId: string; viaConnId: string; entryConnId: string }>();
   const queue = [start.trackId];
@@ -1367,8 +1360,6 @@ function findTrackPathSegments(
 
     for (const edge of adj.get(current) ?? []) {
       if (!visited.has(edge.neighborId)) {
-        // Skip elevated tracks (but allow endId — portal might be on elevated track)
-        if (edge.neighborId !== end.trackId && elevatedIds.has(edge.neighborId)) continue;
         visited.add(edge.neighborId);
         parent.set(edge.neighborId, {
           fromTrackId: current,
@@ -1920,6 +1911,23 @@ export function drawPortals(
     const screenPath = pathPoints.map((p) => worldToScreen(p, transform));
     if (kind === "tunnel") drawTunnelPathStyle(screenPath);
     else drawBridgePathStyle(screenPath);
+
+    // DEBUG: draw red dot at path start, blue dot at path end
+    if (screenPath.length > 0) {
+      ctx.fillStyle = "red";
+      ctx.beginPath();
+      ctx.arc(screenPath[0].x, screenPath[0].y, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "blue";
+      ctx.beginPath();
+      ctx.arc(screenPath[screenPath.length - 1].x, screenPath[screenPath.length - 1].y, 6, 0, Math.PI * 2);
+      ctx.fill();
+      // DEBUG text with t values
+      ctx.fillStyle = "white";
+      ctx.font = "12px monospace";
+      ctx.fillText(`a.t=${a.t.toFixed(2)}`, screenPath[0].x + 8, screenPath[0].y - 4);
+      ctx.fillText(`b.t=${b.t.toFixed(2)}`, screenPath[screenPath.length - 1].x + 8, screenPath[screenPath.length - 1].y - 4);
+    }
   };
 
   /** Draw single portal oriented so the arch (half-circle) faces toward `towardWorld` */
