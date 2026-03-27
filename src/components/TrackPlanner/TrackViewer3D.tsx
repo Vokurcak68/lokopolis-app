@@ -431,14 +431,15 @@ function TrackPiece3D({
     }));
   }, [segmentPoints, halfGauge]);
 
-  const sleeperLength = gaugeMm * SLEEPER_LENGTH_FACTOR;
+  const isMultiSegment = segmentPoints.length > 1; // turnout / crossing
+  // For turnouts: sleepers only on primary path but wider to cover diverging branch
+  const sleeperLengthBase = gaugeMm * SLEEPER_LENGTH_FACTOR;
+  const sleeperLength = isMultiSegment ? sleeperLengthBase * 1.6 : sleeperLengthBase;
 
-  // Build ballast + sleeper geometry per segment (so turnout branches get full treatment)
-  const perSegGeoms = useMemo(() => {
+  // Ballast per segment (each branch gets its own ballast)
+  const ballastGeoms = useMemo(() => {
     return segmentPoints.map((pts) => {
-      if (pts.length < 2) return { ballast: null, sleepers: null };
-
-      // -- Ballast --
+      if (pts.length < 2) return null;
       const topHalfW = gaugeMm * BALLAST_WIDTH_FACTOR / 2;
       const botHalfW = topHalfW * 1.3;
       const bh = BALLAST_HEIGHT_MM;
@@ -460,79 +461,80 @@ function TrackPiece3D({
           bIdx.push(p + 3, p, c, p + 3, c, c + 3);
         }
       }
-      const ballast = new THREE.BufferGeometry();
-      ballast.setAttribute("position", new THREE.Float32BufferAttribute(bVerts, 3));
-      ballast.setIndex(bIdx);
-      ballast.computeVertexNormals();
-
-      // -- Sleepers --
-      const cumDist: number[] = [0];
-      for (let i = 1; i < pts.length; i++) {
-        cumDist.push(cumDist[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z));
-      }
-      const totalLen = cumDist[cumDist.length - 1];
-      let sleepers: THREE.BufferGeometry | null = null;
-      if (totalLen >= 1) {
-        const count = Math.max(2, Math.floor(totalLen / SLEEPER_SPACING_MM));
-        const halfLen = sleeperLength / 2;
-        const halfW = SLEEPER_WIDTH_MM / 2;
-        const hh = SLEEPER_THICKNESS_MM;
-        const sVerts: number[] = [];
-        const sIdx: number[] = [];
-        for (let s = 0; s <= count; s++) {
-          const target = (s / count) * totalLen;
-          let si = 1;
-          while (si < cumDist.length - 1 && cumDist[si] < target) si++;
-          const segLen = cumDist[si] - cumDist[si - 1];
-          const t = segLen > 0 ? (target - cumDist[si - 1]) / segLen : 0;
-          const p0 = pts[si - 1], p1 = pts[si];
-          const cx = p0.x + t * (p1.x - p0.x);
-          const cy = p0.y + t * (p1.y - p0.y) + BALLAST_HEIGHT_MM;
-          const cz = p0.z + t * (p1.z - p0.z);
-          const tx = p1.tangentX, tz = p1.tangentZ;
-          const px = -tz, pz = tx;
-          const base = s * 8;
-          for (let dy = 0; dy <= 1; dy++) {
-            const y = cy + dy * hh;
-            sVerts.push(cx + tx * halfW + px * halfLen, y, cz + tz * halfW + pz * halfLen);
-            sVerts.push(cx + tx * halfW - px * halfLen, y, cz + tz * halfW - pz * halfLen);
-            sVerts.push(cx - tx * halfW - px * halfLen, y, cz - tz * halfW - pz * halfLen);
-            sVerts.push(cx - tx * halfW + px * halfLen, y, cz - tz * halfW + pz * halfLen);
-          }
-          const b = base;
-          sIdx.push(b + 4, b + 5, b + 6, b + 4, b + 6, b + 7);
-          sIdx.push(b + 2, b + 1, b, b + 3, b + 2, b);
-          sIdx.push(b, b + 1, b + 5, b, b + 5, b + 4);
-          sIdx.push(b + 2, b + 3, b + 7, b + 2, b + 7, b + 6);
-          sIdx.push(b + 3, b, b + 4, b + 3, b + 4, b + 7);
-          sIdx.push(b + 1, b + 2, b + 6, b + 1, b + 6, b + 5);
-        }
-        sleepers = new THREE.BufferGeometry();
-        sleepers.setAttribute("position", new THREE.Float32BufferAttribute(sVerts, 3));
-        sleepers.setIndex(sIdx);
-        sleepers.computeVertexNormals();
-      }
-
-      return { ballast, sleepers };
+      const geom = new THREE.BufferGeometry();
+      geom.setAttribute("position", new THREE.Float32BufferAttribute(bVerts, 3));
+      geom.setIndex(bIdx);
+      geom.computeVertexNormals();
+      return geom;
     });
-  }, [segmentPoints, gaugeMm, sleeperLength]);
+  }, [segmentPoints, gaugeMm]);
+
+  // Sleepers only on PRIMARY segment (turnouts share sleepers across branches like real ones)
+  const sleeperGeom = useMemo(() => {
+    const pts = primaryPoints;
+    if (pts.length < 2) return null;
+    const cumDist: number[] = [0];
+    for (let i = 1; i < pts.length; i++) {
+      cumDist.push(cumDist[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z));
+    }
+    const totalLen = cumDist[cumDist.length - 1];
+    if (totalLen < 1) return null;
+    const count = Math.max(2, Math.floor(totalLen / SLEEPER_SPACING_MM));
+    const halfLen = sleeperLength / 2;
+    const halfW = SLEEPER_WIDTH_MM / 2;
+    const hh = SLEEPER_THICKNESS_MM;
+    const sVerts: number[] = [];
+    const sIdx: number[] = [];
+    for (let s = 0; s <= count; s++) {
+      const target = (s / count) * totalLen;
+      let si = 1;
+      while (si < cumDist.length - 1 && cumDist[si] < target) si++;
+      const segLen = cumDist[si] - cumDist[si - 1];
+      const t = segLen > 0 ? (target - cumDist[si - 1]) / segLen : 0;
+      const p0 = pts[si - 1], p1 = pts[si];
+      const cx = p0.x + t * (p1.x - p0.x);
+      const cy = p0.y + t * (p1.y - p0.y) + BALLAST_HEIGHT_MM;
+      const cz = p0.z + t * (p1.z - p0.z);
+      const tx = p1.tangentX, tz = p1.tangentZ;
+      const px = -tz, pz = tx;
+      const base = s * 8;
+      for (let dy = 0; dy <= 1; dy++) {
+        const y = cy + dy * hh;
+        sVerts.push(cx + tx * halfW + px * halfLen, y, cz + tz * halfW + pz * halfLen);
+        sVerts.push(cx + tx * halfW - px * halfLen, y, cz + tz * halfW - pz * halfLen);
+        sVerts.push(cx - tx * halfW - px * halfLen, y, cz - tz * halfW - pz * halfLen);
+        sVerts.push(cx - tx * halfW + px * halfLen, y, cz - tz * halfW + pz * halfLen);
+      }
+      const b = base;
+      sIdx.push(b + 4, b + 5, b + 6, b + 4, b + 6, b + 7);
+      sIdx.push(b + 2, b + 1, b, b + 3, b + 2, b);
+      sIdx.push(b, b + 1, b + 5, b, b + 5, b + 4);
+      sIdx.push(b + 2, b + 3, b + 7, b + 2, b + 7, b + 6);
+      sIdx.push(b + 3, b, b + 4, b + 3, b + 4, b + 7);
+      sIdx.push(b + 1, b + 2, b + 6, b + 1, b + 6, b + 5);
+    }
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute("position", new THREE.Float32BufferAttribute(sVerts, 3));
+    geom.setIndex(sIdx);
+    geom.computeVertexNormals();
+    return geom;
+  }, [primaryPoints, sleeperLength]);
 
   return (
     <group>
-      {perSegGeoms.map((sg, idx) => (
-        <group key={`seg-${idx}`}>
-          {sg.ballast && (
-            <mesh geometry={sg.ballast} castShadow receiveShadow>
-              <meshStandardMaterial color="#8b8171" roughness={0.9} />
-            </mesh>
-          )}
-          {sg.sleepers && (
-            <mesh geometry={sg.sleepers} castShadow receiveShadow>
-              <meshStandardMaterial color="#5a4a3a" roughness={0.8} />
-            </mesh>
-          )}
-        </group>
+      {/* Ballast per segment */}
+      {ballastGeoms.map((bg, idx) => bg && (
+        <mesh key={`ballast-${idx}`} geometry={bg} castShadow receiveShadow>
+          <meshStandardMaterial color="#8b8171" roughness={0.9} />
+        </mesh>
       ))}
+
+      {/* Sleepers only on primary path */}
+      {sleeperGeom && (
+        <mesh geometry={sleeperGeom} castShadow receiveShadow>
+          <meshStandardMaterial color="#5a4a3a" roughness={0.8} />
+        </mesh>
+      )}
 
       {railGeoms.map((rg, idx) => (
         <group key={`rails-${idx}`}>
