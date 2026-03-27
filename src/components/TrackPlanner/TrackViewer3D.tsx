@@ -322,10 +322,10 @@ function BoardMesh({ board }: { board: BoardConfig }) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
 
-    ctx.fillStyle = "#a8c490";
+    ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, 512, 512);
 
-    ctx.strokeStyle = "#c0d8a8";
+    ctx.strokeStyle = "#e0e0e0";
     ctx.lineWidth = 2;
     ctx.beginPath();
     for (let i = 0; i <= 512; i += 64) {
