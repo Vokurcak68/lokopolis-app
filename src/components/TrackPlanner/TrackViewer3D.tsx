@@ -322,10 +322,10 @@ function BoardMesh({ board }: { board: BoardConfig }) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
 
-    ctx.fillStyle = "#6a7a5b";
+    ctx.fillStyle = "#a8c490";
     ctx.fillRect(0, 0, 512, 512);
 
-    ctx.strokeStyle = "#8b9a7b";
+    ctx.strokeStyle = "#c0d8a8";
     ctx.lineWidth = 2;
     ctx.beginPath();
     for (let i = 0; i <= 512; i += 64) {
@@ -995,6 +995,9 @@ function Scene({ tracks, catalog, board, elevationPoints }: TrackViewer3DProps) 
 
   return (
     <>
+      {/* Scene background */}
+      <color attach="background" args={["#d4d0c8"]} />
+
       {/* Lighting */}
       <ambientLight intensity={0.9} />
       <hemisphereLight intensity={0.5} color="#ffffff" groundColor="#b0a890" />
