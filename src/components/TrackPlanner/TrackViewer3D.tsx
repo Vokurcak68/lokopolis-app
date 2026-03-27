@@ -309,8 +309,10 @@ function BoardMesh({ board }: { board: BoardConfig }) {
       bevelEnabled: false,
     });
 
-    // ExtrudeGeometry extrudes along Z — rotate so board lies in XZ plane (flat)
+    // ExtrudeGeometry extrudes along +Z — rotate to lie flat in XZ plane
+    // and flip to correct mirror
     geom.rotateX(-Math.PI / 2);
+    geom.scale(1, 1, -1);
 
     return geom;
   }, [board]);
@@ -323,10 +325,10 @@ function BoardMesh({ board }: { board: BoardConfig }) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
 
-    ctx.fillStyle = "#5a8a45";
+    ctx.fillStyle = "#7dbf60";
     ctx.fillRect(0, 0, 512, 512);
 
-    ctx.strokeStyle = "#4a7a38";
+    ctx.strokeStyle = "#6aad50";
     ctx.lineWidth = 1;
     ctx.beginPath();
     for (let i = 0; i <= 512; i += 32) {
