@@ -858,15 +858,11 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
   // Elevated = tracks that cross OVER a tunnel/bridge.
   // A track is elevated if:
   //   1. It has an elevation marker > 0 directly on it, OR
-  //   2. It is connected (snapped) to an elevated track AND is not flagged as isTunnel
-  // This propagates elevation through snap connections so all tracks on the upper layer
-  // are drawn above the tunnel overlay, even without their own elevation markers.
-  const directElevated = new Set<string>();
-  for (const ep of elevationPoints) {
-    if (ep.elevation > 0) directElevated.add(ep.trackId);
-  }
+  //   2. It is NOT isTunnel and is connected (snapped) to a track with isTunnel
+  //      (i.e. it neighbors or crosses a tunnel area from outside)
+  // This ensures tracks above a tunnel are drawn on top of the green overlay.
 
-  // Build snap adjacency for propagation
+  // Build snap adjacency
   const snapAdj = new Map<string, string[]>();
   for (const t of tracks) {
     const neighbors: string[] = [];
@@ -875,6 +871,12 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
       neighbors.push(otherId);
     }
     snapAdj.set(t.instanceId, neighbors);
+  }
+
+  // Seed: tracks with elevation > 0
+  const directElevated = new Set<string>();
+  for (const ep of elevationPoints) {
+    if (ep.elevation > 0) directElevated.add(ep.trackId);
   }
 
   // BFS: propagate elevation through connected non-tunnel tracks
@@ -886,7 +888,6 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
       if (elevatedTrackIds.has(neighbor)) continue;
       const nTrack = tracks.find((t) => t.instanceId === neighbor);
       if (!nTrack) continue;
-      // Don't propagate into tunnel tracks — those stay underground
       if (nTrack.isTunnel) continue;
       elevatedTrackIds.add(neighbor);
       queue.push(neighbor);
