@@ -903,7 +903,7 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
 
   // Portals (paths + icons) drawn LAST so they're always visible and clickable
   if (!skipBackground && portals.length > 0) {
-    drawPortals(ctx, portals, tracks, catalog, transform);
+    drawPortals(ctx, portals, tracks, catalog, transform, elevationPoints);
   }
 
   const dots: WorldConnectionDot[] = [];
@@ -1326,6 +1326,7 @@ function findTrackPathSegments(
   start: TrackPoint,
   end: TrackPoint,
   tracks: PlacedTrack[],
+  elevationPoints?: ElevationPoint[],
 ): { trackId: string; tFrom: number; tTo: number }[] {
   // Same track — trivial
   if (start.trackId === end.trackId) {
@@ -1347,6 +1348,14 @@ function findTrackPathSegments(
     adj.set(t.instanceId, edges);
   }
 
+  // Skip elevated tracks when finding tunnel path (they go OVER the tunnel)
+  const elevatedIds = new Set<string>();
+  if (elevationPoints) {
+    for (const ep of elevationPoints) {
+      if (ep.elevation > 0) elevatedIds.add(ep.trackId);
+    }
+  }
+
   // BFS from start track to end track
   const visited = new Set<string>([start.trackId]);
   const parent = new Map<string, { fromTrackId: string; viaConnId: string; entryConnId: string }>();
@@ -1358,6 +1367,8 @@ function findTrackPathSegments(
 
     for (const edge of adj.get(current) ?? []) {
       if (!visited.has(edge.neighborId)) {
+        // Skip elevated tracks (but allow endId — portal might be on elevated track)
+        if (edge.neighborId !== end.trackId && elevatedIds.has(edge.neighborId)) continue;
         visited.add(edge.neighborId);
         parent.set(edge.neighborId, {
           fromTrackId: current,
@@ -1430,8 +1441,9 @@ function sampleTrackPath(
   tracks: PlacedTrack[],
   catalog: Record<string, TrackPieceDefinition>,
   numSamples: number,
+  elevationPoints?: ElevationPoint[],
 ): LocalPoint[] {
-  const segments = findTrackPathSegments(zone.start, zone.end, tracks);
+  const segments = findTrackPathSegments(zone.start, zone.end, tracks, elevationPoints);
   const points: LocalPoint[] = [];
 
   // Distribute samples proportionally to segment t-ranges
@@ -1811,6 +1823,7 @@ export function drawPortals(
   tracks: PlacedTrack[],
   catalog: Record<string, TrackPieceDefinition>,
   transform: ViewTransform,
+  elevationPoints?: ElevationPoint[],
 ) {
   const portalRadius = Math.max(16, 24 * transform.zoom); // trošku větší než terrain default
   const pathWidth = Math.max(10, 22 * transform.zoom);
@@ -1892,9 +1905,8 @@ export function drawPortals(
   };
 
   const drawBetween = (a: TrackPoint, b: TrackPoint, kind: "tunnel" | "bridge") => {
-    console.log("[drawBetween]", kind, "a.t=", a.t, "b.t=", b.t, "a.trackId=", a.trackId, "b.trackId=", b.trackId);
     const zone: TerrainZone = { id: "tmp", kind, start: a, end: b };
-    const pathPoints = sampleTrackPath(zone, tracks, catalog, 40);
+    const pathPoints = sampleTrackPath(zone, tracks, catalog, 40, elevationPoints);
 
     // Snap first and last path point to the actual cached world positions of the portals
     // (avoids mismatch when t maps to a slightly different point, e.g. on turnout primary vs all segments)
