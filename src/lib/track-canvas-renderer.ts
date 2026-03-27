@@ -1892,6 +1892,7 @@ export function drawPortals(
   };
 
   const drawBetween = (a: TrackPoint, b: TrackPoint, kind: "tunnel" | "bridge") => {
+    console.log("[drawBetween]", kind, "a.t=", a.t, "b.t=", b.t, "a.trackId=", a.trackId, "b.trackId=", b.trackId);
     const zone: TerrainZone = { id: "tmp", kind, start: a, end: b };
     const pathPoints = sampleTrackPath(zone, tracks, catalog, 40);
 
