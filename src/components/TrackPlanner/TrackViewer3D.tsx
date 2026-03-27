@@ -348,7 +348,7 @@ function BoardMesh({ board }: { board: BoardConfig }) {
   return (
     <mesh geometry={geometry} position={[0, 0, 0]} receiveShadow>
       <meshStandardMaterial
-        color="#7a8a6b"
+        color="#8fb07a"
         map={gridTexture}
         roughness={0.8}
         metalness={0.1}
@@ -601,14 +601,14 @@ function TrackPiece3D({
       {/* Ballast per segment */}
       {ballastGeoms.map((bg, idx) => bg && (
         <mesh key={`ballast-${idx}`} geometry={bg} castShadow receiveShadow>
-          <meshStandardMaterial color="#8b8171" roughness={0.9} />
+          <meshStandardMaterial color="#c4b08a" roughness={0.8} />
         </mesh>
       ))}
 
       {/* Fan-shaped sleepers for turnouts, standard for simple tracks */}
       {sleeperGeom && (
         <mesh geometry={sleeperGeom} castShadow receiveShadow>
-          <meshStandardMaterial color="#5a4a3a" roughness={0.8} />
+          <meshStandardMaterial color="#9b7b50" roughness={0.7} />
         </mesh>
       )}
 
@@ -831,7 +831,7 @@ function BridgeSupports({
     <group>
       {bridgeGeom && (
         <mesh geometry={bridgeGeom} castShadow receiveShadow>
-          <meshStandardMaterial color="#5a5a5a" roughness={0.5} metalness={0.3} />
+          <meshStandardMaterial color="#8a9aaa" roughness={0.4} metalness={0.4} />
         </mesh>
       )}
     </group>
@@ -996,11 +996,11 @@ function Scene({ tracks, catalog, board, elevationPoints }: TrackViewer3DProps) 
   return (
     <>
       {/* Lighting */}
-      <ambientLight intensity={0.5} />
-      <hemisphereLight intensity={0.3} color="#a0a0a0" groundColor="#404040" />
+      <ambientLight intensity={0.9} />
+      <hemisphereLight intensity={0.5} color="#ffffff" groundColor="#b0a890" />
       <directionalLight
         position={[board.width * 5, board.width * 8, board.depth * 5]}
-        intensity={0.8}
+        intensity={1.2}
         castShadow
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
@@ -1008,11 +1008,11 @@ function Scene({ tracks, catalog, board, elevationPoints }: TrackViewer3DProps) 
       />
       <directionalLight
         position={[-board.width * 3, board.width * 5, -board.depth * 3]}
-        intensity={0.3}
+        intensity={0.5}
       />
 
       {/* Fog for depth cue */}
-      <fog attach="fog" args={["#1a1a2e", boardDiagonal * 0.5, boardDiagonal * 3]} />
+      <fog attach="fog" args={["#d4d0c8", boardDiagonal * 0.8, boardDiagonal * 4]} />
 
       {/* Board */}
       <BoardMesh board={board} />
@@ -1053,7 +1053,7 @@ export default function TrackViewer3D(props: TrackViewer3DProps) {
   const boardDiagonal = Math.sqrt(widthMm * widthMm + depthMm * depthMm);
 
   return (
-    <div className="h-full w-full" style={{ background: "#1a1a2e" }}>
+    <div className="h-full w-full" style={{ background: "#d4d0c8" }}>
       <Canvas
         camera={{
           position: [widthMm / 2, Math.max(widthMm, depthMm) * 0.7, depthMm * 1.2],
