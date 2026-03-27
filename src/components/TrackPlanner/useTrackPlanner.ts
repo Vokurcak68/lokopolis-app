@@ -182,6 +182,43 @@ function loadPersisted(allowLocalProjects: boolean): { state: DesignerState; tra
   }
 }
 
+/** BFS to find connected tracks between two track IDs (via snappedConnections) */
+function findTracksBetween(startId: string, endId: string, tracks: PlacedTrack[]): string[] {
+  if (startId === endId) return [startId];
+  const trackMap = new Map(tracks.map((t) => [t.instanceId, t]));
+  const visited = new Set<string>();
+  const parent = new Map<string, string>();
+  const queue = [startId];
+  visited.add(startId);
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    const track = trackMap.get(current);
+    if (!track) continue;
+
+    for (const conn of Object.values(track.snappedConnections)) {
+      const neighborId = conn.split(":")[0];
+      if (visited.has(neighborId)) continue;
+      visited.add(neighborId);
+      parent.set(neighborId, current);
+      if (neighborId === endId) {
+        // Reconstruct path
+        const path: string[] = [];
+        let node: string | undefined = endId;
+        while (node && node !== startId) {
+          path.push(node);
+          node = parent.get(node);
+        }
+        path.push(startId);
+        return path;
+      }
+      queue.push(neighborId);
+    }
+  }
+  // Not connected — return just the endpoints
+  return [startId, endId];
+}
+
 export function useTrackPlanner() {
   const { user, loading: authLoading } = useAuth();
   const persistedRef = useRef(loadPersisted(Boolean(user)));
@@ -890,6 +927,17 @@ export function useTrackPlanner() {
         };
         dispatch({ type: "ADD_PORTAL", portal: startPortal });
         dispatch({ type: "ADD_PORTAL", portal: endPortal });
+        // Auto-flag tracks between portals as bridge/tunnel
+        const flag = portalMode.kind === "bridge"
+          ? { isBridge: true, isTunnel: false }
+          : { isTunnel: true, isBridge: false };
+        const flaggedIds = new Set([portalFirstTrack.trackId, point.trackId]);
+        // Also flag connected tracks between the two portal tracks
+        const between = findTracksBetween(portalFirstTrack.trackId, point.trackId, state.tracks);
+        for (const tid of between) flaggedIds.add(tid);
+        for (const tid of flaggedIds) {
+          dispatch({ type: "UPDATE_TRACK", instanceId: tid, updates: flag });
+        }
         setPortalMode(null);
         setPortalFirstTrack(null);
         return true;

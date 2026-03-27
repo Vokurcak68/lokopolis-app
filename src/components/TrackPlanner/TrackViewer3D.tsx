@@ -5,7 +5,7 @@ import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import * as THREE from "three";
-import type { PlacedTrack, BoardConfig, ElevationPoint, TerrainZone, Portal } from "@/lib/track-designer-store";
+import type { PlacedTrack, BoardConfig, ElevationPoint, TerrainZone } from "@/lib/track-designer-store";
 import type { TrackPieceDefinition } from "@/lib/track-library";
 import { getPieceSegmentsLocal, pointAndTangentAt, localToWorld, getGaugeMm, getBoardPathMm, type PathSegment, type LocalPoint } from "@/lib/track-canvas-renderer";
 
@@ -17,7 +17,6 @@ interface TrackViewer3DProps {
   board: BoardConfig;
   elevationPoints: ElevationPoint[];
   terrainZones: TerrainZone[];
-  portals: Portal[];
 }
 
 // ── Constants ──
@@ -984,7 +983,7 @@ function CameraSetup({ board, boardDiagonal }: { board: BoardConfig; boardDiagon
 
 // ── Main scene ──
 
-function Scene({ tracks, catalog, board, elevationPoints, portals }: TrackViewer3DProps) {
+function Scene({ tracks, catalog, board, elevationPoints }: TrackViewer3DProps) {
   const widthMm = board.width * 10;
   const depthMm = board.depth * 10;
   const boardDiagonal = Math.sqrt(widthMm * widthMm + depthMm * depthMm);
@@ -993,37 +992,6 @@ function Scene({ tracks, catalog, board, elevationPoints, portals }: TrackViewer
     () => buildElevationMap(tracks, elevationPoints, catalog),
     [tracks, elevationPoints, catalog],
   );
-
-  // Compute which tracks are bridges/tunnels based on paired portals
-  const portalFlags = useMemo(() => {
-    const flags: Record<string, { isBridge?: boolean; isTunnel?: boolean }> = {};
-    if (!portals?.length) return flags;
-
-    // Find paired bridge/tunnel portals and flag their tracks
-    for (const portal of portals) {
-      if (!portal.pairedPortalId) continue;
-      const paired = portals.find((p) => p.id === portal.pairedPortalId);
-      if (!paired) continue;
-
-      // Collect track IDs from both portals
-      const trackIds = new Set<string>();
-      trackIds.add(portal.track1.trackId);
-      if (portal.track2) trackIds.add(portal.track2.trackId);
-      trackIds.add(paired.track1.trackId);
-      if (paired.track2) trackIds.add(paired.track2.trackId);
-
-      // Also flag tracks between the two portals (connected chain)
-      // For now, just flag the portal tracks themselves
-      for (const tid of trackIds) {
-        if (portal.kind === "bridge") {
-          flags[tid] = { ...flags[tid], isBridge: true };
-        } else {
-          flags[tid] = { ...flags[tid], isTunnel: true };
-        }
-      }
-    }
-    return flags;
-  }, [portals]);
 
   return (
     <>
@@ -1053,17 +1021,10 @@ function Scene({ tracks, catalog, board, elevationPoints, portals }: TrackViewer
       {tracks.map((track) => {
         const piece = catalog[track.pieceId];
         if (!piece) return null;
-        // Merge portal-based flags with track's own flags
-        const pf = portalFlags[track.instanceId];
-        const mergedTrack = pf ? {
-          ...track,
-          isBridge: track.isBridge || pf.isBridge,
-          isTunnel: track.isTunnel || pf.isTunnel,
-        } : track;
         return (
           <TrackPiece3D
             key={track.instanceId}
-            track={mergedTrack}
+            track={track}
             piece={piece}
             elevMap={elevMap}
           />
