@@ -322,13 +322,13 @@ function BoardMesh({ board }: { board: BoardConfig }) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
 
-    ctx.fillStyle = "#ffffff";
+    ctx.fillStyle = "#5a8a45";
     ctx.fillRect(0, 0, 512, 512);
 
-    ctx.strokeStyle = "#e0e0e0";
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#4a7a38";
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    for (let i = 0; i <= 512; i += 64) {
+    for (let i = 0; i <= 512; i += 32) {
       ctx.moveTo(i, 0);
       ctx.lineTo(i, 512);
       ctx.moveTo(0, i);
@@ -339,19 +339,23 @@ function BoardMesh({ board }: { board: BoardConfig }) {
     const texture = new THREE.CanvasTexture(canvas);
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(1, 1);
+    // Repeat so grid tiles are ~50mm each
+    const widthMm = board.width * 10;
+    const depthMm = board.depth * 10;
+    const tileMm = 50;
+    texture.repeat.set(widthMm / tileMm, depthMm / tileMm);
     return texture;
   }, []);
 
   if (!geometry) return null;
 
   return (
-    <mesh geometry={geometry} position={[0, 0, 0]} receiveShadow>
+    <mesh geometry={geometry} position={[0, -0.5, 0]} receiveShadow>
       <meshStandardMaterial
-        color="#8fb07a"
+        color="#ffffff"
         map={gridTexture}
-        roughness={0.8}
-        metalness={0.1}
+        roughness={0.85}
+        metalness={0}
       />
     </mesh>
   );
