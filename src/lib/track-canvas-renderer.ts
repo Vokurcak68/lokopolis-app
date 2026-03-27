@@ -1551,7 +1551,7 @@ export function drawTerrainZones(
         for (let i = 1; i < screenPath.length; i++) {
           ctx.lineTo(screenPath[i].x, screenPath[i].y);
         }
-        ctx.strokeStyle = "#4a7a3a";
+        ctx.strokeStyle = "rgba(60, 120, 50, 0.5)";
         ctx.lineWidth = pathWidth * 1.8;
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
@@ -1563,7 +1563,7 @@ export function drawTerrainZones(
         for (let i = 1; i < screenPath.length; i++) {
           ctx.lineTo(screenPath[i].x, screenPath[i].y);
         }
-        ctx.strokeStyle = "#3a6a2a";
+        ctx.strokeStyle = "rgba(45, 90, 35, 0.55)";
         ctx.lineWidth = pathWidth;
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
@@ -1792,32 +1792,29 @@ export function drawPortals(
   const drawTunnelPathStyle = (screenPath: { x: number; y: number }[]) => {
     if (screenPath.length < 2) return;
 
-    // Outer hill — opaque green so tunnel tracks underneath are fully hidden
     ctx.beginPath();
     ctx.moveTo(screenPath[0].x, screenPath[0].y);
     for (let i = 1; i < screenPath.length; i++) ctx.lineTo(screenPath[i].x, screenPath[i].y);
-    ctx.strokeStyle = "#4a7a3a";
+    ctx.strokeStyle = "rgba(60, 120, 50, 0.5)";
     ctx.lineWidth = pathWidth * 1.8;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.stroke();
 
-    // Inner darker core
     ctx.beginPath();
     ctx.moveTo(screenPath[0].x, screenPath[0].y);
     for (let i = 1; i < screenPath.length; i++) ctx.lineTo(screenPath[i].x, screenPath[i].y);
-    ctx.strokeStyle = "#3a6a2a";
+    ctx.strokeStyle = "rgba(45, 90, 35, 0.55)";
     ctx.lineWidth = pathWidth;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.stroke();
 
-    // Dashed center line (path hint)
     ctx.beginPath();
     ctx.moveTo(screenPath[0].x, screenPath[0].y);
     for (let i = 1; i < screenPath.length; i++) ctx.lineTo(screenPath[i].x, screenPath[i].y);
     ctx.setLineDash([4, 5]);
-    ctx.strokeStyle = "rgba(200, 190, 160, 0.5)";
+    ctx.strokeStyle = "rgba(200, 190, 160, 0.4)";
     ctx.lineWidth = 1.5;
     ctx.stroke();
     ctx.setLineDash([]);
