@@ -180,11 +180,71 @@ function TabBoard() {
         />
       </Card>
 
+      <TwoCol
+        left={
+          <Card title="L tvar — jak chápat ramena a výřez">
+            <p style={{ margin: "0 0 10px 0" }}>
+              <strong>L ramena</strong> jsou části, které <strong>zůstávají</strong>. Šipka určuje roh, kde bude výřez.
+            </p>
+            <pre
+              style={{
+                margin: 0,
+                padding: "10px 12px",
+                borderRadius: 10,
+                border: "1px solid var(--border)",
+                background: "var(--bg-input)",
+                fontSize: 12,
+                lineHeight: 1.4,
+                overflowX: "auto",
+              }}
+            >{`Příklad: deska 200×100, L ramena 80×60, roh ↘
+
+┌──────────────────┐
+│                  │
+│                  │  60 cm (rameno)
+│      ┌───────────┘
+│      │   ↘ výřez
+│      │
+└──────┘
+ 80 cm (rameno)`}</pre>
+          </Card>
+        }
+        right={
+          <Card title="U tvar — hloubka výřezu + šířka ramen">
+            <p style={{ margin: "0 0 10px 0" }}>
+              <strong>U hloubka</strong> = jak hluboko jde výřez. <strong>Šířka ramen</strong> = levý/pravý pás, který zůstane.
+            </p>
+            <pre
+              style={{
+                margin: 0,
+                padding: "10px 12px",
+                borderRadius: 10,
+                border: "1px solid var(--border)",
+                background: "var(--bg-input)",
+                fontSize: 12,
+                lineHeight: 1.4,
+                overflowX: "auto",
+              }}
+            >{`Příklad: deska 200×100, U hloubka 60, ramena 40
+
+┌──────┐          ┌──────┐
+│      │  výřez   │      │
+│      │ 120 cm   │      │  60 cm
+│      └──────────┘      │
+│                        │
+└────────────────────────┘
+ 40 cm      120 cm      40 cm`}</pre>
+          </Card>
+        }
+      />
+
+      <Tip>
+        Když si nejsi jistý tvarem, nejdřív nastav desku nahrubo, pak dolaď L/U parametry po krocích a sleduj obrys v reálném čase.
+      </Tip>
       <Tip>Měřítko TT/H0 přepínej podle katalogu kolejí, ne podle rozměru desky.</Tip>
     </div>
   );
 }
-
 function TabTracks() {
   return (
     <div>
