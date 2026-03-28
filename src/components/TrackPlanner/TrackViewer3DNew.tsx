@@ -45,6 +45,7 @@ const TERRAIN_MIN_Y = -90;
 const TERRAIN_MAX_Y = 140;
 const TERRAIN_STEP_MM = 22;
 const TRACK_INFLUENCE_RADIUS_MM = 75;
+const TRACK_HARD_LOCK_RADIUS_MM = 18;
 const ELEVATION_INFLUENCE_RADIUS_MM = 180;
 const ZONE_INFLUENCE_RADIUS_MM = 130;
 const TERRAIN_TUNNEL_RAISE_MM = 22;
@@ -1199,19 +1200,51 @@ function buildTerrainSamples(
   tracks: PlacedTrack[],
   catalog: Record<string, TrackPieceDefinition>,
   elevMap: Map<string, { startElev: number; endElev: number }>,
+  zoneTrackKind: Map<string, TerrainZone["kind"]>,
 ): TerrainSample[] {
   const out: TerrainSample[] = [];
+
   for (const track of tracks) {
     const piece = catalog[track.pieceId];
     if (!piece) continue;
+
     const segments = getPieceSegmentsLocal(piece);
-    for (const seg of segments) {
-      const pts = sampleSegmentWorld3D(seg, track, elevMap, 18);
-      for (const p of pts) {
-        out.push({ x: p.x, y: p.y, z: p.z, isTunnel: !!track.isTunnel, isBridge: !!track.isBridge });
+    if (segments.length === 0) continue;
+
+    const segLens = segments.map((seg) => seg.kind === "line"
+      ? Math.hypot(seg.to.x - seg.from.x, seg.to.z - seg.from.z)
+      : seg.radius * Math.abs(seg.endAngle - seg.startAngle));
+    const totalLen = segLens.reduce((a, b) => a + b, 0) || 1;
+
+    let acc = 0;
+    const zoneKind = zoneTrackKind.get(track.instanceId);
+    const forcedTunnel = zoneKind === "tunnel";
+    const forcedBridge = zoneKind === "bridge";
+
+    for (let si = 0; si < segments.length; si++) {
+      const seg = segments[si];
+      const segLen = segLens[si] || 1;
+      const steps = Math.max(3, Math.ceil(segLen / 18));
+
+      for (let i = 0; i <= steps; i++) {
+        const localT = i / steps;
+        const globalT = (acc + localT * segLen) / totalLen;
+        const p = pointAndTangentAt(seg, localT).point;
+        const w = localToWorld(p, track);
+
+        out.push({
+          x: w.x,
+          y: getElevationFromMap(track.instanceId, globalT, elevMap),
+          z: w.z,
+          isTunnel: forcedTunnel || (!!track.isTunnel && !forcedBridge),
+          isBridge: forcedBridge || (!!track.isBridge && !forcedTunnel),
+        });
       }
+
+      acc += segLen;
     }
   }
+
   return out;
 }
 
@@ -1237,6 +1270,69 @@ function buildZoneSamples(
       end: sampleTrackPoint(t2, p2, zone.end.t, elevMap),
     });
   }
+  return out;
+}
+
+
+function buildZoneTrackKindMap(
+  terrainZones: TerrainZone[],
+  tracks: PlacedTrack[],
+): Map<string, TerrainZone["kind"]> {
+  const byId = new Map(tracks.map((t) => [t.instanceId, t]));
+  const out = new Map<string, TerrainZone["kind"]>();
+
+  type Edge = { to: string };
+  const graph = new Map<string, Edge[]>();
+  for (const track of tracks) {
+    const edges: Edge[] = [];
+    for (const snap of Object.values(track.snappedConnections)) {
+      const [to] = snap.split(":");
+      if (to) edges.push({ to });
+    }
+    graph.set(track.instanceId, edges);
+  }
+
+  for (const zone of terrainZones) {
+    if (!byId.has(zone.start.trackId) || !byId.has(zone.end.trackId)) continue;
+
+    const parent = new Map<string, string>();
+    const q = [zone.start.trackId];
+    const visited = new Set([zone.start.trackId]);
+
+    while (q.length > 0) {
+      const cur = q.shift()!;
+      if (cur === zone.end.trackId) break;
+      for (const e of graph.get(cur) ?? []) {
+        if (visited.has(e.to)) continue;
+        visited.add(e.to);
+        parent.set(e.to, cur);
+        q.push(e.to);
+      }
+    }
+
+    const path: string[] = [];
+    if (zone.start.trackId === zone.end.trackId) {
+      path.push(zone.start.trackId);
+    } else if (parent.has(zone.end.trackId)) {
+      let cur: string | undefined = zone.end.trackId;
+      while (cur) {
+        path.unshift(cur);
+        if (cur === zone.start.trackId) break;
+        cur = parent.get(cur);
+      }
+      if (path[0] !== zone.start.trackId) continue;
+    } else {
+      path.push(zone.start.trackId, zone.end.trackId);
+    }
+
+    for (const trackId of path) {
+      const existing = out.get(trackId);
+      if (!existing) {
+        out.set(trackId, zone.kind);
+      }
+    }
+  }
+
   return out;
 }
 
@@ -1294,7 +1390,8 @@ function TerrainMesh({
     const cols = Math.max(2, Math.floor(widthMm / TERRAIN_STEP_MM) + 1);
     const rows = Math.max(2, Math.floor(depthMm / TERRAIN_STEP_MM) + 1);
 
-    const trackSamples = buildTerrainSamples(tracks, catalog, elevMap);
+    const zoneTrackKind = buildZoneTrackKindMap(terrainZones, tracks);
+    const trackSamples = buildTerrainSamples(tracks, catalog, elevMap, zoneTrackKind);
     const zoneSamples = buildZoneSamples(terrainZones, tracks, catalog, elevMap);
 
     const markerSamples = elevationPoints.map((ep) => {
@@ -1334,8 +1431,14 @@ function TerrainMesh({
             } else if (s.isBridge) {
               y = Math.min(y, s.y - TERRAIN_BRIDGE_CUT_MM * f);
             } else {
-              const target = s.y - 2.5;
-              y = y * (1 - 0.22 * f) + target * (0.22 * f);
+              const target = s.y - 0.6;
+              y = y * (1 - 0.55 * f) + target * (0.55 * f);
+            }
+
+            if (d <= TRACK_HARD_LOCK_RADIUS_MM) {
+              if (s.isTunnel) y = Math.max(y, s.y + TERRAIN_TUNNEL_RAISE_MM * 0.92);
+              else if (s.isBridge) y = Math.min(y, s.y - TERRAIN_BRIDGE_CUT_MM * 0.9);
+              else y = y * 0.25 + (s.y - 0.5) * 0.75;
             }
           }
 
@@ -1366,6 +1469,38 @@ function TerrainMesh({
     }
 
     cells = smoothCells(cells, cols, rows);
+
+    // Re-anchor terrain to nearest track corridor after smoothing,
+    // so mesh keeps respecting rail elevations and tunnel/bridge markings.
+    for (let i = 0; i < cells.length; i++) {
+      if (!cells[i].inside) continue;
+
+      let best: TerrainSample | null = null;
+      let bestDist = Infinity;
+      for (const s of trackSamples) {
+        const d = Math.hypot(cells[i].x - s.x, cells[i].z - s.z);
+        if (d < bestDist) {
+          bestDist = d;
+          best = s;
+        }
+      }
+
+      if (!best || bestDist > TRACK_INFLUENCE_RADIUS_MM) continue;
+
+      const f = smoothstep01(1 - bestDist / TRACK_INFLUENCE_RADIUS_MM);
+      if (best.isTunnel) {
+        const minY = best.y + TERRAIN_TUNNEL_RAISE_MM * (0.85 + 0.15 * f);
+        cells[i].y = Math.max(cells[i].y, minY);
+      } else if (best.isBridge) {
+        const maxY = best.y - TERRAIN_BRIDGE_CUT_MM * (0.8 + 0.2 * f);
+        cells[i].y = Math.min(cells[i].y, maxY);
+      } else {
+        const target = best.y - 0.5;
+        cells[i].y = cells[i].y * (1 - 0.35 * f) + target * (0.35 * f);
+      }
+
+      cells[i].y = clamp(cells[i].y, TERRAIN_MIN_Y, TERRAIN_MAX_Y);
+    }
 
     const topPos: number[] = [];
     const topIdx: number[] = [];
