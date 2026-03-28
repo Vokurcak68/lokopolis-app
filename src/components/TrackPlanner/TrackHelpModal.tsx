@@ -16,15 +16,25 @@ type TabId = (typeof tabs)[number]["id"];
 function Card({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section
-      className="rounded-xl border p-4 sm:p-5"
-      style={{ borderColor: "var(--border)", background: "var(--bg-card)" }}
+      style={{
+        border: "1px solid var(--border)",
+        background: "var(--bg-card)",
+        borderRadius: 12,
+        padding: 16,
+        marginBottom: 14,
+      }}
     >
-      <h4 className="mb-3 text-sm font-bold sm:text-base" style={{ color: "var(--text-heading)" }}>
+      <h4
+        style={{
+          margin: "0 0 10px 0",
+          fontSize: 16,
+          fontWeight: 700,
+          color: "var(--text-heading)",
+        }}
+      >
         {title}
       </h4>
-      <div className="space-y-2 text-sm leading-relaxed sm:text-[15px]" style={{ color: "var(--text-body)" }}>
-        {children}
-      </div>
+      <div style={{ color: "var(--text-body)", lineHeight: 1.65, fontSize: 14 }}>{children}</div>
     </section>
   );
 }
@@ -32,8 +42,15 @@ function Card({ title, children }: { title: string; children: ReactNode }) {
 function Tip({ children }: { children: ReactNode }) {
   return (
     <div
-      className="rounded-lg border px-3 py-2.5 text-xs sm:text-sm"
-      style={{ borderColor: "#f59e0b55", background: "#f59e0b1f", color: "var(--text-body)" }}
+      style={{
+        border: "1px solid rgba(245,158,11,0.45)",
+        background: "rgba(245,158,11,0.12)",
+        borderRadius: 10,
+        padding: "10px 12px",
+        color: "var(--text-body)",
+        fontSize: 13,
+        marginTop: 6,
+      }}
     >
       💡 {children}
     </div>
@@ -42,10 +59,10 @@ function Tip({ children }: { children: ReactNode }) {
 
 function DotList({ items }: { items: ReactNode[] }) {
   return (
-    <ul className="space-y-1.5">
+    <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
       {items.map((item, i) => (
-        <li key={i} className="flex items-start gap-2">
-          <span className="mt-1 text-xs opacity-70">•</span>
+        <li key={i} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "flex-start" }}>
+          <span style={{ opacity: 0.7, marginTop: 2 }}>•</span>
           <span>{item}</span>
         </li>
       ))}
@@ -55,12 +72,24 @@ function DotList({ items }: { items: ReactNode[] }) {
 
 function StepList({ items }: { items: ReactNode[] }) {
   return (
-    <ol className="space-y-2">
+    <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
       {items.map((item, i) => (
-        <li key={i} className="flex items-start gap-2.5">
+        <li key={i} style={{ display: "flex", gap: 10, marginBottom: 10, alignItems: "flex-start" }}>
           <span
-            className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold"
-            style={{ background: "var(--accent)", color: "#111" }}
+            style={{
+              width: 20,
+              height: 20,
+              borderRadius: 999,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 11,
+              fontWeight: 700,
+              flexShrink: 0,
+              background: "var(--accent)",
+              color: "#111",
+              marginTop: 1,
+            }}
           >
             {i + 1}
           </span>
@@ -71,9 +100,18 @@ function StepList({ items }: { items: ReactNode[] }) {
   );
 }
 
+function TwoCol({ left, right }: { left: ReactNode; right: ReactNode }) {
+  return (
+    <div className="grid gap-4 md:grid-cols-2" style={{ marginBottom: 14 }}>
+      <div>{left}</div>
+      <div>{right}</div>
+    </div>
+  );
+}
+
 function TabQuick() {
   return (
-    <div className="space-y-4">
+    <div>
       <Card title="Začni během minuty">
         <StepList
           items={[
@@ -82,34 +120,37 @@ function TabQuick() {
             <>
               Pro tunel/most použij <strong>🚪 Portál ▾</strong> (single nebo double).
             </>,
-            <>Přepni na <strong>🏔️ 3D</strong> a ověř výšky + průjezdy.</>,
+            <>Přepni na <strong>🏔️ 3D</strong> a zkontroluj výšky + průjezdy.</>,
           ]}
         />
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card title="Nejčastější klávesy">
-          <DotList
-            items={[
-              <><strong>Delete / Backspace</strong> = smazat vybraný objekt</>,
-              <><strong>Ctrl + Z / Ctrl + Shift + Z</strong> = zpět / znovu</>,
-              <><strong>R</strong> = otočit vybranou kolej (pokud není napojená)</>,
-              <><strong>F</strong> = zrcadlit vybranou kolej / výhybku</>,
-            ]}
-          />
-        </Card>
-
-        <Card title="Nové funkce">
-          <DotList
-            items={[
-              <><strong>⤴️ Vždy navrch</strong> — kolej je ve 2D nad overlayi</>,
-              <><strong>🟢 Vždy pod tunelem</strong> — kolej je vždy schovaná pod tunelem</>,
-              <>Na plátně uvidíš štítky <strong>TOP</strong> / <strong>TUN</strong></>,
-              <>Tunel/most tlačítka jsou sloučená pod <strong>🚪 Portál</strong></>,
-            ]}
-          />
-        </Card>
-      </div>
+      <TwoCol
+        left={
+          <Card title="Nejčastější klávesy">
+            <DotList
+              items={[
+                <><strong>Delete / Backspace</strong> = smazat vybraný objekt</>,
+                <><strong>Ctrl + Z / Ctrl + Shift + Z</strong> = zpět / znovu</>,
+                <><strong>R</strong> = otočit vybranou kolej (pokud není napojená)</>,
+                <><strong>F</strong> = zrcadlit vybranou kolej / výhybku</>,
+              ]}
+            />
+          </Card>
+        }
+        right={
+          <Card title="Nové funkce">
+            <DotList
+              items={[
+                <><strong>⤴️ Vždy navrch</strong> — kolej je ve 2D nad overlayi</>,
+                <><strong>🟢 Vždy pod tunelem</strong> — kolej je vždy schovaná pod tunelem</>,
+                <>Na plátně uvidíš štítky <strong>TOP</strong> / <strong>TUN</strong></>,
+                <>Tunel/most tlačítka jsou sloučená pod <strong>🚪 Portál</strong></>,
+              ]}
+            />
+          </Card>
+        }
+      />
 
       <Tip>Po větších úpravách portálů mrkni i do 3D pohledu, ať hned vidíš, že párování sedí.</Tip>
     </div>
@@ -118,7 +159,7 @@ function TabQuick() {
 
 function TabBoard() {
   return (
-    <div className="space-y-4">
+    <div>
       <Card title="Nastavení desky">
         <DotList
           items={[
@@ -146,13 +187,13 @@ function TabBoard() {
 
 function TabTracks() {
   return (
-    <div className="space-y-4">
+    <div>
       <Card title="Pokládání a napojování kolejí">
         <DotList
           items={[
             <>Vyber díl v katalogu vlevo a klikni na desku.</>,
             <>Konce se přichytávají automaticky.</>,
-            <><strong>Červený bod</strong> = volný konec, <strong>zelený bod</strong> = napojený konec.</>,
+            <><strong>Červený bod</strong> = volný konec, <strong>Zelený bod</strong> = napojený konec.</>,
           ]}
         />
       </Card>
@@ -173,8 +214,8 @@ function TabTracks() {
           items={[
             <><strong>⤴️ Vždy navrch</strong> vykreslí kolej nad overlayi</>,
             <><strong>🟢 Vždy pod tunelem</strong> vykreslí kolej pod tunelem</>,
-            <>Oba flagy jsou vzájemně exkluzivní</>,
-            <>Na plátně se ukáže štítek <strong>TOP</strong> nebo <strong>TUN</strong></>,
+            <>Oba flagy jsou vzájemně exkluzivní.</>,
+            <>Na plátně se ukáže štítek <strong>TOP</strong> nebo <strong>TUN</strong>.</>,
           ]}
         />
       </Card>
@@ -184,34 +225,35 @@ function TabTracks() {
 
 function TabPortals() {
   return (
-    <div className="space-y-4">
+    <div>
       <Card title="Portály: tunel i most na jednom místě">
-        <p>
-          Pro tunel i most používej jen <strong>🚪 Portál ▾</strong> v horní liště.
-        </p>
+        <p style={{ margin: 0 }}>Pro tunel i most používej jen <strong>🚪 Portál ▾</strong> v horní liště.</p>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card title="Jednokolejný portál (single)">
-          <StepList
-            items={[
-              <>🚪 Portál ▾ → zvol typ + <strong>single</strong></>,
-              <>1. klik = začátek</>,
-              <>2. klik = konec</>,
-            ]}
-          />
-        </Card>
-
-        <Card title="Dvojkolejný portál (double)">
-          <StepList
-            items={[
-              <>🚪 Portál ▾ → zvol typ + <strong>double</strong></>,
-              <>1. a 2. klik = dvě startovní koleje</>,
-              <>3. a 4. klik = dvě koncové koleje</>,
-            ]}
-          />
-        </Card>
-      </div>
+      <TwoCol
+        left={
+          <Card title="Jednokolejný portál (single)">
+            <StepList
+              items={[
+                <>🚪 Portál ▾ → zvol typ + <strong>single</strong></>,
+                <>1. klik = začátek</>,
+                <>2. klik = konec</>,
+              ]}
+            />
+          </Card>
+        }
+        right={
+          <Card title="Dvojkolejný portál (double)">
+            <StepList
+              items={[
+                <>🚪 Portál ▾ → zvol typ + <strong>double</strong></>,
+                <>1. a 2. klik = dvě startovní koleje</>,
+                <>3. a 4. klik = dvě koncové koleje</>,
+              ]}
+            />
+          </Card>
+        }
+      />
 
       <Card title="Úpravy a mazání">
         <DotList items={[<>Klik na portál = výběr</>, <><strong>Delete</strong> nebo tlačítko <strong>🗑 Smazat</strong></>]} />
@@ -222,13 +264,13 @@ function TabPortals() {
 
 function TabElevation() {
   return (
-    <div className="space-y-4">
+    <div>
       <Card title="Výškový profil">
         <StepList
           items={[
             <>Zapni režim <strong>📐 Výšky</strong>.</>,
-            <>Klikni na kolej, zadej výšku v mm.</>,
-            <>Bod můžeš později upravit nebo smazat.</>,
+            <>Klikni na kolej a zadej výšku v mm.</>,
+            <>Bod můžeš kdykoliv upravit nebo smazat.</>,
           ]}
         />
       </Card>
@@ -262,26 +304,33 @@ function TabShortcuts() {
   ] as const;
 
   return (
-    <div className="space-y-4">
-      <div className="overflow-hidden rounded-xl border" style={{ borderColor: "var(--border)" }}>
-        <table className="w-full text-left text-sm">
+    <div>
+      <section style={{ border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", marginBottom: 14 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
           <tbody>
             {rows.map(([key, desc], i) => (
               <tr key={key} style={{ background: i % 2 ? "transparent" : "var(--bg-card)" }}>
-                <td className="px-3 py-2 align-top">
+                <td style={{ padding: "10px 12px", verticalAlign: "top", width: "40%" }}>
                   <kbd
-                    className="rounded border px-2 py-0.5 font-mono text-xs font-semibold"
-                    style={{ borderColor: "var(--border)", background: "var(--bg-input)" }}
+                    style={{
+                      border: "1px solid var(--border)",
+                      background: "var(--bg-input)",
+                      borderRadius: 6,
+                      padding: "2px 8px",
+                      fontFamily: "monospace",
+                      fontSize: 12,
+                      fontWeight: 700,
+                    }}
                   >
                     {key}
                   </kbd>
                 </td>
-                <td className="px-3 py-2" style={{ color: "var(--text-body)" }}>{desc}</td>
+                <td style={{ padding: "10px 12px", color: "var(--text-body)" }}>{desc}</td>
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
+      </section>
 
       <Tip>Na mobilu/tabletu používej pro posun plátna gesto dvěma prsty.</Tip>
     </div>
@@ -310,23 +359,42 @@ export function TrackHelpModal({ onClose }: { onClose: () => void }) {
       }}
     >
       <div
-        className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border shadow-2xl"
-        style={{ borderColor: "var(--border)", background: "var(--bg-page)" }}
+        style={{
+          width: "100%",
+          maxWidth: 980,
+          maxHeight: "90vh",
+          overflow: "hidden",
+          borderRadius: 16,
+          border: "1px solid var(--border)",
+          background: "var(--bg-page)",
+          boxShadow: "0 18px 50px rgba(0,0,0,0.45)",
+          display: "flex",
+          flexDirection: "column",
+        }}
       >
-        <div className="border-b px-4 py-3 sm:px-5" style={{ borderColor: "var(--border)", background: "var(--bg-card)" }}>
-          <div className="flex items-start justify-between gap-3">
+        <div style={{ borderBottom: "1px solid var(--border)", background: "var(--bg-card)", padding: "14px 16px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
             <div>
-              <h2 className="text-base font-bold sm:text-lg" style={{ color: "var(--text-heading)" }}>
+              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: "var(--text-heading)" }}>
                 ❓ Nápověda — Konfigurátor kolejiště
               </h2>
-              <p className="mt-1 text-xs sm:text-sm" style={{ color: "var(--text-dim)" }}>
-                Jednoduše a přehledně: od prvního dílu až po kontrolu v 3D.
+              <p style={{ margin: "6px 0 0 0", fontSize: 13, color: "var(--text-dim)" }}>
+                Přehledně: od prvního dílu až po kontrolu v 3D.
               </p>
             </div>
             <button
               onClick={onClose}
-              className="rounded-md border px-2 py-1 text-lg"
-              style={{ borderColor: "var(--border)", color: "var(--text-dim)", background: "var(--bg-card)" }}
+              style={{
+                border: "1px solid var(--border)",
+                borderRadius: 8,
+                background: "var(--bg-card)",
+                color: "var(--text-dim)",
+                fontSize: 20,
+                lineHeight: 1,
+                width: 34,
+                height: 34,
+                cursor: "pointer",
+              }}
               aria-label="Zavřít nápovědu"
             >
               ✕
@@ -334,17 +402,22 @@ export function TrackHelpModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
 
-        <div className="border-b px-3 py-2" style={{ borderColor: "var(--border)", background: "var(--bg-card)" }}>
+        <div style={{ borderBottom: "1px solid var(--border)", background: "var(--bg-card)", padding: "10px 12px" }}>
           <div className="flex gap-2 overflow-x-auto pb-0.5">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className="whitespace-nowrap rounded-lg border px-3 py-1.5 text-sm font-medium"
                 style={{
-                  borderColor: activeTab === tab.id ? "transparent" : "var(--border)",
+                  whiteSpace: "nowrap",
+                  borderRadius: 10,
+                  border: `1px solid ${activeTab === tab.id ? "transparent" : "var(--border)"}`,
                   background: activeTab === tab.id ? "var(--accent)" : "var(--bg-card)",
                   color: activeTab === tab.id ? "#111" : "var(--text-body)",
+                  padding: "7px 12px",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: "pointer",
                 }}
               >
                 {tab.label}
@@ -353,8 +426,8 @@ export function TrackHelpModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
 
-        <div className="overflow-y-auto p-4 sm:p-5">
-          <div className="mx-auto max-w-3xl">
+        <div style={{ overflowY: "auto", padding: 16 }}>
+          <div style={{ maxWidth: 860, margin: "0 auto" }}>
             <Content />
           </div>
         </div>
