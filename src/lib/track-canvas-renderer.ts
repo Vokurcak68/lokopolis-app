@@ -857,15 +857,11 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
 
   const portals = params.portals ?? [];
 
-  // Tracks with positive elevation marker are treated as "overpass" tracks.
-  // They should render above tunnel overlays, but still below bridge overlays.
-  const elevatedTrackIds = new Set<string>();
-  for (const ep of elevationPoints) {
-    if (ep.elevation > 0) elevatedTrackIds.add(ep.trackId);
-  }
-
-  const groundTracks = tracks.filter((t) => !elevatedTrackIds.has(t.instanceId));
-  const elevatedTracks = tracks.filter((t) => elevatedTrackIds.has(t.instanceId));
+  // IMPORTANT: elevation alone does NOT mean "over tunnel".
+  // A tunnel can exist at elevation > 0 as well.
+  // So tunnel membership is driven by explicit track flag `isTunnel`.
+  const tunnelTracks = tracks.filter((t) => t.isTunnel === true);
+  const nonTunnelTracks = tracks.filter((t) => t.isTunnel !== true);
 
   if (!skipBackground) {
     const tunnelZones = terrainZones.filter((z) => z.kind === "tunnel");
@@ -873,15 +869,15 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
     const tunnelPortals = portals.filter((p) => p.kind === "tunnel");
     const bridgePortals = portals.filter((p) => p.kind === "bridge");
 
-    // 1) Base tracks (non-elevated)
-    drawLayer(sortSelected(groundTracks));
+    // 1) Tunnel tracks first
+    drawLayer(sortSelected(tunnelTracks));
 
-    // 2) Tunnel overlays above base tracks (so tracks in tunnel are hidden by tunnel)
+    // 2) Tunnel overlays above tunnel tracks (so tracks in tunnel are hidden by tunnel)
     if (tunnelZones.length > 0) drawTerrainZones(ctx, tunnelZones, tracks, catalog, transform);
     if (tunnelPortals.length > 0) drawPortals(ctx, tunnelPortals, tracks, catalog, transform);
 
-    // 3) Elevated tracks above tunnel (tracks that go OVER tunnel)
-    if (elevatedTracks.length > 0) drawLayer(sortSelected(elevatedTracks));
+    // 3) Non-tunnel tracks above tunnel overlays (tracks that go OVER tunnel)
+    if (nonTunnelTracks.length > 0) drawLayer(sortSelected(nonTunnelTracks));
 
     // 4) Bridge overlays on top of everything track-related
     if (bridgeZones.length > 0) drawTerrainZones(ctx, bridgeZones, tracks, catalog, transform);
