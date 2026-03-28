@@ -31,6 +31,16 @@ const SLEEPER_LENGTH_FACTOR = 1.8; // sleeper length = gauge * factor (perpendic
 const BALLAST_WIDTH_FACTOR = 1.97; // ballast width factor
 const BALLAST_HEIGHT_MM = 1.5; // ballast ribbon thickness
 
+// Visual tuning (new 3D)
+const COLOR_SKY = "#b9d8ff";
+const COLOR_GROUND = "#6f8f55";
+const COLOR_GROUND_DARK = "#5f7a49";
+const COLOR_BALLAST = "#7e6a50";
+const COLOR_SLEEPER = "#5b4634";
+const COLOR_RAIL = "#b9bec6";
+const COLOR_BRIDGE = "#6f7786";
+const COLOR_TUNNEL = "#5a6f4b";
+
 // ── Elevation graph solver ──
 
 interface TrackLengthInfo {
@@ -317,7 +327,7 @@ function BoardMesh({ board }: { board: BoardConfig }) {
     return geom;
   }, [board]);
 
-  const gridTexture = useMemo(() => {
+  const groundTexture = useMemo(() => {
     if (typeof document === "undefined") return null;
     const canvas = document.createElement("canvas");
     canvas.width = 512;
@@ -325,26 +335,45 @@ function BoardMesh({ board }: { board: BoardConfig }) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
 
-    ctx.fillStyle = "#7dbf60";
+    // Base grass tone
+    ctx.fillStyle = "#7c9f5a";
     ctx.fillRect(0, 0, 512, 512);
 
-    ctx.strokeStyle = "#6aad50";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (let i = 0; i <= 512; i += 32) {
-      ctx.moveTo(i, 0);
-      ctx.lineTo(i, 512);
-      ctx.moveTo(0, i);
-      ctx.lineTo(512, i);
+    // Mottled grass/soil patches for a less technical look
+    for (let i = 0; i < 2400; i++) {
+      const x = Math.random() * 512;
+      const y = Math.random() * 512;
+      const r = 1 + Math.random() * 3.5;
+      const g = 105 + Math.floor(Math.random() * 35);
+      const a = 0.05 + Math.random() * 0.12;
+      ctx.fillStyle = `rgba(55, ${g}, 40, ${a})`;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
     }
-    ctx.stroke();
+
+    // A few darker paths/strips for visual variation
+    ctx.strokeStyle = "rgba(70,55,35,0.12)";
+    ctx.lineWidth = 8;
+    for (let i = 0; i < 6; i++) {
+      ctx.beginPath();
+      ctx.moveTo(Math.random() * 512, Math.random() * 512);
+      ctx.quadraticCurveTo(
+        Math.random() * 512,
+        Math.random() * 512,
+        Math.random() * 512,
+        Math.random() * 512,
+      );
+      ctx.stroke();
+    }
 
     const texture = new THREE.CanvasTexture(canvas);
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
-    // Repeat so grid tiles are ~50mm each
-    const tileMm = 50;
+    // Tile roughly per 120mm for softer detail density
+    const tileMm = 120;
     texture.repeat.set(widthMm / tileMm, depthMm / tileMm);
+    texture.anisotropy = 8;
     return texture;
   }, [widthMm, depthMm]);
 
@@ -353,9 +382,9 @@ function BoardMesh({ board }: { board: BoardConfig }) {
   return (
     <mesh geometry={geometry} position={[0, -5, 0]} receiveShadow>
       <meshStandardMaterial
-        color="#ffffff"
-        map={gridTexture}
-        roughness={0.85}
+        color="#f2f4ea"
+        map={groundTexture}
+        roughness={0.98}
         metalness={0}
         side={THREE.DoubleSide}
         polygonOffset
@@ -657,14 +686,14 @@ function TrackPiece3D({
       {/* Ballast per segment */}
       {ballastGeoms.map((bg, idx) => bg && (
         <mesh key={`ballast-${idx}`} geometry={bg} castShadow receiveShadow>
-          <meshStandardMaterial color="#c4b08a" roughness={0.8} />
+          <meshStandardMaterial color={COLOR_BALLAST} roughness={0.95} />
         </mesh>
       ))}
 
       {/* Fan-shaped sleepers for turnouts, standard for simple tracks */}
       {sleeperGeom && (
         <mesh geometry={sleeperGeom} castShadow receiveShadow>
-          <meshStandardMaterial color="#9b7b50" roughness={0.7} />
+          <meshStandardMaterial color={COLOR_SLEEPER} roughness={0.82} />
         </mesh>
       )}
 
@@ -672,12 +701,12 @@ function TrackPiece3D({
         <group key={`rails-${idx}`}>
           {rg.left && (
             <mesh geometry={rg.left} castShadow receiveShadow>
-              <meshStandardMaterial color="#c0c0c0" metalness={0.8} roughness={0.2} />
+              <meshStandardMaterial color={COLOR_RAIL} metalness={0.88} roughness={0.26} />
             </mesh>
           )}
           {rg.right && (
             <mesh geometry={rg.right} castShadow receiveShadow>
-              <meshStandardMaterial color="#c0c0c0" metalness={0.8} roughness={0.2} />
+              <meshStandardMaterial color={COLOR_RAIL} metalness={0.88} roughness={0.26} />
             </mesh>
           )}
         </group>
@@ -887,7 +916,7 @@ function BridgeSupports({
     <group>
       {bridgeGeom && (
         <mesh geometry={bridgeGeom} castShadow receiveShadow>
-          <meshStandardMaterial color="#8a9aaa" roughness={0.4} metalness={0.4} />
+          <meshStandardMaterial color={COLOR_BRIDGE} roughness={0.52} metalness={0.42} />
         </mesh>
       )}
     </group>
@@ -953,7 +982,7 @@ function TunnelHill({
 
   return (
     <mesh geometry={hillGeom} receiveShadow>
-      <meshStandardMaterial color="#4a6a3a" transparent opacity={0.7} roughness={0.9} />
+      <meshStandardMaterial color={COLOR_TUNNEL} transparent opacity={0.82} roughness={0.95} />
     </mesh>
   );
 }
@@ -1076,6 +1105,28 @@ function buildSnapMap(tracks: PlacedTrack[], catalog: Record<string, TrackPieceD
   return map;
 }
 
+function GroundPlane({ board }: { board: BoardConfig }) {
+  const widthMm = board.width * 10;
+  const depthMm = board.depth * 10;
+  const boardDiagonal = Math.sqrt(widthMm * widthMm + depthMm * depthMm);
+
+  return (
+    <>
+      {/* Broad terrain under the board to avoid "floating island" feel */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[widthMm / 2, -8, depthMm / 2]} receiveShadow>
+        <planeGeometry args={[boardDiagonal * 3.2, boardDiagonal * 3.2, 1, 1]} />
+        <meshStandardMaterial color={COLOR_GROUND} roughness={1} metalness={0} />
+      </mesh>
+
+      {/* Subtle darker layer for depth */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[widthMm / 2, -8.2, depthMm / 2]} receiveShadow>
+        <planeGeometry args={[boardDiagonal * 2.2, boardDiagonal * 2.2, 1, 1]} />
+        <meshStandardMaterial color={COLOR_GROUND_DARK} roughness={1} metalness={0} transparent opacity={0.35} />
+      </mesh>
+    </>
+  );
+}
+
 function Scene({ tracks, catalog, board, elevationPoints }: TrackViewer3DProps) {
   const widthMm = board.width * 10;
   const depthMm = board.depth * 10;
@@ -1094,28 +1145,33 @@ function Scene({ tracks, catalog, board, elevationPoints }: TrackViewer3DProps) 
   return (
     <>
       {/* Scene background */}
-      <color attach="background" args={["#d4d0c8"]} />
+      <color attach="background" args={[COLOR_SKY]} />
+      <fog attach="fog" args={[COLOR_SKY, boardDiagonal * 1.8, boardDiagonal * 5]} />
 
       {/* Lighting */}
-      <ambientLight intensity={0.9} />
-      <hemisphereLight intensity={0.5} color="#ffffff" groundColor="#b0a890" />
+      <ambientLight intensity={0.42} />
+      <hemisphereLight intensity={0.75} color="#ffffff" groundColor="#7b8a63" />
       <directionalLight
-        position={[board.width * 5, board.width * 8, board.depth * 5]}
-        intensity={1.2}
+        position={[widthMm * 0.45, Math.max(widthMm, depthMm) * 1.6, depthMm * 0.25]}
+        intensity={1.35}
         castShadow
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
-        shadow-bias={-0.0001}
+        shadow-camera-near={10}
+        shadow-camera-far={boardDiagonal * 3}
+        shadow-camera-left={-boardDiagonal}
+        shadow-camera-right={boardDiagonal}
+        shadow-camera-top={boardDiagonal}
+        shadow-camera-bottom={-boardDiagonal}
+        shadow-bias={-0.00012}
       />
       <directionalLight
-        position={[-board.width * 3, board.width * 5, -board.depth * 3]}
-        intensity={0.5}
+        position={[-widthMm * 0.6, Math.max(widthMm, depthMm) * 0.9, -depthMm * 0.8]}
+        intensity={0.38}
       />
 
-      {/* Fog for depth cue */}
-      {/* Fog removed — was washing out the board color */}
-
-      {/* Board */}
+      {/* Surrounding ground + board */}
+      <GroundPlane board={board} />
       <BoardMesh board={board} />
 
       {/* Tracks */}
@@ -1155,7 +1211,7 @@ export default function TrackViewer3DNew(props: TrackViewer3DProps) {
   const boardDiagonal = Math.sqrt(widthMm * widthMm + depthMm * depthMm);
 
   return (
-    <div className="h-full w-full" style={{ background: "#d4d0c8" }}>
+    <div className="h-full w-full" style={{ background: COLOR_SKY }}>
       <Canvas
         camera={{
           position: [widthMm / 2, Math.max(widthMm, depthMm) * 0.7, depthMm * 1.2],
