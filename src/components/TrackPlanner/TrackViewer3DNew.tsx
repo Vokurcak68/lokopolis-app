@@ -55,6 +55,12 @@ const TERRAIN_SURFACE_COLOR = "#6f8f55";
 const TERRAIN_SIDE_COLOR = "#5b7148";
 const TERRAIN_OUTSIDE_COLOR = "#607a4c";
 
+// Terrain v2 (SCARM-like local corridor patches)
+const PATCH_BASE_Y = -2.1;
+const PATCH_NORMAL_HALF_WIDTH_MM = 24;
+const PATCH_TUNNEL_HALF_WIDTH_MM = 85;
+const PATCH_BRIDGE_HALF_WIDTH_MM = 72;
+
 // ── Elevation graph solver ──
 
 interface TrackLengthInfo {
@@ -1336,6 +1342,209 @@ function buildZoneTrackKindMap(
   return out;
 }
 
+type TerrainPatchMode = "normal" | "tunnel" | "bridge";
+type TerrainCorridorPoint = { x: number; y: number; z: number; tangentX: number; tangentZ: number };
+
+function getTrackTerrainMode(
+  track: PlacedTrack,
+  zoneTrackKind: Map<string, TerrainZone["kind"]>,
+): TerrainPatchMode {
+  const z = zoneTrackKind.get(track.instanceId);
+  if (z === "tunnel") return "tunnel";
+  if (z === "bridge") return "bridge";
+  if (track.isTunnel) return "tunnel";
+  if (track.isBridge) return "bridge";
+  return "normal";
+}
+
+function buildTrackCorridorPoints(
+  track: PlacedTrack,
+  piece: TrackPieceDefinition,
+  elevMap: Map<string, { startElev: number; endElev: number }>,
+): TerrainCorridorPoint[] {
+  const segments = getPieceSegmentsLocal(piece);
+  if (segments.length === 0) return [];
+
+  const lengths = segments.map((seg) => seg.kind === "line"
+    ? Math.hypot(seg.to.x - seg.from.x, seg.to.z - seg.from.z)
+    : seg.radius * Math.abs(seg.endAngle - seg.startAngle));
+  const total = lengths.reduce((a, b) => a + b, 0) || 1;
+
+  const out: TerrainCorridorPoint[] = [];
+  let acc = 0;
+
+  for (let si = 0; si < segments.length; si++) {
+    const seg = segments[si];
+    const segLen = lengths[si] || 1;
+    const samples = Math.max(3, Math.ceil(segLen / 14));
+
+    for (let i = 0; i <= samples; i++) {
+      if (si > 0 && i === 0) continue;
+      const localT = i / samples;
+      const globalT = (acc + localT * segLen) / total;
+
+      const { point: local, tangent: localTan } = pointAndTangentAt(seg, localT);
+      const world = localToWorld(local, track);
+      const worldTanPt = localToWorld({ x: local.x + localTan.x, z: local.z + localTan.z }, track);
+      const tx = worldTanPt.x - world.x;
+      const tz = worldTanPt.z - world.z;
+      const tl = Math.hypot(tx, tz) || 1;
+
+      out.push({
+        x: world.x,
+        y: getElevationFromMap(track.instanceId, globalT, elevMap),
+        z: world.z,
+        tangentX: tx / tl,
+        tangentZ: tz / tl,
+      });
+    }
+
+    acc += segLen;
+  }
+
+  return out;
+}
+
+function TerrainCorridors({
+  tracks,
+  catalog,
+  elevMap,
+  terrainZones,
+}: {
+  tracks: PlacedTrack[];
+  catalog: Record<string, TrackPieceDefinition>;
+  elevMap: Map<string, { startElev: number; endElev: number }>;
+  terrainZones: TerrainZone[];
+}) {
+  const { normalGeom, tunnelGeom, bridgeGeom } = useMemo(() => {
+    const zoneTrackKind = buildZoneTrackKindMap(terrainZones, tracks);
+
+    const modeData = {
+      normal: { pos: [] as number[], idx: [] as number[], v: 0 },
+      tunnel: { pos: [] as number[], idx: [] as number[], v: 0 },
+      bridge: { pos: [] as number[], idx: [] as number[], v: 0 },
+    };
+
+    const addStrip = (mode: TerrainPatchMode, points: TerrainCorridorPoint[]) => {
+      if (points.length < 2) return;
+
+      const d = modeData[mode];
+      const centerOffset = mode === "tunnel" ? 12 : mode === "bridge" ? -14 : -0.8;
+      const halfW = mode === "tunnel"
+        ? PATCH_TUNNEL_HALF_WIDTH_MM
+        : mode === "bridge"
+          ? PATCH_BRIDGE_HALF_WIDTH_MM
+          : PATCH_NORMAL_HALF_WIDTH_MM;
+
+      const laneFactors = [-1, -0.58, 0, 0.58, 1];
+
+      for (const p of points) {
+        const px = -p.tangentZ;
+        const pz = p.tangentX;
+        const centerY = p.y + centerOffset;
+
+        for (const lf of laneFactors) {
+          const abs = Math.abs(lf);
+          const edgeBlend = smoothstep01(abs);
+          const y = centerY * (1 - edgeBlend) + PATCH_BASE_Y * edgeBlend;
+          d.pos.push(
+            p.x + px * halfW * lf,
+            y,
+            p.z + pz * halfW * lf,
+          );
+        }
+      }
+
+      const cols = laneFactors.length;
+      const rows = points.length;
+      for (let r = 0; r < rows - 1; r++) {
+        for (let c = 0; c < cols - 1; c++) {
+          const a = d.v + r * cols + c;
+          const b = a + 1;
+          const c1 = a + cols;
+          const d1 = c1 + 1;
+          d.idx.push(a, b, c1, b, d1, c1);
+        }
+      }
+
+      d.v += rows * cols;
+    };
+
+    for (const track of tracks) {
+      const piece = catalog[track.pieceId];
+      if (!piece) continue;
+
+      const mode = getTrackTerrainMode(track, zoneTrackKind);
+      const points = buildTrackCorridorPoints(track, piece, elevMap);
+      addStrip(mode, points);
+    }
+
+    const makeGeom = (pos: number[], idx: number[]) => {
+      if (!pos.length || !idx.length) return null;
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+      g.setIndex(idx);
+      g.computeVertexNormals();
+      return g;
+    };
+
+    return {
+      normalGeom: makeGeom(modeData.normal.pos, modeData.normal.idx),
+      tunnelGeom: makeGeom(modeData.tunnel.pos, modeData.tunnel.idx),
+      bridgeGeom: makeGeom(modeData.bridge.pos, modeData.bridge.idx),
+    };
+  }, [tracks, catalog, elevMap, terrainZones]);
+
+  return (
+    <group>
+      {normalGeom && (
+        <mesh geometry={normalGeom} receiveShadow castShadow>
+          <meshStandardMaterial
+            color="#6f8b4c"
+            roughness={0.98}
+            metalness={0}
+            transparent
+            opacity={0.98}
+            polygonOffset
+            polygonOffsetFactor={-1}
+            polygonOffsetUnits={-1}
+          />
+        </mesh>
+      )}
+
+      {tunnelGeom && (
+        <mesh geometry={tunnelGeom} receiveShadow castShadow>
+          <meshStandardMaterial
+            color="#5f7a43"
+            roughness={0.98}
+            metalness={0}
+            transparent
+            opacity={0.98}
+            polygonOffset
+            polygonOffsetFactor={-1}
+            polygonOffsetUnits={-1}
+          />
+        </mesh>
+      )}
+
+      {bridgeGeom && (
+        <mesh geometry={bridgeGeom} receiveShadow castShadow>
+          <meshStandardMaterial
+            color="#655c4f"
+            roughness={1}
+            metalness={0}
+            transparent
+            opacity={0.92}
+            polygonOffset
+            polygonOffsetFactor={-1}
+            polygonOffsetUnits={-1}
+          />
+        </mesh>
+      )}
+    </group>
+  );
+}
+
 function smoothCells(cells: TerrainCell[], cols: number, rows: number) {
   let current = cells;
   for (let pass = 0; pass < TERRAIN_SMOOTH_PASSES; pass++) {
@@ -1638,8 +1847,14 @@ function Scene({ tracks, catalog, board, elevationPoints, terrainZones }: TrackV
         intensity={0.5}
       />
 
-      {/* Board (terrain mesh v1 dočasně vypnutý) */}
+      {/* Board + local terrain corridors (v2, SCARM-like) */}
       <BoardMesh board={board} />
+      <TerrainCorridors
+        tracks={tracks}
+        catalog={catalog}
+        elevMap={elevMap}
+        terrainZones={terrainZones}
+      />
 
       {/* Tracks */}
       {tracks.map((track) => {
