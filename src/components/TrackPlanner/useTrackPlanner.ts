@@ -228,8 +228,8 @@ function findTracksBetween(startId: string, endId: string, tracks: PlacedTrack[]
       queue.push(neighborId);
     }
   }
-  // Not connected — return just the endpoints
-  return [startId, endId];
+  // Not connected
+  return [];
 }
 
 export function useTrackPlanner() {
