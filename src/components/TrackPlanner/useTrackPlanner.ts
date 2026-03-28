@@ -1015,9 +1015,23 @@ export function useTrackPlanner() {
         point.trackId,
       ]);
 
-      // Direct pairing by click order: start1↔end1 and start2↔end2
-      for (const tid of findTracksBetween(portalFirstTrack.trackId, endFirstTrack.trackId, state.tracks)) flaggedIds.add(tid);
-      for (const tid of findTracksBetween(portalSecondTrack.trackId, point.trackId, state.tracks)) flaggedIds.add(tid);
+      // Double portal pairing can be crossed (start1↔end2, start2↔end1).
+      // Pick the mapping that yields valid/shorter connected paths.
+      const directA = findTracksBetween(portalFirstTrack.trackId, endFirstTrack.trackId, state.tracks);
+      const directB = findTracksBetween(portalSecondTrack.trackId, point.trackId, state.tracks);
+      const crossA = findTracksBetween(portalFirstTrack.trackId, point.trackId, state.tracks);
+      const crossB = findTracksBetween(portalSecondTrack.trackId, endFirstTrack.trackId, state.tracks);
+
+      const directValid = directA.length > 0 && directB.length > 0;
+      const crossValid = crossA.length > 0 && crossB.length > 0;
+
+      const directCost = directValid ? directA.length + directB.length : Number.POSITIVE_INFINITY;
+      const crossCost = crossValid ? crossA.length + crossB.length : Number.POSITIVE_INFINITY;
+
+      const chosen = crossCost < directCost ? [crossA, crossB] : [directA, directB];
+      for (const list of chosen) {
+        for (const tid of list) flaggedIds.add(tid);
+      }
 
       for (const tid of flaggedIds) {
         dispatch({ type: "UPDATE_TRACK", instanceId: tid, updates: flag });
