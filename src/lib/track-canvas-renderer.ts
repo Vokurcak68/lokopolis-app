@@ -857,21 +857,33 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
 
   const portals = params.portals ?? [];
 
-  // Layering rule:
-  // - Tunnel overlays UNDER tracks (tracks crossing a tunnel stay visually on top)
-  // - Bridge overlays OVER tracks (tracks crossing a bridge go visually under it)
+  // Tracks with positive elevation marker are treated as "overpass" tracks.
+  // They should render above tunnel overlays, but still below bridge overlays.
+  const elevatedTrackIds = new Set<string>();
+  for (const ep of elevationPoints) {
+    if (ep.elevation > 0) elevatedTrackIds.add(ep.trackId);
+  }
+
+  const groundTracks = tracks.filter((t) => !elevatedTrackIds.has(t.instanceId));
+  const elevatedTracks = tracks.filter((t) => elevatedTrackIds.has(t.instanceId));
+
   if (!skipBackground) {
     const tunnelZones = terrainZones.filter((z) => z.kind === "tunnel");
     const bridgeZones = terrainZones.filter((z) => z.kind === "bridge");
     const tunnelPortals = portals.filter((p) => p.kind === "tunnel");
     const bridgePortals = portals.filter((p) => p.kind === "bridge");
 
+    // 1) Base tracks (non-elevated)
+    drawLayer(sortSelected(groundTracks));
+
+    // 2) Tunnel overlays above base tracks (so tracks in tunnel are hidden by tunnel)
     if (tunnelZones.length > 0) drawTerrainZones(ctx, tunnelZones, tracks, catalog, transform);
     if (tunnelPortals.length > 0) drawPortals(ctx, tunnelPortals, tracks, catalog, transform);
 
-    // Tracks in the middle layer
-    drawLayer(sortSelected(tracks));
+    // 3) Elevated tracks above tunnel (tracks that go OVER tunnel)
+    if (elevatedTracks.length > 0) drawLayer(sortSelected(elevatedTracks));
 
+    // 4) Bridge overlays on top of everything track-related
     if (bridgeZones.length > 0) drawTerrainZones(ctx, bridgeZones, tracks, catalog, transform);
     if (bridgePortals.length > 0) drawPortals(ctx, bridgePortals, tracks, catalog, transform);
   } else {
