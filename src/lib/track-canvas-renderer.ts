@@ -1310,6 +1310,7 @@ function findTrackPathSegments(
   end: TrackPoint,
   tracks: PlacedTrack[],
   catalog: Record<string, TrackPieceDefinition>,
+  options?: { allowDisconnectedFallback?: boolean },
 ): { trackId: string; tFrom: number; tTo: number }[] {
   // Same track — trivial
   if (start.trackId === end.trackId) {
@@ -1354,8 +1355,14 @@ function findTrackPathSegments(
   }
 
   if (!parent.has(end.trackId)) {
-    // No connected path — just straight between portals
-    // Use start.t and end.t directly instead of mapping to conn points
+    // No connected path.
+    // For portal overlays we prefer "draw nothing" over a misleading fallback
+    // that can paint from/to whole-track endpoints.
+    if (options?.allowDisconnectedFallback === false) {
+      return [];
+    }
+
+    // Legacy fallback (kept for callsites that still want a visual hint)
     return [
       { trackId: start.trackId, tFrom: start.t, tTo: start.t > 0.5 ? 1 : 0 },
       { trackId: end.trackId, tFrom: end.t > 0.5 ? 1 : 0, tTo: end.t },
@@ -1935,7 +1942,7 @@ export function drawPortals(
   const drawPortalSegment = (start: TrackPoint, end: TrackPoint) => {
     const points: LocalPoint[] = [];
 
-    const segments = findTrackPathSegments(start, end, tracks, catalog);
+    const segments = findTrackPathSegments(start, end, tracks, catalog, { allowDisconnectedFallback: false });
     if (segments.length === 0) return points;
 
     const totalSpan = segments.reduce((sum, s) => sum + Math.abs(s.tTo - s.tFrom), 0) || 1;
@@ -2063,6 +2070,15 @@ export function drawPortals(
     ctx.restore();
   };
 
+  const getPortalPairPath = (a: TrackPoint, b: TrackPoint) =>
+    findTrackPathSegments(a, b, tracks, catalog, { allowDisconnectedFallback: false });
+
+  const getPortalPairCost = (a: TrackPoint, b: TrackPoint) => {
+    const segs = getPortalPairPath(a, b);
+    if (segs.length === 0) return Number.POSITIVE_INFINITY;
+    return segs.reduce((sum, s) => sum + Math.abs(s.tTo - s.tFrom), 0);
+  };
+
   // 1) paired portals: draw path + properly oriented mouths (start and end flipped 180°)
   for (const portal of portals) {
     if (!portal.pairedPortalId) continue;
@@ -2074,11 +2090,26 @@ export function drawPortals(
     drawnPairs.add(pairKey);
 
     // path highlight like classic terrain tunnel/bridge
-    drawBetween(portal.track1, partner.track1, portal.kind);
-    if (portal.width === "double" || partner.width === "double") {
-      const a2 = portal.track2 ?? portal.track1;
-      const b2 = partner.track2 ?? partner.track1;
-      drawBetween(a2, b2, portal.kind);
+    if (portal.width === "double" && partner.width === "double" && portal.track2 && partner.track2) {
+      // U dvojkolejných portálů nemusí pořadí track1/track2 mezi oběma konci sedět.
+      // Vybereme mapování s menší (a existující) trasou: (1→1, 2→2) vs (1→2, 2→1).
+      const directCost = getPortalPairCost(portal.track1, partner.track1) + getPortalPairCost(portal.track2, partner.track2);
+      const crossCost = getPortalPairCost(portal.track1, partner.track2) + getPortalPairCost(portal.track2, partner.track1);
+
+      if (crossCost < directCost) {
+        drawBetween(portal.track1, partner.track2, portal.kind);
+        drawBetween(portal.track2, partner.track1, portal.kind);
+      } else {
+        drawBetween(portal.track1, partner.track1, portal.kind);
+        drawBetween(portal.track2, partner.track2, portal.kind);
+      }
+    } else {
+      drawBetween(portal.track1, partner.track1, portal.kind);
+      if (portal.width === "double" || partner.width === "double") {
+        const a2 = portal.track2 ?? portal.track1;
+        const b2 = partner.track2 ?? partner.track1;
+        drawBetween(a2, b2, portal.kind);
+      }
     }
 
     // Compute world centers to orient portals toward each other
