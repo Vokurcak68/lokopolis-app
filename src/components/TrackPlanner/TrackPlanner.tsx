@@ -11,11 +11,12 @@ import { useTrackPlanner } from "./useTrackPlanner";
 import { useAuth } from "@/components/Auth/AuthProvider";
 
 const TrackViewer3D = dynamic(() => import("./TrackViewer3D"), { ssr: false });
+const TrackViewer3DNew = dynamic(() => import("./TrackViewer3DNew"), { ssr: false });
 
 export default function TrackPlanner() {
   const { user } = useAuth();
   const planner = useTrackPlanner();
-  const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");
+  const [viewMode, setViewMode] = useState<"2d" | "3d" | "3d-new">("2d");
   const [showHelp, setShowHelp] = useState(false);
   const [elevationPopup, setElevationPopup] = useState<{
     trackId: string; t: number; worldX: number; worldZ: number; screenX: number; screenY: number;
@@ -206,7 +207,7 @@ export default function TrackPlanner() {
         saveToast={saveToast}
         onToggleCatalogMobile={() => planner.setCatalogOpenMobile((v) => !v)}
         viewMode={viewMode}
-        onToggleViewMode={() => setViewMode((v) => (v === "2d" ? "3d" : "2d"))}
+        onSetViewMode={setViewMode}
         elevationMode={planner.elevationMode}
         onStartElevation={planner.startElevationMode}
         onCancelElevation={() => { planner.cancelElevationMode(); setElevationPopup(null); }}
@@ -332,6 +333,14 @@ export default function TrackPlanner() {
           )}
           {viewMode === "3d" ? (
             <TrackViewer3D
+              tracks={planner.state.tracks}
+              catalog={planner.catalogMap}
+              board={planner.state.board}
+              elevationPoints={planner.state.elevationPoints}
+              terrainZones={planner.state.terrainZones}
+            />
+          ) : viewMode === "3d-new" ? (
+            <TrackViewer3DNew
               tracks={planner.state.tracks}
               catalog={planner.catalogMap}
               board={planner.state.board}

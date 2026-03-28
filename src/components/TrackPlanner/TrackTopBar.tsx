@@ -43,8 +43,8 @@ interface TrackTopBarProps {
   saveToast?: "ok" | "fail" | null;
   onExportList: () => void;
   onToggleCatalogMobile: () => void;
-  viewMode: "2d" | "3d";
-  onToggleViewMode: () => void;
+  viewMode: "2d" | "3d" | "3d-new";
+  onSetViewMode: (mode: "2d" | "3d" | "3d-new") => void;
   elevationMode: boolean;
   onStartElevation: () => void;
   onCancelElevation: () => void;
@@ -93,7 +93,7 @@ export function TrackTopBar(props: TrackTopBarProps) {
     onExportList,
     onToggleCatalogMobile,
     viewMode,
-    onToggleViewMode,
+    onSetViewMode,
     elevationMode,
     onStartElevation,
     onCancelElevation,
@@ -261,18 +261,41 @@ export function TrackTopBar(props: TrackTopBarProps) {
         )}
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          <button
-            onClick={onToggleViewMode}
-            className={btnBase}
-            style={{
-              borderColor: viewMode === "3d" ? "#10b981" : "var(--border)",
-              color: viewMode === "3d" ? "#fff" : "var(--text-body)",
-              background: viewMode === "3d" ? "#10b981" : "transparent",
-            }}
-            title={viewMode === "2d" ? "Přepnout na 3D pohled" : "Přepnout na 2D pohled"}
-          >
-            {viewMode === "2d" ? "🏔️ 3D" : "🗺️ 2D"}
-          </button>
+          <div className="flex items-center gap-1 rounded-lg border p-1" style={{ borderColor: "var(--border)" }}>
+            <button
+              onClick={() => onSetViewMode("2d")}
+              className="h-8 rounded-md px-3 text-sm font-semibold"
+              style={{
+                background: viewMode === "2d" ? "var(--accent)" : "transparent",
+                color: viewMode === "2d" ? "#111" : "var(--text-body)",
+              }}
+              title="2D pohled"
+            >
+              🗺️ 2D
+            </button>
+            <button
+              onClick={() => onSetViewMode("3d")}
+              className="h-8 rounded-md px-3 text-sm font-semibold"
+              style={{
+                background: viewMode === "3d" ? "#10b981" : "transparent",
+                color: viewMode === "3d" ? "#fff" : "var(--text-body)",
+              }}
+              title="Původní 3D pohled"
+            >
+              🏔️ 3D
+            </button>
+            <button
+              onClick={() => onSetViewMode("3d-new")}
+              className="h-8 rounded-md px-3 text-sm font-semibold"
+              style={{
+                background: viewMode === "3d-new" ? "#6366f1" : "transparent",
+                color: viewMode === "3d-new" ? "#fff" : "var(--text-body)",
+              }}
+              title="Nový 3D pohled pro experimenty"
+            >
+              ✨ 3D nový
+            </button>
+          </div>
           <button
             onClick={elevationMode ? onCancelElevation : onStartElevation}
             className={btnBase}
