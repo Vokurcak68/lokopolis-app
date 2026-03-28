@@ -113,18 +113,9 @@ function setCloudCurrentProjectId(id: string | null) {
 
 function dataToState(data: PersistedData): DesignerState {
   const portals = data.portals ?? [];
-  const portalTrackIds = new Set<string>();
-  for (const p of portals) {
-    portalTrackIds.add(p.track1.trackId);
-    if (p.track2) portalTrackIds.add(p.track2.trackId);
-  }
-  // Clean orphaned isTunnel/isBridge flags on tracks without portals
-  const tracks = (data.tracks ?? []).map((t) => {
-    if ((t.isTunnel || t.isBridge) && !portalTrackIds.has(t.instanceId)) {
-      return { ...t, isTunnel: false, isBridge: false };
-    }
-    return t;
-  });
+  // Keep persisted per-track bridge/tunnel flags as-is.
+  // They can represent whole portal paths, not only portal endpoint tracks.
+  const tracks = data.tracks ?? [];
   return {
     board: data.board,
     tracks,
