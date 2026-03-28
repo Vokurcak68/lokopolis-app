@@ -1131,6 +1131,17 @@ export function useTrackPlanner() {
     });
   }, [state.selectedTrackId, state.tracks]);
 
+  const toggleSelectedAlwaysOnTop = useCallback(() => {
+    if (!state.selectedTrackId) return;
+    const track = state.tracks.find((t) => t.instanceId === state.selectedTrackId);
+    if (!track) return;
+    dispatch({
+      type: "UPDATE_TRACK",
+      instanceId: track.instanceId,
+      updates: { alwaysOnTop: !track.alwaysOnTop },
+    });
+  }, [state.selectedTrackId, state.tracks]);
+
   return {
     state,
     dispatch,
@@ -1173,6 +1184,7 @@ export function useTrackPlanner() {
     flipSelectedTrack,
     toggleSelectedTunnel,
     toggleSelectedBridge,
+    toggleSelectedAlwaysOnTop,
     terrainMode,
     terrainFirstPoint,
     startTerrainMode,

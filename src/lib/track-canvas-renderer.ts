@@ -855,17 +855,25 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
     }
   };
 
-  // Draw all tracks in one pass so elevation markers do NOT force a top rendering layer.
-  // Tunnel/bridge overlays can therefore cover any track uniformly.
-  drawLayer(sortSelected(tracks));
+  // Tracks explicitly marked as alwaysOnTop are rendered in a dedicated top layer.
+  const normalTracks = tracks.filter((t) => !t.alwaysOnTop);
+  const alwaysTopTracks = tracks.filter((t) => t.alwaysOnTop);
 
-  // Overlays on top of tracks (tunnel green covers tracks inside tunnel)
+  // Base tracks layer
+  drawLayer(sortSelected(normalTracks));
+
+  // Overlays on top of base tracks (tunnel/bridge highlights)
   const portals = params.portals ?? [];
   if (!skipBackground && terrainZones.length > 0) {
     drawTerrainZones(ctx, terrainZones, tracks, catalog, transform);
   }
   if (!skipBackground && portals.length > 0) {
     drawPortals(ctx, portals, tracks, catalog, transform);
+  }
+
+  // Forced top tracks above overlays
+  if (alwaysTopTracks.length > 0) {
+    drawLayer(sortSelected(alwaysTopTracks));
   }
 
   const dots: WorldConnectionDot[] = [];

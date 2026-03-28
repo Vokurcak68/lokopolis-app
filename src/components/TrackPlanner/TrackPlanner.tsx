@@ -532,6 +532,19 @@ export default function TrackPlanner() {
                 )}
 
                 <button
+                  onClick={planner.toggleSelectedAlwaysOnTop}
+                  className="h-8 rounded-md border px-3 text-sm font-medium transition"
+                  style={{
+                    borderColor: selTrack?.alwaysOnTop ? "var(--accent)" : "var(--border)",
+                    color: selTrack?.alwaysOnTop ? "var(--accent)" : "var(--text-body)",
+                    background: selTrack?.alwaysOnTop ? "var(--accent-bg)" : "transparent",
+                  }}
+                  title="Vždy navrch"
+                >
+                  ⤴️ Vždy navrch
+                </button>
+
+                <button
                   onClick={() => planner.removeTrack(planner.state.selectedTrackId!)}
                   className="h-8 rounded-md border px-3 text-sm font-medium transition"
                   style={{ borderColor: "var(--border)", color: "#ef4444" }}

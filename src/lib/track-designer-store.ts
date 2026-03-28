@@ -27,6 +27,8 @@ export interface PlacedTrack {
   isBridge?: boolean;
   /** Is this inside a tunnel */
   isTunnel?: boolean;
+  /** Force this track to render on top in 2D canvas */
+  alwaysOnTop?: boolean;
   /** Mirror the piece in Z axis (flips curves/turnouts to other direction) */
   flipZ?: boolean;
 }
