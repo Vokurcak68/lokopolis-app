@@ -1506,13 +1506,23 @@ function TerrainCorridors({
       d.v += rows * cols;
     };
 
+    let debugTunnelCount = 0;
+    let debugNormalCount = 0;
     for (const track of tracks) {
       const piece = catalog[track.pieceId];
       if (!piece) continue;
 
       const mode = getTrackTerrainMode(track, zoneTrackKind);
+      if (mode === "tunnel") debugTunnelCount++;
+      else if (mode === "normal") debugNormalCount++;
       const points = buildTrackCorridorPoints(track, piece, elevMap);
       addStrip(mode, points);
+    }
+    if (typeof console !== "undefined") {
+      console.log("[TerrainCorridors] tracks:", tracks.length, "tunnel:", debugTunnelCount, "normal:", debugNormalCount, "zoneTrackKind size:", zoneTrackKind.size, "terrainZones:", terrainZones.length);
+      // Log isTunnel flags
+      const tunnelTracks = tracks.filter(t => t.isTunnel);
+      if (tunnelTracks.length) console.log("[TerrainCorridors] tracks with isTunnel:", tunnelTracks.map(t => t.instanceId));
     }
 
     const makeGeom = (pos: number[], idx: number[]) => {
