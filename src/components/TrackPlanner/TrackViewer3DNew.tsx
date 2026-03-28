@@ -1427,14 +1427,13 @@ function TerrainCorridors({
 
     const addStrip = (mode: TerrainPatchMode, points: TerrainCorridorPoint[]) => {
       if (points.length < 2) return;
+      if (mode === "bridge") return; // keep original bridge model without terrain cut under it
 
       const d = modeData[mode];
-      const centerOffset = mode === "tunnel" ? 12 : mode === "bridge" ? -14 : -0.8;
+      const centerOffset = mode === "tunnel" ? 12 : -0.8;
       const halfW = mode === "tunnel"
         ? PATCH_TUNNEL_HALF_WIDTH_MM
-        : mode === "bridge"
-          ? PATCH_BRIDGE_HALF_WIDTH_MM
-          : PATCH_NORMAL_HALF_WIDTH_MM;
+        : PATCH_NORMAL_HALF_WIDTH_MM;
 
       const laneFactors = [-1, -0.58, 0, 0.58, 1];
 
