@@ -694,6 +694,88 @@ function drawTrackPiece(
   }
 }
 
+function drawForcedTunnelOverlayForTracks(
+  ctx: CanvasRenderingContext2D,
+  tracks: PlacedTrack[],
+  catalog: Record<string, TrackPieceDefinition>,
+  transform: ViewTransform,
+) {
+  if (tracks.length === 0) return;
+
+  const pathWidth = Math.max(10, 22 * transform.zoom);
+
+  for (const track of tracks) {
+    const piece = catalog[track.pieceId];
+    if (!piece) continue;
+    const segs = getPieceSegmentsLocal(piece);
+
+    // Wide green hill shape
+    ctx.strokeStyle = "rgba(60, 120, 50, 0.5)";
+    ctx.lineWidth = pathWidth * 1.8;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    for (const seg of segs) {
+      const pts = sampleSegmentWorld(seg, track, 6 / transform.zoom);
+      drawPolyline(ctx, pts, transform);
+    }
+
+    // Darker core
+    ctx.strokeStyle = "rgba(45, 90, 35, 0.55)";
+    ctx.lineWidth = pathWidth;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    for (const seg of segs) {
+      const pts = sampleSegmentWorld(seg, track, 6 / transform.zoom);
+      drawPolyline(ctx, pts, transform);
+    }
+
+    // Dashed track hint through the hill
+    ctx.setLineDash([4, 5]);
+    ctx.strokeStyle = "rgba(200, 190, 160, 0.4)";
+    ctx.lineWidth = 1.5;
+    for (const seg of segs) {
+      const pts = sampleSegmentWorld(seg, track, 8 / transform.zoom);
+      drawPolyline(ctx, pts, transform);
+    }
+    ctx.setLineDash([]);
+  }
+}
+
+function drawTrackFlagIndicators(
+  ctx: CanvasRenderingContext2D,
+  tracks: PlacedTrack[],
+  transform: ViewTransform,
+) {
+  for (const track of tracks) {
+    const labels: { text: string; bg: string; fg: string }[] = [];
+    if (track.alwaysOnTop) labels.push({ text: "TOP", bg: "rgba(245, 158, 11, 0.9)", fg: "#111827" });
+    if (track.alwaysUnderTunnel) labels.push({ text: "TUN", bg: "rgba(45, 90, 35, 0.9)", fg: "#f8fafc" });
+    if (labels.length === 0) continue;
+
+    const p = worldToScreen(track.position, transform);
+    let x = p.x + 8;
+    const y = p.y - 10;
+
+    ctx.font = "bold 10px system-ui, sans-serif";
+    for (const label of labels) {
+      const tw = ctx.measureText(label.text).width;
+      const padX = 4;
+      const w = tw + padX * 2;
+      const h = 14;
+
+      ctx.fillStyle = label.bg;
+      ctx.fillRect(x, y - h + 2, w, h);
+      ctx.strokeStyle = "rgba(17,24,39,0.55)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x, y - h + 2, w, h);
+
+      ctx.fillStyle = label.fg;
+      ctx.fillText(label.text, x + padX, y - 1);
+      x += w + 4;
+    }
+  }
+}
+
 function drawConnectionDots(
   ctx: CanvasRenderingContext2D,
   dots: WorldConnectionDot[],
@@ -873,6 +955,12 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
     drawPortals(ctx, portals, tracks, catalog, transform);
   }
 
+  // Forced per-track tunnel cover (for hidden branches etc.)
+  if (!skipBackground) {
+    const forcedTunnelTracks = tracks.filter((t) => t.alwaysUnderTunnel);
+    drawForcedTunnelOverlayForTracks(ctx, forcedTunnelTracks, catalog, transform);
+  }
+
   // Forced top tracks above overlays
   if (alwaysTopTracks.length > 0) {
     drawLayer(sortSelected(alwaysTopTracks));
@@ -893,6 +981,10 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
 
   if (!skipBackground && elevationPoints.length > 0) {
     drawElevationMarkers(ctx, elevationPoints, tracks, catalog, transform);
+  }
+
+  if (!skipBackground) {
+    drawTrackFlagIndicators(ctx, tracks, transform);
   }
 }
 
