@@ -29,6 +29,8 @@ export interface PlacedTrack {
   isTunnel?: boolean;
   /** Force this track to render on top in 2D canvas */
   alwaysOnTop?: boolean;
+  /** Force this track to stay under tunnel-style overlay in 2D canvas */
+  alwaysUnderTunnel?: boolean;
   /** Mirror the piece in Z axis (flips curves/turnouts to other direction) */
   flipZ?: boolean;
 }

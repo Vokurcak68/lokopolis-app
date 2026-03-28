@@ -545,6 +545,19 @@ export default function TrackPlanner() {
                 </button>
 
                 <button
+                  onClick={planner.toggleSelectedAlwaysUnderTunnel}
+                  className="h-8 rounded-md border px-3 text-sm font-medium transition"
+                  style={{
+                    borderColor: selTrack?.alwaysUnderTunnel ? "#4d7d41" : "var(--border)",
+                    color: selTrack?.alwaysUnderTunnel ? "#4d7d41" : "var(--text-body)",
+                    background: selTrack?.alwaysUnderTunnel ? "rgba(77,125,65,0.15)" : "transparent",
+                  }}
+                  title="Vždy pod tunelem"
+                >
+                  🟢 Vždy pod tunelem
+                </button>
+
+                <button
                   onClick={() => planner.removeTrack(planner.state.selectedTrackId!)}
                   className="h-8 rounded-md border px-3 text-sm font-medium transition"
                   style={{ borderColor: "var(--border)", color: "#ef4444" }}

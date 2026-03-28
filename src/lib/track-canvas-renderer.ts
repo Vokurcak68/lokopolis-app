@@ -856,11 +856,13 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
   };
 
   // Tracks explicitly marked as alwaysOnTop are rendered in a dedicated top layer.
-  const normalTracks = tracks.filter((t) => !t.alwaysOnTop);
+  // Tracks marked as alwaysUnderTunnel are always part of the base layer (under overlays).
   const alwaysTopTracks = tracks.filter((t) => t.alwaysOnTop);
+  const alwaysUnderTunnelTracks = tracks.filter((t) => t.alwaysUnderTunnel && !t.alwaysOnTop);
+  const normalTracks = tracks.filter((t) => !t.alwaysOnTop && !t.alwaysUnderTunnel);
 
-  // Base tracks layer
-  drawLayer(sortSelected(normalTracks));
+  // Base tracks layer (under overlays)
+  drawLayer(sortSelected([...normalTracks, ...alwaysUnderTunnelTracks]));
 
   // Overlays on top of base tracks (tunnel/bridge highlights)
   const portals = params.portals ?? [];

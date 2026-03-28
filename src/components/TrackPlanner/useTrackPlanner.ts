@@ -1135,10 +1135,23 @@ export function useTrackPlanner() {
     if (!state.selectedTrackId) return;
     const track = state.tracks.find((t) => t.instanceId === state.selectedTrackId);
     if (!track) return;
+    const next = !track.alwaysOnTop;
     dispatch({
       type: "UPDATE_TRACK",
       instanceId: track.instanceId,
-      updates: { alwaysOnTop: !track.alwaysOnTop },
+      updates: { alwaysOnTop: next, alwaysUnderTunnel: next ? false : track.alwaysUnderTunnel },
+    });
+  }, [state.selectedTrackId, state.tracks]);
+
+  const toggleSelectedAlwaysUnderTunnel = useCallback(() => {
+    if (!state.selectedTrackId) return;
+    const track = state.tracks.find((t) => t.instanceId === state.selectedTrackId);
+    if (!track) return;
+    const next = !track.alwaysUnderTunnel;
+    dispatch({
+      type: "UPDATE_TRACK",
+      instanceId: track.instanceId,
+      updates: { alwaysUnderTunnel: next, alwaysOnTop: next ? false : track.alwaysOnTop },
     });
   }, [state.selectedTrackId, state.tracks]);
 
@@ -1185,6 +1198,7 @@ export function useTrackPlanner() {
     toggleSelectedTunnel,
     toggleSelectedBridge,
     toggleSelectedAlwaysOnTop,
+    toggleSelectedAlwaysUnderTunnel,
     terrainMode,
     terrainFirstPoint,
     startTerrainMode,
