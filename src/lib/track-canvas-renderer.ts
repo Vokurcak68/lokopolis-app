@@ -1300,11 +1300,16 @@ function computeTrackPointFromT(
 /**
  * Find path of (trackId, tStart, tEnd) segments between two TrackPoints,
  * following snapped connections. BFS over track graph.
+ * 
+ * IMPORTANT: For portals, we want to use the actual t parameter of the portal,
+ * not map it to connection points (a=0, b=1). This ensures the green path
+ * starts exactly at the portal mouth, not at the end of the track.
  */
 function findTrackPathSegments(
   start: TrackPoint,
   end: TrackPoint,
   tracks: PlacedTrack[],
+  catalog: Record<string, TrackPieceDefinition>,
 ): { trackId: string; tFrom: number; tTo: number }[] {
   // Same track — trivial
   if (start.trackId === end.trackId) {
@@ -1350,11 +1355,52 @@ function findTrackPathSegments(
 
   if (!parent.has(end.trackId)) {
     // No connected path — just straight between portals
+    // Use start.t and end.t directly instead of mapping to conn points
     return [
       { trackId: start.trackId, tFrom: start.t, tTo: start.t > 0.5 ? 1 : 0 },
       { trackId: end.trackId, tFrom: end.t > 0.5 ? 1 : 0, tTo: end.t },
     ];
   }
+
+  // Helper: get t value for a connection point on a track
+  // We need to find where the connection point lies on the track's primary path
+  const getConnectionT = (trackId: string, connId: string, tracks: PlacedTrack[], catalog: Record<string, TrackPieceDefinition>): number | null => {
+    const track = tracks.find((t) => t.instanceId === trackId);
+    if (!track) return null;
+    const piece = catalog[track.pieceId];
+    if (!piece) return null;
+
+    const conn = piece.connections.find((c) => c.id === connId);
+    if (!conn) return null;
+
+    // Connection point in local space
+    const localConn = { x: conn.position.x, z: conn.position.z };
+
+    // Find t along the primary path using sampleSegmentWorld
+    const primarySegs = getPrimarySegments(piece);
+    if (primarySegs.length === 0) return null;
+
+    // Sample points along the primary path and find closest to connection
+    const samples: { t: number; dist: number }[] = [];
+    const totalLen = primarySegs.reduce((sum, s) => sum + segmentLength(s), 0);
+    let cumLen = 0;
+
+    for (const seg of primarySegs) {
+      const segLen = segmentLength(seg);
+      const numSamples = Math.max(10, Math.ceil(segLen / 5));
+      for (let i = 0; i <= numSamples; i++) {
+        const segT = i / numSamples;
+        const localPt = pointAndTangentAt(seg, segT).point;
+        const dist = Math.hypot(localPt.x - localConn.x, localPt.z - localConn.z);
+        samples.push({ t: (cumLen + segT * segLen) / totalLen, dist });
+      }
+      cumLen += segLen;
+    }
+
+    // Return t of closest sample
+    const closest = samples.reduce((best, s) => s.dist < best.dist ? s : best, samples[0]);
+    return closest.t;
+  };
 
   // Reconstruct path
   const path: string[] = [];
@@ -1364,10 +1410,6 @@ function findTrackPathSegments(
     cur = parent.get(cur)!.fromTrackId;
   }
   path.unshift(start.trackId);
-
-  // Build segments with t-ranges
-  // Connection "a" = t=0 end, connection "b"/"c"/"d" = t=1 end (simplified)
-  const connToT = (connId: string) => (connId === "a" ? 0 : 1);
 
   const segments: { trackId: string; tFrom: number; tTo: number }[] = [];
 
@@ -1380,20 +1422,21 @@ function findTrackPathSegments(
         segments.push({ trackId: tid, tFrom: start.t, tTo: end.t });
       } else {
         const p = parent.get(path[i + 1])!;
-        const exitT = connToT(p.viaConnId);
+        // Use actual t of the connection point, not hardcoded 0 or 1
+        const exitT = getConnectionT(tid, p.viaConnId, tracks, catalog) ?? 1;
         segments.push({ trackId: tid, tFrom: start.t, tTo: exitT });
       }
     } else if (i === path.length - 1) {
       // Last track: from entry connection to end.t
       const p = parent.get(tid)!;
-      const entryT = connToT(p.entryConnId);
+      const entryT = getConnectionT(tid, p.entryConnId, tracks, catalog) ?? 0;
       segments.push({ trackId: tid, tFrom: entryT, tTo: end.t });
     } else {
       // Middle track: traverse fully from entry to exit
       const pEntry = parent.get(tid)!;
       const pExit = parent.get(path[i + 1])!;
-      const entryT = connToT(pEntry.entryConnId);
-      const exitT = connToT(pExit.viaConnId);
+      const entryT = getConnectionT(tid, pEntry.entryConnId, tracks, catalog) ?? 0;
+      const exitT = getConnectionT(tid, pExit.viaConnId, tracks, catalog) ?? 1;
       segments.push({ trackId: tid, tFrom: entryT, tTo: exitT });
     }
   }
@@ -1410,7 +1453,7 @@ function sampleTrackPath(
   catalog: Record<string, TrackPieceDefinition>,
   numSamples: number,
 ): LocalPoint[] {
-  const segments = findTrackPathSegments(zone.start, zone.end, tracks);
+  const segments = findTrackPathSegments(zone.start, zone.end, tracks, catalog);
   const points: LocalPoint[] = [];
 
   // Distribute samples proportionally to segment t-ranges
@@ -1870,28 +1913,35 @@ export function drawPortals(
     return d1.pos;
   };
 
-  // Pro portály: vykreslíme jen segment mezi dvěma body na stejné stopě (nebo přímou čáru mezi nimi)
-  // Použijeme computeTrackPointFromT přímo bez findTrackPathSegments
+  // Pro portály: vykreslíme trasu mezi dvěma body
+  // Použijeme findTrackPathSegments pro případ, kdy portály jsou na různých stopách a připojené
   const drawPortalSegment = (start: TrackPoint, end: TrackPoint) => {
-    // Pokud na stejné stopě → jen segment
-    if (start.trackId === end.trackId) {
-      const tStart = Math.min(start.t, end.t);
-      const tEnd = Math.max(start.t, end.t);
-      const points: LocalPoint[] = [];
-      const samples = Math.max(2, Math.ceil(40 * Math.abs(tEnd - tStart)));
-      for (let i = 0; i <= samples; i++) {
-        const t = tStart + (tEnd - tStart) * (i / samples);
-        const wp = computeTrackPointFromT({ trackId: start.trackId, t }, tracks, catalog);
+    const segments = findTrackPathSegments(start, end, tracks, catalog);
+    const points: LocalPoint[] = [];
+
+    // Distribute samples proportionally to segment t-ranges
+    const totalSpan = segments.reduce((sum, s) => sum + Math.abs(s.tTo - s.tFrom), 0) || 1;
+
+    for (const seg of segments) {
+      const span = Math.abs(seg.tTo - seg.tFrom);
+      const n = Math.max(2, Math.round((span / totalSpan) * 40));
+      for (let i = 0; i <= n; i++) {
+        const t = seg.tFrom + (seg.tTo - seg.tFrom) * (i / n);
+        const wp = computeTrackPointFromT({ trackId: seg.trackId, t }, tracks, catalog);
         if (wp) points.push(wp.pos);
       }
-      return points;
     }
 
-    // Jinak → jen dva body (začátek a konec)
-    const p1 = trackPointToWorld(start, tracks, catalog);
-    const p2 = trackPointToWorld(end, tracks, catalog);
-    if (!p1 || !p2) return [];
-    return [p1, p2];
+    // Snap first and last path point to the actual cached world positions of the portals
+    // (avoids mismatch when t maps to a slightly different point, e.g. on turnout primary vs all segments)
+    if (points.length > 0 && start.worldX !== undefined && start.worldZ !== undefined) {
+      points[0] = { x: start.worldX, z: start.worldZ };
+    }
+    if (points.length > 0 && end.worldX !== undefined && end.worldZ !== undefined) {
+      points[points.length - 1] = { x: end.worldX, z: end.worldZ };
+    }
+
+    return points;
   };
 
   const drawBetween = (a: TrackPoint, b: TrackPoint, kind: "tunnel" | "bridge") => {
