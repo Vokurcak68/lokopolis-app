@@ -855,34 +855,17 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
     }
   };
 
-  // Elevated = only tracks that directly have an elevation marker with height > 0.
-  // No propagation through snap connections — only the track with the marker itself.
-  // These are drawn ABOVE tunnel/bridge overlays (they visually cross over the tunnel).
-  const elevatedTrackIds = new Set<string>();
-  for (const ep of elevationPoints) {
-    if (ep.elevation > 0) elevatedTrackIds.add(ep.trackId);
-  }
-  // If a track has both >0 and =0 markers, it stays elevated (it has a ramp on it)
+  // Draw all tracks in one pass so elevation markers do NOT force a top rendering layer.
+  // Tunnel/bridge overlays can therefore cover any track uniformly.
+  drawLayer(sortSelected(tracks));
 
-  // Split ALL tracks (not just normal) into ground-level and elevated
-  const groundTracks = tracks.filter((t) => !elevatedTrackIds.has(t.instanceId));
-  const elevatedTracks = tracks.filter((t) => elevatedTrackIds.has(t.instanceId));
-
-  // Draw ground-level tracks (everything without elevation markers > 0)
-  drawLayer(sortSelected(groundTracks));
-
-  // Overlays on top of ground-level tracks (tunnel green covers tracks inside tunnel)
+  // Overlays on top of tracks (tunnel green covers tracks inside tunnel)
   const portals = params.portals ?? [];
   if (!skipBackground && terrainZones.length > 0) {
     drawTerrainZones(ctx, terrainZones, tracks, catalog, transform);
   }
   if (!skipBackground && portals.length > 0) {
     drawPortals(ctx, portals, tracks, catalog, transform);
-  }
-
-  // Elevated tracks on top of overlays (crossing over tunnels/bridges)
-  if (elevatedTracks.length > 0) {
-    drawLayer(sortSelected(elevatedTracks));
   }
 
   const dots: WorldConnectionDot[] = [];
