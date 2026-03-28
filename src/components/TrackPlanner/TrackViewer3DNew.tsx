@@ -736,9 +736,7 @@ function TrackPiece3D({
         <BridgeSupports centerPoints={primaryPoints} gaugeMm={gaugeMm} />
       )}
 
-      {track.isTunnel && (
-        <TunnelHill centerPoints={primaryPoints} gaugeMm={gaugeMm} />
-      )}
+      {/* Tunnel hill replaced by terrain corridor v2 */}
     </group>
   );
 }
@@ -1425,22 +1423,61 @@ function TerrainCorridors({
       bridge: { pos: [] as number[], idx: [] as number[], v: 0 },
     };
 
+    const TUNNEL_PROFILE_SEGMENTS = 10; // cross-section segments for tunnel hill
+
     const addStrip = (mode: TerrainPatchMode, points: TerrainCorridorPoint[]) => {
       if (points.length < 2) return;
       if (mode === "bridge") return; // keep original bridge model without terrain cut under it
 
       const d = modeData[mode];
-      const centerOffset = mode === "tunnel" ? 12 : -0.8;
-      const halfW = mode === "tunnel"
-        ? PATCH_TUNNEL_HALF_WIDTH_MM
-        : PATCH_NORMAL_HALF_WIDTH_MM;
 
+      if (mode === "tunnel") {
+        // Semi-elliptical hill profile (like a real tunnel mound)
+        const hillHalfW = PATCH_TUNNEL_HALF_WIDTH_MM;
+        const hillHeight = 38; // mm above track
+        const cols = TUNNEL_PROFILE_SEGMENTS + 1;
+
+        for (const p of points) {
+          const px = -p.tangentZ;
+          const pz = p.tangentX;
+          const baseY = p.y - 1;
+
+          for (let j = 0; j <= TUNNEL_PROFILE_SEGMENTS; j++) {
+            const angle = (j / TUNNEL_PROFILE_SEGMENTS) * Math.PI; // 0..PI
+            const dx = Math.cos(angle) * hillHalfW; // -halfW..+halfW
+            const dy = Math.sin(angle) * hillHeight; // 0..hillHeight..0
+
+            d.pos.push(
+              p.x + px * dx,
+              baseY + dy,
+              p.z + pz * dx,
+            );
+          }
+        }
+
+        const rows = points.length;
+        for (let r = 0; r < rows - 1; r++) {
+          for (let c = 0; c < cols - 1; c++) {
+            const a = d.v + r * cols + c;
+            const b = a + 1;
+            const c1 = a + cols;
+            const d1 = c1 + 1;
+            d.idx.push(a, b, c1, b, d1, c1);
+          }
+        }
+
+        d.v += rows * cols;
+        return;
+      }
+
+      // Normal mode: flat ribbon along track
+      const halfW = PATCH_NORMAL_HALF_WIDTH_MM;
       const laneFactors = [-1, -0.58, 0, 0.58, 1];
 
       for (const p of points) {
         const px = -p.tangentZ;
         const pz = p.tangentX;
-        const centerY = p.y + centerOffset;
+        const centerY = p.y - 0.8;
 
         for (const lf of laneFactors) {
           const abs = Math.abs(lf);
@@ -1514,14 +1551,9 @@ function TerrainCorridors({
       {tunnelGeom && (
         <mesh geometry={tunnelGeom} receiveShadow castShadow>
           <meshStandardMaterial
-            color="#5f7a43"
-            roughness={0.98}
+            color="#5a7340"
+            roughness={0.95}
             metalness={0}
-            transparent
-            opacity={0.98}
-            polygonOffset
-            polygonOffsetFactor={-1}
-            polygonOffsetUnits={-1}
           />
         </mesh>
       )}
