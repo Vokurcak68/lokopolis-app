@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode, type JSX } from "react";
 
 const tabs = [
   { id: "quick", label: "🚀 Rychlý start" },
