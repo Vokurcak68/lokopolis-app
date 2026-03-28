@@ -855,36 +855,17 @@ export function renderTrackCanvas(params: RenderTrackCanvasParams) {
     }
   };
 
+  // Draw all tracks in one pass so elevation markers do NOT force a top rendering layer.
+  // Tunnel/bridge overlays can therefore cover any track uniformly.
+  drawLayer(sortSelected(tracks));
+
+  // Overlays on top of tracks (tunnel green covers tracks inside tunnel)
   const portals = params.portals ?? [];
-
-  // IMPORTANT: elevation alone does NOT mean "over tunnel".
-  // A tunnel can exist at elevation > 0 as well.
-  // So tunnel membership is driven by explicit track flag `isTunnel`.
-  const tunnelTracks = tracks.filter((t) => t.isTunnel === true);
-  const nonTunnelTracks = tracks.filter((t) => t.isTunnel !== true);
-
-  if (!skipBackground) {
-    const tunnelZones = terrainZones.filter((z) => z.kind === "tunnel");
-    const bridgeZones = terrainZones.filter((z) => z.kind === "bridge");
-    const tunnelPortals = portals.filter((p) => p.kind === "tunnel");
-    const bridgePortals = portals.filter((p) => p.kind === "bridge");
-
-    // 1) Tunnel tracks first
-    drawLayer(sortSelected(tunnelTracks));
-
-    // 2) Tunnel overlays above tunnel tracks (so tracks in tunnel are hidden by tunnel)
-    if (tunnelZones.length > 0) drawTerrainZones(ctx, tunnelZones, tracks, catalog, transform);
-    if (tunnelPortals.length > 0) drawPortals(ctx, tunnelPortals, tracks, catalog, transform);
-
-    // 3) Non-tunnel tracks above tunnel overlays (tracks that go OVER tunnel)
-    if (nonTunnelTracks.length > 0) drawLayer(sortSelected(nonTunnelTracks));
-
-    // 4) Bridge overlays on top of everything track-related
-    if (bridgeZones.length > 0) drawTerrainZones(ctx, bridgeZones, tracks, catalog, transform);
-    if (bridgePortals.length > 0) drawPortals(ctx, bridgePortals, tracks, catalog, transform);
-  } else {
-    // Preview/ghost render path: keep tracks-only rendering
-    drawLayer(sortSelected(tracks));
+  if (!skipBackground && terrainZones.length > 0) {
+    drawTerrainZones(ctx, terrainZones, tracks, catalog, transform);
+  }
+  if (!skipBackground && portals.length > 0) {
+    drawPortals(ctx, portals, tracks, catalog, transform);
   }
 
   const dots: WorldConnectionDot[] = [];
