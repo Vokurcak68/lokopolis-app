@@ -1363,7 +1363,7 @@ function findTrackPathSegments(
   }
 
   // Helper: get t value for a connection point on a track
-  // We need to find where the connection point lies on the track's full path
+  // We need to find where the connection point lies on the track's primary path
   const getConnectionT = (trackId: string, connId: string, tracks: PlacedTrack[], catalog: Record<string, TrackPieceDefinition>): number | null => {
     const track = tracks.find((t) => t.instanceId === trackId);
     if (!track) return null;
@@ -1376,30 +1376,46 @@ function findTrackPathSegments(
     // Connection point in local space
     const localConn = { x: conn.position.x, z: conn.position.z };
 
-    // Find t along the FULL path (all segments) using sampleSegmentWorld
-    const allSegs = getPieceSegmentsLocal(piece);
-    if (allSegs.length === 0) return null;
+    // Find t along the primary path using sampleSegmentWorld
+    const primarySegs = getPrimarySegments(piece);
+    if (primarySegs.length === 0) return null;
 
-    // Sample points along the full path and find closest to connection
-    const samples: { t: number; dist: number }[] = [];
-    const totalLen = allSegs.reduce((sum, s) => sum + segmentLength(s), 0);
+    // Calculate cumulative length up to each segment
+    const segLengths = primarySegs.map(segmentLength);
+    const totalLen = segLengths.reduce((a, b) => a + b, 0);
+
+    // Find the segment containing the connection point (by distance)
     let cumLen = 0;
-
-    for (const seg of allSegs) {
-      const segLen = segmentLength(seg);
+    for (let i = 0; i < primarySegs.length; i++) {
+      const seg = primarySegs[i];
+      const segLen = segLengths[i];
+      
+      // Sample points on this segment to find closest to connection
       const numSamples = Math.max(10, Math.ceil(segLen / 5));
-      for (let i = 0; i <= numSamples; i++) {
-        const segT = i / numSamples;
+      let closestDist = Infinity;
+      let closestTInSeg = 0;
+      
+      for (let j = 0; j <= numSamples; j++) {
+        const segT = j / numSamples;
         const localPt = pointAndTangentAt(seg, segT).point;
         const dist = Math.hypot(localPt.x - localConn.x, localPt.z - localConn.z);
-        samples.push({ t: (cumLen + segT * segLen) / totalLen, dist });
+        if (dist < closestDist) {
+          closestDist = dist;
+          closestTInSeg = segT;
+        }
       }
+      
+      // If this segment contains the connection point (within tolerance)
+      if (closestDist < 2) { // 2mm tolerance
+        const t = (cumLen + closestTInSeg * segLen) / totalLen;
+        return t;
+      }
+      
       cumLen += segLen;
     }
 
-    // Return t of closest sample
-    const closest = samples.reduce((best, s) => s.dist < best.dist ? s : best, samples[0]);
-    return closest.t;
+    // Fallback: return t based on connection name (a=0, b=1)
+    return connId === "a" ? 0 : 1;
   };
 
   // Reconstruct path
@@ -1914,15 +1930,49 @@ export function drawPortals(
   };
 
   // Pro portály: vykreslíme trasu mezi dvěma body
-  // Použijeme findTrackPathSegments pro případ, kdy portály jsou na různých stopách a připojené
+  // POUŽIJEME POUZE start.t a end.t (skutečné parametry portálů), NE t z connection pointů
   const drawPortalSegment = (start: TrackPoint, end: TrackPoint) => {
-    const segments = findTrackPathSegments(start, end, tracks, catalog);
     const points: LocalPoint[] = [];
-
-    // Distribute samples proportionally to segment t-ranges
-    const totalSpan = segments.reduce((sum, s) => sum + Math.abs(s.tTo - s.tFrom), 0) || 1;
-
-    for (const seg of segments) {
+    
+    // Pokud na stejné stopě → jen segment mezi nimi
+    if (start.trackId === end.trackId) {
+      const tStart = Math.min(start.t, end.t);
+      const tEnd = Math.max(start.t, end.t);
+      const samples = Math.max(2, Math.ceil(40 * (tEnd - tStart)));
+      for (let i = 0; i <= samples; i++) {
+        const t = tStart + (tEnd - tStart) * (i / samples);
+        const wp = computeTrackPointFromT({ trackId: start.trackId, t }, tracks, catalog);
+        if (wp) points.push(wp.pos);
+      }
+      return points;
+    }
+    
+    // Jinak → najdeme cestu přes stopy, ale použijeme t z start/end
+    const segments = findTrackPathSegments(start, end, tracks, catalog);
+    
+    // Build corrected t-ranges using start.t and end.t
+    const correctedSegments: { trackId: string; tFrom: number; tTo: number }[] = [];
+    
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
+      if (i === 0) {
+        // First segment: from start.t to 1 (or 0 depending on direction)
+        const tTo = start.t > 0.5 ? 1 : 0;
+        correctedSegments.push({ trackId: seg.trackId, tFrom: start.t, tTo });
+      } else if (i === segments.length - 1) {
+        // Last segment: from 0 (or 1) to end.t
+        const tFrom = end.t > 0.5 ? 1 : 0;
+        correctedSegments.push({ trackId: seg.trackId, tFrom, tTo: end.t });
+      } else {
+        // Middle segments: full segment (0 to 1)
+        correctedSegments.push({ trackId: seg.trackId, tFrom: 0, tTo: 1 });
+      }
+    }
+    
+    // Sample points using corrected t-ranges
+    const totalSpan = correctedSegments.reduce((sum, s) => sum + Math.abs(s.tTo - s.tFrom), 0) || 1;
+    
+    for (const seg of correctedSegments) {
       const span = Math.abs(seg.tTo - seg.tFrom);
       const n = Math.max(2, Math.round((span / totalSpan) * 40));
       for (let i = 0; i <= n; i++) {
@@ -1931,16 +1981,7 @@ export function drawPortals(
         if (wp) points.push(wp.pos);
       }
     }
-
-    // Snap first and last path point to the actual cached world positions of the portals
-    // (avoids mismatch when t maps to a slightly different point, e.g. on turnout primary vs all segments)
-    if (points.length > 0 && start.worldX !== undefined && start.worldZ !== undefined) {
-      points[0] = { x: start.worldX, z: start.worldZ };
-    }
-    if (points.length > 0 && end.worldX !== undefined && end.worldZ !== undefined) {
-      points[points.length - 1] = { x: end.worldX, z: end.worldZ };
-    }
-
+    
     return points;
   };
 
