@@ -5,7 +5,7 @@ import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import * as THREE from "three";
-import type { PlacedTrack, BoardConfig, ElevationPoint, TerrainZone } from "@/lib/track-designer-store";
+import type { PlacedTrack, BoardConfig, ElevationPoint, TerrainZone, Portal } from "@/lib/track-designer-store";
 import type { TrackPieceDefinition } from "@/lib/track-library";
 import { getPieceSegmentsLocal, pointAndTangentAt, localToWorld, getGaugeMm, getBoardPathMm, type PathSegment, type LocalPoint } from "@/lib/track-canvas-renderer";
 
@@ -17,6 +17,7 @@ interface TrackViewer3DProps {
   board: BoardConfig;
   elevationPoints: ElevationPoint[];
   terrainZones: TerrainZone[];
+  portals: Portal[];
 }
 
 // ── Constants ──
@@ -1403,19 +1404,96 @@ function buildTrackCorridorPoints(
   return out;
 }
 
+function derivePortalTrackKinds(
+  portals: Portal[],
+  tracks: PlacedTrack[],
+): Map<string, TerrainZone["kind"]> {
+  const out = new Map<string, TerrainZone["kind"]>();
+  const byId = new Map(tracks.map((t) => [t.instanceId, t]));
+
+  // Build snap graph
+  const graph = new Map<string, string[]>();
+  for (const track of tracks) {
+    const edges: string[] = [];
+    for (const snap of Object.values(track.snappedConnections)) {
+      const [to] = snap.split(":");
+      if (to) edges.push(to);
+    }
+    graph.set(track.instanceId, edges);
+  }
+
+  // Group paired portals
+  const paired = new Map<string, Portal>();
+  for (const p of portals) paired.set(p.id, p);
+
+  const processed = new Set<string>();
+  for (const portal of portals) {
+    if (!portal.pairedPortalId || processed.has(portal.id)) continue;
+    const other = paired.get(portal.pairedPortalId);
+    if (!other) continue;
+    processed.add(portal.id);
+    processed.add(other.id);
+
+    // Collect all portal endpoint track IDs
+    const startIds = [portal.track1.trackId];
+    if (portal.track2) startIds.push(portal.track2.trackId);
+    const endIds = [other.track1.trackId];
+    if (other.track2) endIds.push(other.track2.trackId);
+
+    // BFS from each start to find path to any end
+    const endSet = new Set(endIds);
+    for (const startId of startIds) {
+      const visited = new Set([startId]);
+      const parent = new Map<string, string>();
+      const q = [startId];
+      let found: string | null = null;
+
+      while (q.length > 0) {
+        const cur = q.shift()!;
+        if (endSet.has(cur) && cur !== startId) { found = cur; break; }
+        for (const next of graph.get(cur) ?? []) {
+          if (visited.has(next)) continue;
+          visited.add(next);
+          parent.set(next, cur);
+          q.push(next);
+        }
+      }
+
+      if (found) {
+        let cur: string | undefined = found;
+        while (cur) {
+          out.set(cur, portal.kind);
+          if (cur === startId) break;
+          cur = parent.get(cur);
+        }
+      }
+    }
+  }
+
+  return out;
+}
+
 function TerrainCorridors({
   tracks,
   catalog,
   elevMap,
   terrainZones,
+  portals,
 }: {
   tracks: PlacedTrack[];
   catalog: Record<string, TrackPieceDefinition>;
   elevMap: Map<string, { startElev: number; endElev: number }>;
   terrainZones: TerrainZone[];
+  portals: Portal[];
 }) {
   const { normalGeom, tunnelGeom, bridgeGeom } = useMemo(() => {
+    // Merge zone-based + portal-based track kind maps
     const zoneTrackKind = buildZoneTrackKindMap(terrainZones, tracks);
+    const portalTrackKind = derivePortalTrackKinds(portals, tracks);
+    // Portal-derived kinds take precedence
+    for (const [tid, kind] of portalTrackKind) {
+      if (!zoneTrackKind.has(tid)) zoneTrackKind.set(tid, kind);
+    }
 
     const modeData = {
       normal: { pos: [] as number[], idx: [] as number[], v: 0 },
@@ -1539,7 +1617,7 @@ function TerrainCorridors({
       tunnelGeom: makeGeom(modeData.tunnel.pos, modeData.tunnel.idx),
       bridgeGeom: makeGeom(modeData.bridge.pos, modeData.bridge.idx),
     };
-  }, [tracks, catalog, elevMap, terrainZones]);
+  }, [tracks, catalog, elevMap, terrainZones, portals]);
 
   return (
     <group>
@@ -1852,7 +1930,7 @@ function TerrainMesh({
   );
 }
 
-function Scene({ tracks, catalog, board, elevationPoints, terrainZones }: TrackViewer3DProps) {
+function Scene({ tracks, catalog, board, elevationPoints, terrainZones, portals }: TrackViewer3DProps) {
   const widthMm = board.width * 10;
   const depthMm = board.depth * 10;
   const boardDiagonal = Math.sqrt(widthMm * widthMm + depthMm * depthMm);
@@ -1895,6 +1973,7 @@ function Scene({ tracks, catalog, board, elevationPoints, terrainZones }: TrackV
         catalog={catalog}
         elevMap={elevMap}
         terrainZones={terrainZones}
+        portals={portals}
       />
 
       {/* Tracks */}
