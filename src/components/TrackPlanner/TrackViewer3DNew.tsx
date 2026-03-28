@@ -1638,16 +1638,8 @@ function Scene({ tracks, catalog, board, elevationPoints, terrainZones }: TrackV
         intensity={0.5}
       />
 
-      {/* Board + terrain mesh v1 */}
+      {/* Board (terrain mesh v1 dočasně vypnutý) */}
       <BoardMesh board={board} />
-      <TerrainMesh
-        board={board}
-        tracks={tracks}
-        catalog={catalog}
-        elevMap={elevMap}
-        elevationPoints={elevationPoints}
-        terrainZones={terrainZones}
-      />
 
       {/* Tracks */}
       {tracks.map((track) => {
