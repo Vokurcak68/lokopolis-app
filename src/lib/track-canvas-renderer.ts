@@ -1929,42 +1929,32 @@ export function drawPortals(
     return d1.pos;
   };
 
-  // Pro portály: vykreslíme trasu mezi dvěma body
-  // POUŽIJEME POUZE start.t a end.t (skutečné parametry portálů), NE t z connection pointů
+  // Pro portály: vykreslíme trasu mezi portály po připojených stopách
+  // Použijeme findTrackPathSegments pro nalezení cesty, ale t-razy budeme počítat od portálů
   const drawPortalSegment = (start: TrackPoint, end: TrackPoint) => {
     const points: LocalPoint[] = [];
     
-    // Pokud na stejné stopě → jen segment mezi nimi
-    if (start.trackId === end.trackId) {
-      const tStart = Math.min(start.t, end.t);
-      const tEnd = Math.max(start.t, end.t);
-      const samples = Math.max(2, Math.ceil(40 * (tEnd - tStart)));
-      for (let i = 0; i <= samples; i++) {
-        const t = tStart + (tEnd - tStart) * (i / samples);
-        const wp = computeTrackPointFromT({ trackId: start.trackId, t }, tracks, catalog);
-        if (wp) points.push(wp.pos);
-      }
-      return points;
-    }
-    
-    // Jinak → najdeme cestu přes stopy, ale použijeme t z start/end
+    // Najdeme cestu přes stopy
     const segments = findTrackPathSegments(start, end, tracks, catalog);
+    if (segments.length === 0) return points;
     
-    // Build corrected t-ranges using start.t and end.t
+    // Pro každý segment vypočítáme skutečné t-razy
+    // První segment: od start.t do connection pointu (t=1)
+    // Poslední segment: od connection pointu (t=0) do end.t
+    // Střední segmenty: celá stopa (t=0 do t=1)
+    
     const correctedSegments: { trackId: string; tFrom: number; tTo: number }[] = [];
     
     for (let i = 0; i < segments.length; i++) {
       const seg = segments[i];
       if (i === 0) {
-        // First segment: from start.t to 1 (or 0 depending on direction)
-        const tTo = start.t > 0.5 ? 1 : 0;
-        correctedSegments.push({ trackId: seg.trackId, tFrom: start.t, tTo });
+        // První segment: od start.t do 1 (konec stopy, connection point)
+        correctedSegments.push({ trackId: seg.trackId, tFrom: start.t, tTo: 1 });
       } else if (i === segments.length - 1) {
-        // Last segment: from 0 (or 1) to end.t
-        const tFrom = end.t > 0.5 ? 1 : 0;
-        correctedSegments.push({ trackId: seg.trackId, tFrom, tTo: end.t });
+        // Poslední segment: od 0 (začátek stopy, connection point) do end.t
+        correctedSegments.push({ trackId: seg.trackId, tFrom: 0, tTo: end.t });
       } else {
-        // Middle segments: full segment (0 to 1)
+        // Střední segmenty: celá stopa
         correctedSegments.push({ trackId: seg.trackId, tFrom: 0, tTo: 1 });
       }
     }
@@ -1974,6 +1964,7 @@ export function drawPortals(
     
     for (const seg of correctedSegments) {
       const span = Math.abs(seg.tTo - seg.tFrom);
+      if (span < 0.001) continue; // Skip if too small
       const n = Math.max(2, Math.round((span / totalSpan) * 40));
       for (let i = 0; i <= n; i++) {
         const t = seg.tFrom + (seg.tTo - seg.tFrom) * (i / n);
