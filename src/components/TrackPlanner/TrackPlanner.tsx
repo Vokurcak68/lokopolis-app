@@ -205,10 +205,6 @@ export default function TrackPlanner() {
         }}
         saveToast={saveToast}
         onToggleCatalogMobile={() => planner.setCatalogOpenMobile((v) => !v)}
-        terrainMode={planner.terrainMode}
-        onStartTunnel={() => planner.startTerrainMode("tunnel")}
-        onStartBridge={() => planner.startTerrainMode("bridge")}
-        onCancelTerrain={planner.cancelTerrainMode}
         viewMode={viewMode}
         onToggleViewMode={() => setViewMode((v) => (v === "2d" ? "3d" : "2d"))}
         elevationMode={planner.elevationMode}

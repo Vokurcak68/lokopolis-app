@@ -43,10 +43,6 @@ interface TrackTopBarProps {
   saveToast?: "ok" | "fail" | null;
   onExportList: () => void;
   onToggleCatalogMobile: () => void;
-  terrainMode: "tunnel" | "bridge" | null;
-  onStartTunnel: () => void;
-  onStartBridge: () => void;
-  onCancelTerrain: () => void;
   viewMode: "2d" | "3d";
   onToggleViewMode: () => void;
   elevationMode: boolean;
@@ -96,10 +92,6 @@ export function TrackTopBar(props: TrackTopBarProps) {
     saveToast,
     onExportList,
     onToggleCatalogMobile,
-    terrainMode,
-    onStartTunnel,
-    onStartBridge,
-    onCancelTerrain,
     viewMode,
     onToggleViewMode,
     elevationMode,
@@ -292,30 +284,6 @@ export function TrackTopBar(props: TrackTopBarProps) {
             title="Nastavit výšky"
           >
             📐 Výšky
-          </button>
-          <button
-            onClick={terrainMode === "tunnel" ? onCancelTerrain : onStartTunnel}
-            className={btnBase}
-            style={{
-              borderColor: terrainMode === "tunnel" ? "#6366f1" : "var(--border)",
-              color: terrainMode === "tunnel" ? "#fff" : "var(--text-body)",
-              background: terrainMode === "tunnel" ? "#6366f1" : "transparent",
-            }}
-            title="Vložit tunel"
-          >
-            🏔️ Tunel
-          </button>
-          <button
-            onClick={terrainMode === "bridge" ? onCancelTerrain : onStartBridge}
-            className={btnBase}
-            style={{
-              borderColor: terrainMode === "bridge" ? "#f59e0b" : "var(--border)",
-              color: terrainMode === "bridge" ? "#fff" : "var(--text-body)",
-              background: terrainMode === "bridge" ? "#f59e0b" : "transparent",
-            }}
-            title="Vložit most"
-          >
-            🌉 Most
           </button>
           {/* New portal buttons */}
           <div className="relative" style={{ display: "inline-block" }}>
