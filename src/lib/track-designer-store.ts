@@ -410,7 +410,6 @@ export function designerReducer(state: DesignerState, action: DesignerAction): D
 
     case "REMOVE_PORTAL": {
       const next = pushHistory(state);
-      // Also unpair partner if paired
       const removing = next.portals.find((p) => p.id === action.portalId);
       let portals = next.portals.filter((p) => p.id !== action.portalId);
       if (removing?.pairedPortalId) {
@@ -418,7 +417,20 @@ export function designerReducer(state: DesignerState, action: DesignerAction): D
           p.id === removing.pairedPortalId ? { ...p, pairedPortalId: null } : p,
         );
       }
-      return { ...next, portals };
+      // Collect track IDs still referenced by remaining portals
+      const portalTrackIds = new Set<string>();
+      for (const p of portals) {
+        portalTrackIds.add(p.track1.trackId);
+        if (p.track2) portalTrackIds.add(p.track2.trackId);
+      }
+      // Clear isTunnel/isBridge on tracks that no longer have any portal
+      const tracks = next.tracks.map((t) => {
+        if ((t.isTunnel || t.isBridge) && !portalTrackIds.has(t.instanceId)) {
+          return { ...t, isTunnel: false, isBridge: false };
+        }
+        return t;
+      });
+      return { ...next, portals, tracks };
     }
 
     case "PAIR_PORTALS": {
