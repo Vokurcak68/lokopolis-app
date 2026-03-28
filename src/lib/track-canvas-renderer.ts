@@ -1870,9 +1870,32 @@ export function drawPortals(
     return d1.pos;
   };
 
+  // Pro portály: vykreslíme jen segment mezi dvěma body na stejné stopě (nebo přímou čáru mezi nimi)
+  // Použijeme computeTrackPointFromT přímo bez findTrackPathSegments
+  const drawPortalSegment = (start: TrackPoint, end: TrackPoint) => {
+    // Pokud na stejné stopě → jen segment
+    if (start.trackId === end.trackId) {
+      const tStart = Math.min(start.t, end.t);
+      const tEnd = Math.max(start.t, end.t);
+      const points: LocalPoint[] = [];
+      const samples = Math.max(2, Math.ceil(40 * Math.abs(tEnd - tStart)));
+      for (let i = 0; i <= samples; i++) {
+        const t = tStart + (tEnd - tStart) * (i / samples);
+        const wp = computeTrackPointFromT({ trackId: start.trackId, t }, tracks, catalog);
+        if (wp) points.push(wp.pos);
+      }
+      return points;
+    }
+
+    // Jinak → jen dva body (začátek a konec)
+    const p1 = trackPointToWorld(start, tracks, catalog);
+    const p2 = trackPointToWorld(end, tracks, catalog);
+    if (!p1 || !p2) return [];
+    return [p1, p2];
+  };
+
   const drawBetween = (a: TrackPoint, b: TrackPoint, kind: "tunnel" | "bridge") => {
-    const zone: TerrainZone = { id: "tmp", kind, start: a, end: b };
-    const pathPoints = sampleTrackPath(zone, tracks, catalog, 40);
+    const pathPoints = drawPortalSegment(a, b);
 
     // Snap first and last path point to the actual cached world positions of the portals
     // (avoids mismatch when t maps to a slightly different point, e.g. on turnout primary vs all segments)
