@@ -32,14 +32,27 @@ const BALLAST_WIDTH_FACTOR = 1.97; // ballast width factor
 const BALLAST_HEIGHT_MM = 1.5; // ballast ribbon thickness
 
 // Visual tuning (new 3D)
-const COLOR_SKY = "#b9d8ff";
-const COLOR_GROUND = "#6f8f55";
-const COLOR_GROUND_DARK = "#5f7a49";
 const COLOR_BALLAST = "#7e6a50";
 const COLOR_SLEEPER = "#5b4634";
 const COLOR_RAIL = "#b9bec6";
 const COLOR_BRIDGE = "#6f7786";
 const COLOR_TUNNEL = "#5a6f4b";
+
+// Terrain mesh v1
+const TERRAIN_BASE_Y = -4;
+const TERRAIN_OUTSIDE_Y = -10;
+const TERRAIN_MIN_Y = -90;
+const TERRAIN_MAX_Y = 140;
+const TERRAIN_STEP_MM = 22;
+const TRACK_INFLUENCE_RADIUS_MM = 75;
+const ELEVATION_INFLUENCE_RADIUS_MM = 180;
+const ZONE_INFLUENCE_RADIUS_MM = 130;
+const TERRAIN_TUNNEL_RAISE_MM = 22;
+const TERRAIN_BRIDGE_CUT_MM = 28;
+const TERRAIN_SMOOTH_PASSES = 2;
+const TERRAIN_SURFACE_COLOR = "#6f8f55";
+const TERRAIN_SIDE_COLOR = "#5b7148";
+const TERRAIN_OUTSIDE_COLOR = "#607a4c";
 
 // ── Elevation graph solver ──
 
@@ -1105,29 +1118,356 @@ function buildSnapMap(tracks: PlacedTrack[], catalog: Record<string, TrackPieceD
   return map;
 }
 
-function GroundPlane({ board }: { board: BoardConfig }) {
-  const widthMm = board.width * 10;
-  const depthMm = board.depth * 10;
-  const boardDiagonal = Math.sqrt(widthMm * widthMm + depthMm * depthMm);
+type TerrainSample = { x: number; y: number; z: number; isTunnel: boolean; isBridge: boolean };
+type ZoneSample = { kind: TerrainZone["kind"]; start: { x: number; y: number; z: number }; end: { x: number; y: number; z: number } };
+
+type TerrainCell = { x: number; z: number; y: number; inside: boolean };
+
+function clamp(v: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, v));
+}
+
+function smoothstep01(t: number) {
+  const c = clamp(t, 0, 1);
+  return c * c * (3 - 2 * c);
+}
+
+function pointInPolygon2D(x: number, z: number, polygon: LocalPoint[]): boolean {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].x;
+    const zi = polygon[i].z;
+    const xj = polygon[j].x;
+    const zj = polygon[j].z;
+    const intersects = ((zi > z) !== (zj > z))
+      && (x < ((xj - xi) * (z - zi)) / ((zj - zi) || 1e-6) + xi);
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
+function distanceToSegment2D(px: number, pz: number, ax: number, az: number, bx: number, bz: number) {
+  const abx = bx - ax;
+  const abz = bz - az;
+  const denom = abx * abx + abz * abz;
+  const t = denom > 0 ? clamp(((px - ax) * abx + (pz - az) * abz) / denom, 0, 1) : 0;
+  const qx = ax + abx * t;
+  const qz = az + abz * t;
+  return { dist: Math.hypot(px - qx, pz - qz), t };
+}
+
+function sampleTrackPoint(
+  track: PlacedTrack,
+  piece: TrackPieceDefinition,
+  t: number,
+  elevMap: Map<string, { startElev: number; endElev: number }>,
+) {
+  const segments = getPieceSegmentsLocal(piece);
+  if (!segments.length) {
+    return { x: track.position.x, y: getElevationFromMap(track.instanceId, t, elevMap), z: track.position.z };
+  }
+
+  if (segments.length === 1) {
+    const p = pointAndTangentAt(segments[0], clamp(t, 0, 1)).point;
+    const w = localToWorld(p, track);
+    return { x: w.x, y: getElevationFromMap(track.instanceId, t, elevMap), z: w.z };
+  }
+
+  const lengths = segments.map((seg) => seg.kind === "line"
+    ? Math.hypot(seg.to.x - seg.from.x, seg.to.z - seg.from.z)
+    : seg.radius * Math.abs(seg.endAngle - seg.startAngle));
+  const total = lengths.reduce((a, b) => a + b, 0) || 1;
+  const target = clamp(t, 0, 1) * total;
+
+  let acc = 0;
+  for (let i = 0; i < segments.length; i++) {
+    const len = lengths[i];
+    const next = acc + len;
+    if (target <= next || i === segments.length - 1) {
+      const localT = len > 0 ? (target - acc) / len : 0;
+      const p = pointAndTangentAt(segments[i], clamp(localT, 0, 1)).point;
+      const w = localToWorld(p, track);
+      return { x: w.x, y: getElevationFromMap(track.instanceId, t, elevMap), z: w.z };
+    }
+    acc = next;
+  }
+
+  return { x: track.position.x, y: getElevationFromMap(track.instanceId, t, elevMap), z: track.position.z };
+}
+
+function buildTerrainSamples(
+  tracks: PlacedTrack[],
+  catalog: Record<string, TrackPieceDefinition>,
+  elevMap: Map<string, { startElev: number; endElev: number }>,
+): TerrainSample[] {
+  const out: TerrainSample[] = [];
+  for (const track of tracks) {
+    const piece = catalog[track.pieceId];
+    if (!piece) continue;
+    const segments = getPieceSegmentsLocal(piece);
+    for (const seg of segments) {
+      const pts = sampleSegmentWorld3D(seg, track, elevMap, 18);
+      for (const p of pts) {
+        out.push({ x: p.x, y: p.y, z: p.z, isTunnel: !!track.isTunnel, isBridge: !!track.isBridge });
+      }
+    }
+  }
+  return out;
+}
+
+function buildZoneSamples(
+  terrainZones: TerrainZone[],
+  tracks: PlacedTrack[],
+  catalog: Record<string, TrackPieceDefinition>,
+  elevMap: Map<string, { startElev: number; endElev: number }>,
+): ZoneSample[] {
+  const byTrack = new Map(tracks.map((t) => [t.instanceId, t]));
+  const out: ZoneSample[] = [];
+
+  for (const zone of terrainZones) {
+    const t1 = byTrack.get(zone.start.trackId);
+    const t2 = byTrack.get(zone.end.trackId);
+    if (!t1 || !t2) continue;
+    const p1 = catalog[t1.pieceId];
+    const p2 = catalog[t2.pieceId];
+    if (!p1 || !p2) continue;
+    out.push({
+      kind: zone.kind,
+      start: sampleTrackPoint(t1, p1, zone.start.t, elevMap),
+      end: sampleTrackPoint(t2, p2, zone.end.t, elevMap),
+    });
+  }
+  return out;
+}
+
+function smoothCells(cells: TerrainCell[], cols: number, rows: number) {
+  let current = cells;
+  for (let pass = 0; pass < TERRAIN_SMOOTH_PASSES; pass++) {
+    const next = current.map((c) => ({ ...c }));
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const idx = r * cols + c;
+        if (!current[idx].inside) continue;
+
+        let sum = current[idx].y * 4;
+        let w = 4;
+        for (let dz = -1; dz <= 1; dz++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dz === 0) continue;
+            const rr = r + dz;
+            const cc = c + dx;
+            if (rr < 0 || rr >= rows || cc < 0 || cc >= cols) continue;
+            const ni = rr * cols + cc;
+            if (!current[ni].inside) continue;
+            const ww = dx === 0 || dz === 0 ? 1.4 : 0.8;
+            sum += current[ni].y * ww;
+            w += ww;
+          }
+        }
+        next[idx].y = sum / w;
+      }
+    }
+    current = next;
+  }
+  return current;
+}
+
+function TerrainMesh({
+  board,
+  tracks,
+  catalog,
+  elevMap,
+  elevationPoints,
+  terrainZones,
+}: {
+  board: BoardConfig;
+  tracks: PlacedTrack[];
+  catalog: Record<string, TrackPieceDefinition>;
+  elevMap: Map<string, { startElev: number; endElev: number }>;
+  elevationPoints: ElevationPoint[];
+  terrainZones: TerrainZone[];
+}) {
+  const { topGeom, sideGeom, outsideGeom } = useMemo(() => {
+    const widthMm = board.width * 10;
+    const depthMm = board.depth * 10;
+    const poly = getBoardPathMm(board);
+    const cols = Math.max(2, Math.floor(widthMm / TERRAIN_STEP_MM) + 1);
+    const rows = Math.max(2, Math.floor(depthMm / TERRAIN_STEP_MM) + 1);
+
+    const trackSamples = buildTerrainSamples(tracks, catalog, elevMap);
+    const zoneSamples = buildZoneSamples(terrainZones, tracks, catalog, elevMap);
+
+    const markerSamples = elevationPoints.map((ep) => {
+      const tr = tracks.find((t) => t.instanceId === ep.trackId);
+      if (!tr) return null;
+      const piece = catalog[tr.pieceId];
+      if (!piece) return null;
+      return sampleTrackPoint(tr, piece, ep.t, elevMap);
+    }).filter(Boolean) as Array<{ x: number; y: number; z: number }>;
+
+    let cells: TerrainCell[] = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const x = (c / (cols - 1)) * widthMm;
+        const z = (r / (rows - 1)) * depthMm;
+        const inside = pointInPolygon2D(x, z, poly);
+
+        let y = inside ? TERRAIN_BASE_Y : TERRAIN_OUTSIDE_Y;
+
+        if (inside) {
+          y += Math.sin(x * 0.012) * Math.cos(z * 0.01) * 1.2;
+
+          for (const m of markerSamples) {
+            const d = Math.hypot(x - m.x, z - m.z);
+            if (d > ELEVATION_INFLUENCE_RADIUS_MM) continue;
+            const f = smoothstep01(1 - d / ELEVATION_INFLUENCE_RADIUS_MM);
+            y += m.y * 0.4 * f;
+          }
+
+          for (const s of trackSamples) {
+            const d = Math.hypot(x - s.x, z - s.z);
+            if (d > TRACK_INFLUENCE_RADIUS_MM) continue;
+            const f = smoothstep01(1 - d / TRACK_INFLUENCE_RADIUS_MM);
+
+            if (s.isTunnel) {
+              y = Math.max(y, s.y + TERRAIN_TUNNEL_RAISE_MM * f);
+            } else if (s.isBridge) {
+              y = Math.min(y, s.y - TERRAIN_BRIDGE_CUT_MM * f);
+            } else {
+              const target = s.y - 2.5;
+              y = y * (1 - 0.22 * f) + target * (0.22 * f);
+            }
+          }
+
+          for (const zSample of zoneSamples) {
+            const d = distanceToSegment2D(
+              x,
+              z,
+              zSample.start.x,
+              zSample.start.z,
+              zSample.end.x,
+              zSample.end.z,
+            );
+            if (d.dist > ZONE_INFLUENCE_RADIUS_MM) continue;
+            const f = smoothstep01(1 - d.dist / ZONE_INFLUENCE_RADIUS_MM);
+            const lineY = zSample.start.y + (zSample.end.y - zSample.start.y) * d.t;
+            if (zSample.kind === "tunnel") {
+              y = Math.max(y, lineY + TERRAIN_TUNNEL_RAISE_MM * 1.1 * f);
+            } else {
+              y = Math.min(y, lineY - TERRAIN_BRIDGE_CUT_MM * 1.1 * f);
+            }
+          }
+
+          y = clamp(y, TERRAIN_MIN_Y, TERRAIN_MAX_Y);
+        }
+
+        cells.push({ x, z, y, inside });
+      }
+    }
+
+    cells = smoothCells(cells, cols, rows);
+
+    const topPos: number[] = [];
+    const topIdx: number[] = [];
+    const topIndex = new Map<number, number>();
+
+    for (let i = 0; i < cells.length; i++) {
+      if (!cells[i].inside) continue;
+      topIndex.set(i, topPos.length / 3);
+      topPos.push(cells[i].x, cells[i].y, cells[i].z);
+    }
+
+    const addTri = (a: number, b: number, c: number) => {
+      const ia = topIndex.get(a);
+      const ib = topIndex.get(b);
+      const ic = topIndex.get(c);
+      if (ia == null || ib == null || ic == null) return;
+      topIdx.push(ia, ib, ic);
+    };
+
+    for (let r = 0; r < rows - 1; r++) {
+      for (let c = 0; c < cols - 1; c++) {
+        const a = r * cols + c;
+        const b = a + 1;
+        const cIdx = a + cols;
+        const d = cIdx + 1;
+        addTri(a, b, cIdx);
+        addTri(b, d, cIdx);
+      }
+    }
+
+    const sidePos: number[] = [];
+    const sideIdx: number[] = [];
+    let sv = 0;
+    const pushSide = (a: TerrainCell, b: TerrainCell) => {
+      sidePos.push(
+        a.x, a.y, a.z,
+        b.x, b.y, b.z,
+        b.x, TERRAIN_OUTSIDE_Y, b.z,
+        a.x, TERRAIN_OUTSIDE_Y, a.z,
+      );
+      sideIdx.push(sv, sv + 1, sv + 2, sv, sv + 2, sv + 3);
+      sv += 4;
+    };
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const idx = r * cols + c;
+        if (!cells[idx].inside) continue;
+
+        const neighbors = [
+          { ok: c + 1 < cols, idx: idx + 1, edgeA: idx, edgeB: r + 1 < rows ? idx + cols : idx },
+          { ok: c - 1 >= 0, idx: idx - 1, edgeA: idx, edgeB: r + 1 < rows ? idx + cols : idx },
+          { ok: r + 1 < rows, idx: idx + cols, edgeA: idx, edgeB: c + 1 < cols ? idx + 1 : idx },
+          { ok: r - 1 >= 0, idx: idx - cols, edgeA: idx, edgeB: c + 1 < cols ? idx + 1 : idx },
+        ];
+
+        for (const n of neighbors) {
+          if (!n.ok || cells[n.idx].inside) {
+            continue;
+          }
+          const a = cells[n.edgeA];
+          const b = cells[n.edgeB];
+          if (a && b && a.inside && b.inside) pushSide(a, b);
+        }
+      }
+    }
+
+    const topGeom = new THREE.BufferGeometry();
+    topGeom.setAttribute("position", new THREE.Float32BufferAttribute(topPos, 3));
+    topGeom.setIndex(topIdx);
+    topGeom.computeVertexNormals();
+
+    const sideGeom = new THREE.BufferGeometry();
+    sideGeom.setAttribute("position", new THREE.Float32BufferAttribute(sidePos, 3));
+    sideGeom.setIndex(sideIdx);
+    sideGeom.computeVertexNormals();
+
+    const outsideSize = Math.sqrt(widthMm * widthMm + depthMm * depthMm) * 2.6;
+    const outsideGeom = new THREE.PlaneGeometry(outsideSize, outsideSize, 1, 1);
+    outsideGeom.rotateX(-Math.PI / 2);
+
+    return { topGeom, sideGeom, outsideGeom };
+  }, [board, tracks, catalog, elevMap, elevationPoints, terrainZones]);
 
   return (
-    <>
-      {/* Broad terrain under the board to avoid "floating island" feel */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[widthMm / 2, -8, depthMm / 2]} receiveShadow>
-        <planeGeometry args={[boardDiagonal * 3.2, boardDiagonal * 3.2, 1, 1]} />
-        <meshStandardMaterial color={COLOR_GROUND} roughness={1} metalness={0} />
+    <group>
+      <mesh geometry={outsideGeom} position={[board.width * 5, TERRAIN_OUTSIDE_Y, board.depth * 5]} receiveShadow>
+        <meshStandardMaterial color={TERRAIN_OUTSIDE_COLOR} roughness={1} metalness={0} transparent opacity={0.5} />
       </mesh>
 
-      {/* Subtle darker layer for depth */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[widthMm / 2, -8.2, depthMm / 2]} receiveShadow>
-        <planeGeometry args={[boardDiagonal * 2.2, boardDiagonal * 2.2, 1, 1]} />
-        <meshStandardMaterial color={COLOR_GROUND_DARK} roughness={1} metalness={0} transparent opacity={0.35} />
+      <mesh geometry={topGeom} receiveShadow castShadow>
+        <meshStandardMaterial color={TERRAIN_SURFACE_COLOR} roughness={0.98} metalness={0} />
       </mesh>
-    </>
+
+      <mesh geometry={sideGeom} receiveShadow castShadow>
+        <meshStandardMaterial color={TERRAIN_SIDE_COLOR} roughness={0.95} metalness={0} />
+      </mesh>
+    </group>
   );
 }
 
-function Scene({ tracks, catalog, board, elevationPoints }: TrackViewer3DProps) {
+function Scene({ tracks, catalog, board, elevationPoints, terrainZones }: TrackViewer3DProps) {
   const widthMm = board.width * 10;
   const depthMm = board.depth * 10;
   const boardDiagonal = Math.sqrt(widthMm * widthMm + depthMm * depthMm);
@@ -1145,34 +1485,34 @@ function Scene({ tracks, catalog, board, elevationPoints }: TrackViewer3DProps) 
   return (
     <>
       {/* Scene background */}
-      <color attach="background" args={[COLOR_SKY]} />
-      <fog attach="fog" args={[COLOR_SKY, boardDiagonal * 1.8, boardDiagonal * 5]} />
+      <color attach="background" args={["#d4d0c8"]} />
 
       {/* Lighting */}
-      <ambientLight intensity={0.42} />
-      <hemisphereLight intensity={0.75} color="#ffffff" groundColor="#7b8a63" />
+      <ambientLight intensity={0.9} />
+      <hemisphereLight intensity={0.5} color="#ffffff" groundColor="#b0a890" />
       <directionalLight
-        position={[widthMm * 0.45, Math.max(widthMm, depthMm) * 1.6, depthMm * 0.25]}
-        intensity={1.35}
+        position={[board.width * 5, board.width * 8, board.depth * 5]}
+        intensity={1.2}
         castShadow
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
-        shadow-camera-near={10}
-        shadow-camera-far={boardDiagonal * 3}
-        shadow-camera-left={-boardDiagonal}
-        shadow-camera-right={boardDiagonal}
-        shadow-camera-top={boardDiagonal}
-        shadow-camera-bottom={-boardDiagonal}
-        shadow-bias={-0.00012}
+        shadow-bias={-0.0001}
       />
       <directionalLight
-        position={[-widthMm * 0.6, Math.max(widthMm, depthMm) * 0.9, -depthMm * 0.8]}
-        intensity={0.38}
+        position={[-board.width * 3, board.width * 5, -board.depth * 3]}
+        intensity={0.5}
       />
 
-      {/* Surrounding ground + board */}
-      <GroundPlane board={board} />
+      {/* Board + terrain mesh v1 */}
       <BoardMesh board={board} />
+      <TerrainMesh
+        board={board}
+        tracks={tracks}
+        catalog={catalog}
+        elevMap={elevMap}
+        elevationPoints={elevationPoints}
+        terrainZones={terrainZones}
+      />
 
       {/* Tracks */}
       {tracks.map((track) => {
@@ -1211,7 +1551,7 @@ export default function TrackViewer3DNew(props: TrackViewer3DProps) {
   const boardDiagonal = Math.sqrt(widthMm * widthMm + depthMm * depthMm);
 
   return (
-    <div className="h-full w-full" style={{ background: COLOR_SKY }}>
+    <div className="h-full w-full" style={{ background: "#d4d0c8" }}>
       <Canvas
         camera={{
           position: [widthMm / 2, Math.max(widthMm, depthMm) * 0.7, depthMm * 1.2],
