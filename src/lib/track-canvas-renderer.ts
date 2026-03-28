@@ -1363,7 +1363,7 @@ function findTrackPathSegments(
   }
 
   // Helper: get t value for a connection point on a track
-  // We need to find where the connection point lies on the track's primary path
+  // We need to find where the connection point lies on the track's full path
   const getConnectionT = (trackId: string, connId: string, tracks: PlacedTrack[], catalog: Record<string, TrackPieceDefinition>): number | null => {
     const track = tracks.find((t) => t.instanceId === trackId);
     if (!track) return null;
@@ -1376,16 +1376,16 @@ function findTrackPathSegments(
     // Connection point in local space
     const localConn = { x: conn.position.x, z: conn.position.z };
 
-    // Find t along the primary path using sampleSegmentWorld
-    const primarySegs = getPrimarySegments(piece);
-    if (primarySegs.length === 0) return null;
+    // Find t along the FULL path (all segments) using sampleSegmentWorld
+    const allSegs = getPieceSegmentsLocal(piece);
+    if (allSegs.length === 0) return null;
 
-    // Sample points along the primary path and find closest to connection
+    // Sample points along the full path and find closest to connection
     const samples: { t: number; dist: number }[] = [];
-    const totalLen = primarySegs.reduce((sum, s) => sum + segmentLength(s), 0);
+    const totalLen = allSegs.reduce((sum, s) => sum + segmentLength(s), 0);
     let cumLen = 0;
 
-    for (const seg of primarySegs) {
+    for (const seg of allSegs) {
       const segLen = segmentLength(seg);
       const numSamples = Math.max(10, Math.ceil(segLen / 5));
       for (let i = 0; i <= numSamples; i++) {
