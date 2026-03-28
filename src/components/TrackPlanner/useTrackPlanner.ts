@@ -981,6 +981,7 @@ export function useTrackPlanner() {
       // 4th click — second track of end portal
       if (endFirstTrackRef.current.trackId === point.trackId) return false;
 
+      const endFirstTrack = endFirstTrackRef.current;
       const startId = generatePortalId();
       const endId = generatePortalId();
       const startPortal: Portal = {
@@ -995,12 +996,33 @@ export function useTrackPlanner() {
         id: endId,
         kind: portalMode.kind,
         width: "double",
-        track1: endFirstTrackRef.current,
+        track1: endFirstTrack,
         track2: point,
         pairedPortalId: startId,
       };
       dispatch({ type: "ADD_PORTAL", portal: startPortal });
       dispatch({ type: "ADD_PORTAL", portal: endPortal });
+
+      // Auto-flag tracks between paired double portals as bridge/tunnel (for 3D rendering too)
+      const flag = portalMode.kind === "bridge"
+        ? { isBridge: true, isTunnel: false }
+        : { isTunnel: true, isBridge: false };
+
+      const flaggedIds = new Set<string>([
+        portalFirstTrack.trackId,
+        portalSecondTrack.trackId,
+        endFirstTrack.trackId,
+        point.trackId,
+      ]);
+
+      // Direct pairing by click order: start1↔end1 and start2↔end2
+      for (const tid of findTracksBetween(portalFirstTrack.trackId, endFirstTrack.trackId, state.tracks)) flaggedIds.add(tid);
+      for (const tid of findTracksBetween(portalSecondTrack.trackId, point.trackId, state.tracks)) flaggedIds.add(tid);
+
+      for (const tid of flaggedIds) {
+        dispatch({ type: "UPDATE_TRACK", instanceId: tid, updates: flag });
+      }
+
       setPortalMode(null);
       setPortalFirstTrack(null);
       setPortalSecondTrack(null);
