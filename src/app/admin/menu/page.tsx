@@ -20,6 +20,7 @@ const MENU_ITEMS: MenuItemConfig[] = [
   { key: "gallery", label: "Galerie", description: "Fotogalerie a videa", href: "/galerie", group: "Komunita" },
   { key: "events", label: "Akce", description: "Kalendář akcí a srazů", href: "/akce", group: "Komunita" },
   { key: "competition", label: "Soutěž", description: "Kolejiště měsíce", href: "/soutez", group: "Komunita" },
+  { key: "configurator", label: "Konfigurátor", description: "Návrhář tratí a 3D konfigurátor", href: "/konfigurator", group: "Komunita" },
   { key: "shop", label: "Shop", description: "E-shop s digitálními produkty", href: "/shop", group: "Obchod" },
   { key: "bazar", label: "Bazar", description: "C2C tržiště pro modeláře", href: "/bazar", group: "Obchod" },
   { key: "downloads", label: "Ke stažení", description: "Soubory ke stažení", href: "/ke-stazeni", group: "Obchod" },

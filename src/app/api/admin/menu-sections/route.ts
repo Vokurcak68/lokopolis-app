@@ -29,6 +29,7 @@ const DEFAULTS: Record<string, boolean> = {
   gallery: true,
   events: true,
   competition: true,
+  configurator: true,
   shop: true,
   bazar: true,
   downloads: true,

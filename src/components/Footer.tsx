@@ -9,7 +9,7 @@ type MenuSettings = Record<string, boolean>;
 export default function Footer() {
   const [menu, setMenu] = useState<MenuSettings>({
     home: true, articles: true, forum: true, gallery: true,
-    events: true, competition: true, shop: true, bazar: true, downloads: true,
+    events: true, competition: true, configurator: true, shop: true, bazar: true, downloads: true,
   });
 
   useEffect(() => {
@@ -62,6 +62,7 @@ export default function Footer() {
             {show("gallery") && <FooterLink href="/galerie">Galerie</FooterLink>}
             {show("downloads") && <FooterLink href="/ke-stazeni">Ke stažení</FooterLink>}
             {show("events") && <FooterLink href="/akce">Akce</FooterLink>}
+            {show("configurator") && <FooterLink href="/konfigurator">Konfigurátor</FooterLink>}
             <FooterLink href="/kamera">Live kamera</FooterLink>
           </div>
 
