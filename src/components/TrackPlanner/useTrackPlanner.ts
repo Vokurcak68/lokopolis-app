@@ -268,6 +268,14 @@ export function useTrackPlanner() {
 
   const setScale = useCallback(
     (scale: TrackScale) => {
+      if (scale === state.board.scale) return;
+
+      // Safety: changing scale creates a new unsaved workspace
+      // so autosave cannot overwrite an existing saved project with an empty board.
+      setCurrentProjectIdState(null);
+      setCurrentProjectName(null);
+      setCloudCurrentProjectId(null);
+
       dispatch({ type: "SET_BOARD", board: { ...state.board, scale } });
       dispatch({ type: "SET_ACTIVE_PIECE", pieceId: null });
       dispatch({ type: "CLEAR_TRACKS" });
