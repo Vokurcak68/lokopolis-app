@@ -8,7 +8,7 @@ const csp = [
   "font-src 'self' data:",
   "media-src 'self' blob:",
   "connect-src 'self' https://*.supabase.co https://challenges.cloudflare.com wss://*.trycloudflare.com",
-  "frame-src https://challenges.cloudflare.com",
+  "frame-src https://challenges.cloudflare.com https://www.youtube.com https://youtube.com https://www.youtube-nocookie.com",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
