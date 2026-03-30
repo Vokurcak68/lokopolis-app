@@ -16,7 +16,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://lokopolis-app.vercel.app"),
+  metadataBase: new URL("https://lokopolis.cz"),
   title: {
     default: "Lokopolis — Svět modelové železnice",
     template: "%s | Lokopolis",
@@ -40,10 +40,14 @@ export const metadata: Metadata = {
     title: "Lokopolis — Svět modelové železnice",
     description:
       "Komunita nadšenců do modelové železnice. Články, návody, recenze, galerie.",
-    url: "https://lokopolis-app.vercel.app",
+    url: "https://lokopolis.cz",
   },
   twitter: {
     card: "summary_large_image",
+    site: "@lokopolis",
+  },
+  alternates: {
+    canonical: "/",
   },
   robots: {
     index: true,
