@@ -49,8 +49,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       .eq("status", "active"),
     supabase
       .from("forum_threads")
-      .select("id, updated_at, created_at, section:forum_sections(slug)")
-      .eq("is_hidden", false),
+      .select("id, updated_at, created_at, section:forum_sections(slug)"),
   ]);
 
   const articleEntries: MetadataRoute.Sitemap = (articlesRes.data || [])

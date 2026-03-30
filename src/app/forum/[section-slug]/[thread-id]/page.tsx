@@ -21,7 +21,7 @@ async function getThreadSeo(sectionSlug: string, threadId: string) {
 
   const { data: thread } = await supabase
     .from("forum_threads")
-    .select("id, title, content, created_at, updated_at, is_hidden, section_id")
+    .select("id, title, content, created_at, updated_at, section_id")
     .eq("id", threadId)
     .eq("section_id", section.id)
     .single();
@@ -55,13 +55,11 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   }
 
   const description = stripHtml(data.thread.content || `${data.thread.title} — diskuze na Lokopolis`).slice(0, 160);
-  const isIndexable = !data.thread.is_hidden;
-
   return {
     title: `${data.thread.title} — Fórum`,
     description,
     alternates: { canonical: `/forum/${sectionSlug}/${threadId}` },
-    robots: isIndexable ? { index: true, follow: true } : { index: false, follow: false },
+    robots: { index: true, follow: true },
     openGraph: {
       title: `${data.thread.title} — Fórum | Lokopolis`,
       description,
@@ -111,12 +109,10 @@ export default async function ThreadDetailPage({ params }: { params: Promise<Par
 
   return (
     <>
-      {!data.thread.is_hidden && (
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-        />
-      )}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <ThreadDetailClient />
     </>
   );
