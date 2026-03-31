@@ -208,22 +208,24 @@ export default function ListingCard({ listing, compact }: ListingCardProps) {
             {listing.status === "active" && listing.payment_methods?.includes("escrow") && <EscrowBadge size="sm" />}
           </div>
 
-          {/* Location + Date */}
+          {/* Location + Views + Date */}
           <div
             style={{
-              display: "flex",
-              justifyContent: "space-between",
+              display: "grid",
+              gridTemplateColumns: "1fr auto 1fr",
               alignItems: "center",
               fontSize: "12px",
               color: "var(--text-dimmer)",
+              gap: "8px",
             }}
           >
-            {listing.location && (
-              <span style={{ display: "flex", alignItems: "center", gap: "3px" }}>
-                📍 {listing.location}
-              </span>
-            )}
-            <span>{timeAgo(listing.created_at)}</span>
+            <span style={{ display: "flex", alignItems: "center", gap: "3px", minWidth: 0, justifySelf: "start", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {listing.location ? `📍 ${listing.location}` : " "}
+            </span>
+            <span style={{ justifySelf: "center", whiteSpace: "nowrap" }}>
+              👁️ {listing.view_count.toLocaleString("cs-CZ")}
+            </span>
+            <span style={{ justifySelf: "end", whiteSpace: "nowrap" }}>{timeAgo(listing.created_at)}</span>
           </div>
         </div>
       </div>
