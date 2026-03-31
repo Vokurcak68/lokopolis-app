@@ -138,9 +138,11 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
                   </p>
                 )}
                 <div className="flex items-center justify-between text-xs text-text-muted gap-3">
-                  <span>{article.author?.display_name || article.author?.username || "Anonym"}</span>
-                  <span>👁️ {article.view_count.toLocaleString("cs-CZ")}</span>
-                  <span>{formatDate(article.published_at)}</span>
+                  <span className="truncate">{article.author?.display_name || article.author?.username || "Anonym"}</span>
+                  <div className="flex items-center gap-2 ml-auto whitespace-nowrap">
+                    <span>👁️ {article.view_count.toLocaleString("cs-CZ")}</span>
+                    <span>{formatDate(article.published_at)}</span>
+                  </div>
                 </div>
               </div>
             </Link>
