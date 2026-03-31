@@ -891,7 +891,7 @@ export default function HomeContent({ data }: { data: HomePageData }) {
                         }}
                       >
                         <span style={{ fontSize: "12px", color: "var(--text-dimmer)", display: "flex", alignItems: "center", gap: "4px" }}>
-                          👁️ {a.view_count.toLocaleString("cs-CZ")}
+                          👁️ {(a.view_count_period ?? a.view_count).toLocaleString("cs-CZ")}
                         </span>
                       </div>
                     </div>

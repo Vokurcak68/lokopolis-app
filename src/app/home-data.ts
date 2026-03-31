@@ -32,6 +32,7 @@ export interface PopularArticle {
   excerpt: string | null;
   cover_image_url: string | null;
   view_count: number;
+  view_count_period?: number;
   category: { name: string; icon: string; slug: string } | null;
 }
 
@@ -384,8 +385,12 @@ async function fetchHomeDataInternal(): Promise<HomePageData> {
         .select("id, slug, title, excerpt, cover_image_url, view_count, category:categories(name, icon, slug)")
         .in("id", ids);
       if (popArticles && popArticles.length > 0) {
-        popularArticles = (popArticles as unknown as PopularArticle[]).sort(
-          (a, b) => (viewMap[b.id] || 0) - (viewMap[a.id] || 0)
+        const normalized = (popArticles as unknown as PopularArticle[]).map((article) => ({
+          ...article,
+          view_count_period: viewMap[article.id] || 0,
+        }));
+        popularArticles = normalized.sort(
+          (a, b) => (b.view_count_period || 0) - (a.view_count_period || 0)
         );
       }
     } else {
