@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/components/Auth/AuthProvider";
 import type { Download, DownloadCategory } from "@/types/database";
@@ -415,11 +416,16 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
    ============================================================ */
 
 export default function DownloadsPage() {
+  const searchParams = useSearchParams();
   const { user, profile, loading: authLoading } = useAuth();
   const [downloads, setDownloads] = useState<Download[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState<DownloadCategory | "all">("all");
   const [showUpload, setShowUpload] = useState(false);
+
+  const fileParam = searchParams.get("file")?.trim() || "";
+  const fileIdParam = searchParams.get("fileId")?.trim() || "";
+  const categoryParam = (searchParams.get("category")?.trim() || "") as DownloadCategory | "";
 
   const isAdmin = profile?.role === "admin";
 
@@ -438,6 +444,12 @@ export default function DownloadsPage() {
         query = query.eq("category", activeCategory);
       }
 
+      if (fileIdParam) {
+        query = query.eq("id", fileIdParam);
+      } else if (fileParam) {
+        query = query.ilike("title", fileParam);
+      }
+
       const { data, error } = await query;
       if (error) throw error;
       setDownloads((data as Download[]) || []);
@@ -447,7 +459,25 @@ export default function DownloadsPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeCategory]);
+  }, [activeCategory, fileIdParam, fileParam]);
+
+  useEffect(() => {
+    if (categoryParam && CATEGORIES.some((c) => c.value === categoryParam)) {
+      setActiveCategory(categoryParam);
+    }
+  }, [categoryParam]);
+
+  const exactDownloadByTitle = useMemo(() => {
+    if (!fileParam || fileIdParam) return null;
+    const normalized = fileParam.toLowerCase();
+    return downloads.find((d) => d.title.toLowerCase() === normalized) ?? null;
+  }, [downloads, fileParam, fileIdParam]);
+
+  const displayedDownloads = useMemo(() => {
+    if (fileIdParam) return downloads;
+    if (exactDownloadByTitle) return [exactDownloadByTitle];
+    return downloads;
+  }, [downloads, fileIdParam, exactDownloadByTitle]);
 
   useEffect(() => {
     // Wait until auth state is resolved before fetching
@@ -579,12 +609,16 @@ export default function DownloadsPage() {
           <div style={{ fontSize: "32px", marginBottom: "12px" }}>⏳</div>
           <p style={{ color: "var(--text-dimmer)", fontSize: "14px" }}>Načítám soubory...</p>
         </div>
-      ) : downloads.length === 0 ? (
+      ) : displayedDownloads.length === 0 ? (
         <div style={{ textAlign: "center", padding: "64px 0" }}>
           <div style={{ fontSize: "48px", marginBottom: "16px" }}>📂</div>
           <p style={{ color: "var(--text-dim)", fontSize: "16px", marginBottom: "4px" }}>Žádné soubory k zobrazení</p>
           <p style={{ color: "var(--text-faint)", fontSize: "13px" }}>
-            {activeCategory !== "all" ? "Zkuste jinou kategorii" : "Zatím nebyly nahrány žádné soubory"}
+            {fileIdParam || fileParam
+              ? "Konkrétní soubor nebyl nalezen. Zkontrolujte parametr file/fileId v odkazu."
+              : activeCategory !== "all"
+                ? "Zkuste jinou kategorii"
+                : "Zatím nebyly nahrány žádné soubory"}
           </p>
         </div>
       ) : (
@@ -595,7 +629,7 @@ export default function DownloadsPage() {
             gap: "16px",
           }}
         >
-          {downloads.map((dl) => {
+          {displayedDownloads.map((dl) => {
             const icon = getFileIcon(dl.file_type, dl.file_name);
             const ext = dl.file_name.split(".").pop()?.toUpperCase() || "";
             const needsAuth = dl.access === "authenticated" && !user;
