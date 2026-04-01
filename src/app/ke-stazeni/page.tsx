@@ -420,6 +420,7 @@ export default function DownloadsPage() {
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState<DownloadCategory | "all">("all");
   const [showUpload, setShowUpload] = useState(false);
+  const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
 
   const [fileParam, setFileParam] = useState("");
   const [fileIdParam, setFileIdParam] = useState("");
@@ -511,6 +512,18 @@ export default function DownloadsPage() {
       fetchDownloads();
     } catch (err) {
       alert(err instanceof Error ? err.message : "Chyba při mazání");
+    }
+  }
+
+  async function handleCopyDeepLink(dl: Download) {
+    try {
+      if (typeof window === "undefined") return;
+      const deepLink = window.location.origin + "/ke-stazeni?file=" + encodeURIComponent(dl.title);
+      await navigator.clipboard.writeText(deepLink);
+      setCopiedLinkId(dl.id);
+      setTimeout(() => setCopiedLinkId((current) => (current === dl.id ? null : current)), 2000);
+    } catch {
+      alert("Nepodařilo se zkopírovat odkaz do schránky.");
     }
   }
 
@@ -763,29 +776,50 @@ export default function DownloadsPage() {
                     </button>
                   )}
                   {isAdmin && (
-                    <button
-                      onClick={() => handleDelete(dl)}
-                      style={{
-                        padding: "10px 14px",
-                        background: "var(--danger-bg)",
-                        border: "1px solid rgba(220,53,69,0.3)",
-                        borderRadius: "8px",
-                        color: "var(--danger)",
-                        fontSize: "13px",
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        transition: "all 0.2s",
-                        flexShrink: 0,
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = "rgba(220,53,69,0.2)";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = "var(--danger-bg)";
-                      }}
-                    >
-                      🗑️
-                    </button>
+                    <>
+                      <button
+                        onClick={() => handleCopyDeepLink(dl)}
+                        style={{
+                          padding: "10px 12px",
+                          background: copiedLinkId === dl.id ? "rgba(34,197,94,0.16)" : "var(--bg-input)",
+                          border: `1px solid ${copiedLinkId === dl.id ? "rgba(34,197,94,0.45)" : "var(--border)"}`,
+                          borderRadius: "8px",
+                          color: copiedLinkId === dl.id ? "#22c55e" : "var(--text-muted)",
+                          fontSize: "12px",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          transition: "all 0.2s",
+                          flexShrink: 0,
+                        }}
+                        title="Zkopírovat přímý odkaz na tento soubor"
+                      >
+                        {copiedLinkId === dl.id ? "✅ Zkopírováno" : "🔗 Link"}
+                      </button>
+
+                      <button
+                        onClick={() => handleDelete(dl)}
+                        style={{
+                          padding: "10px 14px",
+                          background: "var(--danger-bg)",
+                          border: "1px solid rgba(220,53,69,0.3)",
+                          borderRadius: "8px",
+                          color: "var(--danger)",
+                          fontSize: "13px",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          transition: "all 0.2s",
+                          flexShrink: 0,
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = "rgba(220,53,69,0.2)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = "var(--danger-bg)";
+                        }}
+                      >
+                        🗑️
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
