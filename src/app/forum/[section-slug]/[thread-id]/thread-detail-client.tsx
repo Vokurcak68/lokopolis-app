@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, type ReactNode } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -947,6 +947,58 @@ interface PostCardProps {
   showUser: boolean;
 }
 
+function renderLineWithLinks(line: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  const markdownOrUrlRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s]+)/g;
+
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = markdownOrUrlRegex.exec(line)) !== null) {
+    if (match.index > lastIndex) {
+      nodes.push(line.slice(lastIndex, match.index));
+    }
+
+    const markdownText = match[1];
+    const markdownUrl = match[2];
+    const plainUrl = match[3];
+
+    if (markdownText && markdownUrl) {
+      nodes.push(
+        <a
+          key={`md-${match.index}`}
+          href={markdownUrl}
+          target="_blank"
+          rel="noopener noreferrer nofollow"
+          style={{ color: "var(--accent)", textDecoration: "underline" }}
+        >
+          {markdownText}
+        </a>
+      );
+    } else if (plainUrl) {
+      nodes.push(
+        <a
+          key={`url-${match.index}`}
+          href={plainUrl}
+          target="_blank"
+          rel="noopener noreferrer nofollow"
+          style={{ color: "var(--accent)", textDecoration: "underline" }}
+        >
+          {plainUrl}
+        </a>
+      );
+    }
+
+    lastIndex = markdownOrUrlRegex.lastIndex;
+  }
+
+  if (lastIndex < line.length) {
+    nodes.push(line.slice(lastIndex));
+  }
+
+  return nodes;
+}
+
 function PostCard(props: PostCardProps) {
   const initials = props.authorName.charAt(0).toUpperCase();
   const wasEdited = props.createdAt !== props.updatedAt;
@@ -1062,7 +1114,7 @@ function PostCard(props: PostCardProps) {
                       </div>
                     );
                   }
-                  return <div key={i}>{line || "\u00A0"}</div>;
+                  return <div key={i}>{line ? renderLineWithLinks(line) : "\u00A0"}</div>;
                 })}
               </div>
 
