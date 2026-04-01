@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/components/Auth/AuthProvider";
 import type { Download, DownloadCategory } from "@/types/database";
@@ -416,16 +415,14 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
    ============================================================ */
 
 export default function DownloadsPage() {
-  const searchParams = useSearchParams();
   const { user, profile, loading: authLoading } = useAuth();
   const [downloads, setDownloads] = useState<Download[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState<DownloadCategory | "all">("all");
   const [showUpload, setShowUpload] = useState(false);
 
-  const fileParam = searchParams.get("file")?.trim() || "";
-  const fileIdParam = searchParams.get("fileId")?.trim() || "";
-  const categoryParam = (searchParams.get("category")?.trim() || "") as DownloadCategory | "";
+  const [fileParam, setFileParam] = useState("");
+  const [fileIdParam, setFileIdParam] = useState("");
 
   const isAdmin = profile?.role === "admin";
 
@@ -447,7 +444,7 @@ export default function DownloadsPage() {
       if (fileIdParam) {
         query = query.eq("id", fileIdParam);
       } else if (fileParam) {
-        query = query.ilike("title", fileParam);
+        query = query.eq("title", fileParam);
       }
 
       const { data, error } = await query;
@@ -462,10 +459,20 @@ export default function DownloadsPage() {
   }, [activeCategory, fileIdParam, fileParam]);
 
   useEffect(() => {
-    if (categoryParam && CATEGORIES.some((c) => c.value === categoryParam)) {
-      setActiveCategory(categoryParam);
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+
+    const file = params.get("file")?.trim() || "";
+    const fileId = params.get("fileId")?.trim() || "";
+    const category = (params.get("category")?.trim() || "") as DownloadCategory | "";
+
+    setFileParam(file);
+    setFileIdParam(fileId);
+
+    if (category && CATEGORIES.some((c) => c.value === category)) {
+      setActiveCategory(category);
     }
-  }, [categoryParam]);
+  }, []);
 
   const exactDownloadByTitle = useMemo(() => {
     if (!fileParam || fileIdParam) return null;
