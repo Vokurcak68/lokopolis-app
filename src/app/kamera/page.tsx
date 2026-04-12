@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-const YOUTUBE_VIDEO_ID = "9RI87qlP3XU";
+const YOUTUBE_VIDEO_ID = "DG7HbjBC_9A";
 const YOUTUBE_URL = `https://www.youtube.com/watch?v=${YOUTUBE_VIDEO_ID}`;
 
 export const metadata: Metadata = {
